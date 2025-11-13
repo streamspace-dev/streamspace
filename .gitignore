@@ -1,0 +1,61 @@
+# Binaries
+*.exe
+*.dll
+*.so
+*.dylib
+bin/
+dist/
+
+# Test coverage
+*.out
+coverage/
+
+# IDE
+.idea/
+.vscode/
+*.swp
+*.swo
+*~
+
+# OS
+.DS_Store
+Thumbs.db
+
+# Kubernetes
+*.kubeconfig
+
+# Secrets
+*secret*.yaml
+!*secret*.yaml.example
+.env
+.env.local
+
+# Build artifacts
+node_modules/
+build/
+target/
+
+# Python
+__pycache__/
+*.py[cod]
+*$py.class
+.pytest_cache/
+*.egg-info/
+
+# Go
+vendor/
+*.test
+*.cover
+
+# Helm
+*.tgz
+charts/*/charts/
+
+# Logs
+*.log
+logs/
+
+# Temporary files
+tmp/
+temp/
+*.tmp

@@ -1,0 +1,53 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: workspace-controller-config
+  namespace: workspaces
+data:
+  # Database connection
+  POSTGRES_HOST: "postgres.data.svc.cluster.local"
+  POSTGRES_PORT: "5432"
+  POSTGRES_DB: "workspaces"
+  POSTGRES_USER: "postgres"
+
+  # Authentik integration
+  AUTHENTIK_URL: "https://authentik.local"
+  AUTHENTIK_ISSUER: "https://authentik.local/application/o/workspaces/"
+
+  # Hibernation settings
+  DEFAULT_IDLE_TIMEOUT: "30m"
+  DEFAULT_MAX_SESSION_DURATION: "8h"
+  HIBERNATION_CHECK_INTERVAL: "60s"
+  HIBERNATION_ENABLED: "true"
+
+  # Resource defaults
+  DEFAULT_WORKSPACE_MEMORY: "2Gi"
+  DEFAULT_WORKSPACE_CPU: "1000m"
+  MAX_WORKSPACE_MEMORY: "8Gi"
+  MAX_WORKSPACE_CPU: "4000m"
+
+  # Storage configuration
+  NFS_STORAGE_CLASS: "nfs-client"
+  DEFAULT_HOME_STORAGE: "50Gi"
+  PERSISTENT_HOME_ENABLED: "true"
+
+  # Cluster capacity management
+  CLUSTER_MEMORY_THRESHOLD: "85"
+  QUEUE_ENABLED: "true"
+  QUEUE_MAX_WAIT_TIME: "5m"
+
+  # Wake-on-access
+  WAKE_TIMEOUT: "120s"
+  WAKE_POLL_INTERVAL: "2s"
+
+  # Networking
+  WORKSPACE_INGRESS_DOMAIN: "workspaces.local"
+  WORKSPACE_INGRESS_CLASS: "traefik"
+
+  # Monitoring
+  METRICS_ENABLED: "true"
+  METRICS_PORT: "8080"
+
+  # Logging
+  LOG_LEVEL: "info"
+  AUDIT_LOG_ENABLED: "true"

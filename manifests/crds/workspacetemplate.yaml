@@ -1,0 +1,111 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workspacetemplates.workspaces.aiinfra.io
+spec:
+  group: workspaces.aiinfra.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [displayName, baseImage]
+              properties:
+                displayName:
+                  type: string
+                  description: Human-readable name for the workspace
+                description:
+                  type: string
+                  description: Detailed description of the workspace
+                category:
+                  type: string
+                  description: Category for organizing templates (e.g., Browsers, Development)
+                icon:
+                  type: string
+                  description: URL to icon image
+                baseImage:
+                  type: string
+                  description: Docker image to use (e.g., lscr.io/linuxserver/firefox:latest)
+                defaultResources:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                      default: "2Gi"
+                    cpu:
+                      type: string
+                      default: "1000m"
+                ports:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      containerPort:
+                        type: integer
+                      protocol:
+                        type: string
+                        default: TCP
+                env:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      value:
+                        type: string
+                volumeMounts:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      name:
+                        type: string
+                      mountPath:
+                        type: string
+                kasmvnc:
+                  type: object
+                  properties:
+                    enabled:
+                      type: boolean
+                      default: true
+                    port:
+                      type: integer
+                      default: 3000
+                capabilities:
+                  type: array
+                  items:
+                    type: string
+                    enum: [Network, Audio, Clipboard, USB, Printing]
+                tags:
+                  type: array
+                  items:
+                    type: string
+      additionalPrinterColumns:
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Category
+          type: string
+          jsonPath: .spec.category
+        - name: Image
+          type: string
+          jsonPath: .spec.baseImage
+        - name: Memory
+          type: string
+          jsonPath: .spec.defaultResources.memory
+  scope: Namespaced
+  names:
+    plural: workspacetemplates
+    singular: workspacetemplate
+    kind: WorkspaceTemplate
+    shortNames:
+      - wt
+      - wstpl

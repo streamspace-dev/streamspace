@@ -1,0 +1,39 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: kicad
+  namespace: workspaces
+spec:
+  displayName: KiCad
+  description: Electronics design automation suite for PCB design, schematic capture, and circuit simulation. Complete EDA solution.
+  category: Design & Graphics
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/kicad-logo.png
+  baseImage: lscr.io/linuxserver/kicad:latest
+  defaultResources:
+    memory: 3Gi
+    cpu: 1500m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Clipboard
+  tags:
+    - electronics
+    - pcb
+    - eda
+    - circuit
+    - hardware

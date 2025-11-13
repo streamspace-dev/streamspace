@@ -1,0 +1,42 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: chromium-browser
+  namespace: workspaces
+spec:
+  displayName: Chromium Web Browser
+  description: Open-source web browser that forms the basis of Google Chrome. Fast, standards-compliant, and developer-friendly.
+  category: Web Browsers
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/chromium-logo.png
+  baseImage: lscr.io/linuxserver/chromium:latest
+  defaultResources:
+    memory: 2Gi
+    cpu: 1000m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: CHROME_CLI
+      value: "--disable-dev-shm-usage"
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - browser
+    - web
+    - chromium
+    - development

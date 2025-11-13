@@ -1,0 +1,144 @@
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: workspace-platform-alerts
+  namespace: workspaces
+  labels:
+    prometheus: kube-prometheus-stack
+    role: alert-rules
+spec:
+  groups:
+    - name: workspace.platform
+      interval: 30s
+      rules:
+        # High workspace memory usage
+        - alert: WorkspaceHighMemoryUsage
+          expr: sum(workspaces_resource_usage_bytes{resource="memory"}) / 1024^3 > 40
+          for: 5m
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "High workspace memory usage"
+            description: "Total workspace memory usage is {{ $value | humanize }}GB (threshold: 40GB)"
+
+        # Cluster memory threshold exceeded
+        - alert: WorkspaceClusterMemoryThreshold
+          expr: workspaces_cluster_memory_usage_percent > 85
+          for: 10m
+          labels:
+            severity: critical
+            component: workspaces
+          annotations:
+            summary: "Cluster memory threshold exceeded"
+            description: "Cluster memory usage is {{ $value | humanize }}% (threshold: 85%)"
+
+        # Workspace provisioning failures
+        - alert: WorkspaceProvisioningFailures
+          expr: rate(workspaces_session_start_failures_total[5m]) > 0.1
+          for: 5m
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "Workspace provisioning failures detected"
+            description: "Workspace provisioning failure rate: {{ $value | humanize }} failures/sec"
+
+        # Hibernation not working
+        - alert: WorkspaceHibernationNotWorking
+          expr: |
+            (workspaces_active_sessions_total > 5)
+            and
+            (rate(workspaces_hibernation_events_total[30m]) == 0)
+          for: 1h
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "Workspace hibernation not functioning"
+            description: "No hibernation events in 30 minutes despite {{ $value }} active sessions"
+
+        # High wake duration
+        - alert: WorkspaceHighWakeDuration
+          expr: |
+            histogram_quantile(0.95,
+              rate(workspaces_wake_duration_seconds_bucket[5m])
+            ) > 60
+          for: 15m
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "High workspace wake duration"
+            description: "95th percentile wake duration is {{ $value | humanize }}s (threshold: 60s)"
+
+        # Controller down
+        - alert: WorkspaceControllerDown
+          expr: up{job="workspace-controller"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: workspaces
+          annotations:
+            summary: "Workspace controller is down"
+            description: "Workspace controller has been down for more than 5 minutes"
+
+        # API down
+        - alert: WorkspaceAPIDown
+          expr: up{job="workspace-api"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: workspaces
+          annotations:
+            summary: "Workspace API is down"
+            description: "Workspace API has been down for more than 5 minutes"
+
+        # High API error rate
+        - alert: WorkspaceAPIHighErrorRate
+          expr: |
+            rate(workspace_api_requests_total{status=~"5.."}[5m])
+            /
+            rate(workspace_api_requests_total[5m])
+            > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "High API error rate"
+            description: "API error rate is {{ $value | humanizePercentage }} (threshold: 5%)"
+
+        # Queue building up
+        - alert: WorkspaceQueueBacklog
+          expr: workspaces_queue_depth > 10
+          for: 15m
+          labels:
+            severity: warning
+            component: workspaces
+          annotations:
+            summary: "Workspace queue backlog"
+            description: "{{ $value }} workspace requests queued (threshold: 10)"
+
+        # Too many concurrent sessions per user
+        - alert: WorkspaceUserQuotaExceeded
+          expr: workspaces_user_active_sessions > 5
+          for: 5m
+          labels:
+            severity: info
+            component: workspaces
+          annotations:
+            summary: "User has too many active workspaces"
+            description: "User {{ $labels.username }} has {{ $value }} active sessions (typical limit: 5)"
+
+        # Long-running sessions (potential forgotten workspaces)
+        - alert: WorkspaceLongRunningSessions
+          expr: |
+            (time() - workspaces_session_start_timestamp_seconds) / 3600 > 12
+          for: 1h
+          labels:
+            severity: info
+            component: workspaces
+          annotations:
+            summary: "Long-running workspace session"
+            description: "Session {{ $labels.session_name }} has been running for {{ $value | humanizeDuration }}"

@@ -1,0 +1,151 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-controller
+  namespace: workspaces
+  labels:
+    app: workspace-controller
+    component: controller
+spec:
+  replicas: 1  # Phase 5: Increase to 2+ with leader election
+  selector:
+    matchLabels:
+      app: workspace-controller
+  template:
+    metadata:
+      labels:
+        app: workspace-controller
+        component: controller
+    spec:
+      serviceAccountName: workspace-controller
+      containers:
+      - name: controller
+        image: your-registry/workspace-controller:latest  # TODO: Build and push
+        imagePullPolicy: IfNotPresent
+        command:
+          - /workspace-controller
+        args:
+          - --enable-leader-election  # For HA in Phase 5
+          - --metrics-addr=:8080
+          - --health-probe-addr=:8081
+        ports:
+          - name: metrics
+            containerPort: 8080
+            protocol: TCP
+          - name: health
+            containerPort: 8081
+            protocol: TCP
+        env:
+          # Database configuration
+          - name: POSTGRES_HOST
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: POSTGRES_HOST
+          - name: POSTGRES_PORT
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: POSTGRES_PORT
+          - name: POSTGRES_DB
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: POSTGRES_DB
+          - name: POSTGRES_USER
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: POSTGRES_USER
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: workspace-controller-secret
+                key: postgres-password
+
+          # Authentik configuration
+          - name: AUTHENTIK_URL
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: AUTHENTIK_URL
+          - name: AUTHENTIK_ISSUER
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: AUTHENTIK_ISSUER
+
+          # All other config from ConfigMap
+          - name: DEFAULT_IDLE_TIMEOUT
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: DEFAULT_IDLE_TIMEOUT
+          - name: HIBERNATION_ENABLED
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: HIBERNATION_ENABLED
+          - name: CLUSTER_MEMORY_THRESHOLD
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: CLUSTER_MEMORY_THRESHOLD
+          - name: NFS_STORAGE_CLASS
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: NFS_STORAGE_CLASS
+          - name: LOG_LEVEL
+            valueFrom:
+              configMapKeyRef:
+                name: workspace-controller-config
+                key: LOG_LEVEL
+
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 200m
+          limits:
+            memory: 512Mi
+            cpu: 500m
+
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: 8081
+          initialDelaySeconds: 15
+          periodSeconds: 20
+
+        readinessProbe:
+          httpGet:
+            path: /readyz
+            port: 8081
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+
+      terminationGracePeriodSeconds: 10
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-controller-metrics
+  namespace: workspaces
+  labels:
+    app: workspace-controller
+spec:
+  selector:
+    app: workspace-controller
+  ports:
+    - name: metrics
+      port: 8080
+      targetPort: 8080
+      protocol: TCP

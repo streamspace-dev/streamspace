@@ -1,0 +1,39 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: github-desktop
+  namespace: workspaces
+spec:
+  displayName: GitHub Desktop
+  description: Simple GitHub client with visual interface for managing repositories, commits, branches, and pull requests.
+  category: Development
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/github-desktop-logo.png
+  baseImage: lscr.io/linuxserver/github-desktop:latest
+  defaultResources:
+    memory: 2Gi
+    cpu: 1000m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Clipboard
+  tags:
+    - git
+    - github
+    - development
+    - version-control

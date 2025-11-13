@@ -1,0 +1,44 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: webtop-alpine-i3
+  namespace: workspaces
+spec:
+  displayName: Alpine Desktop (i3)
+  description: Minimal Alpine Linux desktop with i3 tiling window manager. Extremely lightweight and keyboard-driven. Perfect for developers and power users.
+  category: Desktop Environments
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/webtop-logo.png
+  baseImage: lscr.io/linuxserver/webtop:alpine-i3
+  defaultResources:
+    memory: 2Gi
+    cpu: 1000m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: CUSTOM_USER
+      value: kasm-user
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - desktop
+    - alpine
+    - i3
+    - tiling
+    - minimal
+    - lightweight

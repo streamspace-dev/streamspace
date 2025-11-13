@@ -1,0 +1,114 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: workspacesessions.workspaces.aiinfra.io
+spec:
+  group: workspaces.aiinfra.io
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [user, template, state]
+              properties:
+                user:
+                  type: string
+                  description: Username who owns this workspace session
+                template:
+                  type: string
+                  description: WorkspaceTemplate name to use
+                state:
+                  type: string
+                  enum: [running, hibernated, terminated]
+                  description: Desired state of the workspace
+                resources:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                      description: Memory limit (e.g., 2Gi, 4Gi)
+                    cpu:
+                      type: string
+                      description: CPU limit (e.g., 1000m, 2000m)
+                persistentHome:
+                  type: boolean
+                  default: true
+                  description: Mount persistent home directory
+                idleTimeout:
+                  type: string
+                  default: "30m"
+                  description: Idle timeout before hibernation (e.g., 30m, 1h)
+                maxSessionDuration:
+                  type: string
+                  default: "8h"
+                  description: Maximum session duration before forced termination
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Running, Hibernated, Failed, Terminated]
+                podName:
+                  type: string
+                url:
+                  type: string
+                lastActivity:
+                  type: string
+                  format: date-time
+                resourceUsage:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                    cpu:
+                      type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: User
+          type: string
+          jsonPath: .spec.user
+        - name: Template
+          type: string
+          jsonPath: .spec.template
+        - name: State
+          type: string
+          jsonPath: .spec.state
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: URL
+          type: string
+          jsonPath: .status.url
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: workspacesessions
+    singular: workspacesession
+    kind: WorkspaceSession
+    shortNames:
+      - ws
+      - wss

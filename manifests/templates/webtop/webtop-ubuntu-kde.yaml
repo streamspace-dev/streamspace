@@ -1,0 +1,44 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: webtop-ubuntu-kde
+  namespace: workspaces
+spec:
+  displayName: Ubuntu Desktop (KDE)
+  description: Full Ubuntu Linux desktop with KDE Plasma. Beautiful, feature-rich, and highly customizable desktop environment accessible via browser.
+  category: Desktop Environments
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/webtop-logo.png
+  baseImage: lscr.io/linuxserver/webtop:ubuntu-kde
+  defaultResources:
+    memory: 5Gi
+    cpu: 2500m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: CUSTOM_USER
+      value: kasm-user
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - desktop
+    - ubuntu
+    - kde
+    - plasma
+    - linux
+    - full-desktop

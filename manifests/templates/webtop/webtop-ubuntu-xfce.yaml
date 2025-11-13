@@ -1,0 +1,43 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: webtop-ubuntu-xfce
+  namespace: workspaces
+spec:
+  displayName: Ubuntu Desktop (XFCE)
+  description: Full Ubuntu Linux desktop environment with XFCE. Lightweight, fast, and fully customizable. Access a complete Linux workstation via browser.
+  category: Desktop Environments
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/webtop-logo.png
+  baseImage: lscr.io/linuxserver/webtop:ubuntu-xfce
+  defaultResources:
+    memory: 4Gi
+    cpu: 2000m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: CUSTOM_USER
+      value: kasm-user
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - desktop
+    - ubuntu
+    - xfce
+    - linux
+    - full-desktop

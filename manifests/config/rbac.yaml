@@ -1,0 +1,62 @@
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: workspace-controller
+  namespace: workspaces
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: workspace-controller
+rules:
+  # Manage WorkspaceSessions and WorkspaceTemplates
+  - apiGroups: [workspaces.aiinfra.io]
+    resources: [workspacesessions, workspacetemplates]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [workspaces.aiinfra.io]
+    resources: [workspacesessions/status, workspacetemplates/status]
+    verbs: [get, update, patch]
+
+  # Manage workspace pods
+  - apiGroups: [""]
+    resources: [pods, services]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Manage deployments for workspaces
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Manage PVCs for user home directories
+  - apiGroups: [""]
+    resources: [persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Read configmaps and secrets
+  - apiGroups: [""]
+    resources: [configmaps, secrets]
+    verbs: [get, list, watch]
+
+  # Create events for logging
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+
+  # Manage ingress for workspace access
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: workspace-controller
+subjects:
+  - kind: ServiceAccount
+    name: workspace-controller
+    namespace: workspaces
+roleRef:
+  kind: ClusterRole
+  name: workspace-controller
+  apiGroup: rbac.authorization.k8s.io

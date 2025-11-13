@@ -1,0 +1,137 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: workspace-api
+  namespace: workspaces
+  labels:
+    app: workspace-api
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: workspace-api
+  template:
+    metadata:
+      labels:
+        app: workspace-api
+        component: api
+    spec:
+      containers:
+      - name: api
+        image: your-registry/workspace-api:latest  # TODO: Build and push
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8000
+            protocol: TCP
+          - name: metrics
+            containerPort: 9090
+            protocol: TCP
+        env:
+          # Database configuration
+          - name: POSTGRES_HOST
+            value: postgres.data.svc.cluster.local
+          - name: POSTGRES_PORT
+            value: "5432"
+          - name: POSTGRES_DB
+            value: workspaces
+          - name: POSTGRES_USER
+            value: postgres
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: workspace-controller-secret
+                key: postgres-password
+
+          # JWT configuration
+          - name: JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: workspace-controller-secret
+                key: jwt-secret
+          - name: JWT_ALGORITHM
+            value: HS256
+          - name: JWT_EXPIRATION
+            value: "3600"  # 1 hour
+
+          # Authentik OIDC
+          - name: AUTHENTIK_URL
+            value: https://authentik.local
+          - name: AUTHENTIK_CLIENT_ID
+            value: workspaces
+          - name: AUTHENTIK_CLIENT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: workspace-controller-secret
+                key: authentik-client-secret
+          - name: AUTHENTIK_REDIRECT_URI
+            value: https://workspaces.local/auth/callback
+
+          # Kubernetes API
+          - name: KUBERNETES_NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: IN_CLUSTER
+            value: "true"
+
+          # API configuration
+          - name: CORS_ORIGINS
+            value: https://workspaces.local
+          - name: LOG_LEVEL
+            value: info
+          - name: METRICS_ENABLED
+            value: "true"
+
+        resources:
+          requests:
+            memory: 128Mi
+            cpu: 100m
+          limits:
+            memory: 256Mi
+            cpu: 500m
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 10
+          periodSeconds: 15
+
+        readinessProbe:
+          httpGet:
+            path: /ready
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: workspace-api
+  namespace: workspaces
+  labels:
+    app: workspace-api
+spec:
+  type: ClusterIP
+  selector:
+    app: workspace-api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+    - name: metrics
+      port: 9090
+      targetPort: 9090
+      protocol: TCP

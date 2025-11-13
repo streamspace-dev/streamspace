@@ -1,0 +1,63 @@
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: workspace-platform
+  namespace: workspaces
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # Optional: Enable cert-manager for TLS
+    # cert-manager.io/cluster-issuer: letsencrypt-cloudflare
+    # Optional: Enable Authentik SSO protection
+    # traefik.ingress.kubernetes.io/router.middlewares: authentik-forwardauth@kubernetescrd
+spec:
+  # tls:
+  #   - hosts:
+  #       - workspaces.local
+  #     secretName: workspace-platform-tls
+  rules:
+    # Main UI
+    - host: workspaces.local
+      http:
+        paths:
+          # API endpoints
+          - path: /api
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-api
+                port:
+                  number: 8000
+          # UI (catch-all)
+          - path: /
+            pathType: Prefix
+            backend:
+              service:
+                name: workspace-ui
+                port:
+                  number: 80
+---
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: workspace-sessions
+  namespace: workspaces
+  annotations:
+    traefik.ingress.kubernetes.io/router.entrypoints: websecure
+    traefik.ingress.kubernetes.io/router.tls: "true"
+    # This ingress will be dynamically updated by the controller
+    # to route *.workspaces.local to individual workspace pods
+spec:
+  rules:
+    # Example session route (controller will add more dynamically)
+    # - host: session-abc123.workspaces.local
+    #   http:
+    #     paths:
+    #       - path: /
+    #         pathType: Prefix
+    #         backend:
+    #           service:
+    #             name: ws-user1-firefox-abc123
+    #             port:
+    #               number: 3000
+  ingressClassName: traefik

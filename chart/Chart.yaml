@@ -1,0 +1,18 @@
+apiVersion: v2
+name: workspace-platform
+description: Multi-user container streaming platform with on-demand auto-hibernation
+type: application
+version: 0.1.0
+appVersion: "0.1.0"
+keywords:
+  - workspaces
+  - kasm
+  - vnc
+  - containers
+  - multi-user
+home: https://github.com/yourusername/ai-infra-k3s
+sources:
+  - https://github.com/yourusername/ai-infra-k3s
+maintainers:
+  - name: Your Name
+    email: your.email@example.com

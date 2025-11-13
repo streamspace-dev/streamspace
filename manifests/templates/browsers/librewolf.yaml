@@ -1,0 +1,40 @@
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: librewolf-browser
+  namespace: workspaces
+spec:
+  displayName: LibreWolf Browser
+  description: Firefox fork focused on privacy, security and user freedom. No telemetry, enhanced tracking protection, and fingerprinting resistance.
+  category: Web Browsers
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/librewolf-logo.png
+  baseImage: lscr.io/linuxserver/librewolf:latest
+  defaultResources:
+    memory: 2Gi
+    cpu: 1000m
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - browser
+    - privacy
+    - firefox
+    - security

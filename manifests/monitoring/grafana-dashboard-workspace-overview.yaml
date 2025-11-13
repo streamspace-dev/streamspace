@@ -1,0 +1,203 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: grafana-dashboard-workspace-overview
+  namespace: observability
+  labels:
+    grafana_dashboard: "1"
+data:
+  workspace-overview.json: |
+    {
+      "dashboard": {
+        "title": "Workspace Platform Overview",
+        "tags": ["workspaces", "platform"],
+        "timezone": "browser",
+        "panels": [
+          {
+            "title": "Active Sessions",
+            "type": "stat",
+            "gridPos": {"x": 0, "y": 0, "w": 6, "h": 4},
+            "targets": [
+              {
+                "expr": "workspaces_active_sessions_total",
+                "legendFormat": "Active"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "thresholds"},
+                "thresholds": {
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 10, "color": "yellow"},
+                    {"value": 20, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "title": "Hibernated Sessions",
+            "type": "stat",
+            "gridPos": {"x": 6, "y": 0, "w": 6, "h": 4},
+            "targets": [
+              {
+                "expr": "workspaces_hibernated_sessions_total",
+                "legendFormat": "Hibernated"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "color": {"mode": "palette-classic"}
+              }
+            }
+          },
+          {
+            "title": "Total Memory Usage",
+            "type": "gauge",
+            "gridPos": {"x": 12, "y": 0, "w": 6, "h": 4},
+            "targets": [
+              {
+                "expr": "sum(workspaces_resource_usage_bytes{resource=\"memory\"}) / 1024^3",
+                "legendFormat": "Memory (GB)"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "decgbytes",
+                "max": 44,
+                "thresholds": {
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 30, "color": "yellow"},
+                    {"value": 40, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "title": "Cluster Capacity",
+            "type": "gauge",
+            "gridPos": {"x": 18, "y": 0, "w": 6, "h": 4},
+            "targets": [
+              {
+                "expr": "workspaces_cluster_memory_usage_percent",
+                "legendFormat": "Memory %"
+              }
+            ],
+            "fieldConfig": {
+              "defaults": {
+                "unit": "percent",
+                "max": 100,
+                "thresholds": {
+                  "steps": [
+                    {"value": 0, "color": "green"},
+                    {"value": 75, "color": "yellow"},
+                    {"value": 85, "color": "red"}
+                  ]
+                }
+              }
+            }
+          },
+          {
+            "title": "Session Starts (Rate)",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 4, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "rate(workspaces_session_starts_total[5m])",
+                "legendFormat": "Starts/sec"
+              },
+              {
+                "expr": "rate(workspaces_session_start_failures_total[5m])",
+                "legendFormat": "Failures/sec"
+              }
+            ]
+          },
+          {
+            "title": "Hibernation & Wake Events",
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 4, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "rate(workspaces_hibernation_events_total[5m])",
+                "legendFormat": "Hibernations/sec"
+              },
+              {
+                "expr": "rate(workspaces_wake_events_total[5m])",
+                "legendFormat": "Wakes/sec"
+              }
+            ]
+          },
+          {
+            "title": "Active Sessions by User",
+            "type": "table",
+            "gridPos": {"x": 0, "y": 12, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "workspaces_user_active_sessions",
+                "format": "table",
+                "instant": true
+              }
+            ]
+          },
+          {
+            "title": "Resource Usage by Session",
+            "type": "table",
+            "gridPos": {"x": 12, "y": 12, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "topk(10, workspaces_resource_usage_bytes{resource=\"memory\"})",
+                "format": "table",
+                "instant": true
+              }
+            ]
+          },
+          {
+            "title": "Hibernation Duration",
+            "type": "heatmap",
+            "gridPos": {"x": 0, "y": 20, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "rate(workspaces_hibernation_duration_seconds_bucket[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Wake Duration",
+            "type": "heatmap",
+            "gridPos": {"x": 12, "y": 20, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "rate(workspaces_wake_duration_seconds_bucket[5m])"
+              }
+            ]
+          },
+          {
+            "title": "Workspace Queue Depth",
+            "type": "graph",
+            "gridPos": {"x": 0, "y": 28, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "workspaces_queue_depth",
+                "legendFormat": "Queued Requests"
+              }
+            ]
+          },
+          {
+            "title": "API Request Rate",
+            "type": "graph",
+            "gridPos": {"x": 12, "y": 28, "w": 12, "h": 8},
+            "targets": [
+              {
+                "expr": "rate(workspace_api_requests_total[5m])",
+                "legendFormat": "{{method}} {{endpoint}}"
+              }
+            ]
+          }
+        ],
+        "refresh": "30s",
+        "time": {"from": "now-6h", "to": "now"}
+      }
+    }

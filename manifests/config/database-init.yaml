@@ -1,0 +1,183 @@
+apiVersion: batch/v1
+kind: Job
+metadata:
+  name: workspace-db-init
+  namespace: workspaces
+spec:
+  template:
+    metadata:
+      labels:
+        app: workspace-db-init
+    spec:
+      restartPolicy: OnFailure
+      containers:
+      - name: db-init
+        image: postgres:16
+        env:
+          - name: PGHOST
+            value: postgres.data.svc.cluster.local
+          - name: PGPORT
+            value: "5432"
+          - name: PGUSER
+            value: postgres
+          - name: PGPASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: workspace-controller-secret
+                key: postgres-password
+          - name: PGDATABASE
+            value: postgres
+        command:
+          - sh
+          - -c
+          - |
+            set -e
+            echo "Creating workspaces database if not exists..."
+            psql -c "CREATE DATABASE workspaces;" || echo "Database already exists"
+
+            echo "Connecting to workspaces database..."
+            export PGDATABASE=workspaces
+
+            echo "Creating schema..."
+            psql <<'EOF'
+            -- Users table
+            CREATE TABLE IF NOT EXISTS users (
+              id SERIAL PRIMARY KEY,
+              username VARCHAR(255) UNIQUE NOT NULL,
+              email VARCHAR(255) UNIQUE,
+              display_name VARCHAR(255),
+              tier VARCHAR(50) DEFAULT 'free',
+              quota_memory_gb INTEGER DEFAULT 4,
+              quota_max_workspaces INTEGER DEFAULT 2,
+              quota_max_session_hours INTEGER DEFAULT 4,
+              quota_storage_gb INTEGER DEFAULT 50,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW(),
+              last_login TIMESTAMP
+            );
+
+            -- Workspace sessions table
+            CREATE TABLE IF NOT EXISTS workspace_sessions (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) UNIQUE NOT NULL,
+              user_id INTEGER REFERENCES users(id) ON DELETE CASCADE,
+              username VARCHAR(255) NOT NULL,
+              template_name VARCHAR(255) NOT NULL,
+              state VARCHAR(50) NOT NULL CHECK (state IN ('pending', 'running', 'hibernated', 'failed', 'terminated')),
+              phase VARCHAR(50) CHECK (phase IN ('Pending', 'Running', 'Hibernated', 'Failed', 'Terminated')),
+              pod_name VARCHAR(255),
+              deployment_name VARCHAR(255),
+              service_name VARCHAR(255),
+              ingress_hostname VARCHAR(255),
+              url TEXT,
+              pvc_name VARCHAR(255),
+              memory_request VARCHAR(50),
+              cpu_request VARCHAR(50),
+              memory_usage VARCHAR(50),
+              cpu_usage VARCHAR(50),
+              last_activity TIMESTAMP,
+              idle_timeout_minutes INTEGER DEFAULT 30,
+              max_session_hours INTEGER DEFAULT 8,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW(),
+              started_at TIMESTAMP,
+              hibernated_at TIMESTAMP,
+              terminated_at TIMESTAMP
+            );
+
+            -- Workspace templates table
+            CREATE TABLE IF NOT EXISTS workspace_templates (
+              id SERIAL PRIMARY KEY,
+              name VARCHAR(255) UNIQUE NOT NULL,
+              display_name VARCHAR(255) NOT NULL,
+              description TEXT,
+              category VARCHAR(100),
+              icon_url TEXT,
+              base_image VARCHAR(500) NOT NULL,
+              default_memory VARCHAR(50) DEFAULT '2Gi',
+              default_cpu VARCHAR(50) DEFAULT '1000m',
+              kasmvnc_enabled BOOLEAN DEFAULT true,
+              kasmvnc_port INTEGER DEFAULT 3000,
+              tags TEXT[],
+              enabled BOOLEAN DEFAULT true,
+              created_at TIMESTAMP DEFAULT NOW(),
+              updated_at TIMESTAMP DEFAULT NOW()
+            );
+
+            -- Audit logs table
+            CREATE TABLE IF NOT EXISTS audit_logs (
+              id SERIAL PRIMARY KEY,
+              username VARCHAR(255),
+              user_id INTEGER REFERENCES users(id) ON DELETE SET NULL,
+              action VARCHAR(255) NOT NULL,
+              resource_type VARCHAR(100),
+              resource_name VARCHAR(255),
+              details JSONB,
+              ip_address INET,
+              user_agent TEXT,
+              timestamp TIMESTAMP DEFAULT NOW()
+            );
+
+            -- Session events table (for analytics)
+            CREATE TABLE IF NOT EXISTS session_events (
+              id SERIAL PRIMARY KEY,
+              session_id INTEGER REFERENCES workspace_sessions(id) ON DELETE CASCADE,
+              event_type VARCHAR(100) NOT NULL CHECK (event_type IN ('created', 'started', 'accessed', 'hibernated', 'woken', 'terminated', 'failed')),
+              details JSONB,
+              timestamp TIMESTAMP DEFAULT NOW()
+            );
+
+            -- Resource usage snapshots (for monitoring)
+            CREATE TABLE IF NOT EXISTS resource_snapshots (
+              id SERIAL PRIMARY KEY,
+              session_id INTEGER REFERENCES workspace_sessions(id) ON DELETE CASCADE,
+              memory_bytes BIGINT,
+              cpu_millicores INTEGER,
+              timestamp TIMESTAMP DEFAULT NOW()
+            );
+
+            -- Create indexes
+            CREATE INDEX IF NOT EXISTS idx_sessions_username ON workspace_sessions(username);
+            CREATE INDEX IF NOT EXISTS idx_sessions_state ON workspace_sessions(state);
+            CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON workspace_sessions(last_activity);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_username ON audit_logs(username);
+            CREATE INDEX IF NOT EXISTS idx_audit_logs_timestamp ON audit_logs(timestamp);
+            CREATE INDEX IF NOT EXISTS idx_session_events_session_id ON session_events(session_id);
+            CREATE INDEX IF NOT EXISTS idx_session_events_type ON session_events(event_type);
+            CREATE INDEX IF NOT EXISTS idx_resource_snapshots_session_id ON resource_snapshots(session_id);
+
+            -- Create functions
+            CREATE OR REPLACE FUNCTION update_updated_at_column()
+            RETURNS TRIGGER AS \$\$
+            BEGIN
+              NEW.updated_at = NOW();
+              RETURN NEW;
+            END;
+            \$\$ LANGUAGE plpgsql;
+
+            -- Create triggers
+            DROP TRIGGER IF EXISTS update_users_updated_at ON users;
+            CREATE TRIGGER update_users_updated_at BEFORE UPDATE ON users
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+            DROP TRIGGER IF EXISTS update_sessions_updated_at ON workspace_sessions;
+            CREATE TRIGGER update_sessions_updated_at BEFORE UPDATE ON workspace_sessions
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+            DROP TRIGGER IF EXISTS update_templates_updated_at ON workspace_templates;
+            CREATE TRIGGER update_templates_updated_at BEFORE UPDATE ON workspace_templates
+              FOR EACH ROW EXECUTE FUNCTION update_updated_at_column();
+
+            -- Insert default admin user
+            INSERT INTO users (username, email, display_name, tier, quota_memory_gb, quota_max_workspaces, quota_storage_gb)
+            VALUES ('admin', 'admin@workspaces.local', 'Administrator', 'admin', 64, 20, 500)
+            ON CONFLICT (username) DO NOTHING;
+
+            -- Insert demo user
+            INSERT INTO users (username, email, display_name, tier)
+            VALUES ('demo', 'demo@workspaces.local', 'Demo User', 'free')
+            ON CONFLICT (username) DO NOTHING;
+
+            EOF
+
+            echo "Database initialization complete!"

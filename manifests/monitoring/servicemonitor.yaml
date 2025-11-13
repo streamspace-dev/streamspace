@@ -1,0 +1,33 @@
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: workspace-controller
+  namespace: workspaces
+  labels:
+    app: workspace-controller
+    prometheus: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: workspace-controller
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
+---
+apiVersion: monitoring.coreos.com/v1
+kind: ServiceMonitor
+metadata:
+  name: workspace-api
+  namespace: workspaces
+  labels:
+    app: workspace-api
+    prometheus: kube-prometheus-stack
+spec:
+  selector:
+    matchLabels:
+      app: workspace-api
+  endpoints:
+    - port: metrics
+      interval: 30s
+      path: /metrics
