@@ -1,0 +1,50 @@
+# Kdenlive - Professional video editing software with multi-track timeline
+# Category: Audio & Video
+# Base Image: lscr.io/linuxserver/kdenlive:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: kdenlive
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: kdenlive
+    app.kubernetes.io/component: template
+    streamspace.io/category: audio-video
+spec:
+  displayName: Kdenlive
+  description: Professional video editing software with multi-track timeline
+  category: Audio & Video
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/kdenlive-logo.png
+  baseImage: lscr.io/linuxserver/kdenlive:latest
+  defaultResources:
+    requests:
+      memory: 6Gi
+      cpu: 3000m
+    limits:
+      memory: 6Gi
+      cpu: 6000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  - Audio
+  tags:
+  - kdenlive
+  - audio-&-video

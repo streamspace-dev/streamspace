@@ -1,0 +1,49 @@
+# Remmina - Remote desktop client supporting RDP, VNC, SSH, and more
+# Category: Remote Access
+# Base Image: lscr.io/linuxserver/remmina:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: remmina
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: remmina
+    app.kubernetes.io/component: template
+    streamspace.io/category: remote-access
+spec:
+  displayName: Remmina
+  description: Remote desktop client supporting RDP, VNC, SSH, and more
+  category: Remote Access
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/remmina-logo.png
+  baseImage: lscr.io/linuxserver/remmina:latest
+  defaultResources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - remmina
+  - remote-access

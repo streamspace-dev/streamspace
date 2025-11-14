@@ -1,0 +1,168 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: templaterepositories.stream.streamspace.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+spec:
+  group: stream.streamspace.io
+  names:
+    kind: TemplateRepository
+    listKind: TemplateRepositoryList
+    plural: templaterepositories
+    shortNames:
+    - repo
+    - repos
+    singular: templaterepository
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: TemplateRepository is the Schema for managing Git repositories containing templates
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object.'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents.'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TemplateRepositorySpec defines the desired state of TemplateRepository
+            properties:
+              auth:
+                description: Auth configures authentication for the repository
+                properties:
+                  secretRef:
+                    description: SecretRef references a Secret containing auth credentials
+                    properties:
+                      name:
+                        description: Name of the secret
+                        type: string
+                      namespace:
+                        description: Namespace of the secret
+                        type: string
+                    required:
+                    - name
+                    type: object
+                  type:
+                    description: Type of authentication (none, ssh, token, basic)
+                    enum:
+                    - none
+                    - ssh
+                    - token
+                    - basic
+                    type: string
+                required:
+                - type
+                type: object
+              branch:
+                description: Branch to sync from (default "main")
+                type: string
+              syncInterval:
+                description: SyncInterval defines how often to sync (default "1h")
+                type: string
+              url:
+                description: URL is the Git repository URL
+                type: string
+            required:
+            - url
+            type: object
+          status:
+            description: TemplateRepositoryStatus defines the observed state of TemplateRepository
+            properties:
+              conditions:
+                description: Conditions represent the latest available observations
+                items:
+                  description: Condition contains details for one aspect of the current state
+                  properties:
+                    lastTransitionTime:
+                      description: lastTransitionTime is the last time the condition
+                        transitioned from one status to another
+                      format: date-time
+                      type: string
+                    message:
+                      description: message is a human readable message indicating
+                        details about the transition
+                      maxLength: 32768
+                      type: string
+                    observedGeneration:
+                      description: observedGeneration represents the .metadata.generation
+                        that the condition was set based upon
+                      format: int64
+                      minimum: 0
+                      type: integer
+                    reason:
+                      description: reason contains a programmatic identifier indicating
+                        the reason for the condition's last transition
+                      maxLength: 1024
+                      minLength: 1
+                      pattern: ^[A-Za-z]([A-Za-z0-9_,:]*[A-Za-z0-9_])?$
+                      type: string
+                    status:
+                      description: status of the condition, one of True, False, Unknown
+                      enum:
+                      - "True"
+                      - "False"
+                      - Unknown
+                      type: string
+                    type:
+                      description: type of condition in CamelCase
+                      maxLength: 316
+                      pattern: ^([a-z0-9]([-a-z0-9]*[a-z0-9])?(\.[a-z0-9]([-a-z0-9]*[a-z0-9])?)*/)?(([A-Za-z0-9][-A-Za-z0-9_.]*)?[A-Za-z0-9])$
+                      type: string
+                  required:
+                  - lastTransitionTime
+                  - message
+                  - reason
+                  - status
+                  - type
+                  type: object
+                type: array
+              errorMessage:
+                description: ErrorMessage contains error details if sync failed
+                type: string
+              lastSyncTime:
+                description: LastSyncTime is when the repository was last synced
+                format: date-time
+                type: string
+              phase:
+                description: Phase represents the current phase (Pending, Syncing, Ready, Failed)
+                enum:
+                - Pending
+                - Syncing
+                - Ready
+                - Failed
+                type: string
+              templateCount:
+                description: TemplateCount is the number of templates discovered in the repository
+                type: integer
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: URL
+      type: string
+      jsonPath: .spec.url
+    - name: Branch
+      type: string
+      jsonPath: .spec.branch
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Templates
+      type: integer
+      jsonPath: .status.templateCount
+    - name: Last Sync
+      type: date
+      jsonPath: .status.lastSyncTime
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp

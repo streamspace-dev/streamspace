@@ -1,0 +1,49 @@
+# qBittorrent - BitTorrent client with web interface
+# Category: File Management
+# Base Image: lscr.io/linuxserver/qbittorrent:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: qbittorrent
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: qbittorrent
+    app.kubernetes.io/component: template
+    streamspace.io/category: file-management
+spec:
+  displayName: qBittorrent
+  description: BitTorrent client with web interface
+  category: File Management
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/qbittorrent-logo.png
+  baseImage: lscr.io/linuxserver/qbittorrent:latest
+  defaultResources:
+    requests:
+      memory: 1Gi
+      cpu: 500m
+    limits:
+      memory: 1Gi
+      cpu: 1000m
+  ports:
+  - name: http
+    containerPort: 8080
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: false
+    port: null
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - qbittorrent
+  - file-management

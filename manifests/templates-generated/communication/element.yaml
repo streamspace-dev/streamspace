@@ -1,0 +1,49 @@
+# Element - Matrix protocol messaging client
+# Category: Communication
+# Base Image: lscr.io/linuxserver/element:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: element
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: element
+    app.kubernetes.io/component: template
+    streamspace.io/category: communication
+spec:
+  displayName: Element
+  description: Matrix protocol messaging client
+  category: Communication
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/element-logo.png
+  baseImage: lscr.io/linuxserver/element:latest
+  defaultResources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+  ports:
+  - name: http
+    containerPort: 80
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: false
+    port: null
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - element
+  - communication

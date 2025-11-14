@@ -1,0 +1,50 @@
+# DuckStation - PlayStation 1 emulator with enhanced features
+# Category: Gaming
+# Base Image: lscr.io/linuxserver/duckstation:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: duckstation
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: duckstation
+    app.kubernetes.io/component: template
+    streamspace.io/category: gaming
+spec:
+  displayName: DuckStation
+  description: PlayStation 1 emulator with enhanced features
+  category: Gaming
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/duckstation-logo.png
+  baseImage: lscr.io/linuxserver/duckstation:latest
+  defaultResources:
+    requests:
+      memory: 4Gi
+      cpu: 2000m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  - Audio
+  tags:
+  - duckstation
+  - gaming

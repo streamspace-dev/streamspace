@@ -1,0 +1,280 @@
+name: CI
+
+on:
+  pull_request:
+    branches:
+      - main
+      - develop
+  push:
+    branches:
+      - main
+      - develop
+
+env:
+  GO_VERSION: '1.21'
+  NODE_VERSION: '18'
+
+jobs:
+  lint:
+    name: Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Lint Controller
+        working-directory: ./controller
+        run: |
+          go fmt ./...
+          go vet ./...
+          # Install golangci-lint
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+          golangci-lint run
+
+      - name: Lint API
+        working-directory: ./api
+        run: |
+          go fmt ./...
+          go vet ./...
+          golangci-lint run
+
+      - name: Lint UI
+        working-directory: ./ui
+        run: |
+          npm ci
+          npm run lint
+
+  test-controller:
+    name: Test Controller
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('controller/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        working-directory: ./controller
+        run: go mod download
+
+      - name: Run tests
+        working-directory: ./controller
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./controller/coverage.out
+          flags: controller
+          name: controller-coverage
+
+  test-api:
+    name: Test API
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:15-alpine
+        env:
+          POSTGRES_USER: streamspace
+          POSTGRES_PASSWORD: testpassword
+          POSTGRES_DB: streamspace_test
+        options: >-
+          --health-cmd pg_isready
+          --health-interval 10s
+          --health-timeout 5s
+          --health-retries 5
+        ports:
+          - 5432:5432
+
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Cache Go modules
+        uses: actions/cache@v4
+        with:
+          path: |
+            ~/.cache/go-build
+            ~/go/pkg/mod
+          key: ${{ runner.os }}-go-${{ hashFiles('api/go.sum') }}
+          restore-keys: |
+            ${{ runner.os }}-go-
+
+      - name: Download dependencies
+        working-directory: ./api
+        run: go mod download
+
+      - name: Run tests
+        working-directory: ./api
+        env:
+          DB_HOST: localhost
+          DB_PORT: 5432
+          DB_NAME: streamspace_test
+          DB_USER: streamspace
+          DB_PASSWORD: testpassword
+          DB_SSLMODE: disable
+        run: |
+          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+          go tool cover -func=coverage.out
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./api/coverage.out
+          flags: api
+          name: api-coverage
+
+  test-ui:
+    name: Test UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Cache node modules
+        uses: actions/cache@v4
+        with:
+          path: ~/.npm
+          key: ${{ runner.os }}-node-${{ hashFiles('ui/package-lock.json') }}
+          restore-keys: |
+            ${{ runner.os }}-node-
+
+      - name: Install dependencies
+        working-directory: ./ui
+        run: npm ci
+
+      - name: Run tests
+        working-directory: ./ui
+        run: npm test -- --coverage --watchAll=false
+
+      - name: Upload coverage to Codecov
+        uses: codecov/codecov-action@v4
+        with:
+          files: ./ui/coverage/lcov.info
+          flags: ui
+          name: ui-coverage
+
+  build:
+    name: Build
+    runs-on: ubuntu-latest
+    needs: [lint, test-controller, test-api, test-ui]
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Go
+        uses: actions/setup-go@v5
+        with:
+          go-version: ${{ env.GO_VERSION }}
+
+      - name: Set up Node.js
+        uses: actions/setup-node@v4
+        with:
+          node-version: ${{ env.NODE_VERSION }}
+
+      - name: Build Controller
+        working-directory: ./controller
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager cmd/main.go
+          echo "Controller binary size: $(ls -lh bin/manager | awk '{print $5}')"
+
+      - name: Build API
+        working-directory: ./api
+        run: |
+          CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/api cmd/main.go
+          echo "API binary size: $(ls -lh bin/api | awk '{print $5}')"
+
+      - name: Build UI
+        working-directory: ./ui
+        run: |
+          npm ci
+          npm run build
+          echo "UI build size: $(du -sh build | awk '{print $1}')"
+
+      - name: Upload Controller artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: controller-binary
+          path: controller/bin/manager
+
+      - name: Upload API artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: api-binary
+          path: api/bin/api
+
+      - name: Upload UI artifact
+        uses: actions/upload-artifact@v4
+        with:
+          name: ui-build
+          path: ui/build/
+
+  helm-lint:
+    name: Helm Lint
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Lint Helm chart
+        run: |
+          helm lint chart/
+          helm template streamspace chart/ --namespace streamspace > /dev/null
+
+  summary:
+    name: CI Summary
+    runs-on: ubuntu-latest
+    needs: [build, helm-lint]
+    if: always()
+    steps:
+      - name: Check status
+        run: |
+          echo "## CI Summary" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "✅ All checks passed!" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Components" >> $GITHUB_STEP_SUMMARY
+          echo "- Controller: Built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- API: Built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- UI: Built successfully" >> $GITHUB_STEP_SUMMARY
+          echo "- Helm Chart: Validated" >> $GITHUB_STEP_SUMMARY

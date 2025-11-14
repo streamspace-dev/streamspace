@@ -1,0 +1,49 @@
+# Transmission - Lightweight BitTorrent client
+# Category: File Management
+# Base Image: lscr.io/linuxserver/transmission:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: transmission
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: transmission
+    app.kubernetes.io/component: template
+    streamspace.io/category: file-management
+spec:
+  displayName: Transmission
+  description: Lightweight BitTorrent client
+  category: File Management
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/transmission-logo.png
+  baseImage: lscr.io/linuxserver/transmission:latest
+  defaultResources:
+    requests:
+      memory: 512Mi
+      cpu: 250m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+  ports:
+  - name: http
+    containerPort: 9091
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: false
+    port: null
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - transmission
+  - file-management

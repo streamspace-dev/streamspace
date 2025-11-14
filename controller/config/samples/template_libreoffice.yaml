@@ -1,0 +1,60 @@
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: libreoffice
+  namespace: streamspace
+spec:
+  displayName: LibreOffice
+  description: Free and powerful office suite - documents, spreadsheets, presentations
+  category: Productivity
+  icon: https://upload.wikimedia.org/wikipedia/commons/e/e5/LibreOffice_logo.svg
+  baseImage: lscr.io/linuxserver/libreoffice:latest
+
+  # VNC configuration
+  vnc:
+    enabled: true
+    port: 3000
+    protocol: websocket
+    encryption: false
+
+  # Default resource allocations
+  defaultResources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "3Gi"
+      cpu: "1500m"
+
+  # Environment variables
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+
+  # Volume mounts
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+
+  # Capabilities
+  capabilities:
+    - Documents
+    - Spreadsheets
+    - Presentations
+    - Clipboard
+    - Printing
+
+  # Tags
+  tags:
+    - productivity
+    - office
+    - documents
+    - spreadsheet
+    - presentation
+    - writer
+    - calc
+    - impress

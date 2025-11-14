@@ -1,0 +1,38 @@
+{{- if .Values.ingress.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: Ingress
+metadata:
+  name: {{ include "streamspace.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.labels" . | nindent 4 }}
+  {{- with .Values.ingress.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+spec:
+  ingressClassName: {{ .Values.ingress.className }}
+  {{- if .Values.ingress.tls.enabled }}
+  tls:
+    {{- range .Values.ingress.hosts }}
+    - hosts:
+        - {{ .host }}
+      secretName: {{ include "streamspace.fullname" $ }}-tls
+    {{- end }}
+  {{- end }}
+  rules:
+    {{- range .Values.ingress.hosts }}
+    - host: {{ .host }}
+      http:
+        paths:
+          {{- range .paths }}
+          - path: {{ .path }}
+            pathType: {{ .pathType }}
+            backend:
+              service:
+                name: {{ include "streamspace.fullname" $ }}-{{ .service }}
+                port:
+                  number: {{ if eq .service "ui" }}{{ $.Values.ui.service.port }}{{ else }}{{ $.Values.api.service.port }}{{ end }}
+          {{- end }}
+    {{- end }}
+{{- end }}

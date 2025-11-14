@@ -1,0 +1,49 @@
+# LibreWolf - Privacy and security focused Firefox fork
+# Category: Web Browsers
+# Base Image: lscr.io/linuxserver/librewolf:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: librewolf
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: librewolf
+    app.kubernetes.io/component: template
+    streamspace.io/category: web-browsers
+spec:
+  displayName: LibreWolf
+  description: Privacy and security focused Firefox fork
+  category: Web Browsers
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/librewolf-logo.png
+  baseImage: lscr.io/linuxserver/librewolf:latest
+  defaultResources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - librewolf
+  - web-browsers

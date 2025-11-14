@@ -1,0 +1,106 @@
+{{- if .Values.rbac.create }}
+---
+# Controller RBAC
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: {{ include "streamspace.fullname" . }}-controller
+  labels:
+    {{- include "streamspace.controller.labels" . | nindent 4 }}
+rules:
+  # Sessions and Templates CRDs
+  - apiGroups: ["stream.streamspace.io"]
+    resources: ["sessions", "templates"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["stream.streamspace.io"]
+    resources: ["sessions/status", "templates/status"]
+    verbs: ["get", "update", "patch"]
+  - apiGroups: ["stream.streamspace.io"]
+    resources: ["sessions/finalizers", "templates/finalizers"]
+    verbs: ["update"]
+  
+  # Core resources
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["networking.k8s.io"]
+    resources: ["ingresses"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  
+  # Events
+  - apiGroups: [""]
+    resources: ["events"]
+    verbs: ["create", "patch"]
+  
+  # Leader election
+  - apiGroups: [""]
+    resources: ["configmaps"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["coordination.k8s.io"]
+    resources: ["leases"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: {{ include "streamspace.fullname" . }}-controller
+  labels:
+    {{- include "streamspace.controller.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: ClusterRole
+  name: {{ include "streamspace.fullname" . }}-controller
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "streamspace.controller.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+---
+# API RBAC
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: {{ include "streamspace.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.api.labels" . | nindent 4 }}
+rules:
+  # Sessions and Templates CRDs
+  - apiGroups: ["stream.streamspace.io"]
+    resources: ["sessions", "templates"]
+    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+  - apiGroups: ["stream.streamspace.io"]
+    resources: ["sessions/status", "templates/status"]
+    verbs: ["get", "update", "patch"]
+  
+  # Pods for logs streaming
+  - apiGroups: [""]
+    resources: ["pods", "pods/log"]
+    verbs: ["get", "list", "watch"]
+  
+  # Other cluster resources for admin API
+  - apiGroups: [""]
+    resources: ["services", "persistentvolumeclaims", "nodes"]
+    verbs: ["get", "list"]
+  - apiGroups: ["apps"]
+    resources: ["deployments"]
+    verbs: ["get", "list"]
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: {{ include "streamspace.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.api.labels" . | nindent 4 }}
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: {{ include "streamspace.fullname" . }}-api
+subjects:
+  - kind: ServiceAccount
+    name: {{ include "streamspace.api.serviceAccountName" . }}
+    namespace: {{ .Release.Namespace }}
+{{- end }}

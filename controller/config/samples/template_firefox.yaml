@@ -1,0 +1,57 @@
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: firefox-browser
+  namespace: streamspace
+spec:
+  displayName: Firefox Web Browser
+  description: Modern, privacy-focused web browser with full desktop environment
+  category: Web Browsers
+  icon: https://upload.wikimedia.org/wikipedia/commons/a/a0/Firefox_logo%2C_2019.svg
+  baseImage: lscr.io/linuxserver/firefox:latest
+
+  # VNC configuration (generic, not Kasm-specific)
+  vnc:
+    enabled: true
+    port: 3000  # LinuxServer.io images use port 3000
+    protocol: websocket
+    encryption: false
+
+  # Default resource allocations
+  defaultResources:
+    requests:
+      memory: "1Gi"
+      cpu: "500m"
+    limits:
+      memory: "2Gi"
+      cpu: "1000m"
+
+  # Environment variables
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: FIREFOX_CLI
+      value: "https://www.mozilla.org"  # Default homepage
+
+  # Volume mounts (user home will be auto-mounted)
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+
+  # Capabilities
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+    - USB
+
+  # Tags for search and categorization
+  tags:
+    - browser
+    - web
+    - privacy
+    - mozilla

@@ -1,0 +1,185 @@
+
+████████████████████████████████████████████████████████████████
+█                                                              █
+█   StreamSpace v{{ .Chart.AppVersion }} has been installed!  █
+█                                                              █
+████████████████████████████████████████████████████████████████
+
+🚀 Stream any app, anywhere - 100% open source
+
+Your StreamSpace installation is ready. Here's what to do next:
+
+📋 INSTALLATION STATUS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Namespace:     {{ .Release.Namespace }}
+Release Name:  {{ .Release.Name }}
+
+Components installed:
+  {{- if .Values.controller.enabled }}
+  ✓ Controller ({{ .Values.controller.replicaCount }} replica{{ if gt (.Values.controller.replicaCount | int) 1 }}s{{ end }})
+  {{- end }}
+  {{- if .Values.api.enabled }}
+  ✓ API Backend ({{ .Values.api.replicaCount }} replica{{ if gt (.Values.api.replicaCount | int) 1 }}s{{ end }})
+  {{- end }}
+  {{- if .Values.ui.enabled }}
+  ✓ Web UI ({{ .Values.ui.replicaCount }} replica{{ if gt (.Values.ui.replicaCount | int) 1 }}s{{ end }})
+  {{- end }}
+  {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+  ✓ PostgreSQL Database
+  {{- end }}
+  {{- if .Values.monitoring.enabled }}
+  ✓ Monitoring (ServiceMonitor, PrometheusRules, Dashboard)
+  {{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🔍 CHECK STATUS
+
+Watch pods starting up:
+  kubectl get pods -n {{ .Release.Namespace }} -w
+
+Check controller logs:
+  kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "streamspace.fullname" . }}-controller -f
+
+Check API logs:
+  kubectl logs -n {{ .Release.Namespace }} deploy/{{ include "streamspace.fullname" . }}-api -f
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+🌐 ACCESS STREAMSPACE
+
+{{- if .Values.ingress.enabled }}
+
+Web UI URL:
+  {{- range .Values.ingress.hosts }}
+  {{- if .host }}
+  {{ if $.Values.ingress.tls.enabled }}https{{ else }}http{{ end }}://{{ .host }}
+  {{- end }}
+  {{- end }}
+
+{{- if not .Values.ingress.tls.enabled }}
+
+⚠️  WARNING: TLS is disabled. Your connection is NOT encrypted.
+   Enable TLS in production with:
+   --set ingress.tls.enabled=true
+{{- end }}
+
+{{- else }}
+
+Port-forward to access locally:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "streamspace.fullname" . }}-ui 3000:80
+
+Then visit: http://localhost:3000
+
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📚 NEXT STEPS
+
+1. Verify all pods are running:
+   kubectl get pods -n {{ .Release.Namespace }}
+
+2. {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+   Check database is ready:
+   kubectl get statefulset {{ include "streamspace.fullname" . }}-postgres -n {{ .Release.Namespace }}
+   {{- end }}
+
+3. {{- if .Values.templates.deploy }}
+   View available templates:
+   kubectl get templates -n {{ .Release.Namespace }}
+   {{- else }}
+   Create application templates:
+   kubectl apply -f manifests/templates/
+   {{- end }}
+
+4. Create your first session:
+   kubectl apply -f - <<EOF
+   apiVersion: stream.streamspace.io/v1alpha1
+   kind: Session
+   metadata:
+     name: my-first-session
+     namespace: {{ .Release.Namespace }}
+   spec:
+     user: demo
+     template: firefox-browser
+     state: running
+     resources:
+       requests:
+         memory: 2Gi
+         cpu: 1000m
+   EOF
+
+5. Watch the session being created:
+   kubectl get sessions -n {{ .Release.Namespace }} -w
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+{{- if .Values.monitoring.enabled }}
+
+📊 MONITORING
+
+{{- if .Values.monitoring.serviceMonitor.enabled }}
+Prometheus metrics are being scraped automatically.
+{{- end }}
+
+View controller metrics:
+  kubectl port-forward -n {{ .Release.Namespace }} svc/{{ include "streamspace.fullname" . }}-controller 8080:8080
+  curl http://localhost:8080/metrics
+
+{{- if .Values.monitoring.grafanaDashboard.enabled }}
+
+Grafana dashboard has been created. Import it into your Grafana instance.
+{{- end }}
+
+{{- end }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+⚙️  CONFIGURATION
+
+{{- if .Values.secrets.create }}
+
+⚠️  SECURITY WARNING:
+   Using default auto-generated secrets. This is NOT secure for production!
+
+   For production, create your own secret:
+     kubectl create secret generic streamspace-secrets \
+       -n {{ .Release.Namespace }} \
+       --from-literal=postgres-password='YOUR-SECURE-PASSWORD'
+
+   Then update the release:
+     helm upgrade {{ .Release.Name }} streamspace/streamspace \
+       --set secrets.create=false \
+       --set secrets.existingSecret=streamspace-secrets
+{{- end }}
+
+Ingress domain: {{ (index .Values.ingress.hosts 0).host | default "streamspace.local" }}
+Ingress class: {{ .Values.ingress.className }}
+
+Session defaults:
+  - Memory: {{ .Values.sessionDefaults.resources.requests.memory }}
+  - CPU: {{ .Values.sessionDefaults.resources.requests.cpu }}
+  - Idle timeout: {{ .Values.sessionDefaults.idleTimeout }}
+  - Persistent home: {{ .Values.sessionDefaults.persistentHome.enabled }}
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+📖 DOCUMENTATION
+
+Full documentation: https://docs.streamspace.io (coming soon)
+GitHub: https://github.com/streamspace/streamspace
+Issues: https://github.com/streamspace/streamspace/issues
+
+Quick reference:
+  - List sessions: kubectl get sessions -n {{ .Release.Namespace }}
+  - List templates: kubectl get templates -n {{ .Release.Namespace }}
+  - View logs: kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/name=streamspace
+  - Upgrade: helm upgrade {{ .Release.Name }} streamspace/streamspace
+
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Thank you for installing StreamSpace! 🎉
+
+For support, visit: https://github.com/streamspace/streamspace/discussions

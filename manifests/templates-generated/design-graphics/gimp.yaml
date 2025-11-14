@@ -1,0 +1,49 @@
+# GIMP - GNU Image Manipulation Program for photo editing and graphics design
+# Category: Design & Graphics
+# Base Image: lscr.io/linuxserver/gimp:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: gimp
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: gimp
+    app.kubernetes.io/component: template
+    streamspace.io/category: design-graphics
+spec:
+  displayName: GIMP
+  description: GNU Image Manipulation Program for photo editing and graphics design
+  category: Design & Graphics
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/gimp-logo.png
+  baseImage: lscr.io/linuxserver/gimp:latest
+  defaultResources:
+    requests:
+      memory: 4Gi
+      cpu: 2000m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - gimp
+  - design-&-graphics

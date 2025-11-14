@@ -1,0 +1,49 @@
+# FreeCAD - Parametric 3D CAD modeler for product design
+# Category: Design & Graphics
+# Base Image: lscr.io/linuxserver/freecad:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: freecad
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: freecad
+    app.kubernetes.io/component: template
+    streamspace.io/category: design-graphics
+spec:
+  displayName: FreeCAD
+  description: Parametric 3D CAD modeler for product design
+  category: Design & Graphics
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/freecad-logo.png
+  baseImage: lscr.io/linuxserver/freecad:latest
+  defaultResources:
+    requests:
+      memory: 4Gi
+      cpu: 2000m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - freecad
+  - design-&-graphics

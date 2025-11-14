@@ -1,6 +1,6 @@
 #!/usr/bin/env python3
 """
-Generate WorkspaceTemplate CRs from LinuxServer.io API
+Generate StreamSpace Template CRs from LinuxServer.io API
 
 Usage:
     python3 generate-templates.py [--category CATEGORY] [--output-dir DIR]
@@ -126,7 +126,7 @@ def should_skip(image_name: str) -> bool:
 
 
 def generate_template(image: Dict) -> Dict:
-    """Generate WorkspaceTemplate CR from image metadata"""
+    """Generate StreamSpace Template CR from image metadata"""
     name = image.get("name", "").lower().replace("/", "-")
     display_name = image.get("name", "Unknown").replace("linuxserver/", "").title()
     raw_category = image.get("category", "")
@@ -145,11 +145,11 @@ def generate_template(image: Dict) -> Dict:
     base_image = f"lscr.io/linuxserver/{name.replace('linuxserver-', '')}:latest"
 
     template = {
-        "apiVersion": "workspaces.aiinfra.io/v1alpha1",
-        "kind": "WorkspaceTemplate",
+        "apiVersion": "stream.streamspace.io/v1alpha1",
+        "kind": "Template",
         "metadata": {
             "name": name.replace("linuxserver-", ""),
-            "namespace": "workspaces",
+            "namespace": "streamspace",
         },
         "spec": {
             "displayName": display_name,
@@ -203,7 +203,7 @@ def save_template(template: Dict, output_dir: Path):
 
 
 def main():
-    parser = argparse.ArgumentParser(description="Generate WorkspaceTemplate CRs from LinuxServer.io")
+    parser = argparse.ArgumentParser(description="Generate StreamSpace Template CRs from LinuxServer.io")
     parser.add_argument(
         "--category",
         help="Filter by category (e.g., 'Web Browsers', 'Development')",
@@ -212,7 +212,7 @@ def main():
     parser.add_argument(
         "--output-dir",
         help="Output directory for templates",
-        default="../k8s/templates",
+        default="manifests/templates-generated",
     )
     parser.add_argument(
         "--list-categories",

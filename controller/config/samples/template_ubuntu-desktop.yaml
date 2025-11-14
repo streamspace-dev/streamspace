@@ -1,0 +1,63 @@
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: ubuntu-desktop
+  namespace: streamspace
+spec:
+  displayName: Ubuntu Desktop
+  description: Full Ubuntu desktop environment with XFCE - complete Linux workstation
+  category: Desktop Environments
+  icon: https://upload.wikimedia.org/wikipedia/commons/9/9e/UbuntuCoF.svg
+  baseImage: lscr.io/linuxserver/webtop:ubuntu-xfce
+
+  # VNC configuration
+  vnc:
+    enabled: true
+    port: 3000
+    protocol: websocket
+    encryption: false
+
+  # Default resource allocations (desktop needs more resources)
+  defaultResources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "8Gi"
+      cpu: "4000m"
+
+  # Environment variables
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+    - name: TZ
+      value: "America/New_York"
+    - name: CUSTOM_USER
+      value: "ubuntu"
+
+  # Volume mounts
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+
+  # Capabilities
+  capabilities:
+    - Full-Desktop
+    - Terminal
+    - Network
+    - Audio
+    - Clipboard
+    - USB
+    - File-Manager
+    - Multiple-Apps
+
+  # Tags
+  tags:
+    - desktop
+    - ubuntu
+    - xfce
+    - linux
+    - workstation
+    - full-environment

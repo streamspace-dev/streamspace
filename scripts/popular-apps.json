@@ -1,0 +1,248 @@
+{
+  "images": [
+    {
+      "name": "firefox",
+      "displayName": "Firefox",
+      "description": "Mozilla Firefox web browser with KasmVNC for browser-based access",
+      "category": "Web Browsers",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "chromium",
+      "displayName": "Chromium",
+      "description": "Open-source Chromium web browser with KasmVNC",
+      "category": "Web Browsers",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "brave",
+      "displayName": "Brave Browser",
+      "description": "Privacy-focused Brave web browser with built-in ad blocker",
+      "category": "Web Browsers",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "librewolf",
+      "displayName": "LibreWolf",
+      "description": "Privacy and security focused Firefox fork",
+      "category": "Web Browsers",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "opera",
+      "displayName": "Opera",
+      "description": "Opera web browser with built-in VPN and ad blocker",
+      "category": "Web Browsers",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "code-server",
+      "displayName": "VS Code Server",
+      "description": "Visual Studio Code running in the browser with full IDE features",
+      "category": "Development",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": false,
+      "port": 8443
+    },
+    {
+      "name": "gimp",
+      "displayName": "GIMP",
+      "description": "GNU Image Manipulation Program for photo editing and graphics design",
+      "category": "Design & Graphics",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "krita",
+      "displayName": "Krita",
+      "description": "Professional digital painting and illustration software",
+      "category": "Design & Graphics",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "inkscape",
+      "displayName": "Inkscape",
+      "description": "Vector graphics editor for creating SVG files and illustrations",
+      "category": "Design & Graphics",
+      "resources": {"memory": "3Gi", "cpu": "1500m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "blender",
+      "displayName": "Blender",
+      "description": "3D modeling, animation, rendering, and video editing software",
+      "category": "Design & Graphics",
+      "resources": {"memory": "8Gi", "cpu": "4000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "libreoffice",
+      "displayName": "LibreOffice",
+      "description": "Complete office suite compatible with Microsoft Office formats",
+      "category": "Productivity",
+      "resources": {"memory": "3Gi", "cpu": "1500m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "kdenlive",
+      "displayName": "Kdenlive",
+      "description": "Professional video editing software with multi-track timeline",
+      "category": "Audio & Video",
+      "resources": {"memory": "6Gi", "cpu": "3000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "audacity",
+      "displayName": "Audacity",
+      "description": "Free audio editor and recording software",
+      "category": "Audio & Video",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "obs",
+      "displayName": "OBS Studio",
+      "description": "Open Broadcaster Software for video recording and live streaming",
+      "category": "Audio & Video",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "thunderbird",
+      "displayName": "Thunderbird",
+      "description": "Email client from Mozilla with calendar and contacts",
+      "category": "Productivity",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "remmina",
+      "displayName": "Remmina",
+      "description": "Remote desktop client supporting RDP, VNC, SSH, and more",
+      "category": "Remote Access",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "filezilla",
+      "displayName": "FileZilla",
+      "description": "FTP/SFTP client for file transfer operations",
+      "category": "File Management",
+      "resources": {"memory": "2Gi", "cpu": "500m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "calibre",
+      "displayName": "Calibre",
+      "description": "E-book library management and conversion software",
+      "category": "Productivity",
+      "resources": {"memory": "3Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "webtop-ubuntu",
+      "displayName": "Webtop Ubuntu Desktop",
+      "description": "Full Ubuntu desktop environment accessible via web browser",
+      "category": "Desktop Environments",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "webtop-alpine",
+      "displayName": "Webtop Alpine Desktop",
+      "description": "Lightweight Alpine Linux desktop environment",
+      "category": "Desktop Environments",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "webtop-fedora",
+      "displayName": "Webtop Fedora Desktop",
+      "description": "Fedora Linux desktop environment with latest packages",
+      "category": "Desktop Environments",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "duckstation",
+      "displayName": "DuckStation",
+      "description": "PlayStation 1 emulator with enhanced features",
+      "category": "Gaming",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "dolphin",
+      "displayName": "Dolphin Emulator",
+      "description": "GameCube and Wii emulator",
+      "category": "Gaming",
+      "resources": {"memory": "6Gi", "cpu": "3000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "freecad",
+      "displayName": "FreeCAD",
+      "description": "Parametric 3D CAD modeler for product design",
+      "category": "Design & Graphics",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "digikam",
+      "displayName": "digiKam",
+      "description": "Professional photo management software",
+      "category": "Design & Graphics",
+      "resources": {"memory": "3Gi", "cpu": "1500m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "darktable",
+      "displayName": "Darktable",
+      "description": "Photography workflow application and raw developer",
+      "category": "Design & Graphics",
+      "resources": {"memory": "4Gi", "cpu": "2000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "telegram-desktop",
+      "displayName": "Telegram Desktop",
+      "description": "Fast and secure messaging application",
+      "category": "Communication",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": true
+    },
+    {
+      "name": "element",
+      "displayName": "Element",
+      "description": "Matrix protocol messaging client",
+      "category": "Communication",
+      "resources": {"memory": "2Gi", "cpu": "1000m"},
+      "kasmvnc": false,
+      "port": 80
+    },
+    {
+      "name": "qbittorrent",
+      "displayName": "qBittorrent",
+      "description": "BitTorrent client with web interface",
+      "category": "File Management",
+      "resources": {"memory": "1Gi", "cpu": "500m"},
+      "kasmvnc": false,
+      "port": 8080
+    },
+    {
+      "name": "transmission",
+      "displayName": "Transmission",
+      "description": "Lightweight BitTorrent client",
+      "category": "File Management",
+      "resources": {"memory": "512Mi", "cpu": "250m"},
+      "kasmvnc": false,
+      "port": 9091
+    }
+  ]
+}

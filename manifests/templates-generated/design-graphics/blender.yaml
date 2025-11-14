@@ -1,0 +1,49 @@
+# Blender - 3D modeling, animation, rendering, and video editing software
+# Category: Design & Graphics
+# Base Image: lscr.io/linuxserver/blender:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: blender
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: blender
+    app.kubernetes.io/component: template
+    streamspace.io/category: design-graphics
+spec:
+  displayName: Blender
+  description: 3D modeling, animation, rendering, and video editing software
+  category: Design & Graphics
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/blender-logo.png
+  baseImage: lscr.io/linuxserver/blender:latest
+  defaultResources:
+    requests:
+      memory: 8Gi
+      cpu: 4000m
+    limits:
+      memory: 8Gi
+      cpu: 8000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - blender
+  - design-&-graphics

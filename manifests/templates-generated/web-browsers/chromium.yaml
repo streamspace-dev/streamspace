@@ -1,0 +1,49 @@
+# Chromium - Open-source Chromium web browser with KasmVNC
+# Category: Web Browsers
+# Base Image: lscr.io/linuxserver/chromium:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: chromium
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: chromium
+    app.kubernetes.io/component: template
+    streamspace.io/category: web-browsers
+spec:
+  displayName: Chromium
+  description: Open-source Chromium web browser with KasmVNC
+  category: Web Browsers
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/chromium-logo.png
+  baseImage: lscr.io/linuxserver/chromium:latest
+  defaultResources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - chromium
+  - web-browsers

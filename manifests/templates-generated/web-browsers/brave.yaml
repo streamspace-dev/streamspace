@@ -1,0 +1,49 @@
+# Brave Browser - Privacy-focused Brave web browser with built-in ad blocker
+# Category: Web Browsers
+# Base Image: lscr.io/linuxserver/brave:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: brave
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: brave
+    app.kubernetes.io/component: template
+    streamspace.io/category: web-browsers
+spec:
+  displayName: Brave Browser
+  description: Privacy-focused Brave web browser with built-in ad blocker
+  category: Web Browsers
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/brave-logo.png
+  baseImage: lscr.io/linuxserver/brave:latest
+  defaultResources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 2Gi
+      cpu: 2000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - brave
+  - web-browsers

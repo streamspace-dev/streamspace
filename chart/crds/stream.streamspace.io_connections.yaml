@@ -1,0 +1,94 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: connections.stream.streamspace.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+spec:
+  group: stream.streamspace.io
+  names:
+    kind: Connection
+    listKind: ConnectionList
+    plural: connections
+    shortNames:
+    - conn
+    singular: connection
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Connection is the Schema for tracking active user connections to sessions
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object.'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents.'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: ConnectionSpec defines the desired state of Connection
+            properties:
+              clientIP:
+                description: ClientIP is the IP address of the connecting client
+                type: string
+              sessionID:
+                description: SessionID references the Session this connection belongs to
+                type: string
+              userAgent:
+                description: UserAgent is the browser user agent string
+                type: string
+              userID:
+                description: UserID is the user who owns this connection
+                type: string
+            required:
+            - sessionID
+            - userID
+            type: object
+          status:
+            description: ConnectionStatus defines the observed state of Connection
+            properties:
+              connectedAt:
+                description: ConnectedAt is when the connection was established
+                format: date-time
+                type: string
+              lastHeartbeat:
+                description: LastHeartbeat is the last time a heartbeat was received
+                format: date-time
+                type: string
+              state:
+                description: State indicates the connection state (active, stale, disconnected)
+                enum:
+                - active
+                - stale
+                - disconnected
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: User
+      type: string
+      jsonPath: .spec.userID
+    - name: Session
+      type: string
+      jsonPath: .spec.sessionID
+    - name: Client IP
+      type: string
+      jsonPath: .spec.clientIP
+    - name: State
+      type: string
+      jsonPath: .status.state
+    - name: Last Heartbeat
+      type: date
+      jsonPath: .status.lastHeartbeat
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp

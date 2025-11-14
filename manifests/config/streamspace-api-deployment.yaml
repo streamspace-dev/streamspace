@@ -1,0 +1,195 @@
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: api
+spec:
+  replicas: 2
+  selector:
+    matchLabels:
+      app: streamspace
+      component: api
+  template:
+    metadata:
+      labels:
+        app: streamspace
+        component: api
+      annotations:
+        prometheus.io/scrape: "true"
+        prometheus.io/port: "8000"
+        prometheus.io/path: "/metrics"
+    spec:
+      serviceAccountName: streamspace-api
+      containers:
+      - name: api
+        image: your-registry/streamspace-api:v0.2.0
+        imagePullPolicy: IfNotPresent
+        ports:
+          - name: http
+            containerPort: 8000
+            protocol: TCP
+        env:
+          # Database configuration
+          - name: DB_HOST
+            value: postgres.streamspace.svc.cluster.local
+          - name: DB_PORT
+            value: "5432"
+          - name: DB_NAME
+            value: streamspace
+          - name: DB_USER
+            value: streamspace
+          - name: DB_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: streamspace-secrets
+                key: postgres-password
+          - name: DB_SSLMODE
+            value: disable
+
+          # Kubernetes API
+          - name: KUBECONFIG
+            value: ""  # Use in-cluster config
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+
+          # Repository Sync
+          - name: SYNC_WORK_DIR
+            value: /tmp/streamspace-repos
+          - name: SYNC_INTERVAL
+            value: 1h
+
+          # Server configuration
+          - name: API_PORT
+            value: "8000"
+          - name: GIN_MODE
+            value: release
+
+          # CORS (update for your domain)
+          - name: CORS_ORIGINS
+            value: "*"  # TODO: Restrict in production
+
+        resources:
+          requests:
+            memory: 256Mi
+            cpu: 200m
+          limits:
+            memory: 512Mi
+            cpu: 1000m
+
+        livenessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 15
+          periodSeconds: 20
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        readinessProbe:
+          httpGet:
+            path: /health
+            port: 8000
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 3
+          failureThreshold: 3
+
+        securityContext:
+          allowPrivilegeEscalation: false
+          runAsNonRoot: true
+          runAsUser: 1000
+          capabilities:
+            drop:
+              - ALL
+          readOnlyRootFilesystem: false  # Need to write to /tmp for repo clones
+
+        volumeMounts:
+          - name: tmp
+            mountPath: /tmp
+
+      volumes:
+        - name: tmp
+          emptyDir: {}
+
+      securityContext:
+        fsGroup: 1000
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: api
+spec:
+  type: ClusterIP
+  selector:
+    app: streamspace
+    component: api
+  ports:
+    - name: http
+      port: 8000
+      targetPort: 8000
+      protocol: TCP
+
+---
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: api
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+spec:
+  rules:
+    # Access to Session and Template CRDs
+    - apiGroups: ["stream.streamspace.io"]
+      resources: ["sessions", "templates"]
+      verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+    - apiGroups: ["stream.streamspace.io"]
+      resources: ["sessions/status", "templates/status"]
+      verbs: ["get", "update", "patch"]
+
+    # Access to pods for logs streaming
+    - apiGroups: [""]
+      resources: ["pods", "pods/log"]
+      verbs: ["get", "list", "watch"]
+
+    # Access to other cluster resources for admin API
+    - apiGroups: [""]
+      resources: ["services", "persistentvolumeclaims", "namespaces", "nodes"]
+      verbs: ["get", "list"]
+
+    - apiGroups: ["apps"]
+      resources: ["deployments"]
+      verbs: ["get", "list"]
+
+---
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: streamspace-api
+subjects:
+  - kind: ServiceAccount
+    name: streamspace-api
+    namespace: streamspace

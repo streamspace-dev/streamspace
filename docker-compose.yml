@@ -1,0 +1,142 @@
+version: '3.9'
+
+services:
+  # PostgreSQL database
+  postgres:
+    image: postgres:16-alpine
+    container_name: streamspace-postgres
+    environment:
+      POSTGRES_DB: streamspace
+      POSTGRES_USER: streamspace
+      POSTGRES_PASSWORD: streamspace
+    ports:
+      - "5432:5432"
+    volumes:
+      - postgres-data:/var/lib/postgresql/data
+    healthcheck:
+      test: ["CMD-SHELL", "pg_isready -U streamspace"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+    networks:
+      - streamspace
+
+  # StreamSpace API Backend
+  api:
+    build:
+      context: ./api
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-local}
+        BUILD_DATE: ${BUILD_DATE}
+    container_name: streamspace-api
+    depends_on:
+      postgres:
+        condition: service_healthy
+    environment:
+      # Database configuration
+      DB_HOST: postgres
+      DB_PORT: 5432
+      DB_USER: streamspace
+      DB_PASSWORD: streamspace
+      DB_NAME: streamspace
+
+      # API configuration
+      API_PORT: 8000
+      GIN_MODE: debug
+
+      # JWT configuration
+      JWT_SECRET: dev-secret-change-in-production
+
+      # Sync configuration
+      SYNC_INTERVAL: 1h
+
+      # Kubernetes config (when running outside cluster)
+      # KUBECONFIG: /root/.kube/config
+    ports:
+      - "8000:8000"
+    volumes:
+      # Mount kubeconfig for local development (optional)
+      # - ~/.kube:/root/.kube:ro
+      - /tmp/streamspace-repos:/tmp/streamspace-repos
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      interval: 30s
+      timeout: 3s
+      retries: 3
+    networks:
+      - streamspace
+    restart: unless-stopped
+
+  # pgAdmin for database management (optional, for development)
+  pgadmin:
+    image: dpage/pgadmin4:latest
+    container_name: streamspace-pgadmin
+    environment:
+      PGADMIN_DEFAULT_EMAIL: admin@streamspace.local
+      PGADMIN_DEFAULT_PASSWORD: admin
+      PGADMIN_CONFIG_SERVER_MODE: 'False'
+    ports:
+      - "5050:80"
+    volumes:
+      - pgadmin-data:/var/lib/pgadmin
+    networks:
+      - streamspace
+    profiles:
+      - dev
+    restart: unless-stopped
+
+  # Prometheus for metrics (optional, for development)
+  prometheus:
+    image: prom/prometheus:latest
+    container_name: streamspace-prometheus
+    command:
+      - '--config.file=/etc/prometheus/prometheus.yml'
+      - '--storage.tsdb.path=/prometheus'
+      - '--web.console.libraries=/usr/share/prometheus/console_libraries'
+      - '--web.console.templates=/usr/share/prometheus/consoles'
+    ports:
+      - "9090:9090"
+    volumes:
+      - ./monitoring/prometheus.yml:/etc/prometheus/prometheus.yml:ro
+      - prometheus-data:/prometheus
+    networks:
+      - streamspace
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+  # Grafana for dashboards (optional, for development)
+  grafana:
+    image: grafana/grafana:latest
+    container_name: streamspace-grafana
+    environment:
+      GF_SECURITY_ADMIN_USER: admin
+      GF_SECURITY_ADMIN_PASSWORD: admin
+      GF_USERS_ALLOW_SIGN_UP: 'false'
+    ports:
+      - "3000:3000"
+    volumes:
+      - grafana-data:/var/lib/grafana
+      - ./monitoring/grafana/provisioning:/etc/grafana/provisioning:ro
+    networks:
+      - streamspace
+    profiles:
+      - monitoring
+    restart: unless-stopped
+
+networks:
+  streamspace:
+    name: streamspace
+    driver: bridge
+
+volumes:
+  postgres-data:
+    name: streamspace-postgres-data
+  pgadmin-data:
+    name: streamspace-pgadmin-data
+  prometheus-data:
+    name: streamspace-prometheus-data
+  grafana-data:
+    name: streamspace-grafana-data

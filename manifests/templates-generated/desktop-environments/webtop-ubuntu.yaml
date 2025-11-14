@@ -1,0 +1,49 @@
+# Webtop Ubuntu Desktop - Full Ubuntu desktop environment accessible via web browser
+# Category: Desktop Environments
+# Base Image: lscr.io/linuxserver/webtop-ubuntu:latest
+---
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Template
+metadata:
+  name: webtop-ubuntu
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: webtop-ubuntu
+    app.kubernetes.io/component: template
+    streamspace.io/category: desktop-environments
+spec:
+  displayName: Webtop Ubuntu Desktop
+  description: Full Ubuntu desktop environment accessible via web browser
+  category: Desktop Environments
+  icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/webtop-ubuntu-logo.png
+  baseImage: lscr.io/linuxserver/webtop-ubuntu:latest
+  defaultResources:
+    requests:
+      memory: 4Gi
+      cpu: 2000m
+    limits:
+      memory: 4Gi
+      cpu: 4000m
+  ports:
+  - name: vnc
+    containerPort: 3000
+    protocol: TCP
+  env:
+  - name: PUID
+    value: '1000'
+  - name: PGID
+    value: '1000'
+  - name: TZ
+    value: America/New_York
+  volumeMounts:
+  - name: user-home
+    mountPath: /config
+  kasmvnc:
+    enabled: true
+    port: 3000
+  capabilities:
+  - Network
+  - Clipboard
+  tags:
+  - webtop-ubuntu
+  - desktop-environments

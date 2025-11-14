@@ -1,0 +1,106 @@
+{{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "streamspace.fullname" . }}-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.postgresql.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.postgresql.internal.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.postgresql.internal.persistence.size }}
+  {{- if or .Values.global.storageClass .Values.postgresql.internal.persistence.storageClass }}
+  storageClassName: {{ .Values.global.storageClass | default .Values.postgresql.internal.persistence.storageClass }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: StatefulSet
+metadata:
+  name: {{ include "streamspace.fullname" . }}-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.postgresql.labels" . | nindent 4 }}
+spec:
+  serviceName: {{ include "streamspace.fullname" . }}-postgres
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  template:
+    metadata:
+      labels:
+        {{- include "streamspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: database
+    spec:
+      securityContext:
+        {{- toYaml .Values.postgresql.internal.podSecurityContext | nindent 8 }}
+      containers:
+      - name: postgres
+        image: {{ include "streamspace.postgresql.image" . }}
+        imagePullPolicy: {{ .Values.postgresql.internal.image.pullPolicy }}
+        ports:
+          - name: postgres
+            containerPort: 5432
+            protocol: TCP
+        env:
+          - name: POSTGRES_DB
+            value: {{ .Values.postgresql.auth.database }}
+          - name: POSTGRES_USER
+            value: {{ .Values.postgresql.auth.username }}
+          - name: POSTGRES_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "streamspace.postgresql.secretName" . }}
+                key: {{ include "streamspace.postgresql.secretKey" . }}
+          - name: PGDATA
+            value: /var/lib/postgresql/data/pgdata
+        resources:
+          {{- toYaml .Values.postgresql.internal.resources | nindent 10 }}
+        volumeMounts:
+          - name: postgres-data
+            mountPath: /var/lib/postgresql/data
+        livenessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - {{ .Values.postgresql.auth.username }}
+          initialDelaySeconds: 30
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+              - pg_isready
+              - -U
+              - {{ .Values.postgresql.auth.username }}
+          initialDelaySeconds: 10
+          periodSeconds: 5
+        securityContext:
+          {{- toYaml .Values.postgresql.internal.securityContext | nindent 10 }}
+      volumes:
+        - name: postgres-data
+          persistentVolumeClaim:
+            claimName: {{ include "streamspace.fullname" . }}-postgres
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "streamspace.fullname" . }}-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.postgresql.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: postgres
+      port: 5432
+      targetPort: postgres
+      protocol: TCP
+  selector:
+    {{- include "streamspace.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: database
+{{- end }}
