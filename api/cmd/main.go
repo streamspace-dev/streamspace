@@ -176,9 +176,10 @@ func main() {
 	activityHandler := handlers.NewActivityHandler(k8sClient, activityTracker)
 	catalogHandler := handlers.NewCatalogHandler(database)
 	sharingHandler := handlers.NewSharingHandler(database)
+	pluginHandler := handlers.NewPluginHandler(database)
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, jwtManager, userDB, redisCache)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, jwtManager, userDB, redisCache)
 
 	// Create HTTP server
 	srv := &http.Server{
@@ -212,7 +213,7 @@ func main() {
 	log.Println("Server stopped")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache) {
 	// Health check (public)
 	router.GET("/health", h.Health)
 	router.GET("/version", h.Version)
@@ -298,6 +299,9 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 
 		// Session sharing and collaboration - using dedicated handler
 		sharingHandler.RegisterRoutes(v1)
+
+		// Plugin system - using dedicated handler
+		pluginHandler.RegisterRoutes(v1)
 
 		// Metrics
 		v1.GET("/metrics", h.GetMetrics)
