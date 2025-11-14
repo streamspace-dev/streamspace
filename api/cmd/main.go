@@ -145,6 +145,10 @@ func main() {
 	router := gin.New()
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
+
+	// SECURITY: Restrict HTTP methods to prevent abuse
+	router.Use(middleware.AllowedHTTPMethods())
+
 	router.Use(corsMiddleware())
 
 	// SECURITY: Add security headers (HSTS, CSP, X-Frame-Options, etc.)
@@ -160,9 +164,14 @@ func main() {
 	router.Use(middleware.RequestSizeLimit(10 * 1024 * 1024))
 
 	// SECURITY: Add rate limiting to prevent DoS attacks
-	// 100 requests per second per IP with burst of 200
+	// Layer 1: IP-based rate limiting (100 req/sec per IP with burst of 200)
 	rateLimiter := middleware.NewRateLimiter(100, 200)
 	router.Use(rateLimiter.Middleware())
+
+	// Layer 2: Per-user rate limiting (1000 req/hour per authenticated user)
+	// Prevents abuse from compromised tokens
+	userRateLimiter := middleware.NewUserRateLimiter(1000, 50)
+	router.Use(userRateLimiter.Middleware())
 
 	// SECURITY: Add audit logging for all requests
 	auditLogger := middleware.NewAuditLogger(database, false) // Don't log request bodies by default
