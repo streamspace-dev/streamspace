@@ -1,0 +1,19 @@
+# Gitleaks ignore file for false positive secrets
+# These are example tokens and keys used in documentation only
+
+# Documentation examples - BUG_BOUNTY.md
+docs/BUG_BOUNTY.md:eyJhbGciOiJub25lIiwidHlwIjoiSldUIn0
+docs/BUG_BOUNTY.md:bugbounty-
+
+# Documentation examples - SECURITY_AUDIT_PREP.md
+docs/SECURITY_AUDIT_PREP.md:test-key-12345-67890-abcdef
+docs/SECURITY_AUDIT_PREP.md:Admin123!
+docs/SECURITY_AUDIT_PREP.md:Test123!
+docs/SECURITY_AUDIT_PREP.md:Authorization: Bearer
+
+# Documentation examples - SECURITY_TESTING.md
+docs/SECURITY_TESTING.md:Authorization: Bearer
+docs/SECURITY_TESTING.md:X-API-Key:
+
+# These are all example credentials for testing documentation
+# NOT real secrets used in production

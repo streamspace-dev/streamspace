@@ -621,6 +621,7 @@ pkill -f "port-forward.*8000:8000"
 kubectl port-forward -n streamspace svc/streamspace-api 8000:8000 &
 
 # Use wscat to test WebSocket (requires: npm install -g wscat)
+# NOTE: ws://localhost is acceptable for local testing. Production uses wss://
 wscat -c ws://localhost:8000/api/v1/ws/sessions
 
 # Should receive periodic session updates every 3 seconds

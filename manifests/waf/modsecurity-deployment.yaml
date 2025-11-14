@@ -108,6 +108,9 @@ spec:
           value: "5"
         - name: ANOMALY_OUTBOUND
           value: "4"
+        # Backend URLs for cluster-internal communication
+        # NOTE: ws:// and http:// are acceptable for internal cluster communication
+        # as Istio service mesh provides mTLS encryption. External clients use wss:// and https://.
         - name: BACKEND
           value: "http://streamspace-api.streamspace.svc.cluster.local:8000"
         - name: BACKEND_WS

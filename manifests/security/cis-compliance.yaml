@@ -1,5 +1,14 @@
 # CIS Kubernetes Benchmark Compliance Automation
 # Runs automated compliance scanning and reporting
+#
+# SECURITY NOTE: The kube-bench pods require hostPID and hostNetwork access
+# to perform CIS benchmark checks on the host. This is by design and necessary
+# for the tool to function. Security is maintained through:
+# - Read-only volume mounts
+# - Minimal privileges (allowPrivilegeEscalation: false)
+# - Dropped capabilities
+# - Namespace isolation
+# - ServiceAccount with read-only RBAC
 
 ---
 # Namespace for security scanning tools
@@ -150,6 +159,14 @@ spec:
           containers:
             - name: kube-bench
               image: aquasec/kube-bench:v0.7.0
+              # Security context: hostPID and hostNetwork are required for CIS benchmarking
+              # as kube-bench needs to inspect host processes and network configuration
+              securityContext:
+                allowPrivilegeEscalation: false
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
               command: ["kube-bench"]
               args:
                 - "--config-dir=/etc/kube-bench/cfg"
@@ -187,6 +204,14 @@ spec:
             # Sidecar to upload results to monitoring
             - name: results-uploader
               image: curlimages/curl:latest
+              securityContext:
+                allowPrivilegeEscalation: false
+                runAsNonRoot: true
+                runAsUser: 65534  # nobody user
+                capabilities:
+                  drop:
+                    - ALL
+                readOnlyRootFilesystem: true
               command: ["/bin/sh"]
               args:
                 - -c
@@ -280,6 +305,14 @@ spec:
       containers:
         - name: kube-bench
           image: aquasec/kube-bench:v0.7.0
+          # Security context: hostPID and hostNetwork are required for CIS benchmarking
+          # as kube-bench needs to inspect host processes and network configuration
+          securityContext:
+            allowPrivilegeEscalation: false
+            capabilities:
+              drop:
+                - ALL
+            readOnlyRootFilesystem: true
           command: ["kube-bench"]
           args:
             - "--config-dir=/etc/kube-bench/cfg"
