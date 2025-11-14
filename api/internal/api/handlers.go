@@ -11,6 +11,7 @@ import (
 	"github.com/google/uuid"
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace/streamspace/api/internal/sync"
 	"github.com/streamspace/streamspace/api/internal/tracker"
 )
 
@@ -19,16 +20,18 @@ type Handler struct {
 	db           *db.Database
 	k8sClient    *k8s.Client
 	connTracker  *tracker.ConnectionTracker
+	syncService  *sync.SyncService
 	namespace    string
 }
 
 // NewHandler creates a new API handler
-func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker) *Handler {
+func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService) *Handler {
 	namespace := "streamspace" // TODO: Make configurable
 	return &Handler{
 		db:          database,
 		k8sClient:   k8sClient,
 		connTracker: connTracker,
+		syncService: syncService,
 		namespace:   namespace,
 	}
 }
@@ -588,11 +591,26 @@ func (h *Handler) AddRepository(c *gin.Context) {
 
 // SyncRepository triggers a sync for a repository
 func (h *Handler) SyncRepository(c *gin.Context) {
-	repoID := c.Param("id")
+	ctx := context.Background()
+	repoIDStr := c.Param("id")
 
-	// TODO: Implement Git repository sync logic
-	c.JSON(http.StatusOK, gin.H{
-		"message": fmt.Sprintf("Sync triggered for repository %s", repoID),
+	// Convert repo ID to int
+	var repoID int
+	if _, err := fmt.Sscanf(repoIDStr, "%d", &repoID); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid repository ID"})
+		return
+	}
+
+	// Trigger sync in background
+	go func() {
+		if err := h.syncService.SyncRepository(ctx, repoID); err != nil {
+			log.Printf("Repository sync failed for ID %d: %v", repoID, err)
+		}
+	}()
+
+	c.JSON(http.StatusAccepted, gin.H{
+		"message": fmt.Sprintf("Sync triggered for repository %d", repoID),
+		"status":  "syncing",
 	})
 }
 

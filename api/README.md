@@ -60,12 +60,47 @@ The API backend serves as the central control plane for StreamSpace, interfacing
   - New Connection CRD: Track active user connections
   - New TemplateRepository CRD: Manage Git-based template repositories
 
+### ✅ Phase 2.2 - Repository Sync (Completed)
+
+- **Sync Service** (`internal/sync/`)
+  - Git repository cloning and pulling
+  - Template YAML parsing and validation
+  - Catalog database population
+  - Scheduled sync jobs (configurable interval)
+  - Manual sync triggers via API
+  - Webhook support for auto-sync on Git push
+
+- **Git Client** (`internal/sync/git.go`)
+  - Clone repositories with depth=1 for faster operations
+  - Pull latest changes (fetch + reset --hard)
+  - Authentication support: SSH keys, tokens, basic auth
+  - GitHub and GitLab URL formatting
+  - Git version validation
+
+- **Template Parser** (`internal/sync/parser.go`)
+  - YAML parsing with gopkg.in/yaml.v3
+  - Template manifest validation
+  - App type inference (desktop vs webapp)
+  - JSON conversion for database storage
+  - Recursive repository scanning
+
+- **Enhanced API Endpoints**
+  - `POST /api/v1/catalog/sync` - Trigger sync for all repositories
+  - `POST /api/v1/catalog/repositories/:id/sync` - Trigger sync for specific repository
+  - `POST /webhooks/repository/sync` - Webhook endpoint for Git providers
+
+- **Scheduled Sync**
+  - Automatic background sync (default: 1 hour interval)
+  - Configurable via `SYNC_INTERVAL` env var
+  - Initial sync on startup
+  - Repository status tracking (pending, syncing, synced, failed)
+
 ## Directory Structure
 
 ```
 api/
 ├── cmd/
-│   └── main.go                    # Server entry point (180 lines)
+│   └── main.go                    # Server entry point (220 lines)
 ├── internal/
 │   ├── db/
 │   │   └── database.go            # Database layer (200 lines)
@@ -73,8 +108,13 @@ api/
 │   │   └── client.go              # K8s client wrapper (700+ lines)
 │   ├── tracker/
 │   │   └── tracker.go             # Connection tracker (450+ lines)
+│   ├── sync/
+│   │   ├── sync.go                # Sync service (220+ lines)
+│   │   ├── git.go                 # Git client (150+ lines)
+│   │   └── parser.go              # Template parser (250+ lines)
 │   └── api/
-│       └── handlers.go            # API handlers (700+ lines)
+│       ├── handlers.go            # API handlers (700+ lines)
+│       └── stubs.go               # Stub handlers and webhooks (200+ lines)
 ├── go.mod                         # Go module definition
 └── README.md                      # This file
 ```
@@ -170,6 +210,10 @@ DB_SSLMODE=disable
 KUBECONFIG=/path/to/kubeconfig  # Optional, uses in-cluster config if not set
 NAMESPACE=streamspace            # Default namespace
 
+# Repository Sync
+SYNC_WORK_DIR=/tmp/streamspace-repos  # Directory for cloned repos
+SYNC_INTERVAL=1h                      # Scheduled sync interval
+
 # Server
 PORT=8080
 GIN_MODE=release                # release or debug
@@ -248,8 +292,33 @@ curl http://localhost:8080/api/v1/templates
 # List catalog templates
 curl http://localhost:8080/api/v1/catalog/templates?category=Browsers
 
+# Add template repository
+curl -X POST http://localhost:8080/api/v1/catalog/repositories \
+  -H "Content-Type: application/json" \
+  -d '{
+    "name": "community-templates",
+    "url": "https://github.com/streamspace/templates",
+    "branch": "main",
+    "authType": "none"
+  }'
+
 # List repositories
-curl http://localhost:8080/api/v1/repositories
+curl http://localhost:8080/api/v1/catalog/repositories
+
+# Trigger sync for specific repository
+curl -X POST http://localhost:8080/api/v1/catalog/repositories/1/sync
+
+# Trigger sync for all repositories
+curl -X POST http://localhost:8080/api/v1/catalog/sync
+
+# Webhook (Git provider pushes to this)
+curl -X POST http://localhost:8080/webhooks/repository/sync \
+  -H "Content-Type: application/json" \
+  -d '{
+    "repository_url": "https://github.com/streamspace/templates",
+    "branch": "main",
+    "ref": "refs/heads/main"
+  }'
 ```
 
 ## Connection Tracking & Auto-Hibernation
@@ -333,14 +402,14 @@ kubectl apply -f manifests/config/api-deployment.yaml
 - REST API handlers
 - Enhanced CRDs (webapp support, Connection, TemplateRepository)
 
-### 🔄 Phase 2.2 - Repository Sync (Next)
+### ✅ Phase 2.2 - Repository Sync (Completed)
 - Git repository cloning and syncing
 - Template manifest parsing (YAML)
 - Catalog database population
 - Scheduled sync jobs
 - Webhook support for auto-sync
 
-### 📋 Phase 2.3 - Authentication & Authorization
+### 📋 Phase 2.3 - Authentication & Authorization (Next)
 - JWT token validation
 - OIDC integration (Authentik/Keycloak)
 - Role-based access control (RBAC)
@@ -382,4 +451,5 @@ MIT License - See [LICENSE](../LICENSE)
 - [Gin](https://github.com/gin-gonic/gin) - Web framework
 - [client-go](https://github.com/kubernetes/client-go) - Kubernetes client
 - [lib/pq](https://github.com/lib/pq) - PostgreSQL driver
+- [gopkg.in/yaml.v3](https://github.com/go-yaml/yaml) - YAML parsing
 - [gorilla/websocket](https://github.com/gorilla/websocket) - WebSocket support

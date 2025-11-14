@@ -14,6 +14,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/api"
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace/streamspace/api/internal/sync"
 	"github.com/streamspace/streamspace/api/internal/tracker"
 )
 
@@ -61,6 +62,26 @@ func main() {
 	go connTracker.Start()
 	defer connTracker.Stop()
 
+	// Initialize sync service
+	log.Println("Initializing repository sync service...")
+	syncService, err := sync.NewSyncService(database)
+	if err != nil {
+		log.Fatalf("Failed to initialize sync service: %v", err)
+	}
+
+	// Start scheduled sync (every 1 hour by default)
+	syncInterval := getEnv("SYNC_INTERVAL", "1h")
+	interval, err := time.ParseDuration(syncInterval)
+	if err != nil {
+		log.Printf("Invalid SYNC_INTERVAL, using default 1h: %v", err)
+		interval = 1 * time.Hour
+	}
+
+	ctx, cancelSync := context.WithCancel(context.Background())
+	defer cancelSync()
+
+	go syncService.StartScheduledSync(ctx, interval)
+
 	// Create Gin router
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -71,7 +92,7 @@ func main() {
 	router.Use(corsMiddleware())
 
 	// Initialize API handlers
-	apiHandler := api.NewHandler(database, k8sClient, connTracker)
+	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService)
 
 	// Setup routes
 	setupRoutes(router, apiHandler)
@@ -192,6 +213,12 @@ func setupRoutes(router *gin.Engine, h *api.Handler) {
 		ws.GET("/sessions", h.SessionsWebSocket)
 		ws.GET("/cluster", h.ClusterWebSocket)
 		ws.GET("/logs/:namespace/:pod", h.LogsWebSocket)
+	}
+
+	// Webhook endpoints (no auth required)
+	webhooks := router.Group("/webhooks")
+	{
+		webhooks.POST("/repository/sync", h.WebhookRepositorySync)
 	}
 }
 
