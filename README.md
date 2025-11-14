@@ -15,6 +15,7 @@ StreamSpace is a Kubernetes-native platform that delivers browser-based access t
 - 💾 **Persistent Home Directories** - User files persist across sessions (NFS)
 - ⚡ **On-Demand Auto-Hibernation** - Idle workspaces automatically scale to zero
 - 🚀 **200+ Pre-Built Templates** - Comprehensive application catalog
+- 🔌 **Plugin System** - Extend functionality with extensions, webhooks, and integrations
 - 📊 **Resource Quotas** - Per-user memory, workspace, and storage limits
 - 🔒 **Enterprise Security** - Network policies, SSO, audit logging, DLP
 - 📈 **Comprehensive Monitoring** - Grafana dashboards and Prometheus metrics
@@ -51,6 +52,7 @@ EOF
 - [Installation](#installation)
 - [Usage](#usage)
 - [Available Applications](#available-applications)
+- [Plugin System](#plugin-system)
 - [Configuration](#configuration)
 - [Monitoring](#monitoring)
 - [Development](#development)
@@ -227,6 +229,126 @@ Ubuntu (XFCE, KDE, MATE), Alpine (i3), Fedora, Arch
 Dolphin, DuckStation, MAME, GZDoom, Flycast
 
 See full catalog: [docs/APPLICATIONS.md](docs/APPLICATIONS.md)
+
+## 🔌 Plugin System
+
+StreamSpace features a powerful plugin system that allows you to extend functionality without modifying core code. Plugins can add new features, integrate with external services, customize workflows, and more.
+
+### Plugin Types
+
+- **Extensions** - Add new features and UI components
+- **Webhooks** - React to system events (session created, user logged in, etc.)
+- **API Integrations** - Connect to external services
+- **UI Themes** - Customize the web interface appearance
+- **CLI Tools** - Add new command-line utilities
+
+### User Guide
+
+#### Browse & Install Plugins
+
+1. Navigate to **Plugins → Plugin Catalog** in the web UI
+2. Browse available plugins by category or search
+3. Click on a plugin to view details, permissions, and reviews
+4. Click **Install** to add the plugin to your account
+5. Configure the plugin in **Plugins → My Plugins**
+
+#### Manage Installed Plugins
+
+- **Enable/Disable**: Toggle plugins on/off without uninstalling
+- **Configure**: Use the built-in form editor or JSON editor
+- **Uninstall**: Remove plugins you no longer need
+- **Rate & Review**: Help others discover great plugins
+
+### Admin Guide
+
+Administrators can manage plugins system-wide from **Admin → Plugin Management**:
+
+```bash
+# View all installed plugins
+kubectl get -n streamspace cm plugin-registry -o yaml
+
+# Enable/disable plugins globally
+# Use the admin UI at /admin/plugins
+```
+
+**Admin Features**:
+- View all installed plugins across all users
+- Enable/disable plugins globally
+- Configure plugin settings system-wide
+- View plugin usage statistics
+- Manage plugin permissions
+
+### Plugin Repositories
+
+Add custom plugin repositories to access more plugins:
+
+1. Go to **Repositories** in the web UI
+2. Click **Add Repository**
+3. Enter repository URL (must be a Git repository)
+4. Set authentication if needed (private repositories)
+5. Click **Sync** to load plugins from the repository
+
+```yaml
+# Example: Add via kubectl
+apiVersion: stream.space/v1alpha1
+kind: Repository
+metadata:
+  name: company-plugins
+  namespace: streamspace
+spec:
+  url: https://github.com/mycompany/streamspace-plugins
+  branch: main
+  authType: ssh
+  authSecret: github-ssh-key
+```
+
+### Security & Permissions
+
+Plugins declare required permissions in their manifest. Users see these permissions before installation:
+
+- **Low Risk** (🟢): Read-only access, notifications, API access
+- **Medium Risk** (🟠): Webhook access, network requests, user data
+- **High Risk** (🔴): Write access, admin privileges, filesystem, execute commands
+
+Review permissions carefully before installing plugins from third-party sources.
+
+### Developer Guide
+
+Want to create your own plugins? See our comprehensive guides:
+
+- **[Plugin Development Guide](PLUGIN_DEVELOPMENT.md)** - Complete tutorial for building plugins
+- **[Plugin API Reference](docs/PLUGIN_API.md)** - API documentation and examples
+- **[Plugin Manifest Schema](docs/PLUGIN_MANIFEST.md)** - Manifest file format
+
+**Quick Example** - Create a simple notification plugin:
+
+```javascript
+// manifest.json
+{
+  "name": "welcome-notifier",
+  "version": "1.0.0",
+  "displayName": "Welcome Notifier",
+  "description": "Sends welcome notifications to new users",
+  "type": "webhook",
+  "author": "Your Name",
+  "permissions": ["notifications", "read:users"],
+  "entrypoints": {
+    "webhook": "index.js"
+  }
+}
+
+// index.js
+module.exports = {
+  async onUserCreated(user) {
+    await streamspace.notify(user.id, {
+      title: "Welcome to StreamSpace!",
+      message: `Hi ${user.fullName}, welcome aboard!`
+    });
+  }
+};
+```
+
+See [PLUGIN_DEVELOPMENT.md](PLUGIN_DEVELOPMENT.md) for complete examples and best practices.
 
 ## ⚙️ Configuration
 
