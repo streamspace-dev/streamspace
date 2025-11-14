@@ -18,6 +18,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/handlers"
 	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace/streamspace/api/internal/middleware"
 	"github.com/streamspace/streamspace/api/internal/quota"
 	"github.com/streamspace/streamspace/api/internal/sync"
 	"github.com/streamspace/streamspace/api/internal/tracker"
@@ -142,6 +143,12 @@ func main() {
 	router.Use(gin.Logger())
 	router.Use(gin.Recovery())
 	router.Use(corsMiddleware())
+
+	// Add gzip compression (exclude WebSocket endpoints)
+	router.Use(middleware.GzipWithExclusions(
+		middleware.BestSpeed, // Use best speed for balance of compression vs CPU
+		[]string{"/api/v1/ws/"}, // Exclude WebSocket paths
+	))
 
 	// Add cache control headers to all responses
 	router.Use(cache.CacheControl(5 * time.Minute))
