@@ -16,6 +16,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/k8s"
 	"github.com/streamspace/streamspace/api/internal/sync"
 	"github.com/streamspace/streamspace/api/internal/tracker"
+	"github.com/streamspace/streamspace/api/internal/websocket"
 )
 
 func main() {
@@ -82,6 +83,11 @@ func main() {
 
 	go syncService.StartScheduledSync(ctx, interval)
 
+	// Initialize WebSocket manager
+	log.Println("Initializing WebSocket manager...")
+	wsManager := websocket.NewManager(database, k8sClient)
+	wsManager.Start()
+
 	// Create Gin router
 	if os.Getenv("GIN_MODE") == "" {
 		gin.SetMode(gin.ReleaseMode)
@@ -92,7 +98,7 @@ func main() {
 	router.Use(corsMiddleware())
 
 	// Initialize API handlers
-	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService)
+	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService, wsManager)
 
 	// Setup routes
 	setupRoutes(router, apiHandler)

@@ -13,6 +13,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/k8s"
 	"github.com/streamspace/streamspace/api/internal/sync"
 	"github.com/streamspace/streamspace/api/internal/tracker"
+	"github.com/streamspace/streamspace/api/internal/websocket"
 )
 
 // Handler handles all API requests
@@ -21,17 +22,19 @@ type Handler struct {
 	k8sClient    *k8s.Client
 	connTracker  *tracker.ConnectionTracker
 	syncService  *sync.SyncService
+	wsManager    *websocket.Manager
 	namespace    string
 }
 
 // NewHandler creates a new API handler
-func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService) *Handler {
+func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager) *Handler {
 	namespace := "streamspace" // TODO: Make configurable
 	return &Handler{
 		db:          database,
 		k8sClient:   k8sClient,
 		connTracker: connTracker,
 		syncService: syncService,
+		wsManager:   wsManager,
 		namespace:   namespace,
 	}
 }

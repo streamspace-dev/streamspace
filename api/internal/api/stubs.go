@@ -1,10 +1,21 @@
 package api
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
+	"github.com/gorilla/websocket"
 )
+
+// WebSocket upgrader
+var upgrader = websocket.Upgrader{
+	ReadBufferSize:  1024,
+	WriteBufferSize: 1024,
+	CheckOrigin: func(r *http.Request) bool {
+		return true // Allow all origins for now (TODO: restrict in production)
+	},
+}
 
 // ============================================================================
 // Health & Version Endpoints
@@ -129,22 +140,43 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 }
 
 // ============================================================================
-// WebSocket Endpoints (Stubs)
+// WebSocket Endpoints
 // ============================================================================
 
 // SessionsWebSocket handles WebSocket for real-time session updates
 func (h *Handler) SessionsWebSocket(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "WebSocket not implemented yet"})
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade WebSocket connection: %v", err)
+		return
+	}
+
+	h.wsManager.HandleSessionsWebSocket(conn)
 }
 
 // ClusterWebSocket handles WebSocket for real-time cluster updates
 func (h *Handler) ClusterWebSocket(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "WebSocket not implemented yet"})
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade WebSocket connection: %v", err)
+		return
+	}
+
+	h.wsManager.HandleMetricsWebSocket(conn)
 }
 
 // LogsWebSocket handles WebSocket for streaming pod logs
 func (h *Handler) LogsWebSocket(c *gin.Context) {
-	c.JSON(http.StatusNotImplemented, gin.H{"error": "WebSocket not implemented yet"})
+	namespace := c.Param("namespace")
+	podName := c.Param("pod")
+
+	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
+	if err != nil {
+		log.Printf("Failed to upgrade WebSocket connection: %v", err)
+		return
+	}
+
+	h.wsManager.HandleLogsWebSocket(conn, namespace, podName)
 }
 
 // ============================================================================
