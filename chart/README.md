@@ -1,230 +1,614 @@
-# Workspace Platform Helm Chart
+# StreamSpace Helm Chart
 
-Helm chart for deploying the Workspace Streaming Platform - a Kasm Workspaces alternative for Kubernetes.
+This Helm chart deploys StreamSpace, a Kubernetes-native multi-user platform for streaming containerized applications to web browsers.
+
+## Overview
+
+StreamSpace provides:
+- **Browser-based access** to any containerized application via KasmVNC
+- **Multi-user support** with SSO authentication (Authentik/Keycloak)
+- **Persistent home directories** using NFS storage
+- **Auto-hibernation** for resource efficiency
+- **200+ application templates** from LinuxServer.io
+- **Resource quotas** and limits per user
+- **Comprehensive monitoring** with Grafana and Prometheus
 
 ## Prerequisites
 
-- Kubernetes 1.19+
-- Helm 3.0+
-- PostgreSQL database
-- NFS storage provisioner
-- Authentik (for SSO)
+- Kubernetes 1.19+ cluster
+- Helm 3.x
+- NFS storage provisioner (for ReadWriteMany PVCs)
+- Ingress controller (Traefik, nginx, etc.)
+- PostgreSQL database (can be deployed by chart or use external)
 
-## Installation
+## Quick Start
 
-### 1. Add Helm Repository (Optional)
+### Install with Default Settings
 
 ```bash
-helm repo add workspace-platform https://your-charts-repo.com
+# Add StreamSpace Helm repository (if published)
+helm repo add streamspace https://streamspace.github.io/charts
 helm repo update
+
+# Install StreamSpace
+helm install streamspace streamspace/streamspace \
+  --namespace streamspace \
+  --create-namespace
 ```
 
-### 2. Install Chart
+### Install from Local Chart
 
 ```bash
-# Create namespace
-kubectl create namespace workspaces
-
-# Install with default values
-helm install workspace-platform ./chart -n workspaces
-
-# Or install from repository
-helm install workspace-platform workspace-platform/workspace-platform -n workspaces
+# From the repository root
+helm install streamspace ./chart \
+  --namespace streamspace \
+  --create-namespace
 ```
 
-### 3. Custom Installation
+### Access the UI
+
+After installation, follow the instructions in the NOTES output to access StreamSpace:
 
 ```bash
-# Create custom values file
-cat > custom-values.yaml <<EOF
-controller:
-  replicas: 2
+# If using ingress (default)
+echo "Access StreamSpace at: http://streamspace.local"
 
-secrets:
-  postgresPassword: your-secure-password
-  jwtSecret: $(openssl rand -base64 32)
-  authentikClientSecret: your-authentik-secret
-
-ingress:
-  hostname: workspaces.example.com
-  tls:
-    enabled: true
-    secretName: workspaces-tls
-
-monitoring:
-  enabled: true
-EOF
-
-# Install with custom values
-helm install workspace-platform ./chart -n workspaces -f custom-values.yaml
+# Or port-forward for local access
+kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
+# Then visit http://localhost:3000
 ```
 
 ## Configuration
 
-The following table lists the configurable parameters:
+### Key Configuration Options
 
 | Parameter | Description | Default |
 |-----------|-------------|---------|
-| `controller.image.repository` | Controller image repository | `your-registry/workspace-controller` |
-| `controller.replicas` | Number of controller replicas | `1` |
-| `controller.config.postgres.host` | PostgreSQL host | `postgres.data.svc.cluster.local` |
-| `controller.config.hibernation.enabled` | Enable auto-hibernation | `true` |
-| `controller.config.hibernation.defaultIdleTimeout` | Default idle timeout | `30m` |
-| `api.replicas` | Number of API replicas | `2` |
-| `ui.replicas` | Number of UI replicas | `2` |
-| `ingress.enabled` | Enable Ingress | `true` |
-| `ingress.hostname` | Ingress hostname | `workspaces.local` |
-| `monitoring.enabled` | Enable monitoring | `true` |
-| `secrets.postgresPassword` | PostgreSQL password | `postgres` (CHANGE!) |
+| `controller.enabled` | Deploy the StreamSpace controller | `true` |
+| `controller.replicaCount` | Number of controller replicas | `1` |
+| `controller.config.ingressDomain` | Base domain for session ingresses | `streamspace.local` |
+| `controller.config.ingressClass` | Ingress class to use | `traefik` |
+| `api.enabled` | Deploy the API backend | `true` |
+| `api.replicaCount` | Number of API replicas | `2` |
+| `api.autoscaling.enabled` | Enable HPA for API | `false` |
+| `ui.enabled` | Deploy the web UI | `true` |
+| `ui.replicaCount` | Number of UI replicas | `2` |
+| `postgresql.enabled` | Deploy PostgreSQL database | `true` |
+| `postgresql.external.enabled` | Use external PostgreSQL | `false` |
+| `ingress.enabled` | Create ingress resources | `true` |
+| `ingress.tls.enabled` | Enable TLS for ingress | `false` |
+| `monitoring.enabled` | Deploy monitoring resources | `true` |
+| `networkPolicy.enabled` | Create network policies | `false` |
 
-## Upgrading
+### Example: Production Deployment
 
-```bash
-# Upgrade to latest version
-helm upgrade workspace-platform ./chart -n workspaces
-
-# Upgrade with custom values
-helm upgrade workspace-platform ./chart -n workspaces -f custom-values.yaml
-```
-
-## Uninstalling
-
-```bash
-# Uninstall chart (keeps PVCs)
-helm uninstall workspace-platform -n workspaces
-
-# Delete namespace and all resources
-kubectl delete namespace workspaces
-```
-
-## Post-Installation
-
-### 1. Check Deployment Status
-
-```bash
-kubectl get pods -n workspaces
-kubectl get svc -n workspaces
-kubectl get ingress -n workspaces
-```
-
-### 2. Initialize Database
-
-```bash
-# Database init job should run automatically
-kubectl get jobs -n workspaces
-
-# Check logs
-kubectl logs -n workspaces job/workspace-db-init
-```
-
-### 3. Access Web UI
-
-```bash
-# Get UI URL
-echo "https://$(kubectl get ingress -n workspaces workspace-platform -o jsonpath='{.spec.rules[0].host}')"
-
-# Or via LoadBalancer IP
-kubectl get svc -n workspaces workspace-platform-ui
-```
-
-### 4. Configure Authentik
-
-1. Login to Authentik admin panel
-2. Create OAuth2/OIDC Provider for Workspaces
-3. Update `authentikClientSecret` in values
-4. Upgrade Helm release
-
-## Troubleshooting
-
-### Controller Not Starting
-
-```bash
-# Check controller logs
-kubectl logs -n workspaces deploy/workspace-platform-controller
-
-# Check events
-kubectl describe pod -n workspaces -l app=workspace-controller
-```
-
-### Database Connection Issues
-
-```bash
-# Test PostgreSQL connection
-kubectl exec -n workspaces deploy/workspace-platform-controller -- \
-  pg_isready -h postgres.data.svc.cluster.local -p 5432
-
-# Check database init job
-kubectl logs -n workspaces job/workspace-db-init
-```
-
-### Templates Not Loading
-
-```bash
-# Check WorkspaceTemplates
-kubectl get workspacetemplates -n workspaces
-
-# Deploy templates manually
-kubectl apply -f k8s/templates/
-```
-
-## Examples
-
-### Minimal Installation
+Create a `production-values.yaml` file:
 
 ```yaml
+global:
+  imageRegistry: "registry.mycompany.com"
+  storageClass: "nfs-client"
+
 controller:
-  replicas: 1
-
-secrets:
-  postgresPassword: mypassword
-
-ingress:
-  hostname: workspaces.local
-  tls:
-    enabled: false
-
-monitoring:
-  enabled: false
-```
-
-### Production Installation
-
-```yaml
-controller:
-  replicas: 2
+  replicaCount: 3
+  leaderElection:
+    enabled: true
   resources:
     requests:
       memory: 512Mi
       cpu: 500m
     limits:
       memory: 1Gi
-      cpu: 1000m
+      cpu: 2000m
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
 
 api:
-  replicas: 3
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 20
+    targetCPUUtilizationPercentage: 70
+  config:
+    corsOrigins: "https://streamspace.mycompany.com"
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
 
 ui:
-  replicas: 3
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+
+postgresql:
+  external:
+    enabled: true
+    host: "postgres.database.svc.cluster.local"
+    port: 5432
+    database: "streamspace"
+    username: "streamspace"
+    existingSecret: "streamspace-db-secret"
 
 ingress:
-  hostname: workspaces.example.com
+  enabled: true
+  className: "nginx"
+  hosts:
+    - host: streamspace.mycompany.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: ui
+        - path: /api
+          pathType: Prefix
+          service: api
   tls:
     enabled: true
-    secretName: workspaces-tls
+    secretName: streamspace-tls
+
+secrets:
+  create: false
+  existingSecret: "streamspace-secrets"
 
 monitoring:
   enabled: true
+  serviceMonitor:
+    enabled: true
+    labels:
+      prometheus: kube-prometheus
+  prometheusRules:
+    enabled: true
+  grafanaDashboard:
+    enabled: true
+    namespace: "observability"
+
+networkPolicy:
+  enabled: true
+  ingress:
+    namespace: "ingress-nginx"
+  monitoring:
+    namespace: "observability"
+```
+
+Install with production values:
+
+```bash
+helm install streamspace ./chart \
+  --namespace streamspace \
+  --create-namespace \
+  --values production-values.yaml
+```
+
+### Example: Development Deployment
+
+For local development with minimal resources:
+
+```yaml
+controller:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+
+api:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 128Mi
+      cpu: 100m
+
+ui:
+  replicaCount: 1
+  resources:
+    requests:
+      memory: 64Mi
+      cpu: 50m
+
+postgresql:
+  enabled: true
+  internal:
+    resources:
+      requests:
+        memory: 128Mi
+        cpu: 100m
+    persistence:
+      size: 5Gi
+
+ingress:
+  enabled: false
+
+monitoring:
+  enabled: false
+```
+
+## Upgrading
+
+### Upgrade to Latest Version
+
+```bash
+helm repo update
+helm upgrade streamspace streamspace/streamspace \
+  --namespace streamspace
+```
+
+### Upgrade with New Values
+
+```bash
+helm upgrade streamspace ./chart \
+  --namespace streamspace \
+  --values production-values.yaml
+```
+
+### Rollback
+
+```bash
+# List releases
+helm history streamspace -n streamspace
+
+# Rollback to previous version
+helm rollback streamspace -n streamspace
+
+# Rollback to specific revision
+helm rollback streamspace 2 -n streamspace
+```
+
+## Uninstalling
+
+```bash
+# Uninstall the release
+helm uninstall streamspace -n streamspace
+
+# Optionally delete the namespace
+kubectl delete namespace streamspace
+```
+
+**Warning:** Uninstalling will delete all sessions and user data unless you have configured external storage or backups.
+
+## Advanced Configuration
+
+### Using External PostgreSQL
+
+To use an existing PostgreSQL database:
+
+```yaml
+postgresql:
+  enabled: false  # Don't deploy internal PostgreSQL
+  external:
+    enabled: true
+    host: "postgres.example.com"
+    port: 5432
+    database: "streamspace"
+    username: "streamspace"
+    existingSecret: "postgres-credentials"
+    existingSecretPasswordKey: "password"
+```
+
+Create the secret:
+
+```bash
+kubectl create secret generic postgres-credentials \
+  --from-literal=password='your-secure-password' \
+  -n streamspace
+```
+
+### Custom Image Registry
+
+To use a private registry:
+
+```yaml
+global:
+  imageRegistry: "registry.mycompany.com"
+  imagePullSecrets:
+    - name: regcred
 
 controller:
-  config:
-    hibernation:
-      defaultIdleTimeout: 15m
-    cluster:
-      memoryThreshold: 80
+  image:
+    repository: "streamspace/controller"
+    tag: "v0.2.0"
+
+api:
+  image:
+    repository: "streamspace/api"
+    tag: "v0.2.0"
+
+ui:
+  image:
+    repository: "streamspace/ui"
+    tag: "v0.2.0"
 ```
+
+Create the image pull secret:
+
+```bash
+kubectl create secret docker-registry regcred \
+  --docker-server=registry.mycompany.com \
+  --docker-username=your-username \
+  --docker-password=your-password \
+  --docker-email=your-email@example.com \
+  -n streamspace
+```
+
+### TLS Configuration
+
+#### Using cert-manager
+
+```yaml
+ingress:
+  enabled: true
+  className: "nginx"
+  annotations:
+    cert-manager.io/cluster-issuer: "letsencrypt-prod"
+  hosts:
+    - host: streamspace.example.com
+      paths:
+        - path: /
+          pathType: Prefix
+          service: ui
+        - path: /api
+          pathType: Prefix
+          service: api
+  tls:
+    enabled: true
+    secretName: streamspace-tls  # Created by cert-manager
+```
+
+#### Using Existing Certificate
+
+```bash
+# Create TLS secret
+kubectl create secret tls streamspace-tls \
+  --cert=path/to/tls.crt \
+  --key=path/to/tls.key \
+  -n streamspace
+```
+
+```yaml
+ingress:
+  tls:
+    enabled: true
+    secretName: streamspace-tls
+```
+
+### Resource Quotas
+
+Configure default resources for user sessions:
+
+```yaml
+sessionDefaults:
+  resources:
+    requests:
+      memory: 4Gi
+      cpu: 2000m
+    limits:
+      memory: 8Gi
+      cpu: 4000m
+  persistentHome:
+    enabled: true
+    size: 100Gi
+  idleTimeout: 1h
+  maxSessionDuration: 12h
+```
+
+### High Availability Setup
+
+For production HA deployment:
+
+```yaml
+controller:
+  replicaCount: 3
+  leaderElection:
+    enabled: true
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 2
+  affinity:
+    podAntiAffinity:
+      preferredDuringSchedulingIgnoredDuringExecution:
+        - weight: 100
+          podAffinityTerm:
+            labelSelector:
+              matchLabels:
+                app.kubernetes.io/component: controller
+            topologyKey: kubernetes.io/hostname
+
+api:
+  replicaCount: 5
+  autoscaling:
+    enabled: true
+    minReplicas: 5
+    maxReplicas: 30
+  podDisruptionBudget:
+    enabled: true
+    minAvailable: 3
+
+postgresql:
+  external:
+    enabled: true
+    host: "postgres-ha.database.svc.cluster.local"
+```
+
+### Monitoring Setup
+
+Enable Prometheus and Grafana integration:
+
+```yaml
+monitoring:
+  enabled: true
+
+  serviceMonitor:
+    enabled: true
+    namespace: "observability"
+    labels:
+      prometheus: kube-prometheus
+    interval: 30s
+
+  prometheusRules:
+    enabled: true
+    labels:
+      prometheus: kube-prometheus
+    interval: 30s
+    alerts:
+      highSessionCount:
+        threshold: 200
+        duration: 15m
+
+  grafanaDashboard:
+    enabled: true
+    namespace: "observability"
+    labels:
+      grafana_dashboard: "1"
+```
+
+### Network Policies
+
+Enable network policies for enhanced security:
+
+```yaml
+networkPolicy:
+  enabled: true
+  ingress:
+    namespace: "ingress-nginx"
+  monitoring:
+    namespace: "observability"
+  controller:
+    restrictEgress: true  # Only allow specific egress
+```
+
+## Troubleshooting
+
+### Check Installation Status
+
+```bash
+# Check all resources
+kubectl get all -n streamspace
+
+# Check pods
+kubectl get pods -n streamspace
+
+# Check services
+kubectl get svc -n streamspace
+
+# Check ingress
+kubectl get ingress -n streamspace
+```
+
+### View Logs
+
+```bash
+# Controller logs
+kubectl logs -n streamspace deploy/streamspace-controller -f
+
+# API logs
+kubectl logs -n streamspace deploy/streamspace-api -f
+
+# UI logs
+kubectl logs -n streamspace deploy/streamspace-ui -f
+
+# PostgreSQL logs
+kubectl logs -n streamspace statefulset/streamspace-postgres -f
+```
+
+### Common Issues
+
+#### Pods Not Starting
+
+Check pod events:
+```bash
+kubectl describe pod <pod-name> -n streamspace
+```
+
+Common causes:
+- Image pull errors: Check image names and pull secrets
+- Resource constraints: Check node capacity
+- PVC issues: Verify storage provisioner
+
+#### Database Connection Failures
+
+Check API logs:
+```bash
+kubectl logs -n streamspace deploy/streamspace-api | grep -i database
+```
+
+Verify database connection:
+```bash
+kubectl exec -it -n streamspace deploy/streamspace-api -- sh -c 'nc -zv $DB_HOST $DB_PORT'
+```
+
+#### Ingress Not Working
+
+Check ingress status:
+```bash
+kubectl describe ingress streamspace -n streamspace
+```
+
+Verify ingress controller is running:
+```bash
+kubectl get pods -n kube-system | grep -i ingress
+# or
+kubectl get pods -n ingress-nginx
+```
+
+#### Sessions Not Creating
+
+Check controller logs:
+```bash
+kubectl logs -n streamspace deploy/streamspace-controller -f
+```
+
+Verify CRDs are installed:
+```bash
+kubectl get crds | grep streamspace
+```
+
+Test creating a session manually:
+```bash
+kubectl apply -f - <<EOF
+apiVersion: stream.streamspace.io/v1alpha1
+kind: Session
+metadata:
+  name: test-session
+  namespace: streamspace
+spec:
+  user: testuser
+  template: firefox-browser
+  state: running
+EOF
+
+# Check session status
+kubectl get sessions -n streamspace
+kubectl describe session test-session -n streamspace
+```
+
+## Values Reference
+
+See [values.yaml](values.yaml) for complete configuration options with comments.
+
+Key sections:
+- `global.*` - Global settings (registry, storage class)
+- `controller.*` - Controller configuration
+- `api.*` - API backend configuration
+- `ui.*` - Web UI configuration
+- `postgresql.*` - Database configuration
+- `ingress.*` - Ingress configuration
+- `secrets.*` - Secret management
+- `monitoring.*` - Prometheus/Grafana integration
+- `networkPolicy.*` - Network policy settings
+- `sessionDefaults.*` - Default session resources
 
 ## Support
 
-For issues and questions:
-- GitHub Issues: https://github.com/yourusername/ai-infra-k3s/issues
-- Documentation: docs/workspaces/
+- **Documentation**: https://docs.streamspace.io
+- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
+- **Discussions**: https://github.com/streamspace/streamspace/discussions
+- **Discord**: https://discord.gg/streamspace
+
+## License
+
+MIT License - see [LICENSE](../LICENSE) for details.

@@ -1,18 +1,23 @@
 apiVersion: v2
-name: workspace-platform
-description: Multi-user container streaming platform with on-demand auto-hibernation
+name: streamspace
+description: Kubernetes-native multi-user platform for streaming containerized applications to web browsers
 type: application
-version: 0.1.0
-appVersion: "0.1.0"
+version: 0.2.0
+appVersion: "0.2.0"
 keywords:
-  - workspaces
-  - kasm
+  - streamspace
   - vnc
   - containers
   - multi-user
-home: https://github.com/yourusername/ai-infra-k3s
+  - streaming
+  - kubernetes
+  - browser-based
+  - remote-desktop
+home: https://github.com/streamspace/streamspace
 sources:
-  - https://github.com/yourusername/ai-infra-k3s
+  - https://github.com/streamspace/streamspace
 maintainers:
-  - name: Your Name
-    email: your.email@example.com
+  - name: StreamSpace Team
+    email: team@streamspace.io
+icon: https://streamspace.io/logo.png
+kubeVersion: ">=1.19.0-0"

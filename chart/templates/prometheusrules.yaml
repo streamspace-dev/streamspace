@@ -1,0 +1,140 @@
+{{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRules.enabled }}
+apiVersion: monitoring.coreos.com/v1
+kind: PrometheusRule
+metadata:
+  name: {{ include "streamspace.fullname" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.prometheusRules.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+spec:
+  groups:
+    - name: streamspace.controller
+      interval: {{ .Values.monitoring.prometheusRules.interval }}
+      rules:
+        - alert: StreamSpaceControllerDown
+          expr: up{job="{{ include "streamspace.fullname" . }}-controller"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: controller
+          annotations:
+            summary: "StreamSpace Controller is down"
+            description: "The StreamSpace controller has been down for more than 5 minutes."
+
+        - alert: StreamSpaceHighSessionCount
+          expr: streamspace_sessions_total > {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold }}
+          for: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.duration }}
+          labels:
+            severity: warning
+            component: controller
+          annotations:
+            summary: "High number of active sessions"
+            description: "There are {{ "{{ $value }}" }} active sessions (threshold: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold }})."
+
+        - alert: StreamSpaceSessionCreationFailures
+          expr: rate(streamspace_session_creation_failures_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: controller
+          annotations:
+            summary: "High rate of session creation failures"
+            description: "Session creation is failing at {{ "{{ $value | humanizePercentage }}" }} per second."
+
+        - alert: StreamSpaceHibernationFailures
+          expr: rate(streamspace_hibernation_failures_total[5m]) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: controller
+          annotations:
+            summary: "High rate of hibernation failures"
+            description: "Session hibernation is failing at {{ "{{ $value | humanizePercentage }}" }} per second."
+
+        - alert: StreamSpaceHighReconciliationDuration
+          expr: histogram_quantile(0.99, rate(streamspace_reconciliation_duration_seconds_bucket[5m])) > 10
+          for: 15m
+          labels:
+            severity: warning
+            component: controller
+          annotations:
+            summary: "High reconciliation duration"
+            description: "99th percentile reconciliation duration is {{ "{{ $value }}" }} seconds."
+
+    {{- if .Values.api.enabled }}
+    - name: streamspace.api
+      interval: {{ .Values.monitoring.prometheusRules.interval }}
+      rules:
+        - alert: StreamSpaceAPIDown
+          expr: up{job="{{ include "streamspace.fullname" . }}-api"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: api
+          annotations:
+            summary: "StreamSpace API is down"
+            description: "The StreamSpace API has been down for more than 5 minutes."
+
+        - alert: StreamSpaceAPIHighErrorRate
+          expr: rate(http_requests_total{job="{{ include "streamspace.fullname" . }}-api",status=~"5.."}[5m]) / rate(http_requests_total{job="{{ include "streamspace.fullname" . }}-api"}[5m]) > 0.05
+          for: 10m
+          labels:
+            severity: warning
+            component: api
+          annotations:
+            summary: "High API error rate"
+            description: "API error rate is {{ "{{ $value | humanizePercentage }}" }}."
+
+        - alert: StreamSpaceAPIHighLatency
+          expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="{{ include "streamspace.fullname" . }}-api"}[5m])) > 2
+          for: 10m
+          labels:
+            severity: warning
+            component: api
+          annotations:
+            summary: "High API latency"
+            description: "99th percentile API latency is {{ "{{ $value }}" }} seconds."
+
+        - alert: StreamSpaceDatabaseConnectionFailed
+          expr: streamspace_database_connected == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: api
+          annotations:
+            summary: "Database connection failed"
+            description: "The API cannot connect to the PostgreSQL database."
+    {{- end }}
+
+    {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+    - name: streamspace.postgresql
+      interval: {{ .Values.monitoring.prometheusRules.interval }}
+      rules:
+        - alert: StreamSpacePostgreSQLDown
+          expr: up{job="{{ include "streamspace.fullname" . }}-postgres"} == 0
+          for: 5m
+          labels:
+            severity: critical
+            component: database
+          annotations:
+            summary: "PostgreSQL is down"
+            description: "The StreamSpace PostgreSQL database has been down for more than 5 minutes."
+
+        - alert: StreamSpacePostgreSQLHighConnections
+          expr: pg_stat_database_numbackends{datname="{{ .Values.postgresql.auth.database }}"} > 80
+          for: 10m
+          labels:
+            severity: warning
+            component: database
+          annotations:
+            summary: "High number of database connections"
+            description: "PostgreSQL has {{ "{{ $value }}" }} connections (threshold: 80)."
+    {{- end }}
+
+    {{- with .Values.monitoring.prometheusRules.additionalRules }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+{{- end }}

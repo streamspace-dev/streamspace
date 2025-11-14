@@ -1,13 +1,32 @@
-# Default values for workspace-platform
+# Default values for StreamSpace
+# This is a YAML-formatted file.
+# Declare variables to be passed into your templates.
 
-# Controller configuration
+## Global settings
+global:
+  # Image registry to use for all images
+  imageRegistry: ""
+  # Image pull secrets for private registries
+  imagePullSecrets: []
+  # Storage class for all PVCs
+  storageClass: ""
+
+## StreamSpace Controller
 controller:
+  enabled: true
+
   image:
-    repository: your-registry/workspace-controller
-    tag: latest
+    registry: ghcr.io
+    repository: streamspace/streamspace-controller
+    tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
-  replicas: 1  # Increase to 2+ for HA (Phase 5)
+  # Number of controller replicas (use 3+ with leader election for HA)
+  replicaCount: 1
+
+  # Leader election for high availability
+  leaderElection:
+    enabled: false  # Enable when replicaCount > 1
 
   resources:
     requests:
@@ -15,84 +34,154 @@ controller:
       cpu: 200m
     limits:
       memory: 512Mi
-      cpu: 500m
+      cpu: 1000m
 
+  # Controller configuration
   config:
-    # PostgreSQL connection
-    postgres:
-      host: postgres.data.svc.cluster.local
-      port: 5432
-      database: workspaces
-      user: postgres
-      # Password should be set in secrets
+    # Ingress settings for created sessions
+    ingressDomain: streamspace.local
+    ingressClass: traefik
 
-    # Authentik integration
-    authentik:
-      url: https://authentik.local
-      issuer: https://authentik.local/application/o/workspaces/
-      # Client secret should be set in secrets
+    # Metrics and health
+    metricsBindAddress: ":8080"
+    healthProbeBindAddress: ":8081"
 
-    # Hibernation settings
-    hibernation:
-      enabled: true
-      defaultIdleTimeout: 30m
-      defaultMaxSessionDuration: 8h
-      checkInterval: 60s
+  # Service for metrics
+  service:
+    type: ClusterIP
+    metricsPort: 8080
 
-    # Resource settings
-    resources:
-      defaultMemory: 2Gi
-      defaultCPU: 1000m
-      maxMemory: 8Gi
-      maxCPU: 4000m
+  # Service account
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
 
-    # Storage
-    storage:
-      className: nfs-client
-      defaultHomeSize: 50Gi
-      persistentHomeEnabled: true
+  # Pod annotations
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8080"
+    prometheus.io/path: "/metrics"
 
-    # Cluster capacity
-    cluster:
-      memoryThreshold: 85
-      queueEnabled: true
-      queueMaxWaitTime: 5m
+  # Security context
+  podSecurityContext:
+    fsGroup: 65532
+    runAsNonRoot: true
+    runAsUser: 65532
 
-    # Networking
-    networking:
-      ingressDomain: workspaces.local
-      ingressClass: traefik
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
 
-# API backend configuration
+  # Node selector
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity
+  affinity: {}
+
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    # maxUnavailable: 1
+
+## API Backend
 api:
+  enabled: true
+
   image:
-    repository: your-registry/workspace-api
-    tag: latest
+    registry: ghcr.io
+    repository: streamspace/streamspace-api
+    tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
-  replicas: 2
+  replicaCount: 2
 
   resources:
     requests:
-      memory: 128Mi
-      cpu: 100m
-    limits:
       memory: 256Mi
-      cpu: 500m
+      cpu: 200m
+    limits:
+      memory: 512Mi
+      cpu: 1000m
 
+  # API configuration
   config:
-    jwtExpiration: 3600
-    corsOrigins: https://workspaces.local
-    metricsEnabled: true
+    port: 8000
+    ginMode: release
 
-# Web UI configuration
+    # CORS settings
+    corsOrigins: "*"  # Restrict in production
+
+    # Repository sync
+    syncInterval: "1h"
+    syncWorkDir: /tmp/streamspace-repos
+
+  # Service
+  service:
+    type: ClusterIP
+    port: 8000
+
+  # Service account
+  serviceAccount:
+    create: true
+    annotations: {}
+    name: ""
+
+  # Pod annotations
+  podAnnotations:
+    prometheus.io/scrape: "true"
+    prometheus.io/port: "8000"
+    prometheus.io/path: "/metrics"
+
+  # Security context
+  podSecurityContext:
+    fsGroup: 1000
+    runAsNonRoot: true
+    runAsUser: 1000
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: false  # Needs to write to /tmp for repo clones
+
+  # Autoscaling
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+    targetMemoryUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    # maxUnavailable: 1
+
+## Web UI
 ui:
+  enabled: true
+
   image:
-    repository: your-registry/workspace-ui
-    tag: latest
+    registry: ghcr.io
+    repository: streamspace/streamspace-ui
+    tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
-  replicas: 2
+  replicaCount: 2
 
   resources:
     requests:
@@ -102,67 +191,237 @@ ui:
       memory: 128Mi
       cpu: 200m
 
-  config:
-    appName: "Workspace Streaming Platform"
-    defaultIdleTimeout: "30m"
-    features:
-      hibernation: true
-      sessionRecording: false
-      analytics: true
-
+  # Service
   service:
-    type: LoadBalancer
+    type: ClusterIP
     port: 80
 
-# Ingress configuration
+  # Security context
+  podSecurityContext:
+    fsGroup: 101
+    runAsNonRoot: true
+    runAsUser: 101  # nginx user
+
+  securityContext:
+    allowPrivilegeEscalation: false
+    capabilities:
+      drop:
+        - ALL
+    readOnlyRootFilesystem: true
+
+  # Autoscaling
+  autoscaling:
+    enabled: false
+    minReplicas: 2
+    maxReplicas: 10
+    targetCPUUtilizationPercentage: 80
+
+  nodeSelector: {}
+  tolerations: []
+  affinity: {}
+
+  # Pod Disruption Budget
+  podDisruptionBudget:
+    enabled: false
+    minAvailable: 1
+    # maxUnavailable: 1
+
+## PostgreSQL Database
+postgresql:
+  enabled: true
+
+  # Use external PostgreSQL
+  external:
+    enabled: false
+    host: ""
+    port: 5432
+    database: streamspace
+    username: streamspace
+    # Password should be in existingSecret
+    existingSecret: ""
+    existingSecretPasswordKey: "postgres-password"
+
+  # Internal PostgreSQL (for development/testing)
+  internal:
+    image:
+      registry: docker.io
+      repository: postgres
+      tag: "15-alpine"
+      pullPolicy: IfNotPresent
+
+    resources:
+      requests:
+        memory: 256Mi
+        cpu: 250m
+      limits:
+        memory: 512Mi
+        cpu: 500m
+
+    # Persistent volume
+    persistence:
+      enabled: true
+      storageClass: ""
+      size: 20Gi
+      accessMode: ReadWriteOnce
+
+    # Security
+    podSecurityContext:
+      fsGroup: 999
+      runAsNonRoot: true
+      runAsUser: 999
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+  # Database configuration
+  auth:
+    database: streamspace
+    username: streamspace
+    # Password from secret
+    existingSecret: ""
+    secretKeys:
+      adminPasswordKey: "postgres-password"
+
+## Ingress
 ingress:
   enabled: true
   className: traefik
+
   annotations:
+    cert-manager.io/cluster-issuer: letsencrypt-prod
     traefik.ingress.kubernetes.io/router.entrypoints: websecure
-    traefik.ingress.kubernetes.io/router.tls: "true"
-  hostname: workspaces.local
+
+  hosts:
+    - host: streamspace.local
+      paths:
+        - path: /
+          pathType: Prefix
+          service: ui
+        - path: /api
+          pathType: Prefix
+          service: api
+        - path: /health
+          pathType: Exact
+          service: api
+        - path: /version
+          pathType: Exact
+          service: api
+
   tls:
     enabled: false
-    secretName: workspace-platform-tls
+    # - secretName: streamspace-tls
+    #   hosts:
+    #     - streamspace.local
 
-# Monitoring configuration
+## Secrets
+secrets:
+  # Create secrets automatically (NOT for production!)
+  create: true
+
+  # PostgreSQL password
+  postgresPassword: "changeme"
+
+  # Or use existing secret
+  existingSecret: ""
+  existingSecretKeys:
+    postgresPassword: "postgres-password"
+
+## Application Templates
+templates:
+  # Deploy sample templates on install
+  deploy: true
+
+  # Categories to deploy
+  categories:
+    browsers: true      # Firefox, Chromium, Brave, LibreWolf
+    development: true   # VS Code, GitHub Desktop
+    productivity: true  # LibreOffice, Calligra
+    design: false       # GIMP, Krita, Inkscape, Blender (large images)
+    media: false        # Audacity, Kdenlive
+    gaming: false       # DuckStation, Dolphin
+    webtop: false       # Desktop environments
+
+## Monitoring & Observability
 monitoring:
   enabled: true
+
+  # Prometheus ServiceMonitor
   serviceMonitor:
     enabled: true
-  prometheusRule:
+    namespace: ""
+    interval: 30s
+    scrapeTimeout: 10s
+    labels: {}
+    relabelings: []
+
+  # Prometheus Rules
+  prometheusRules:
     enabled: true
+    namespace: ""
+    labels: {}
+    interval: 30s
+    alerts:
+      highSessionCount:
+        threshold: 100
+        duration: 10m
+    additionalRules: []
+
+  # Grafana Dashboard
   grafanaDashboard:
     enabled: true
+    namespace: ""
+    labels:
+      grafana_dashboard: "1"
 
-# Database initialization
-database:
-  init:
+## Session Defaults
+sessionDefaults:
+  # Default resources for new sessions
+  resources:
+    requests:
+      memory: 2Gi
+      cpu: 1000m
+    limits:
+      memory: 4Gi
+      cpu: 2000m
+
+  # Persistent home directory
+  persistentHome:
     enabled: true
-    # Uses existing PostgreSQL in data namespace
+    size: 50Gi
+    storageClass: ""
 
-# Secrets (should be overridden)
-secrets:
-  postgresPassword: postgres  # CHANGE ME
-  jwtSecret: CHANGE_ME_GENERATE_RANDOM_SECRET
-  authentikClientSecret: CHANGE_ME_FROM_AUTHENTIK
+  # Auto-hibernation
+  idleTimeout: 30m
+  maxSessionDuration: 8h
 
-# Initial workspace templates
-templates:
-  # Deploy starter templates by default
-  browsers:
-    - firefox
-    - chromium
-  productivity:
-    - libreoffice
-  development:
-    - code-server
-  design:
-    - gimp
-    - blender
+  # State
+  defaultState: running
 
-# Global settings
-nameOverride: ""
-fullnameOverride: ""
-namespaceOverride: workspaces
+## RBAC
+rbac:
+  create: true
+
+## Network Policies
+networkPolicy:
+  enabled: false
+  policyTypes:
+    - Ingress
+    - Egress
+  # Ingress controller namespace
+  ingress:
+    namespace: kube-system
+  # Monitoring namespace
+  monitoring:
+    namespace: observability
+  # Controller network restrictions
+  controller:
+    restrictEgress: false
+
+## Common labels
+commonLabels: {}
+
+## Common annotations
+commonAnnotations: {}

@@ -1,0 +1,229 @@
+{{- if .Values.networkPolicy.enabled }}
+{{- if .Values.controller.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "streamspace.fullname" . }}-controller
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.controller.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: controller
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow Prometheus to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.monitoring.namespace | default "observability" }}
+      ports:
+        - protocol: TCP
+          port: 8080
+  egress:
+    # Allow access to Kubernetes API
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: apiserver
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow all egress if not restricted
+    {{- if not .Values.networkPolicy.controller.restrictEgress }}
+    - {}
+    {{- end }}
+---
+{{- end }}
+{{- if .Values.api.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "streamspace.fullname" . }}-api
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.api.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: api
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from UI
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "streamspace.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: ui
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.config.port }}
+    # Allow from ingress controller
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.ingress.namespace | default "kube-system" }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.config.port }}
+    {{- end }}
+    # Allow Prometheus to scrape metrics
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.monitoring.namespace | default "observability" }}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.config.port }}
+  egress:
+    # Allow access to PostgreSQL
+    {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "streamspace.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: database
+      ports:
+        - protocol: TCP
+          port: 5432
+    {{- end }}
+    # Allow access to external PostgreSQL
+    {{- if .Values.postgresql.external.enabled }}
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: {{ .Values.postgresql.external.port }}
+    {{- end }}
+    # Allow access to Kubernetes API
+    - to:
+        - namespaceSelector: {}
+          podSelector:
+            matchLabels:
+              component: apiserver
+      ports:
+        - protocol: TCP
+          port: 443
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+    # Allow session pod access for WebSocket proxy
+    - to:
+        - podSelector:
+            matchLabels:
+              app: streamspace-session
+      ports:
+        - protocol: TCP
+          port: 3000
+    # Allow external git repository access
+    - to:
+        - podSelector: {}
+      ports:
+        - protocol: TCP
+          port: 443
+        - protocol: TCP
+          port: 80
+---
+{{- end }}
+{{- if .Values.ui.enabled }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "streamspace.fullname" . }}-ui
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.ui.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: ui
+  policyTypes:
+    - Ingress
+    - Egress
+  ingress:
+    # Allow from ingress controller
+    {{- if .Values.ingress.enabled }}
+    - from:
+        - namespaceSelector:
+            matchLabels:
+              name: {{ .Values.networkPolicy.ingress.namespace | default "kube-system" }}
+      ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+    # Allow from anywhere if ingress not enabled
+    {{- if not .Values.ingress.enabled }}
+    - ports:
+        - protocol: TCP
+          port: 80
+    {{- end }}
+  egress:
+    # Allow access to API
+    - to:
+        - podSelector:
+            matchLabels:
+              {{- include "streamspace.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: {{ .Values.api.config.port }}
+    # Allow DNS
+    - to:
+        - namespaceSelector:
+            matchLabels:
+              name: kube-system
+      ports:
+        - protocol: UDP
+          port: 53
+---
+{{- end }}
+{{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
+apiVersion: networking.k8s.io/v1
+kind: NetworkPolicy
+metadata:
+  name: {{ include "streamspace.fullname" . }}-postgres
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.postgresql.labels" . | nindent 4 }}
+spec:
+  podSelector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: database
+  policyTypes:
+    - Ingress
+  ingress:
+    # Allow from API
+    - from:
+        - podSelector:
+            matchLabels:
+              {{- include "streamspace.selectorLabels" . | nindent 14 }}
+              app.kubernetes.io/component: api
+      ports:
+        - protocol: TCP
+          port: 5432
+{{- end }}
+{{- end }}

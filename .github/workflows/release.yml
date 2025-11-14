@@ -1,0 +1,191 @@
+name: Release
+
+on:
+  push:
+    tags:
+      - 'v*'
+
+permissions:
+  contents: write
+
+jobs:
+  release:
+    name: Create Release
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION_NUM=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          # Get previous tag
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+
+          # Generate changelog
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+
+          # Save to file
+          echo "$CHANGELOG" > CHANGELOG.txt
+
+          # Also save to output
+          echo "CHANGELOG<<EOF" >> $GITHUB_OUTPUT
+          echo "$CHANGELOG" >> $GITHUB_OUTPUT
+          echo "EOF" >> $GITHUB_OUTPUT
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Package Helm chart
+        run: |
+          helm package chart/ --version ${{ steps.version.outputs.VERSION_NUM }} --app-version ${{ steps.version.outputs.VERSION }}
+          mv streamspace-${{ steps.version.outputs.VERSION_NUM }}.tgz streamspace-helm-chart.tgz
+
+      - name: Create Release Notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          # StreamSpace ${{ steps.version.outputs.VERSION }}
+
+          ## What's Changed
+
+          ${{ steps.changelog.outputs.CHANGELOG }}
+
+          ## Installation
+
+          ### Using Helm
+
+          \`\`\`bash
+          # Install from chart archive
+          helm install streamspace streamspace-helm-chart.tgz \\
+            --namespace streamspace \\
+            --create-namespace
+
+          # Or install from repository
+          helm repo add streamspace https://streamspace.github.io/charts
+          helm install streamspace streamspace/streamspace \\
+            --namespace streamspace \\
+            --create-namespace \\
+            --version ${{ steps.version.outputs.VERSION_NUM }}
+          \`\`\`
+
+          ### Docker Images
+
+          All images are available for both \`linux/amd64\` and \`linux/arm64\` platforms:
+
+          - Controller: \`ghcr.io/${{ github.repository_owner }}/streamspace-controller:${{ steps.version.outputs.VERSION }}\`
+          - API: \`ghcr.io/${{ github.repository_owner }}/streamspace-api:${{ steps.version.outputs.VERSION }}\`
+          - UI: \`ghcr.io/${{ github.repository_owner }}/streamspace-ui:${{ steps.version.outputs.VERSION }}\`
+
+          ## Documentation
+
+          - [Installation Guide](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Architecture Docs](https://github.com/${{ github.repository }}/blob/main/docs/ARCHITECTURE.md)
+          - [Controller Guide](https://github.com/${{ github.repository }}/blob/main/docs/CONTROLLER_GUIDE.md)
+          - [Helm Chart README](https://github.com/${{ github.repository }}/blob/main/chart/README.md)
+
+          ## Upgrade Instructions
+
+          \`\`\`bash
+          helm upgrade streamspace streamspace/streamspace \\
+            --namespace streamspace \\
+            --version ${{ steps.version.outputs.VERSION_NUM }}
+          \`\`\`
+
+          ## Full Changelog
+
+          **Full Changelog**: https://github.com/${{ github.repository }}/compare/PREV_TAG...${{ steps.version.outputs.VERSION }}
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            streamspace-helm-chart.tgz
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  publish-helm-chart:
+    name: Publish Helm Chart
+    runs-on: ubuntu-latest
+    needs: release
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Checkout gh-pages branch
+        uses: actions/checkout@v4
+        with:
+          ref: gh-pages
+          path: gh-pages
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION_NUM=${GITHUB_REF#refs/tags/v}" >> $GITHUB_OUTPUT
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Package and update Helm repository
+        run: |
+          # Package chart
+          helm package chart/ --version ${{ steps.version.outputs.VERSION_NUM }} --app-version ${GITHUB_REF#refs/tags/}
+
+          # Move to gh-pages
+          mv streamspace-${{ steps.version.outputs.VERSION_NUM }}.tgz gh-pages/
+
+          # Update index
+          cd gh-pages
+          helm repo index . --url https://${{ github.repository_owner }}.github.io/streamspace/
+
+          # Commit and push
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add .
+          git commit -m "chore: publish Helm chart ${{ steps.version.outputs.VERSION_NUM }}"
+          git push
+
+  docker-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    needs: release
+    strategy:
+      matrix:
+        component: [controller, api, ui]
+    steps:
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ghcr.io/${{ github.repository_owner }}/streamspace-${{ matrix.component }}:${{ steps.version.outputs.VERSION }}
+          format: 'sarif'
+          output: 'trivy-results-${{ matrix.component }}.sarif'
+
+      - name: Upload Trivy results to GitHub Security tab
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-results-${{ matrix.component }}.sarif'
+          category: 'trivy-${{ matrix.component }}'
