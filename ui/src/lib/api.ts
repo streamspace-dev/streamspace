@@ -535,6 +535,125 @@ class APIClient {
   }
 
   // ============================================================================
+  // Session Sharing & Collaboration
+  // ============================================================================
+
+  async createShare(sessionId: string, data: {
+    sharedWithUserId: string;
+    permissionLevel: 'view' | 'collaborate' | 'control';
+    expiresAt?: string;
+  }): Promise<{ id: string; shareToken: string; message: string }> {
+    const response = await this.client.post(`/sessions/${sessionId}/share`, data);
+    return response.data;
+  }
+
+  async listShares(sessionId: string): Promise<Array<{
+    id: string;
+    sessionId: string;
+    ownerUserId: string;
+    sharedWithUserId: string;
+    permissionLevel: string;
+    shareToken: string;
+    createdAt: string;
+    expiresAt?: string;
+    acceptedAt?: string;
+    user: {
+      id: string;
+      username: string;
+      fullName: string;
+      email: string;
+    };
+  }>> {
+    const response = await this.client.get(`/sessions/${sessionId}/shares`);
+    return response.data.shares;
+  }
+
+  async revokeShare(sessionId: string, shareId: string): Promise<void> {
+    await this.client.delete(`/sessions/${sessionId}/shares/${shareId}`);
+  }
+
+  async transferOwnership(sessionId: string, newOwnerUserId: string): Promise<void> {
+    await this.client.post(`/sessions/${sessionId}/transfer`, { newOwnerUserId });
+  }
+
+  async createInvitation(sessionId: string, data: {
+    permissionLevel: 'view' | 'collaborate' | 'control';
+    maxUses?: number;
+    expiresAt?: string;
+  }): Promise<{ id: string; invitationToken: string; message: string }> {
+    const response = await this.client.post(`/sessions/${sessionId}/invitations`, data);
+    return response.data;
+  }
+
+  async listInvitations(sessionId: string): Promise<Array<{
+    id: string;
+    sessionId: string;
+    createdBy: string;
+    invitationToken: string;
+    permissionLevel: string;
+    maxUses: number;
+    useCount: number;
+    expiresAt?: string;
+    createdAt: string;
+    isExpired?: boolean;
+    isExhausted?: boolean;
+  }>> {
+    const response = await this.client.get(`/sessions/${sessionId}/invitations`);
+    return response.data.invitations;
+  }
+
+  async revokeInvitation(token: string): Promise<void> {
+    await this.client.delete(`/invitations/${token}`);
+  }
+
+  async acceptInvitation(token: string, userId: string): Promise<{ sessionId: string; message: string }> {
+    const response = await this.client.post(`/invitations/${token}/accept`, { userId });
+    return response.data;
+  }
+
+  async listCollaborators(sessionId: string): Promise<Array<{
+    id: string;
+    sessionId: string;
+    userId: string;
+    permissionLevel: string;
+    joinedAt: string;
+    lastActivity: string;
+    isActive: boolean;
+    user: {
+      username: string;
+      fullName: string;
+    };
+  }>> {
+    const response = await this.client.get(`/sessions/${sessionId}/collaborators`);
+    return response.data.collaborators;
+  }
+
+  async updateCollaboratorActivity(sessionId: string, userId: string): Promise<void> {
+    await this.client.post(`/sessions/${sessionId}/collaborators/${userId}/activity`);
+  }
+
+  async removeCollaborator(sessionId: string, userId: string): Promise<void> {
+    await this.client.delete(`/sessions/${sessionId}/collaborators/${userId}`);
+  }
+
+  async listSharedSessions(userId: string): Promise<Array<{
+    id: string;
+    ownerUserId: string;
+    ownerUsername: string;
+    templateName: string;
+    state: string;
+    appType: string;
+    createdAt: string;
+    sharedAt: string;
+    permissionLevel: string;
+    isShared: boolean;
+    url?: string;
+  }>> {
+    const response = await this.client.get(`/shared-sessions?userId=${userId}`);
+    return response.data.sessions;
+  }
+
+  // ============================================================================
   // Authentication
   // ============================================================================
 
