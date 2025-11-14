@@ -64,18 +64,49 @@ export interface Template {
 
 export interface CatalogTemplate {
   id: number;
+  repositoryId: number;
   name: string;
   displayName: string;
   description: string;
   category: string;
+  appType: string;
   icon?: string;
-  manifest: string;
+  manifest?: string;
   tags: string[];
   installCount: number;
+  isFeatured: boolean;
+  version: string;
+  viewCount: number;
+  avgRating: number;
+  ratingCount: number;
+  createdAt: string;
+  updatedAt: string;
   repository: {
     name: string;
     url: string;
   };
+}
+
+export interface TemplateRating {
+  id: number;
+  userId: string;
+  username: string;
+  fullName: string;
+  rating: number;
+  review?: string;
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface CatalogFilters {
+  search?: string;
+  category?: string;
+  tag?: string;
+  appType?: string;
+  featured?: boolean;
+  sort?: 'popular' | 'rating' | 'recent' | 'installs' | 'views';
+  page?: number;
+  limit?: number;
 }
 
 export interface Repository {
@@ -376,15 +407,72 @@ class APIClient {
   // Catalog (Template Marketplace)
   // ============================================================================
 
-  async listCatalogTemplates(category?: string, tag?: string): Promise<CatalogTemplate[]> {
+  async listCatalogTemplates(filters?: CatalogFilters): Promise<{ templates: CatalogTemplate[]; total: number; page: number; limit: number; totalPages: number }> {
     const params: Record<string, string> = {};
-    if (category) params.category = category;
-    if (tag) params.tag = tag;
+    if (filters?.search) params.search = filters.search;
+    if (filters?.category) params.category = filters.category;
+    if (filters?.tag) params.tag = filters.tag;
+    if (filters?.appType) params.appType = filters.appType;
+    if (filters?.featured) params.featured = 'true';
+    if (filters?.sort) params.sort = filters.sort;
+    if (filters?.page) params.page = String(filters.page);
+    if (filters?.limit) params.limit = String(filters.limit);
 
-    const response = await this.client.get<{ templates: CatalogTemplate[]; total: number }>('/catalog/templates', {
-      params,
+    const response = await this.client.get('/catalog/templates', { params });
+    return response.data;
+  }
+
+  async getTemplateDetails(id: number): Promise<CatalogTemplate> {
+    const response = await this.client.get(`/catalog/templates/${id}`);
+    return response.data;
+  }
+
+  async getFeaturedTemplates(): Promise<CatalogTemplate[]> {
+    const response = await this.client.get<{ templates: CatalogTemplate[] }>('/catalog/templates', {
+      params: { featured: 'true', limit: '6' }
     });
     return response.data.templates;
+  }
+
+  async getTrendingTemplates(): Promise<CatalogTemplate[]> {
+    const response = await this.client.get<{ templates: CatalogTemplate[] }>('/catalog/templates', {
+      params: { sort: 'recent', limit: '12' }
+    });
+    return response.data.templates;
+  }
+
+  async getPopularTemplates(): Promise<CatalogTemplate[]> {
+    const response = await this.client.get<{ templates: CatalogTemplate[] }>('/catalog/templates', {
+      params: { sort: 'installs', limit: '12' }
+    });
+    return response.data.templates;
+  }
+
+  // Ratings
+  async addTemplateRating(templateId: number, rating: number, review?: string): Promise<void> {
+    await this.client.post(`/catalog/templates/${templateId}/ratings`, { rating, review });
+  }
+
+  async getTemplateRatings(templateId: number): Promise<{ ratings: TemplateRating[]; total: number }> {
+    const response = await this.client.get(`/catalog/templates/${templateId}/ratings`);
+    return response.data;
+  }
+
+  async updateTemplateRating(templateId: number, ratingId: number, rating: number, review?: string): Promise<void> {
+    await this.client.put(`/catalog/templates/${templateId}/ratings/${ratingId}`, { rating, review });
+  }
+
+  async deleteTemplateRating(templateId: number, ratingId: number): Promise<void> {
+    await this.client.delete(`/catalog/templates/${templateId}/ratings/${ratingId}`);
+  }
+
+  // Analytics
+  async recordTemplateView(templateId: number): Promise<void> {
+    await this.client.post(`/catalog/templates/${templateId}/view`);
+  }
+
+  async recordTemplateInstall(templateId: number): Promise<void> {
+    await this.client.post(`/catalog/templates/${templateId}/install`);
   }
 
   async installCatalogTemplate(id: number): Promise<void> {

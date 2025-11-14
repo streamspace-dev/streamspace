@@ -6,7 +6,7 @@ import { useUserStore } from './store/userStore';
 // Pages
 import Dashboard from './pages/Dashboard';
 import Sessions from './pages/Sessions';
-import Catalog from './pages/Catalog';
+import EnhancedCatalog from './pages/EnhancedCatalog';
 import Repositories from './pages/Repositories';
 import Login from './pages/Login';
 import SessionViewer from './pages/SessionViewer';
@@ -125,7 +125,7 @@ function App() {
               path="/catalog"
               element={
                 <ProtectedRoute>
-                  <Catalog />
+                  <EnhancedCatalog />
                 </ProtectedRoute>
               }
             />

@@ -1,5 +1,5 @@
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
-import api, { CreateSessionRequest } from '../lib/api';
+import api, { CreateSessionRequest, CatalogFilters } from '../lib/api';
 
 // ============================================================================
 // Session Hooks
@@ -97,10 +97,10 @@ export function useDeleteTemplate() {
 // Catalog Hooks
 // ============================================================================
 
-export function useCatalogTemplates(category?: string, tag?: string) {
+export function useCatalogTemplates(filters?: CatalogFilters) {
   return useQuery({
-    queryKey: ['catalog', category, tag],
-    queryFn: () => api.listCatalogTemplates(category, tag),
+    queryKey: ['catalog', filters],
+    queryFn: () => api.listCatalogTemplates(filters),
   });
 }
 

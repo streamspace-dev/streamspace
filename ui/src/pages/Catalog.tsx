@@ -29,7 +29,8 @@ export default function Catalog() {
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
   const [selectedTemplate, setSelectedTemplate] = useState<string | null>(null);
   const { data: installedTemplates = [], isLoading: installedLoading } = useTemplates();
-  const { data: catalogTemplates = [], isLoading: catalogLoading } = useCatalogTemplates();
+  const { data: catalogResponse, isLoading: catalogLoading } = useCatalogTemplates();
+  const catalogTemplates = catalogResponse?.templates || [];
   const createSession = useCreateSession();
 
   const handleCreateSession = () => {
