@@ -123,6 +123,81 @@ api:
     syncInterval: "1h"
     syncWorkDir: /tmp/streamspace-repos
 
+  # Authentication configuration
+  auth:
+    # Authentication mode: jwt, saml, hybrid, oidc
+    mode: jwt
+
+    # JWT configuration
+    jwt:
+      secret: ""  # Set via existingSecret or auto-generate
+      expiration: 24h
+
+    # SAML SSO configuration
+    saml:
+      enabled: false
+
+      # SAML provider: okta, azuread, google, auth0, keycloak, authentik, generic
+      provider: generic
+
+      # Entity ID (SP identifier)
+      entityID: ""  # e.g., https://streamspace.example.com
+
+      # IdP Metadata (choose one)
+      metadataURL: ""  # URL to fetch IdP metadata
+      metadataXML: ""  # Or provide XML directly
+
+      # Assertion Consumer Service URL
+      acsURL: ""  # e.g., https://streamspace.example.com/saml/acs
+
+      # Single Logout URL
+      sloURL: ""  # e.g., https://streamspace.example.com/saml/slo
+
+      # Certificate and private key (for signing requests)
+      certificate: ""  # Path to certificate file or PEM content
+      privateKey: ""   # Path to private key file or PEM content
+
+      # Or use existing secret
+      existingSecret: ""
+      existingSecretCertKey: "saml-cert"
+      existingSecretKeyKey: "saml-key"
+
+      # SAML options
+      allowIDPInitiated: true
+      signRequest: true
+      forceAuthn: false
+
+      # Attribute mapping (maps SAML attributes to user fields)
+      attributeMapping:
+        email: ""      # Leave empty to use provider defaults
+        username: ""
+        firstName: ""
+        lastName: ""
+        groups: ""
+
+      # Provider-specific configuration (optional overrides)
+      okta:
+        domain: ""     # e.g., mycompany.okta.com
+        appID: ""
+
+      azuread:
+        tenantID: ""   # Azure AD tenant ID
+
+      google:
+        idpID: ""      # Google Workspace IdP ID
+
+      auth0:
+        domain: ""
+        clientID: ""
+
+      keycloak:
+        domain: ""
+        realm: ""
+
+      authentik:
+        domain: ""
+        slug: ""
+
   # Service
   service:
     type: ClusterIP
