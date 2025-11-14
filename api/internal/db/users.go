@@ -459,6 +459,53 @@ func (u *UserDB) UpdateQuotaUsage(ctx context.Context, userID string, sessions i
 	return err
 }
 
+// ListAllUserQuotas retrieves quotas for all users
+func (u *UserDB) ListAllUserQuotas(ctx context.Context) ([]*models.UserQuota, error) {
+	query := `
+		SELECT uq.user_id, uq.max_sessions, uq.max_cpu, uq.max_memory, uq.max_storage,
+		       uq.used_sessions, uq.used_cpu, uq.used_memory, uq.used_storage,
+		       uq.created_at, uq.updated_at, u.username
+		FROM user_quotas uq
+		JOIN users u ON uq.user_id = u.id
+		ORDER BY u.username ASC
+	`
+
+	rows, err := u.db.QueryContext(ctx, query)
+	if err != nil {
+		return nil, err
+	}
+	defer rows.Close()
+
+	quotas := []*models.UserQuota{}
+	for rows.Next() {
+		quota := &models.UserQuota{}
+		var username string
+		err := rows.Scan(
+			&quota.UserID, &quota.MaxSessions, &quota.MaxCPU, &quota.MaxMemory, &quota.MaxStorage,
+			&quota.UsedSessions, &quota.UsedCPU, &quota.UsedMemory, &quota.UsedStorage,
+			&quota.CreatedAt, &quota.UpdatedAt, &username,
+		)
+		if err != nil {
+			continue
+		}
+		quota.Username = username
+		quotas = append(quotas, quota)
+	}
+
+	return quotas, nil
+}
+
+// DeleteUserQuota deletes a user's quota (resets to defaults)
+func (u *UserDB) DeleteUserQuota(ctx context.Context, userID string) error {
+	_, err := u.db.ExecContext(ctx, `DELETE FROM user_quotas WHERE user_id = $1`, userID)
+	if err != nil {
+		return err
+	}
+
+	// Recreate with defaults
+	return u.createDefaultQuota(ctx, userID)
+}
+
 // GetUserGroups retrieves all groups a user belongs to
 func (u *UserDB) GetUserGroups(ctx context.Context, userID string) ([]string, error) {
 	query := `

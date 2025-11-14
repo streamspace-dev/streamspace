@@ -123,6 +123,13 @@ api:
     syncInterval: "1h"
     syncWorkDir: /tmp/streamspace-repos
 
+    # Default user quota settings (applied to new users)
+    quota:
+      defaultMaxSessions: 5        # Maximum concurrent sessions per user
+      defaultMaxCPU: "4000m"        # Maximum CPU allocation (4 cores)
+      defaultMaxMemory: "16Gi"      # Maximum memory allocation
+      defaultMaxStorage: "100Gi"    # Maximum persistent storage
+
   # Authentication configuration
   auth:
     # Authentication mode: jwt, saml, hybrid, oidc
