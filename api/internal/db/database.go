@@ -22,7 +22,7 @@ type Database struct {
 	db *sql.DB
 }
 
-// NewDatabase creates a new database connection
+// NewDatabase creates a new database connection with connection pooling
 func NewDatabase(config Config) (*Database, error) {
 	if config.SSLMode == "" {
 		config.SSLMode = "disable"
@@ -35,6 +35,13 @@ func NewDatabase(config Config) (*Database, error) {
 	if err != nil {
 		return nil, fmt.Errorf("failed to open database: %w", err)
 	}
+
+	// Configure connection pool for optimal performance
+	// These settings balance performance with resource usage
+	db.SetMaxOpenConns(25)                // Maximum number of open connections to the database
+	db.SetMaxIdleConns(5)                 // Maximum number of connections in the idle connection pool
+	db.SetConnMaxLifetime(5 * 60 * 1000)  // Maximum amount of time a connection may be reused (5 minutes)
+	db.SetConnMaxIdleTime(1 * 60 * 1000)  // Maximum amount of time a connection may be idle (1 minute)
 
 	// Test connection
 	if err := db.Ping(); err != nil {
@@ -378,6 +385,31 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_session_collaborators_session_id ON session_collaborators(session_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_session_collaborators_user_id ON session_collaborators(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_session_collaborators_active ON session_collaborators(is_active)`,
+
+		// Performance optimization: Composite indexes for common query patterns
+		// Sessions by user and state (dashboard queries showing active/hibernated sessions)
+		`CREATE INDEX IF NOT EXISTS idx_sessions_user_state ON sessions(user_id, state)`,
+
+		// Audit log by user and timestamp (user activity history queries)
+		`CREATE INDEX IF NOT EXISTS idx_audit_log_user_timestamp ON audit_log(user_id, timestamp DESC)`,
+
+		// Session shares - active shares (not revoked, not expired)
+		`CREATE INDEX IF NOT EXISTS idx_session_shares_active ON session_shares(session_id, shared_with_user_id) WHERE revoked_at IS NULL`,
+
+		// Catalog templates by category and rating (catalog page with sorting)
+		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_category_rating ON catalog_templates(category, avg_rating DESC)`,
+
+		// Catalog templates by category and popularity (catalog page sorted by installs)
+		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_category_installs ON catalog_templates(category, install_count DESC)`,
+
+		// Session collaborators - active collaborators by session (real-time collaboration queries)
+		`CREATE INDEX IF NOT EXISTS idx_session_collaborators_session_active ON session_collaborators(session_id, is_active) WHERE is_active = true`,
+
+		// Connections by session and heartbeat (detecting stale connections)
+		`CREATE INDEX IF NOT EXISTS idx_connections_session_heartbeat ON connections(session_id, last_heartbeat DESC)`,
+
+		// Templates by app_type and rating (filtering by app type with sorting)
+		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_apptype_rating ON catalog_templates(app_type, avg_rating DESC)`,
 	}
 
 	// Execute migrations
