@@ -10,6 +10,7 @@ This document provides comprehensive guidance for AI assistants working with the
 ## 📋 Table of Contents
 
 - [Project Overview](#project-overview)
+- [Strategic Vision: Independence from Proprietary Technologies](#strategic-vision-independence-from-proprietary-technologies)
 - [Repository Structure](#repository-structure)
 - [Key Technologies](#key-technologies)
 - [Custom Resource Definitions (CRDs)](#custom-resource-definitions-crds)
@@ -26,7 +27,9 @@ This document provides comprehensive guidance for AI assistants working with the
 
 ## 📖 Project Overview
 
-**StreamSpace** is a Kubernetes-native multi-user platform that streams containerized applications to web browsers using KasmVNC. It provides on-demand provisioning with auto-hibernation for resource efficiency.
+**StreamSpace** is a Kubernetes-native multi-user platform that streams containerized applications to web browsers using open source VNC technology. It provides on-demand provisioning with auto-hibernation for resource efficiency.
+
+**Strategic Goal**: Build a 100% open source alternative to commercial container streaming platforms with complete independence from proprietary technologies.
 
 ### Key Features
 - Browser-based access to any containerized application
@@ -49,6 +52,257 @@ This document provides comprehensive guidance for AI assistants working with the
 - **New API Group**: `stream.space/v1alpha1`
 - **Old Resources**: WorkspaceSession, WorkspaceTemplate
 - **New Resources**: Session (short: `ss`), Template (short: `tpl`)
+
+---
+
+## 🎯 Strategic Vision: Independence from Proprietary Technologies
+
+**CRITICAL**: StreamSpace is being built as a **100% open source, fully independent** container streaming platform. All proprietary dependencies must be eliminated by v1.0.
+
+### Mission Statement
+
+StreamSpace will become the leading open source alternative to commercial container streaming platforms, offering complete independence from proprietary technologies while providing enterprise-grade features.
+
+### Independence Roadmap
+
+#### Current Dependencies to Eliminate
+
+1. **KasmVNC** (Proprietary VNC Implementation)
+   - **Current Status**: Used in all GUI application templates
+   - **Target Replacement**: TigerVNC + noVNC (100% open source)
+   - **Timeline**: Phase 3 (Months 7-9)
+   - **Impact**: ~50 file references, complete architecture change
+   - **Alternative Options**:
+     - **Primary**: TigerVNC server + noVNC web client
+     - **Secondary**: Apache Guacamole (clientless remote desktop)
+     - **Research**: WebRTC-based streaming (lower latency)
+
+2. **LinuxServer.io Container Images** (External Dependency)
+   - **Current Status**: All 22 templates use LinuxServer.io images
+   - **Target Replacement**: StreamSpace-native container images
+   - **Timeline**: Phase 3 (Months 7-9)
+   - **Impact**: 100+ container images to build and maintain
+   - **Benefits**:
+     - Full control over VNC stack
+     - Optimized for StreamSpace
+     - Faster security patches
+     - ARM64 optimization
+
+3. **Kasm Brand References** (Marketing/Documentation)
+   - **Current Status**: Multiple references in docs and code
+   - **Target Replacement**: StreamSpace brand only
+   - **Timeline**: Ongoing, complete by Phase 3
+   - **Impact**: Documentation, comments, examples
+
+### Technical Migration Strategy
+
+#### Phase 3: VNC Independence (CRITICAL)
+
+**Recommended VNC Stack**:
+```
+┌─────────────────────────────────────┐
+│  Web Browser (User)                 │
+└──────────────┬──────────────────────┘
+               │ HTTPS + WebSocket
+               ↓
+┌─────────────────────────────────────┐
+│  noVNC Web Client (JavaScript)      │
+│  - Canvas rendering                 │
+│  - WebSocket transport              │
+│  - Input handling                   │
+└──────────────┬──────────────────────┘
+               │ RFB Protocol
+               ↓
+┌─────────────────────────────────────┐
+│  WebSocket Proxy (Go)               │
+│  - TLS termination                  │
+│  - Authentication                   │
+│  - Connection routing               │
+└──────────────┬──────────────────────┘
+               │ TCP
+               ↓
+┌─────────────────────────────────────┐
+│  TigerVNC Server (Container)        │
+│  - Xvfb (Virtual framebuffer)       │
+│  - Window manager (XFCE/i3)         │
+│  - Application                      │
+└─────────────────────────────────────┘
+```
+
+**Component Details**:
+
+1. **TigerVNC Server**
+   - License: GPL-2.0 (100% open source)
+   - Features: High performance, clipboard support, resize
+   - Platform: Linux, works with Xvfb
+   - Integration: Drop-in replacement for KasmVNC server
+
+2. **noVNC Client**
+   - License: MPL-2.0 (100% open source)
+   - Features: HTML5 canvas, touch support, mobile-friendly
+   - Customization: Full UI control, branding
+   - Integration: Direct WebSocket to VNC server
+
+3. **WebSocket Proxy**
+   - Implementation: Go-based custom proxy in API backend
+   - Features: Authentication, rate limiting, monitoring
+   - Integration: Part of StreamSpace API (Phase 2)
+
+#### Container Image Strategy
+
+**Base Image Tiers**:
+
+1. **Tier 1: Core Bases** (Build First)
+   - `streamspace/base-ubuntu-vnc:22.04` - Ubuntu with TigerVNC + XFCE
+   - `streamspace/base-alpine-vnc:3.18` - Alpine with TigerVNC + i3
+   - `streamspace/base-debian-vnc:12` - Debian with TigerVNC + MATE
+
+2. **Tier 2: Application Categories** (100+ images)
+   - Web Browsers: Firefox, Chromium, Brave (priority: high)
+   - Development: VS Code, IntelliJ, Eclipse
+   - Design: GIMP, Inkscape, Blender, Krita
+   - Productivity: LibreOffice, Calligra
+   - Media: Audacity, Kdenlive, OBS Studio
+
+3. **Tier 3: Specialized** (50+ images)
+   - Gaming: DuckStation, Dolphin, RetroArch
+   - Scientific: Jupyter, R Studio, Octave
+   - CAD/Engineering: FreeCAD, KiCad, OpenSCAD
+
+**Image Build Infrastructure**:
+```yaml
+# GitHub Actions workflow
+name: Build Container Images
+on:
+  schedule: [cron: '0 0 * * 0']  # Weekly
+  push: {branches: [main]}
+
+jobs:
+  build-matrix:
+    strategy:
+      matrix:
+        app: [firefox, chromium, vscode, gimp, ...]
+        arch: [amd64, arm64]
+    steps:
+      - Build with TigerVNC + noVNC
+      - Security scan (Trivy)
+      - Sign image (Cosign)
+      - Push to ghcr.io/streamspace
+```
+
+### Development Guidelines for AI Assistants
+
+**IMPORTANT RULES**:
+
+1. **Never introduce new Kasm dependencies**
+   - Don't reference KasmVNC in new code
+   - Don't use Kasm-specific features
+   - Don't add Kasm to documentation
+
+2. **Use generic VNC terminology**
+   - Say "VNC server" not "KasmVNC server"
+   - Say "VNC client" not "Kasm client"
+   - Say "streaming" not "Kasm streaming"
+
+3. **Prepare for VNC migration**
+   - Write VNC-agnostic code
+   - Use configuration for VNC endpoints
+   - Abstract VNC details behind interfaces
+
+4. **Reference alternatives in docs**
+   - Mention noVNC as the target
+   - Link to TigerVNC documentation
+   - Explain migration path
+
+5. **Track dependencies**
+   - Document any external dependencies
+   - Prefer open source alternatives
+   - Plan for self-hosting
+
+### Code Patterns for VNC Abstraction
+
+**Good Pattern** (VNC-agnostic):
+```go
+type VNCConfig struct {
+    Port        int    `json:"port"`
+    Protocol    string `json:"protocol"`  // "vnc", "rfb", "websocket"
+    Encryption  bool   `json:"encryption"`
+}
+
+func (t *Template) GetVNCPort() int {
+    if t.Spec.VNC.Port != 0 {
+        return t.Spec.VNC.Port
+    }
+    return 5900  // Standard VNC port
+}
+```
+
+**Bad Pattern** (Kasm-specific):
+```go
+// ❌ DON'T DO THIS
+type KasmVNCConfig struct {
+    KasmPort int `json:"kasmPort"`
+}
+```
+
+**Good Template Definition**:
+```yaml
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: firefox-browser
+spec:
+  vnc:  # Generic VNC config
+    enabled: true
+    port: 5900
+    protocol: rfb
+    websocket: true
+```
+
+**Bad Template Definition**:
+```yaml
+# ❌ DON'T DO THIS
+spec:
+  kasmvnc:  # Kasm-specific
+    enabled: true
+    kasmPort: 3000
+```
+
+### Migration Checklist
+
+Track progress toward full independence:
+
+**Phase 3 Tasks**:
+- [ ] Research and select VNC stack (TigerVNC + noVNC)
+- [ ] Build proof-of-concept with open source VNC
+- [ ] Create base container images with TigerVNC
+- [ ] Implement WebSocket proxy in API backend
+- [ ] Rebuild all 22 templates with new VNC stack
+- [ ] Update all documentation
+- [ ] Remove all KasmVNC references from code
+- [ ] Remove all KasmVNC references from docs
+- [ ] Update CRD field names (kasmvnc → vnc)
+- [ ] Migration guide for existing deployments
+- [ ] Performance testing and optimization
+- [ ] Security audit of new VNC stack
+
+**Completion Criteria**:
+- Zero mentions of "Kasm" or "kasmvnc" in codebase
+- All container images built by StreamSpace
+- No external dependencies on proprietary software
+- Documentation explains open source stack
+- Migration path documented for users
+
+### Reference Documentation
+
+For detailed migration plan, see:
+- `ROADMAP.md` - Complete development roadmap
+- Phase 3 section for VNC migration details
+- Phase 6 for production readiness
+
+For technical architecture, see:
+- `docs/ARCHITECTURE.md` - Current architecture
+- Future: `docs/VNC_MIGRATION.md` - VNC migration guide
 
 ---
 
@@ -164,9 +418,10 @@ streamspace/
 - **HTTP Client**: Axios with JWT interceptors
 
 ### Application Streaming
-- **VNC Server**: KasmVNC (web-native VNC)
-- **Base Images**: LinuxServer.io containers (200+ applications)
-- **VNC Port**: 3000 (standard for LinuxServer.io images)
+- **VNC Server**: Currently KasmVNC (⚠️ TEMPORARY - will be replaced with TigerVNC + noVNC in Phase 3)
+- **Base Images**: Currently LinuxServer.io containers (⚠️ TEMPORARY - will be replaced with StreamSpace-native images in Phase 3)
+- **VNC Port**: 5900 (standard VNC) or 3000 (current LinuxServer.io convention)
+- **Target Stack**: TigerVNC server + noVNC client + WebSocket proxy (100% open source)
 
 ### Monitoring
 - **Metrics**: Prometheus
@@ -964,15 +1219,24 @@ kubectl describe prometheusrule streamspace-alerts -n streamspace
 
 ### When Assisting with Code
 
-1. **CRD API Group**: Always use `stream.space/v1alpha1`, not `workspaces.aiinfra.io`
-2. **Resource Names**: Use `Session` and `Template`, not the old Workspace* names
-3. **Short Names**: Prefer `ss` and `tpl` in kubectl examples
-4. **Namespace**: Default namespace is `streamspace`, not `workspaces`
-5. **Kubebuilder**: When implementing controller, use domain `streamspace.io`
-6. **Images**: Use LinuxServer.io images (`lscr.io/linuxserver/...`)
-7. **VNC Port**: Standard port is 3000 for KasmVNC
-8. **Storage**: Assume NFS with ReadWriteMany access mode
-9. **Ingress Domain**: Default is `streamspace.local` (configurable)
+**⚠️ CRITICAL RULES** (See "Strategic Vision" section above for details):
+
+1. **NEVER introduce new Kasm/KasmVNC dependencies** - Use generic VNC terminology
+2. **NEVER reference Kasm in new code or documentation** - StreamSpace is fully independent
+3. **Always use VNC-agnostic patterns** - Abstract VNC implementation details
+
+**Standard Guidelines**:
+
+4. **CRD API Group**: Always use `stream.space/v1alpha1`, not `workspaces.aiinfra.io`
+5. **Resource Names**: Use `Session` and `Template`, not the old Workspace* names
+6. **Short Names**: Prefer `ss` and `tpl` in kubectl examples
+7. **Namespace**: Default namespace is `streamspace`, not `workspaces`
+8. **Kubebuilder**: When implementing controller, use domain `streamspace.io`
+9. **Images**: Currently LinuxServer.io (`lscr.io/linuxserver/...`), migrating to StreamSpace-native
+10. **VNC Port**: Use 5900 (standard VNC), currently 3000 for LinuxServer.io compatibility
+11. **Storage**: Assume NFS with ReadWriteMany access mode
+12. **Ingress Domain**: Default is `streamspace.local` (configurable)
+13. **VNC Fields**: Use `vnc:` not `kasmvnc:` in template specs
 
 ### Key Design Decisions
 
@@ -987,6 +1251,13 @@ kubectl describe prometheusrule streamspace-alerts -n streamspace
 
 ### Common Misconceptions to Avoid
 
+**⚠️ Critical - Independence Strategy**:
+- ❌ **Don't** introduce new KasmVNC references - use generic VNC
+- ❌ **Don't** hardcode Kasm-specific features - keep VNC-agnostic
+- ❌ **Don't** use `kasmvnc:` field name - use `vnc:` instead
+- ❌ **Don't** assume KasmVNC will remain - code for TigerVNC migration
+
+**Architecture Patterns**:
 - ❌ **Don't** use StatefulSets - use Deployments with replicas field
 - ❌ **Don't** delete pods for hibernation - scale Deployment to 0
 - ❌ **Don't** create per-session PVCs - use shared user PVC
@@ -999,6 +1270,7 @@ kubectl describe prometheusrule streamspace-alerts -n streamspace
 
 When helping with specific tasks, reference these files:
 
+- **Strategic roadmap**: `ROADMAP.md` - Complete development roadmap and Kasm independence plan
 - **Architecture questions**: `docs/ARCHITECTURE.md`
 - **Controller implementation**: `docs/CONTROLLER_GUIDE.md`
 - **CRD structure**: `manifests/crds/session.yaml`, `manifests/crds/template.yaml`

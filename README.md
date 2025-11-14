@@ -1,8 +1,8 @@
 # StreamSpace
 
-> **Stream any app, anywhere** - Open-source multi-user container streaming platform
+> **Stream any app, anywhere** - 100% open source multi-user container streaming platform
 
-StreamSpace is a Kubernetes-native platform that delivers browser-based access to containerized applications with on-demand auto-hibernation, persistent user storage, and enterprise-grade security. Think Kasm Workspaces, but optimized for k3s and ARM64.
+StreamSpace is a Kubernetes-native platform that delivers browser-based access to containerized applications with on-demand auto-hibernation, persistent user storage, and enterprise-grade security. Built for self-hosting with complete independence from proprietary technologies, optimized for k3s and ARM64.
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.19+-blue.svg)](https://kubernetes.io/)
@@ -10,15 +10,16 @@ StreamSpace is a Kubernetes-native platform that delivers browser-based access t
 
 ## ✨ Features
 
-- 🌐 **Browser-Based Access** - Access any application via web browser using KasmVNC
+- 🌐 **Browser-Based Access** - Access any application via web browser using open source VNC
 - 👥 **Multi-User Support** - Isolated sessions with SSO (Authentik/Keycloak)
 - 💾 **Persistent Home Directories** - User files persist across sessions (NFS)
 - ⚡ **On-Demand Auto-Hibernation** - Idle workspaces automatically scale to zero
-- 🚀 **200+ Pre-Built Templates** - LinuxServer.io application catalog
+- 🚀 **200+ Pre-Built Templates** - Comprehensive application catalog
 - 📊 **Resource Quotas** - Per-user memory, workspace, and storage limits
 - 🔒 **Enterprise Security** - Network policies, SSO, audit logging, DLP
 - 📈 **Comprehensive Monitoring** - Grafana dashboards and Prometheus metrics
 - 🎯 **ARM64 Optimized** - Perfect for Orange Pi, Raspberry Pi, or any ARM cluster
+- 🔓 **Fully Open Source** - No proprietary dependencies, complete self-hosting control
 
 ## 🎬 Quick Demo
 
@@ -76,7 +77,7 @@ EOF
 │  ┌──────────┐  ┌──────────┐  ┌──────────┐              │
 │  │ Session  │  │ Session  │  │ Session  │              │
 │  │ Pod      │  │ Pod      │  │ Pod      │              │
-│  │(KasmVNC) │  │(KasmVNC) │  │(KasmVNC) │              │
+│  │(VNC)     │  │(VNC)     │  │(VNC)     │              │
 │  └────┬─────┘  └────┬─────┘  └────┬─────┘              │
 │       │             │             │                      │
 │  /home/user1   /home/user2   /home/user3               │
@@ -88,7 +89,7 @@ EOF
 - **Controller**: Manages session lifecycle, hibernation, and provisioning
 - **API Backend**: REST/WebSocket API for UI and integrations
 - **Web UI**: User-facing dashboard and workspace catalog
-- **Sessions**: Containerized applications with KasmVNC streaming
+- **Sessions**: Containerized applications with VNC streaming to your browser
 - **User Storage**: Persistent NFS volumes mounted across all sessions
 
 ## 📦 Prerequisites
@@ -445,9 +446,8 @@ StreamSpace is licensed under the MIT License. See [LICENSE](LICENSE) for detail
 ## 🙏 Acknowledgments
 
 - Built for [k3s](https://k3s.io/) - Lightweight Kubernetes
-- Powered by [LinuxServer.io](https://linuxserver.io) - 200+ ARM64 container images
-- Streaming via [KasmVNC](https://github.com/kasmtech/KasmVNC) - Web-native VNC
-- Inspired by [Kasm Workspaces](https://kasm.com) - Commercial container streaming platform
+- VNC technology: [TigerVNC](https://tigervnc.org/) (GPL-2.0) and [noVNC](https://github.com/novnc/noVNC) (MPL-2.0)
+- Open source community providing the foundation for truly independent container streaming
 
 ## 🔗 Links
 
