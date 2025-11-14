@@ -170,25 +170,26 @@ Sessions use a state machine:
 - ✅ State-driven session lifecycle management
 - ✅ Deployment creation and scaling
 - ✅ Service creation for VNC access
+- ✅ **Ingress creation** for browser access
 - ✅ PVC provisioning for persistent user homes
 - ✅ VNC-agnostic architecture
 - ✅ RBAC configuration
 - ✅ Kustomize deployment
 - ✅ Dockerfile for containerization
-- ✅ Prometheus metrics endpoint
+- ✅ **Custom Prometheus metrics** (sessions, reconciliations, templates)
 - ✅ Health and readiness probes
 - ✅ Leader election support
+- ✅ Configurable ingress domain and class
 
 ## Next Enhancements
 
 Future improvements (not needed for basic functionality):
 
-1. **Ingress creation**: Auto-create ingress routes for browser access
-2. **Idle timeout detection**: Implement automatic hibernation based on activity
-3. **Resource quotas**: Per-user resource limits and quotas
-4. **Custom metrics**: Add session-specific Prometheus metrics
-5. **Webhooks**: Add validating/mutating webhooks for CRDs
-6. **Phase 3**: TigerVNC migration (see `/docs/VNC_MIGRATION.md`)
+1. **Idle timeout detection**: Implement automatic hibernation based on activity
+2. **Resource quotas**: Per-user resource limits and quotas
+3. **Webhooks**: Add validating/mutating webhooks for CRDs
+4. **Grafana dashboards**: Pre-built dashboards for metrics
+5. **Phase 3**: TigerVNC migration (see `/docs/VNC_MIGRATION.md`)
 
 ## File Structure
 

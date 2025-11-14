@@ -10,6 +10,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	streamv1alpha1 "github.com/streamspace/streamspace/api/v1alpha1"
+	"github.com/streamspace/streamspace/pkg/metrics"
 )
 
 // TemplateReconciler reconciles a Template object
@@ -44,6 +45,7 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 		log.Error(err, "Template validation failed")
 		template.Status.Phase = "Invalid"
 		template.Status.Message = err.Error()
+		metrics.RecordTemplateValidation(req.Namespace, "invalid")
 		if updateErr := r.Status().Update(ctx, &template); updateErr != nil {
 			log.Error(updateErr, "Failed to update Template status")
 			return ctrl.Result{}, updateErr
@@ -54,6 +56,7 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 	// Update status to Ready
 	template.Status.Phase = "Ready"
 	template.Status.Message = "Template is valid and ready to use"
+	metrics.RecordTemplateValidation(req.Namespace, "valid")
 	if err := r.Status().Update(ctx, &template); err != nil {
 		log.Error(err, "Failed to update Template status")
 		return ctrl.Result{}, err

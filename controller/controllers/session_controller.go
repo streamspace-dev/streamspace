@@ -3,9 +3,12 @@ package controllers
 import (
 	"context"
 	"fmt"
+	"os"
+	"time"
 
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
@@ -16,6 +19,7 @@ import (
 	"sigs.k8s.io/controller-runtime/pkg/log"
 
 	streamv1alpha1 "github.com/streamspace/streamspace/api/v1alpha1"
+	"github.com/streamspace/streamspace/pkg/metrics"
 )
 
 // SessionReconciler reconciles a Session object
@@ -31,10 +35,18 @@ type SessionReconciler struct {
 //+kubebuilder:rbac:groups=apps,resources=deployments,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=services,verbs=get;list;watch;create;update;patch;delete
 //+kubebuilder:rbac:groups="",resources=persistentvolumeclaims,verbs=get;list;watch;create;update;patch;delete
+//+kubebuilder:rbac:groups=networking.k8s.io,resources=ingresses,verbs=get;list;watch;create;update;patch;delete
 
 // Reconcile is the main reconciliation loop
 func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
+	startTime := time.Now()
+
+	// Track reconciliation metrics
+	defer func() {
+		duration := time.Since(startTime).Seconds()
+		metrics.ObserveReconciliationDuration(req.Namespace, duration)
+	}()
 
 	// Fetch the Session
 	var session streamv1alpha1.Session
@@ -44,30 +56,46 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 			return ctrl.Result{}, nil
 		}
 		log.Error(err, "Failed to get Session")
+		metrics.RecordReconciliation(req.Namespace, "error")
 		return ctrl.Result{}, err
 	}
 
 	log.Info("Reconciling Session", "name", session.Name, "state", session.Spec.State)
 
+	// Update metrics for this session
+	metrics.RecordSessionByUser(session.Spec.User, session.Namespace, 1)
+	metrics.RecordSessionByTemplate(session.Spec.Template, session.Namespace, 1)
+
 	// Get the Template
 	template, err := r.getTemplate(ctx, session.Spec.Template, session.Namespace)
 	if err != nil {
 		log.Error(err, "Failed to get Template")
+		metrics.RecordReconciliation(req.Namespace, "error")
 		return ctrl.Result{}, err
 	}
 
 	// Handle state transitions
+	var result ctrl.Result
 	switch session.Spec.State {
 	case "running":
-		return r.handleRunning(ctx, &session, template)
+		result, err = r.handleRunning(ctx, &session, template)
 	case "hibernated":
-		return r.handleHibernated(ctx, &session)
+		result, err = r.handleHibernated(ctx, &session)
 	case "terminated":
-		return r.handleTerminated(ctx, &session)
+		result, err = r.handleTerminated(ctx, &session)
 	default:
 		log.Info("Unknown state", "state", session.Spec.State)
 		return ctrl.Result{}, nil
 	}
+
+	// Record reconciliation result
+	if err != nil {
+		metrics.RecordReconciliation(req.Namespace, "error")
+	} else {
+		metrics.RecordReconciliation(req.Namespace, "success")
+	}
+
+	return result, err
 }
 
 func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1alpha1.Session, template *streamv1alpha1.Template) (ctrl.Result, error) {
@@ -137,10 +165,33 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 		}
 	}
 
+	// Ensure Ingress exists
+	ingressName := deploymentName
+	ingress := &networkingv1.Ingress{}
+	err = r.Get(ctx, types.NamespacedName{Name: ingressName, Namespace: session.Namespace}, ingress)
+
+	if errors.IsNotFound(err) {
+		// Create new ingress
+		ingress = r.createIngress(session, template, serviceName)
+		if err := r.Create(ctx, ingress); err != nil {
+			log.Error(err, "Failed to create Ingress")
+			return ctrl.Result{}, err
+		}
+		log.Info("Created Ingress", "name", ingressName)
+	} else if err != nil {
+		return ctrl.Result{}, err
+	}
+
+	// Get ingress domain for URL
+	ingressDomain := os.Getenv("INGRESS_DOMAIN")
+	if ingressDomain == "" {
+		ingressDomain = "streamspace.local"
+	}
+
 	// Update Session status
 	session.Status.Phase = "Running"
 	session.Status.PodName = deploymentName
-	session.Status.URL = fmt.Sprintf("https://%s.streamspace.local", session.Name)
+	session.Status.URL = fmt.Sprintf("https://%s.%s", session.Name, ingressDomain)
 	if err := r.Status().Update(ctx, session); err != nil {
 		log.Error(err, "Failed to update Session status")
 		return ctrl.Result{}, err
@@ -370,6 +421,81 @@ func (r *SessionReconciler) createUserPVC(session *streamv1alpha1.Session) *core
 	return pvc
 }
 
+func (r *SessionReconciler) createIngress(session *streamv1alpha1.Session, template *streamv1alpha1.Template, serviceName string) *networkingv1.Ingress {
+	deploymentName := fmt.Sprintf("ss-%s-%s", session.Spec.User, session.Spec.Template)
+	labels := map[string]string{
+		"app":      "streamspace-session",
+		"user":     session.Spec.User,
+		"template": session.Spec.Template,
+		"session":  session.Name,
+	}
+
+	// Get ingress configuration from environment
+	ingressDomain := os.Getenv("INGRESS_DOMAIN")
+	if ingressDomain == "" {
+		ingressDomain = "streamspace.local"
+	}
+
+	ingressClass := os.Getenv("INGRESS_CLASS")
+	if ingressClass == "" {
+		ingressClass = "traefik"
+	}
+
+	// Determine VNC port
+	vncPort := int32(5900)
+	if template.Spec.VNC.Port != 0 {
+		vncPort = int32(template.Spec.VNC.Port)
+	}
+
+	// Build hostname
+	hostname := fmt.Sprintf("%s.%s", session.Name, ingressDomain)
+
+	// Path type
+	pathTypePrefix := networkingv1.PathTypePrefix
+
+	ingress := &networkingv1.Ingress{
+		ObjectMeta: metav1.ObjectMeta{
+			Name:      deploymentName,
+			Namespace: session.Namespace,
+			Labels:    labels,
+			Annotations: map[string]string{
+				"kubernetes.io/ingress.class": ingressClass,
+			},
+			OwnerReferences: []metav1.OwnerReference{
+				*metav1.NewControllerRef(session, streamv1alpha1.GroupVersion.WithKind("Session")),
+			},
+		},
+		Spec: networkingv1.IngressSpec{
+			IngressClassName: &ingressClass,
+			Rules: []networkingv1.IngressRule{
+				{
+					Host: hostname,
+					IngressRuleValue: networkingv1.IngressRuleValue{
+						HTTP: &networkingv1.HTTPIngressRuleValue{
+							Paths: []networkingv1.HTTPIngressPath{
+								{
+									Path:     "/",
+									PathType: &pathTypePrefix,
+									Backend: networkingv1.IngressBackend{
+										Service: &networkingv1.IngressServiceBackend{
+											Name: serviceName,
+											Port: networkingv1.ServiceBackendPort{
+												Number: vncPort,
+											},
+										},
+									},
+								},
+							},
+						},
+					},
+				},
+			},
+		},
+	}
+
+	return ingress
+}
+
 func (r *SessionReconciler) getTemplate(ctx context.Context, templateName, namespace string) (*streamv1alpha1.Template, error) {
 	template := &streamv1alpha1.Template{}
 	err := r.Get(ctx, types.NamespacedName{Name: templateName, Namespace: namespace}, template)
@@ -384,6 +510,8 @@ func (r *SessionReconciler) SetupWithManager(mgr ctrl.Manager) error {
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&streamv1alpha1.Session{}).
 		Owns(&appsv1.Deployment{}).
+		Owns(&corev1.Service{}).
+		Owns(&networkingv1.Ingress{}).
 		Complete(r)
 }
 

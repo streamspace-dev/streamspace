@@ -14,6 +14,7 @@ import (
 
 	streamv1alpha1 "github.com/streamspace/streamspace/api/v1alpha1"
 	"github.com/streamspace/streamspace/controllers"
+	_ "github.com/streamspace/streamspace/pkg/metrics" // Initialize custom metrics
 )
 
 var (
