@@ -153,6 +153,55 @@ The API backend serves as the central control plane for StreamSpace, interfacing
   - Connection status indicators in UI
   - Reconnection attempt tracking
 
+### ✅ Phase 2.5 - Plugin System (Completed)
+
+- **Plugin Handler** (`internal/plugins/`)
+  - Plugin installation and management
+  - Plugin configuration storage
+  - Plugin enable/disable functionality
+  - Event system for plugin webhooks
+  - Permission validation and enforcement
+
+- **Plugin Database Schema**
+  - `repositories` table - Plugin repositories (GitHub, GitLab, custom)
+  - `catalog_plugins` table - Available plugins with manifest and metadata
+  - `installed_plugins` table - User-installed plugins with configuration
+  - `plugin_ratings` table - User ratings and reviews
+  - JSON support for plugin manifests and configuration
+
+- **Plugin API Endpoints**
+  - `GET /api/v1/plugins/catalog` - Browse available plugins with filters
+  - `POST /api/v1/plugins/install` - Install plugin from catalog
+  - `GET /api/v1/plugins/installed` - List installed plugins
+  - `POST /api/v1/plugins/:id/enable` - Enable installed plugin
+  - `POST /api/v1/plugins/:id/disable` - Disable installed plugin
+  - `PUT /api/v1/plugins/:id/config` - Update plugin configuration
+  - `DELETE /api/v1/plugins/:id` - Uninstall plugin
+  - `POST /api/v1/plugins/:id/rate` - Rate and review plugin
+  - `GET /api/v1/plugins/repositories` - List plugin repositories
+  - `POST /api/v1/plugins/repositories` - Add plugin repository
+  - `POST /api/v1/plugins/repositories/:id/sync` - Sync repository
+
+- **Plugin Types Supported**
+  - Extension plugins (add new features and UI components)
+  - Webhook plugins (react to system events)
+  - API integration plugins (connect to external services)
+  - UI theme plugins (customize interface appearance)
+
+- **Event System**
+  - `session.created`, `session.started`, `session.stopped`
+  - `session.hibernated`, `session.woken`, `session.deleted`
+  - `user.created`, `user.updated`, `user.deleted`
+  - `user.login`, `user.logout`
+  - Plugin event handlers triggered on these events
+
+- **Security Features**
+  - Permission system with risk levels (low/medium/high)
+  - Schema-based configuration validation
+  - Manifest verification and validation
+  - User/admin approval workflows
+  - Isolated plugin execution environment
+
 ## Directory Structure
 
 ```
@@ -161,7 +210,7 @@ api/
 │   └── main.go                    # Server entry point (270 lines)
 ├── internal/
 │   ├── db/
-│   │   └── database.go            # Database layer (200 lines)
+│   │   └── database.go            # Database layer with plugin tables (420+ lines)
 │   ├── k8s/
 │   │   └── client.go              # K8s client wrapper (700+ lines)
 │   ├── tracker/
@@ -173,8 +222,14 @@ api/
 │   ├── websocket/
 │   │   ├── hub.go                 # WebSocket hub infrastructure (160+ lines)
 │   │   └── handlers.go            # WebSocket handlers (280+ lines)
+│   ├── plugins/
+│   │   └── handler.go             # Plugin system handler (150+ lines)
+│   ├── middleware/
+│   │   ├── auth.go                # Authentication middleware
+│   │   ├── cors.go                # CORS middleware
+│   │   └── logging.go             # Logging middleware
 │   └── api/
-│       ├── handlers.go            # API handlers (700+ lines)
+│       ├── handlers.go            # API handlers (1000+ lines with plugin endpoints)
 │       └── stubs.go               # Stub handlers and webhooks (265+ lines)
 ├── go.mod                         # Go module definition
 └── README.md                      # This file
@@ -204,6 +259,18 @@ api/
 
 7. **audit_log** - Audit trail of all actions
    - id, user_id, action, resource_type, resource_id, changes (JSONB), timestamp, ip_address
+
+8. **repositories** (reused) - Plugin repositories (in addition to template repositories)
+   - Same schema supports both template and plugin repositories
+
+9. **catalog_plugins** - Available plugins from repositories
+   - id, repository_id, name, version, display_name, description, category, plugin_type, icon_url, manifest (JSONB), tags, install_count, avg_rating, rating_count
+
+10. **installed_plugins** - User-installed plugins
+    - id, catalog_plugin_id, name, version, enabled, config (JSONB), installed_by, installed_at, updated_at
+
+11. **plugin_ratings** - Plugin ratings and reviews
+    - id, plugin_id, user_id, rating, review_text, created_at, updated_at
 
 ## API Endpoints
 
@@ -245,6 +312,22 @@ GET    /api/v1/repositories         # List template repositories
 POST   /api/v1/repositories         # Add new repository
 POST   /api/v1/repositories/:id/sync   # Trigger repository sync
 DELETE /api/v1/repositories/:id     # Delete repository
+```
+
+### Plugin Management
+
+```
+GET    /api/v1/plugins/catalog      # Browse available plugins (filter by ?category=..., ?type=...)
+POST   /api/v1/plugins/install      # Install plugin from catalog
+GET    /api/v1/plugins/installed    # List installed plugins
+POST   /api/v1/plugins/:id/enable   # Enable installed plugin
+POST   /api/v1/plugins/:id/disable  # Disable installed plugin
+PUT    /api/v1/plugins/:id/config   # Update plugin configuration
+DELETE /api/v1/plugins/:id          # Uninstall plugin
+POST   /api/v1/plugins/:id/rate     # Rate and review plugin
+GET    /api/v1/plugins/repositories # List plugin repositories
+POST   /api/v1/plugins/repositories # Add plugin repository
+POST   /api/v1/plugins/repositories/:id/sync  # Sync plugin repository
 ```
 
 ### WebSocket Endpoints

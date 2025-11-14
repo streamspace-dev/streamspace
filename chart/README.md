@@ -10,6 +10,7 @@ StreamSpace provides:
 - **Persistent home directories** using NFS storage
 - **Auto-hibernation** for resource efficiency
 - **200+ application templates** from LinuxServer.io
+- **Plugin system** for extending platform functionality
 - **Resource quotas** and limits per user
 - **Comprehensive monitoring** with Grafana and Prometheus
 
@@ -75,6 +76,9 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
 | `ui.replicaCount` | Number of UI replicas | `2` |
 | `postgresql.enabled` | Deploy PostgreSQL database | `true` |
 | `postgresql.external.enabled` | Use external PostgreSQL | `false` |
+| `plugins.enabled` | Enable plugin system | `true` |
+| `plugins.catalog.syncInterval` | Plugin repository sync interval | `1h` |
+| `plugins.isolation.enabled` | Enable plugin sandboxing | `true` |
 | `ingress.enabled` | Create ingress resources | `true` |
 | `ingress.tls.enabled` | Enable TLS for ingress | `false` |
 | `monitoring.enabled` | Deploy monitoring resources | `true` |

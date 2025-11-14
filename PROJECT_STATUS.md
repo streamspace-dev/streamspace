@@ -13,6 +13,7 @@ StreamSpace is a fully functional **Kubernetes-native multi-user streaming platf
 - ✅ Complete API backend with REST + WebSocket
 - ✅ Full-featured React TypeScript web UI
 - ✅ Kubernetes controller for session lifecycle management
+- ✅ **Plugin system** for extending platform functionality
 - ✅ Real-time updates and monitoring
 - ✅ Repository sync and template marketplace
 - ✅ Auto-hibernation architecture
@@ -24,6 +25,7 @@ StreamSpace is a fully functional **Kubernetes-native multi-user streaming platf
 4. Real-time dashboard with live metrics
 5. Persistent user home directories
 6. Git-based template repositories with auto-sync
+7. **Install and manage plugins** to extend functionality
 
 ---
 
@@ -179,6 +181,81 @@ npm run dev
                         │   Database    │       │  (CRDs)      │
                         └───────────────┘       └──────────────┘
 ```
+
+---
+
+### ✅ Phase 2.5: Plugin System (COMPLETE)
+
+**Status**: Fully implemented with comprehensive documentation
+**Location**: `api/internal/plugins/`, `ui/src/pages/PluginCatalog.tsx`, `ui/src/pages/InstalledPlugins.tsx`
+**Lines of Code**: ~1,500 lines (backend + frontend)
+**Tech Stack**: Go (backend), React + TypeScript (frontend), PostgreSQL (storage)
+
+**Implemented Features:**
+
+#### Backend (api/internal/plugins/)
+- [x] Plugin handler with CRUD operations
+- [x] Plugin repository management (GitHub, GitLab, custom)
+- [x] Plugin catalog with filtering and search
+- [x] Install/uninstall plugin management
+- [x] Enable/disable plugin functionality
+- [x] Configuration management with JSON storage
+- [x] Plugin ratings and reviews system
+- [x] Event system for webhook plugins
+- [x] Permission validation and enforcement
+- [x] Database schema with 4 tables (repositories, catalog_plugins, installed_plugins, plugin_ratings)
+
+#### Frontend (ui/src/)
+- [x] **PluginCatalog** page - Browse plugins with search, filters, sorting
+- [x] **InstalledPlugins** page - Manage installed plugins with config editor
+- [x] **Admin Plugins** page - System-wide plugin management
+- [x] **PluginCard** component - Type-based color coding
+- [x] **PluginDetailModal** component - Full details with tabs (Details/Reviews)
+- [x] **PluginConfigForm** component - Schema-based form generation
+- [x] **PluginCardSkeleton** component - Skeleton loaders
+- [x] Permission system with risk indicators (low/medium/high)
+- [x] Rich empty states with contextual actions
+- [x] Real-time search and filtering with useMemo optimization
+
+#### Plugin Types Supported
+- **Extension**: Add new features and UI components
+- **Webhook**: React to system events (session.created, user.login, etc.)
+- **API Integration**: Connect to external services (Slack, GitHub, Jira)
+- **UI Theme**: Customize web interface appearance
+
+#### Documentation
+- [x] **PLUGIN_DEVELOPMENT.md** (1,877 lines) - Complete developer guide
+- [x] **docs/PLUGIN_API.md** (1,569 lines) - Comprehensive API reference
+- [x] README.md updated with plugin system section
+
+**API Endpoints** (11 new endpoints):
+```bash
+GET    /api/v1/plugins/catalog           # Browse plugins
+POST   /api/v1/plugins/install            # Install plugin
+GET    /api/v1/plugins/installed          # List installed
+POST   /api/v1/plugins/:id/enable         # Enable plugin
+POST   /api/v1/plugins/:id/disable        # Disable plugin
+PUT    /api/v1/plugins/:id/config         # Update config
+DELETE /api/v1/plugins/:id                # Uninstall
+POST   /api/v1/plugins/:id/rate           # Rate plugin
+GET    /api/v1/plugins/repositories       # List repos
+POST   /api/v1/plugins/repositories       # Add repo
+POST   /api/v1/plugins/repositories/:id/sync  # Sync repo
+```
+
+**Key Files:**
+- `api/internal/plugins/handler.go` (150+ lines) - Plugin backend logic
+- `api/internal/db/database.go` (updated, 420+ lines) - Plugin tables
+- `ui/src/pages/PluginCatalog.tsx` (266 lines) - Plugin browsing
+- `ui/src/pages/InstalledPlugins.tsx` (329 lines) - Plugin management
+- `ui/src/pages/admin/Plugins.tsx` (440 lines) - Admin interface
+- `ui/src/components/PluginCard.tsx` (214 lines) - Plugin display
+- `ui/src/components/PluginDetailModal.tsx` (418 lines) - Details modal
+- `ui/src/components/PluginConfigForm.tsx` (195 lines) - Config form
+- `PLUGIN_DEVELOPMENT.md` (1,877 lines) - Developer guide
+- `docs/PLUGIN_API.md` (1,569 lines) - API reference
+
+---
 
 ### Data Flow
 

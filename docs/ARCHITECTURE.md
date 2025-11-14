@@ -224,6 +224,101 @@ spec:
 - Shared across all user's workspaces
 - Backed up independently
 
+### 6. Plugin System
+
+**Purpose**: Extensible architecture for adding custom functionality without modifying core code
+
+**Plugin Types**:
+- **Extension**: Add new features and UI components
+- **Webhook**: React to system events (session created, user login, etc.)
+- **API Integration**: Connect to external services (Slack, GitHub, Jira)
+- **UI Theme**: Customize web interface appearance
+- **CLI**: Add custom command-line tools
+
+**Database Schema**:
+```sql
+-- Plugin repositories (GitHub, GitLab, custom)
+CREATE TABLE repositories (
+  id SERIAL PRIMARY KEY,
+  name VARCHAR(255) NOT NULL,
+  url TEXT NOT NULL,
+  branch VARCHAR(255) DEFAULT 'main',
+  auth_type VARCHAR(50),
+  enabled BOOLEAN DEFAULT true
+);
+
+-- Catalog of available plugins
+CREATE TABLE catalog_plugins (
+  id SERIAL PRIMARY KEY,
+  repository_id INTEGER REFERENCES repositories(id),
+  name VARCHAR(255) NOT NULL UNIQUE,
+  version VARCHAR(50),
+  display_name VARCHAR(255),
+  description TEXT,
+  category VARCHAR(100),
+  plugin_type VARCHAR(50),
+  icon_url TEXT,
+  manifest JSONB,
+  tags TEXT[]
+);
+
+-- User-installed plugins
+CREATE TABLE installed_plugins (
+  id SERIAL PRIMARY KEY,
+  catalog_plugin_id INTEGER REFERENCES catalog_plugins(id),
+  name VARCHAR(255) NOT NULL UNIQUE,
+  version VARCHAR(50),
+  enabled BOOLEAN DEFAULT false,
+  config JSONB,
+  installed_by VARCHAR(255),
+  installed_at TIMESTAMP DEFAULT NOW()
+);
+```
+
+**API Endpoints**:
+- `GET /api/v1/plugins/catalog` - Browse available plugins
+- `POST /api/v1/plugins/install` - Install plugin
+- `GET /api/v1/plugins/installed` - List installed plugins
+- `POST /api/v1/plugins/{id}/enable` - Enable plugin
+- `POST /api/v1/plugins/{id}/disable` - Disable plugin
+- `PUT /api/v1/plugins/{id}/config` - Update plugin configuration
+- `DELETE /api/v1/plugins/{id}` - Uninstall plugin
+
+**UI Components**:
+- **PluginCatalog** (`/plugins/catalog`) - Browse and install plugins with search, filters, ratings
+- **InstalledPlugins** (`/plugins/installed`) - Manage installed plugins with config editor
+- **Admin PluginManagement** (`/admin/plugins`) - System-wide plugin administration
+- **PluginCard** - Display plugin with type-based color coding
+- **PluginDetailModal** - Full details, reviews, permissions with risk indicators
+- **PluginConfigForm** - Schema-based form generator for plugin configuration
+
+**Security Features**:
+- Permission system with risk levels (low/medium/high)
+- Sandbox execution environment
+- Configuration validation
+- Manifest schema enforcement
+- User/admin approval workflows
+
+**Event System**:
+```javascript
+// Plugins can register handlers for these events:
+- session.created
+- session.started
+- session.stopped
+- session.hibernated
+- session.woken
+- session.deleted
+- user.created
+- user.updated
+- user.deleted
+- user.login
+- user.logout
+```
+
+**Documentation**:
+- `PLUGIN_DEVELOPMENT.md` - Complete developer guide with examples
+- `docs/PLUGIN_API.md` - Comprehensive API reference
+
 ## Data Flow
 
 ### Session Creation Flow

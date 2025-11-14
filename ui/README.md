@@ -39,6 +39,17 @@ React TypeScript frontend for StreamSpace - Stream any containerized application
   - Group member management (add, remove members)
   - Group quota management
   - Role-based access control
+- **Plugin System**
+  - Browse plugin catalog with search, filters, and sorting
+  - View plugin details with tabs (Details/Reviews)
+  - Install plugins from catalog
+  - Manage installed plugins (enable/disable, configure, uninstall)
+  - Plugin configuration with schema-based form generation
+  - Permission system with risk indicators (low/medium/high)
+  - Plugin ratings and reviews
+  - Admin plugin management (system-wide control)
+  - Skeleton loaders for better perceived performance
+  - Rich empty states with contextual actions
 
 ## Tech Stack
 
@@ -58,11 +69,15 @@ ui/
 ├── public/                     # Static assets
 ├── src/
 │   ├── components/
-│   │   └── Layout.tsx         # Main layout with sidebar and app bar
+│   │   ├── Layout.tsx         # Main layout with sidebar and app bar
+│   │   ├── PluginCard.tsx     # Plugin card with type-based color coding
+│   │   ├── PluginCardSkeleton.tsx  # Skeleton loader for plugin cards
+│   │   ├── PluginDetailModal.tsx   # Plugin details modal with tabs
+│   │   └── PluginConfigForm.tsx    # Schema-based configuration form
 │   ├── hooks/
 │   │   └── useApi.ts          # React Query hooks for API
 │   ├── lib/
-│   │   └── api.ts             # API client with JWT auth
+│   │   └── api.ts             # API client with JWT auth and plugin methods
 │   ├── pages/
 │   │   ├── Login.tsx          # Login page with JWT auth
 │   │   ├── Dashboard.tsx      # Overview dashboard
@@ -70,6 +85,8 @@ ui/
 │   │   ├── SessionViewer.tsx  # Session viewer
 │   │   ├── Catalog.tsx        # Template catalog browser
 │   │   ├── Repositories.tsx   # Repository management
+│   │   ├── PluginCatalog.tsx  # Browse and install plugins
+│   │   ├── InstalledPlugins.tsx  # Manage installed plugins
 │   │   └── admin/             # Admin pages (protected)
 │   │       ├── Dashboard.tsx  # Admin dashboard
 │   │       ├── Nodes.tsx      # Node management
@@ -79,7 +96,8 @@ ui/
 │   │       ├── CreateUser.tsx # Create new user
 │   │       ├── Groups.tsx     # Group list and management
 │   │       ├── GroupDetail.tsx # Group detail and members
-│   │       └── CreateGroup.tsx # Create new group
+│   │       ├── CreateGroup.tsx # Create new group
+│   │       └── Plugins.tsx    # Plugin management (system-wide)
 │   ├── store/
 │   │   └── userStore.ts       # Zustand auth state with JWT
 │   ├── App.tsx                # Main app with protected routes

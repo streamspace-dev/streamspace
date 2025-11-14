@@ -38,6 +38,7 @@ This document provides comprehensive guidance for AI assistants working with the
 - On-demand auto-hibernation for resource efficiency
 - 200+ pre-built application templates (LinuxServer.io catalog)
 - Resource quotas and limits per user
+- **Plugin system** for extending platform functionality
 - Comprehensive monitoring with Grafana and Prometheus
 - Optimized for k3s and ARM64 architectures
 
@@ -356,14 +357,41 @@ streamspace/
 │   └── templates/        # Helm templates (to be created)
 │
 ├── docs/                  # Technical documentation
-│   ├── ARCHITECTURE.md        # Complete system architecture (17.8KB)
-│   └── CONTROLLER_GUIDE.md    # Go controller implementation guide (19.2KB)
+│   ├── ARCHITECTURE.md        # Complete system architecture
+│   ├── CONTROLLER_GUIDE.md    # Go controller implementation guide
+│   ├── PLUGIN_API.md          # Plugin API reference documentation
+│   └── (other guides)         # VNC migration, deployment, SAML, etc.
 │
 ├── scripts/               # Utility scripts
 │   └── generate-templates.py  # Generate 200+ LinuxServer.io templates
 │
-└── controller/            # To be created - Go controller using Kubebuilder
-    └── (Phase 1 implementation)
+├── PLUGIN_DEVELOPMENT.md  # Plugin development guide
+│
+├── controller/            # Go controller using Kubebuilder
+│   ├── cmd/              # Main entry point
+│   ├── internal/         # Controller logic, reconcilers
+│   ├── api/              # CRD type definitions
+│   ├── config/           # Controller configuration
+│   └── tests/            # Controller tests
+│
+├── api/                   # Go API backend (REST + WebSocket)
+│   ├── cmd/              # API server entry point
+│   ├── internal/         # API handlers, middleware, database
+│   │   ├── db/          # Database models and queries
+│   │   ├── handlers/    # HTTP request handlers
+│   │   ├── middleware/  # Authentication, logging
+│   │   └── plugins/     # Plugin system implementation
+│   ├── config/          # API configuration
+│   └── tests/           # API tests
+│
+└── ui/                   # React web UI
+    ├── src/             # Source code
+    │   ├── components/  # React components (PluginCard, PluginDetailModal, etc.)
+    │   ├── pages/       # Page components (PluginCatalog, InstalledPlugins, etc.)
+    │   ├── lib/         # Utilities and API client
+    │   └── App.tsx      # Main application
+    ├── public/          # Static assets
+    └── tests/           # UI tests
 ```
 
 ### Directory Purposes
@@ -379,12 +407,23 @@ streamspace/
 - **`docs/`**: Comprehensive technical documentation
   - Architecture diagrams and data flows
   - Implementation guides for each component
+  - Plugin system documentation
 
 - **`scripts/`**: Automation scripts for template generation and utilities
 
-- **`controller/`**: (To be implemented) Go-based Kubernetes controller
-  - Will use Kubebuilder framework
+- **`controller/`**: Go-based Kubernetes controller (Kubebuilder)
   - Manages Session lifecycle and hibernation
+  - Reconciles CRD resources with Kubernetes state
+
+- **`api/`**: Go API backend (REST + WebSocket)
+  - Authentication and session management
+  - Plugin system backend
+  - WebSocket proxy for VNC connections
+
+- **`ui/`**: React web UI with TypeScript
+  - User dashboard for session management
+  - Admin panel for platform administration
+  - Plugin catalog and management UI
 
 ---
 
@@ -1200,6 +1239,8 @@ kubectl describe prometheusrule streamspace-alerts -n streamspace
 **What Exists**:
 - ✅ Complete architecture documentation (`docs/ARCHITECTURE.md`)
 - ✅ Controller implementation guide (`docs/CONTROLLER_GUIDE.md`)
+- ✅ Plugin development guide (`PLUGIN_DEVELOPMENT.md`)
+- ✅ Plugin API reference (`docs/PLUGIN_API.md`)
 - ✅ CRD definitions (Session, Template)
 - ✅ 22 pre-built application templates
 - ✅ Kubernetes manifests for deployment
@@ -1212,6 +1253,7 @@ kubectl describe prometheusrule streamspace-alerts -n streamspace
 - ✅ Go controller using Kubebuilder (Phase 1 - Complete)
 - ✅ API backend with REST/WebSocket (Phase 2 - Complete)
 - ✅ React web UI with admin panel (Phase 4 - Complete)
+- ✅ **Plugin system** (backend, UI, documentation - Complete)
 - ✅ Hibernation controller logic (Phase 1 - Complete)
 - ✅ User management and quotas (Phase 2/4 - Complete)
 - ✅ CI/CD pipelines (Phase 3 - Complete)
