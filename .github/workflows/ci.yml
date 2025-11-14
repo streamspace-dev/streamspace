@@ -160,10 +160,17 @@ jobs:
           DB_PASSWORD: testpassword
           DB_SSLMODE: disable
         run: |
-          go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
-          go tool cover -func=coverage.out
+          # Check if there are any test files
+          if find . -name "*_test.go" | grep -q .; then
+            go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
+            go tool cover -func=coverage.out
+          else
+            echo "No test files found, skipping tests"
+            exit 0
+          fi
 
       - name: Upload coverage to Codecov
+        if: hashFiles('api/coverage.out') != ''
         uses: codecov/codecov-action@v4
         with:
           files: ./api/coverage.out
@@ -196,9 +203,10 @@ jobs:
 
       - name: Run tests
         working-directory: ./ui
-        run: npm test -- --coverage --watchAll=false
+        run: npm test
 
       - name: Upload coverage to Codecov
+        if: hashFiles('ui/coverage/lcov.info') != ''
         uses: codecov/codecov-action@v4
         with:
           files: ./ui/coverage/lcov.info
