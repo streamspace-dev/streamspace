@@ -1,0 +1,405 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="StreamSpace Documentation - Architecture, deployment, API reference, and development guides.">
+  <title>Documentation - StreamSpace</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="index.html" class="logo">
+        <div class="logo-icon">🚀</div>
+        <span>StreamSpace</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="plugins.html">Plugins</a></li>
+        <li><a href="getting-started.html">Get Started</a></li>
+      </ul>
+      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <button class="menu-toggle"><span></span><span></span><span></span></button>
+    </nav>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="doc-sidebar">
+      <h3>Documentation</h3>
+      <ul>
+        <li><a href="#overview">Overview</a></li>
+        <li><a href="#architecture">Architecture</a></li>
+        <li><a href="#installation">Installation</a></li>
+        <li><a href="#usage">Usage</a></li>
+        <li><a href="#api">API Reference</a></li>
+        <li><a href="#development">Development</a></li>
+        <li><a href="#deployment">Deployment</a></li>
+      </ul>
+    </aside>
+
+    <main class="doc-content">
+      <h1>Documentation</h1>
+      <p>Comprehensive guides and references for StreamSpace</p>
+
+      <h2 id="overview">Overview</h2>
+      <p>StreamSpace is a Kubernetes-native multi-user platform that streams containerized applications to web browsers using VNC technology. It provides on-demand provisioning with auto-hibernation for resource efficiency.</p>
+
+      <h3>Key Concepts</h3>
+      <ul>
+        <li><strong>Session</strong> - A running instance of an application for a user</li>
+        <li><strong>Template</strong> - An application definition that can be launched as a Session</li>
+        <li><strong>Hibernation</strong> - Automatic scale-to-zero when sessions are idle</li>
+        <li><strong>Plugin</strong> - Extension that adds functionality to StreamSpace</li>
+        <li><strong>Repository</strong> - Git repository containing templates or plugins</li>
+      </ul>
+
+      <h2 id="architecture">Architecture</h2>
+      <p>StreamSpace consists of three main components:</p>
+
+      <h3>1. Kubernetes Controller</h3>
+      <p>Go-based controller using Kubebuilder framework that manages Session and Template CRDs.</p>
+      <ul>
+        <li>Reconciles Session CRDs with Kubernetes resources</li>
+        <li>Creates Deployments, Services, Ingresses, PVCs</li>
+        <li>Handles state transitions and hibernation</li>
+        <li>Exports Prometheus metrics</li>
+      </ul>
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/ARCHITECTURE.md">View detailed architecture →</a></p>
+
+      <h3>2. API Backend</h3>
+      <p>Go-based REST + WebSocket API using Gin framework.</p>
+      <ul>
+        <li>Session management endpoints</li>
+        <li>Template catalog and repository sync</li>
+        <li>Plugin management system</li>
+        <li>PostgreSQL caching layer</li>
+        <li>Connection tracking</li>
+        <li>Real-time WebSocket updates</li>
+      </ul>
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/api/README.md">API Backend documentation →</a></p>
+
+      <h3>3. Web UI</h3>
+      <p>React + TypeScript web interface with Material-UI.</p>
+      <ul>
+        <li>User dashboard and session management</li>
+        <li>Template catalog browser</li>
+        <li>Plugin catalog and management</li>
+        <li>Admin panel for users, groups, quotas</li>
+        <li>Real-time updates via WebSocket</li>
+      </ul>
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ui/README.md">UI documentation →</a></p>
+
+      <h2 id="installation">Installation</h2>
+      <p>See the <a href="getting-started.html">Getting Started guide</a> for detailed installation instructions.</p>
+
+      <h3>Quick Install</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># Clone repository
+git clone https://github.com/JoshuaAFerguson/streamspace.git
+cd streamspace
+
+# Install with Helm
+helm install streamspace ./chart \\
+  --namespace streamspace \\
+  --create-namespace</code></pre>
+      </div>
+
+      <h2 id="usage">Usage</h2>
+
+      <h3>Creating Sessions</h3>
+      <p>Sessions can be created via the Web UI, kubectl, or API.</p>
+
+      <h4>Using kubectl</h4>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>kubectl apply -f - <<EOF
+apiVersion: stream.space/v1alpha1
+kind: Session
+metadata:
+  name: user1-firefox
+  namespace: streamspace
+spec:
+  user: user1
+  template: firefox-browser
+  state: running
+  resources:
+    memory: 2Gi
+    cpu: 1000m
+  persistentHome: true
+  idleTimeout: 30m
+EOF</code></pre>
+      </div>
+
+      <h4>Using the API</h4>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>curl -X POST http://api.streamspace.local/api/v1/sessions \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "user": "user1",
+    "template": "firefox-browser",
+    "state": "running",
+    "resources": {
+      "memory": "2Gi",
+      "cpu": "1000m"
+    }
+  }'</code></pre>
+      </div>
+
+      <h3>Managing Sessions</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># List sessions
+kubectl get sessions -n streamspace
+
+# Get session details
+kubectl describe session user1-firefox -n streamspace
+
+# Hibernate a session
+kubectl patch session user1-firefox -n streamspace \\
+  --type merge -p '{"spec":{"state":"hibernated"}}'
+
+# Wake a session
+kubectl patch session user1-firefox -n streamspace \\
+  --type merge -p '{"spec":{"state":"running"}}'
+
+# Delete a session
+kubectl delete session user1-firefox -n streamspace</code></pre>
+      </div>
+
+      <h2 id="api">API Reference</h2>
+
+      <h3>Session Endpoints</h3>
+      <ul>
+        <li><code>GET /api/v1/sessions</code> - List all sessions</li>
+        <li><code>POST /api/v1/sessions</code> - Create a session</li>
+        <li><code>GET /api/v1/sessions/:id</code> - Get session details</li>
+        <li><code>PUT /api/v1/sessions/:id</code> - Update session</li>
+        <li><code>DELETE /api/v1/sessions/:id</code> - Delete session</li>
+      </ul>
+
+      <h3>Template Endpoints</h3>
+      <ul>
+        <li><code>GET /api/v1/templates</code> - List templates</li>
+        <li><code>GET /api/v1/templates/:id</code> - Get template details</li>
+        <li><code>GET /api/v1/catalog/templates</code> - Browse catalog</li>
+      </ul>
+
+      <h3>Plugin Endpoints</h3>
+      <ul>
+        <li><code>GET /api/v1/plugins/catalog</code> - Browse plugins</li>
+        <li><code>POST /api/v1/plugins/install</code> - Install plugin</li>
+        <li><code>GET /api/v1/plugins/installed</code> - List installed plugins</li>
+      </ul>
+
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/api/README.md">Full API documentation →</a></p>
+
+      <h2 id="development">Development</h2>
+
+      <h3>Controller Development</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>cd controller
+
+# Run locally
+make run
+
+# Run tests
+make test
+
+# Build Docker image
+make docker-build IMG=myregistry/streamspace-controller:dev</code></pre>
+      </div>
+
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/controller/README.md">Controller development guide →</a></p>
+
+      <h3>API Development</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>cd api
+
+# Run locally
+go run cmd/main.go
+
+# Run tests
+go test ./...</code></pre>
+      </div>
+
+      <h3>UI Development</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>cd ui
+
+# Install dependencies
+npm install
+
+# Run development server
+npm run dev
+
+# Build for production
+npm run build</code></pre>
+      </div>
+
+      <h2 id="deployment">Deployment</h2>
+
+      <h3>Production Deployment</h3>
+      <p>Create a production values file:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>controller:
+  replicaCount: 3
+  leaderElection:
+    enabled: true
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+
+api:
+  replicaCount: 3
+  autoscaling:
+    enabled: true
+    minReplicas: 3
+    maxReplicas: 10
+
+ui:
+  replicaCount: 2
+
+postgresql:
+  enabled: false
+  external:
+    enabled: true
+    host: "postgres.example.com"
+
+ingress:
+  enabled: true
+  className: "nginx"
+  tls:
+    enabled: true
+    secretName: "streamspace-tls"
+
+monitoring:
+  enabled: true</code></pre>
+      </div>
+
+      <h3>Resource Requirements</h3>
+      <table style="width: 100%; margin: 2rem 0;">
+        <thead>
+          <tr>
+            <th style="text-align: left; padding: 0.75rem;">Component</th>
+            <th style="text-align: left; padding: 0.75rem;">CPU</th>
+            <th style="text-align: left; padding: 0.75rem;">Memory</th>
+          </tr>
+        </thead>
+        <tbody>
+          <tr>
+            <td style="padding: 0.75rem;">Controller</td>
+            <td style="padding: 0.75rem;">500m</td>
+            <td style="padding: 0.75rem;">512Mi</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.75rem;">API Backend</td>
+            <td style="padding: 0.75rem;">1000m</td>
+            <td style="padding: 0.75rem;">1Gi</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.75rem;">Web UI</td>
+            <td style="padding: 0.75rem;">100m</td>
+            <td style="padding: 0.75rem;">256Mi</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.75rem;">PostgreSQL</td>
+            <td style="padding: 0.75rem;">1000m</td>
+            <td style="padding: 0.75rem;">2Gi</td>
+          </tr>
+        </tbody>
+      </table>
+
+      <h3>Further Reading</h3>
+      <ul>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CLAUDE.md">AI Assistant Guide</a></li>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Project Roadmap</a></li>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing Guide</a></li>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/ARCHITECTURE.md">Architecture Deep Dive</a></li>
+        <li><a href="plugins.html">Plugin Development Guide</a></li>
+      </ul>
+
+      <div class="mt-4">
+        <a href="getting-started.html" class="button button-primary">Getting Started</a>
+        <a href="https://github.com/JoshuaAFerguson/streamspace" class="button button-secondary">GitHub Repository</a>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>StreamSpace</h3>
+        <p>Open source platform for streaming containerized applications to web browsers.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Documentation</h3>
+        <ul>
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="docs.html">Documentation</a></li>
+          <li><a href="plugins.html">Plugin Development</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Resources</h3>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Community</h3>
+        <ul>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 StreamSpace. Released under MIT License.</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

@@ -1,0 +1,344 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="StreamSpace features - Browser-based access, auto-hibernation, plugin system, multi-user support, and 200+ application templates.">
+  <title>Features - StreamSpace</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <!-- Header -->
+  <header>
+    <nav>
+      <a href="index.html" class="logo">
+        <div class="logo-icon">🚀</div>
+        <span>StreamSpace</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="plugins.html">Plugins</a></li>
+        <li><a href="getting-started.html">Get Started</a></li>
+      </ul>
+      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <button class="menu-toggle" aria-label="Toggle menu">
+        <span></span>
+        <span></span>
+        <span></span>
+      </button>
+    </nav>
+  </header>
+
+  <!-- Page Header -->
+  <section class="hero" style="min-height: 50vh;">
+    <div class="hero-content">
+      <h1>Features</h1>
+      <p>Everything you need for scalable application streaming</p>
+    </div>
+  </section>
+
+  <!-- Core Features -->
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Core Features</h2>
+        <p>Built for enterprise-grade application delivery</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">🖥️</div>
+          <h3>Browser-Based Access</h3>
+          <p>Stream any containerized application directly to web browsers using VNC technology. No client installation, no VPN required. Users simply open a URL and start working.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>HTML5 canvas rendering</li>
+            <li>Clipboard support</li>
+            <li>Full keyboard and mouse support</li>
+            <li>Responsive across devices</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Auto-Hibernation</h3>
+          <p>Sessions automatically hibernate after a configurable idle period (default: 30 minutes). Resources are freed up, but sessions wake instantly when accessed again.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>Scale to zero replicas</li>
+            <li>Instant wake-up on access</li>
+            <li>80%+ cost reduction</li>
+            <li>Configurable per session</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">☸️</div>
+          <h3>Kubernetes Native</h3>
+          <p>Built on Kubernetes with custom resource definitions (CRDs). Leverage your existing K8s infrastructure, monitoring, and deployment tools.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>Session CRD for user workspaces</li>
+            <li>Template CRD for applications</li>
+            <li>Native kubectl integration</li>
+            <li>Helm chart for deployment</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">👥</div>
+          <h3>Multi-User Support</h3>
+          <p>Support unlimited users with SSO authentication via Authentik or Keycloak. Each user gets persistent home directories and configurable resource quotas.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>OIDC/SAML authentication</li>
+            <li>Per-user resource limits</li>
+            <li>Role-based access control</li>
+            <li>User groups and quotas</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Persistent Storage</h3>
+          <p>User home directories persist across sessions using NFS storage. Files, settings, and data are automatically saved and available in all sessions.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>NFS ReadWriteMany PVCs</li>
+            <li>Automatic provisioning</li>
+            <li>Configurable storage quotas</li>
+            <li>Shared across all user sessions</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3>Application Templates</h3>
+          <p>200+ pre-built templates for popular applications. Install custom templates from Git repositories with automatic sync.</p>
+          <ul style="margin-top: 1rem; color: var(--text-secondary);">
+            <li>Web browsers (Firefox, Chromium, Brave)</li>
+            <li>Development tools (VS Code, IDEs)</li>
+            <li>Design apps (GIMP, Inkscape, Blender)</li>
+            <li>Productivity (LibreOffice, Calligra)</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Plugin System -->
+  <section class="code-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Plugin System</h2>
+        <p>Extend StreamSpace without modifying core code</p>
+      </div>
+      <div class="plugin-types">
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🔧</div>
+          <h3>Extension Plugins</h3>
+          <p>Add new features, UI components, and custom dashboards to the web interface.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🔗</div>
+          <h3>Webhook Plugins</h3>
+          <p>React to system events like session created, user login, and more.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🌐</div>
+          <h3>API Integration</h3>
+          <p>Connect to external services like Slack, GitHub, Jira, monitoring systems.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🎨</div>
+          <h3>UI Themes</h3>
+          <p>Customize the web interface with custom colors, typography, and styling.</p>
+        </div>
+      </div>
+      <div class="mt-4">
+        <a href="plugins.html" class="button button-primary">Learn About Plugins</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Management Features -->
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Management & Administration</h2>
+        <p>Powerful tools for platform administrators</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>Real-Time Dashboard</h3>
+          <p>Monitor all sessions, active connections, cluster resources, and system health in real-time via WebSocket.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔍</div>
+          <h3>Monitoring & Metrics</h3>
+          <p>Prometheus metrics for sessions, resources, and hibernation. Pre-built Grafana dashboards included.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Security & Audit</h3>
+          <p>Complete audit logs, network policies, RBAC integration, and permission-based plugin system.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚙️</div>
+          <h3>Resource Quotas</h3>
+          <p>Set CPU, memory, storage, and session limits per user or group. Enforce platform-wide policies.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📂</div>
+          <h3>Repository Sync</h3>
+          <p>Sync templates and plugins from Git repositories (GitHub, GitLab, custom). Automatic or webhook-triggered.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔄</div>
+          <h3>API & WebSocket</h3>
+          <p>Complete REST API with JWT authentication. WebSocket support for real-time updates and log streaming.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Technical Capabilities -->
+  <section class="code-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Technical Capabilities</h2>
+        <p>Built with modern cloud-native technologies</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3>Controller (Go + Kubebuilder)</h3>
+          <ul style="color: var(--text-secondary);">
+            <li>Session lifecycle management</li>
+            <li>Automatic resource provisioning</li>
+            <li>State machine (running/hibernated/terminated)</li>
+            <li>Deployment scaling (0/1 replicas)</li>
+            <li>Service and Ingress creation</li>
+            <li>PVC provisioning for user homes</li>
+            <li>Prometheus metrics export</li>
+            <li>Leader election for HA</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>API Backend (Go + Gin)</h3>
+          <ul style="color: var(--text-secondary);">
+            <li>REST + WebSocket APIs</li>
+            <li>PostgreSQL caching layer</li>
+            <li>Connection tracking</li>
+            <li>Repository sync service</li>
+            <li>Plugin management system</li>
+            <li>JWT authentication</li>
+            <li>Kubernetes client integration</li>
+            <li>Audit logging</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>Web UI (React + TypeScript)</h3>
+          <ul style="color: var(--text-secondary);">
+            <li>Material-UI components</li>
+            <li>Real-time updates via WebSocket</li>
+            <li>Session management interface</li>
+            <li>Template catalog browser</li>
+            <li>Plugin catalog and management</li>
+            <li>Admin dashboard</li>
+            <li>User and group management</li>
+            <li>Responsive design</li>
+          </ul>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- Deployment Options -->
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Deployment Options</h2>
+        <p>Flexible deployment for any environment</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">⎈</div>
+          <h3>K3s (Recommended)</h3>
+          <p>Optimized for k3s lightweight Kubernetes. Perfect for edge deployments and ARM64 architectures like Raspberry Pi clusters.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">☁️</div>
+          <h3>Cloud Providers</h3>
+          <p>Deploy to AWS EKS, Google GKE, Azure AKS, or DigitalOcean. Helm chart works on any Kubernetes 1.19+.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🏢</div>
+          <h3>On-Premises</h3>
+          <p>Run on bare metal, VMware, or OpenStack. Full control over your infrastructure and data.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <!-- CTA -->
+  <section class="code-section">
+    <div class="container text-center">
+      <h2>Ready to Try StreamSpace?</h2>
+      <p class="mb-4">Deploy to your Kubernetes cluster in minutes</p>
+      <div class="hero-buttons">
+        <a href="getting-started.html" class="button button-primary">Get Started</a>
+        <a href="docs.html" class="button button-secondary">Read Documentation</a>
+      </div>
+    </div>
+  </section>
+
+  <!-- Footer -->
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>StreamSpace</h3>
+        <p>Open source platform for streaming containerized applications to web browsers.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Documentation</h3>
+        <ul>
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="docs.html">Documentation</a></li>
+          <li><a href="plugins.html">Plugin Development</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Resources</h3>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Community</h3>
+        <ul>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 StreamSpace. Released under MIT License.</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

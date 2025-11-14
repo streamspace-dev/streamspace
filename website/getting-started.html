@@ -1,0 +1,314 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="Get started with StreamSpace - Installation guide, prerequisites, and first session tutorial.">
+  <title>Getting Started - StreamSpace</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="index.html" class="logo">
+        <div class="logo-icon">🚀</div>
+        <span>StreamSpace</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="plugins.html">Plugins</a></li>
+        <li><a href="getting-started.html">Get Started</a></li>
+      </ul>
+      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <button class="menu-toggle"><span></span><span></span><span></span></button>
+    </nav>
+  </header>
+
+  <div class="doc-layout">
+    <aside class="doc-sidebar">
+      <h3>Contents</h3>
+      <ul>
+        <li><a href="#prerequisites">Prerequisites</a></li>
+        <li><a href="#installation">Installation</a></li>
+        <li><a href="#verify">Verify Deployment</a></li>
+        <li><a href="#first-session">First Session</a></li>
+        <li><a href="#configuration">Configuration</a></li>
+        <li><a href="#next-steps">Next Steps</a></li>
+      </ul>
+    </aside>
+
+    <main class="doc-content">
+      <h1>Getting Started</h1>
+      <p>This guide will help you install StreamSpace on your Kubernetes cluster and create your first session.</p>
+
+      <h2 id="prerequisites">Prerequisites</h2>
+      <ul>
+        <li><strong>Kubernetes 1.19+</strong> - Any Kubernetes cluster (k3s recommended)</li>
+        <li><strong>Helm 3.x</strong> - For installation</li>
+        <li><strong>NFS Storage</strong> - For persistent user home directories</li>
+        <li><strong>Ingress Controller</strong> - Traefik, nginx, or similar</li>
+        <li><strong>kubectl</strong> - Configured to access your cluster</li>
+      </ul>
+
+      <h2 id="installation">Installation</h2>
+
+      <h3>Step 1: Clone the Repository</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>git clone https://github.com/JoshuaAFerguson/streamspace.git
+cd streamspace</code></pre>
+      </div>
+
+      <h3>Step 2: Install with Helm</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>helm install streamspace ./chart \\
+  --namespace streamspace \\
+  --create-namespace</code></pre>
+      </div>
+
+      <h3>Step 3: Custom Configuration (Optional)</h3>
+      <p>Create a <code>custom-values.yaml</code> file to customize your deployment:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>controller:
+  config:
+    ingressDomain: "streamspace.example.com"
+    ingressClass: "traefik"
+
+postgresql:
+  enabled: true
+  auth:
+    postgresPassword: "changeme"
+
+api:
+  replicaCount: 2
+
+ui:
+  replicaCount: 2</code></pre>
+      </div>
+
+      <p>Install with custom values:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>helm install streamspace ./chart \\
+  --namespace streamspace \\
+  --create-namespace \\
+  --values custom-values.yaml</code></pre>
+      </div>
+
+      <h2 id="verify">Verify Deployment</h2>
+      <p>Check that all components are running:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># Check all pods are running
+kubectl get pods -n streamspace
+
+# Expected output:
+# streamspace-controller-xxx    1/1     Running
+# streamspace-api-xxx           1/1     Running
+# streamspace-ui-xxx            1/1     Running
+# postgresql-xxx                1/1     Running</code></pre>
+      </div>
+
+      <h2 id="first-session">Create Your First Session</h2>
+
+      <h3>Access the Web UI</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># Port forward to UI
+kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
+
+# Open in browser
+open http://localhost:3000</code></pre>
+      </div>
+
+      <h3>Or Create Session with kubectl</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>kubectl apply -f - <<EOF
+apiVersion: stream.space/v1alpha1
+kind: Session
+metadata:
+  name: my-firefox
+  namespace: streamspace
+spec:
+  user: myuser
+  template: firefox-browser
+  state: running
+  resources:
+    memory: 2Gi
+    cpu: 1000m
+  persistentHome: true
+  idleTimeout: 30m
+EOF</code></pre>
+      </div>
+
+      <h3>Check Session Status</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># Get session details
+kubectl get session my-firefox -n streamspace
+
+# Watch session become ready
+kubectl get session my-firefox -n streamspace -w
+
+# Get session URL
+kubectl get session my-firefox -n streamspace -o jsonpath='{.status.url}'</code></pre>
+      </div>
+
+      <h2 id="configuration">Configuration</h2>
+
+      <h3>Set Ingress Domain</h3>
+      <p>Configure the domain for session ingresses:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>controller:
+  config:
+    ingressDomain: "apps.example.com"
+    ingressClass: "traefik"</code></pre>
+      </div>
+
+      <h3>Configure Storage</h3>
+      <p>Set up persistent storage for user home directories:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>storage:
+  className: "nfs-client"
+  defaultSize: "50Gi"</code></pre>
+      </div>
+
+      <h3>Enable Monitoring</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">YAML</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>monitoring:
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true</code></pre>
+      </div>
+
+      <h2 id="next-steps">Next Steps</h2>
+      <ul>
+        <li><a href="docs.html">Read the full documentation</a></li>
+        <li><a href="features.html">Explore all features</a></li>
+        <li><a href="plugins.html">Learn about the plugin system</a></li>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Check the roadmap</a></li>
+        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contribute to the project</a></li>
+      </ul>
+
+      <h3>Add Template Repositories</h3>
+      <p>Add more application templates from Git repositories:</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>kubectl apply -f - <<EOF
+apiVersion: stream.space/v1alpha1
+kind: Repository
+metadata:
+  name: my-templates
+  namespace: streamspace
+spec:
+  url: https://github.com/myorg/streamspace-templates
+  branch: main
+  syncInterval: 1h
+EOF</code></pre>
+      </div>
+
+      <h3>Configure User Quotas</h3>
+      <p>Set resource limits per user via the Web UI or API:</p>
+      <ul>
+        <li>Maximum concurrent sessions</li>
+        <li>CPU and memory limits</li>
+        <li>Storage quota</li>
+        <li>Maximum session duration</li>
+      </ul>
+
+      <div class="mt-4">
+        <a href="docs.html" class="button button-primary">Full Documentation</a>
+        <a href="https://github.com/JoshuaAFerguson/streamspace/issues" class="button button-secondary">Get Help</a>
+      </div>
+    </main>
+  </div>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>StreamSpace</h3>
+        <p>Open source platform for streaming containerized applications to web browsers.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Documentation</h3>
+        <ul>
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="docs.html">Documentation</a></li>
+          <li><a href="plugins.html">Plugin Development</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Resources</h3>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Community</h3>
+        <ul>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 StreamSpace. Released under MIT License.</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>

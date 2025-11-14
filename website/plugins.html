@@ -1,0 +1,304 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta name="description" content="StreamSpace Plugin System - Extend functionality with webhooks, API integrations, UI themes, and custom features.">
+  <title>Plugins - StreamSpace</title>
+  <link rel="stylesheet" href="css/style.css">
+  <link rel="preconnect" href="https://fonts.googleapis.com">
+  <link rel="preconnect" href="https://fonts.gstatic.com" crossorigin>
+  <link href="https://fonts.googleapis.com/css2?family=Inter:wght@300;400;500;600;700;800&display=swap" rel="stylesheet">
+</head>
+<body>
+  <header>
+    <nav>
+      <a href="index.html" class="logo">
+        <div class="logo-icon">🚀</div>
+        <span>StreamSpace</span>
+      </a>
+      <ul class="nav-links">
+        <li><a href="index.html">Home</a></li>
+        <li><a href="features.html">Features</a></li>
+        <li><a href="docs.html">Docs</a></li>
+        <li><a href="plugins.html">Plugins</a></li>
+        <li><a href="getting-started.html">Get Started</a></li>
+      </ul>
+      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <button class="menu-toggle"><span></span><span></span><span></span></button>
+    </nav>
+  </header>
+
+  <section class="hero" style="min-height: 60vh;">
+    <div class="hero-content">
+      <h1>Plugin System</h1>
+      <p>Extend StreamSpace without modifying core code</p>
+      <div class="hero-buttons mt-4">
+        <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/PLUGIN_DEVELOPMENT.md" class="button button-primary">Developer Guide</a>
+        <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/PLUGIN_API.md" class="button button-secondary">API Reference</a>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Plugin Types</h2>
+        <p>Five powerful ways to extend StreamSpace</p>
+      </div>
+      <div class="plugin-types">
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🔧</div>
+          <h3>Extension</h3>
+          <p>Add new features and UI components to the web interface. Create custom dashboards, widgets, and functionality.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🔗</div>
+          <h3>Webhook</h3>
+          <p>React to system events like session creation, user login, hibernation, and more. Trigger automations and workflows.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🌐</div>
+          <h3>API Integration</h3>
+          <p>Connect to external services like Slack, GitHub, Jira, monitoring systems, and custom APIs.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">🎨</div>
+          <h3>UI Theme</h3>
+          <p>Customize the web interface appearance with custom colors, typography, layout, and branding.</p>
+        </div>
+        <div class="plugin-type">
+          <div class="plugin-type-icon">⚙️</div>
+          <h3>CLI</h3>
+          <p>Add custom command-line tools and scripts for advanced automation and management tasks.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="code-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Quick Start Example</h2>
+        <p>Build a simple webhook plugin in minutes</p>
+      </div>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">JavaScript</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>// plugin.js - Slack notification plugin
+module.exports = {
+  async onSessionCreated(session) {
+    // Send notification when a session is created
+    await fetch(this.config.slackWebhookUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        text: `🚀 New session created: ${session.template} for ${session.user}`
+      })
+    });
+  },
+
+  async onSessionHibernated(session) {
+    await fetch(this.config.slackWebhookUrl, {
+      method: 'POST',
+      body: JSON.stringify({
+        text: `💤 Session hibernated: ${session.id}`
+      })
+    });
+  }
+};</code></pre>
+      </div>
+
+      <div class="code-block mt-4">
+        <div class="code-header">
+          <span class="code-lang">JSON</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>// manifest.json
+{
+  "name": "slack-notifications",
+  "version": "1.0.0",
+  "displayName": "Slack Notifications",
+  "description": "Send session events to Slack",
+  "type": "webhook",
+  "author": "Your Name",
+  "permissions": ["read:sessions"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "slackWebhookUrl": {
+        "type": "string",
+        "title": "Slack Webhook URL",
+        "description": "Your Slack webhook URL"
+      }
+    },
+    "required": ["slackWebhookUrl"]
+  }
+}</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Plugin Features</h2>
+        <p>Everything you need to build powerful extensions</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <div class="feature-icon">📦</div>
+          <h3>Easy Installation</h3>
+          <p>Browse and install plugins directly from the web UI. One-click installation from Git repositories.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🎛️</div>
+          <h3>Configuration UI</h3>
+          <p>Schema-based form generation for plugin configuration. No need to build admin interfaces.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🔒</div>
+          <h3>Permission System</h3>
+          <p>Granular permissions with risk indicators (low/medium/high). Users know what they're approving.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">⚡</div>
+          <h3>Event System</h3>
+          <p>11+ system events to hook into: session lifecycle, user management, and more.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">💾</div>
+          <h3>Persistent Storage</h3>
+          <p>Key-value storage API for plugin data. Store configuration, cache, and state.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">📊</div>
+          <h3>API Access</h3>
+          <p>Full access to StreamSpace APIs: sessions, users, templates, and more.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="code-section">
+    <div class="container">
+      <div class="section-header">
+        <h2>Available Events</h2>
+        <p>Hook into these system events with webhook plugins</p>
+      </div>
+      <div class="code-block">
+        <pre><code>// Session Events
+onSessionCreated(session)    // Session is created
+onSessionStarted(session)    // Session starts running
+onSessionStopped(session)    // Session stops
+onSessionHibernated(session) // Session hibernates (idle)
+onSessionWoken(session)      // Session wakes from hibernation
+onSessionDeleted(session)    // Session is permanently deleted
+
+// User Events
+onUserCreated(user)          // New user account created
+onUserUpdated(user)          // User details updated
+onUserDeleted(user)          // User account deleted
+onUserLogin(user)            // User logs in
+onUserLogout(user)           // User logs out</code></pre>
+      </div>
+    </div>
+  </section>
+
+  <section class="features">
+    <div class="container">
+      <div class="section-header">
+        <h2>Example Use Cases</h2>
+        <p>Real-world plugins you can build</p>
+      </div>
+      <div class="features-grid">
+        <div class="feature-card">
+          <h3>Slack Integration</h3>
+          <p>Send notifications to Slack channels when sessions are created, hibernated, or encounter errors.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>GitHub Sync</h3>
+          <p>Automatically create GitHub issues for new sessions, sync templates from repositories, track usage.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>Session Analytics</h3>
+          <p>Track session usage patterns, generate reports, identify popular templates, analyze user behavior.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>Custom Branding</h3>
+          <p>Apply company colors, logos, and styling to the web interface. White-label StreamSpace.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>Backup Automation</h3>
+          <p>Automatically backup user home directories, sync to S3 or remote storage, schedule snapshots.</p>
+        </div>
+
+        <div class="feature-card">
+          <h3>Cost Tracking</h3>
+          <p>Track resource usage per user or team, generate cost reports, set budget alerts.</p>
+        </div>
+      </div>
+    </div>
+  </section>
+
+  <section class="code-section">
+    <div class="container text-center">
+      <h2>Ready to Build a Plugin?</h2>
+      <p class="mb-4">Comprehensive guides and API reference available</p>
+      <div class="hero-buttons">
+        <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/PLUGIN_DEVELOPMENT.md" class="button button-primary">Developer Guide (1,877 lines)</a>
+        <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/PLUGIN_API.md" class="button button-secondary">API Reference (1,569 lines)</a>
+      </div>
+    </div>
+  </section>
+
+  <footer>
+    <div class="footer-content">
+      <div class="footer-section">
+        <h3>StreamSpace</h3>
+        <p>Open source platform for streaming containerized applications to web browsers.</p>
+      </div>
+      <div class="footer-section">
+        <h3>Documentation</h3>
+        <ul>
+          <li><a href="getting-started.html">Getting Started</a></li>
+          <li><a href="docs.html">Documentation</a></li>
+          <li><a href="plugins.html">Plugin Development</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Resources</h3>
+        <ul>
+          <li><a href="features.html">Features</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+        </ul>
+      </div>
+      <div class="footer-section">
+        <h3>Community</h3>
+        <ul>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+        </ul>
+      </div>
+    </div>
+    <div class="footer-bottom">
+      <p>&copy; 2025 StreamSpace. Released under MIT License.</p>
+    </div>
+  </footer>
+
+  <script src="js/main.js"></script>
+</body>
+</html>
