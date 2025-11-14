@@ -13,7 +13,7 @@ import {
   IconButton,
   Switch,
   Tooltip,
-  CircularProgress,
+  Skeleton,
   Alert,
   Button,
   Dialog,
@@ -210,9 +210,34 @@ export default function AdminPlugins() {
 
         {/* Plugin Table */}
         {loading ? (
-          <Box display="flex" justifyContent="center" py={8}>
-            <CircularProgress />
-          </Box>
+          <TableContainer component={Paper}>
+            <Table>
+              <TableHead>
+                <TableRow>
+                  <TableCell>Plugin</TableCell>
+                  <TableCell>Type</TableCell>
+                  <TableCell>Version</TableCell>
+                  <TableCell>Status</TableCell>
+                  <TableCell>Installed By</TableCell>
+                  <TableCell>Installed At</TableCell>
+                  <TableCell align="right">Actions</TableCell>
+                </TableRow>
+              </TableHead>
+              <TableBody>
+                {Array.from({ length: 5 }).map((_, index) => (
+                  <TableRow key={index}>
+                    <TableCell><Skeleton width={200} /></TableCell>
+                    <TableCell><Skeleton width={80} /></TableCell>
+                    <TableCell><Skeleton width={60} /></TableCell>
+                    <TableCell><Skeleton width={80} /></TableCell>
+                    <TableCell><Skeleton width={100} /></TableCell>
+                    <TableCell><Skeleton width={100} /></TableCell>
+                    <TableCell align="right"><Skeleton width={150} /></TableCell>
+                  </TableRow>
+                ))}
+              </TableBody>
+            </Table>
+          </TableContainer>
         ) : plugins.length === 0 ? (
           <Alert severity="info">No plugins installed in the system.</Alert>
         ) : (

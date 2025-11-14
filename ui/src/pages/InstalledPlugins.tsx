@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -9,7 +9,6 @@ import {
   Button,
   IconButton,
   Chip,
-  CircularProgress,
   Alert,
   Switch,
   FormControlLabel,
@@ -19,6 +18,9 @@ import {
   DialogActions,
   TextField,
   Tooltip,
+  InputAdornment,
+  Tabs,
+  Tab,
 } from '@mui/material';
 import {
   Settings as SettingsIcon,
@@ -29,10 +31,16 @@ import {
   Api as ApiIcon,
   Dashboard as UiIcon,
   Palette as ThemeIcon,
+  Search as SearchIcon,
+  ExtensionOff as NoPluginsIcon,
+  ShoppingCart as ShopIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
+import PluginCardSkeleton from '../components/PluginCardSkeleton';
+import PluginConfigForm from '../components/PluginConfigForm';
 import { api, type InstalledPlugin } from '../lib/api';
 import { toast } from '../lib/toast';
+import { useNavigate } from 'react-router-dom';
 
 const pluginTypeIcons: Record<string, JSX.Element> = {
   extension: <ExtensionIcon fontSize="small" />,
@@ -51,12 +59,16 @@ const pluginTypeColors: Record<string, string> = {
 };
 
 export default function InstalledPlugins() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
   const [filter, setFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
+  const [searchQuery, setSearchQuery] = useState('');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedPlugin, setSelectedPlugin] = useState<InstalledPlugin | null>(null);
   const [configJson, setConfigJson] = useState('');
+  const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
+  const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
 
   useEffect(() => {
     loadPlugins();
@@ -93,7 +105,11 @@ export default function InstalledPlugins() {
 
   const handleOpenConfig = (plugin: InstalledPlugin) => {
     setSelectedPlugin(plugin);
-    setConfigJson(JSON.stringify(plugin.config || {}, null, 2));
+    const config = plugin.config || {};
+    setConfigJson(JSON.stringify(config, null, 2));
+    setConfigFormData(config);
+    // Use form mode if schema is available, otherwise JSON mode
+    setConfigMode(plugin.manifest?.configSchema ? 'form' : 'json');
     setConfigDialogOpen(true);
   };
 
@@ -101,14 +117,36 @@ export default function InstalledPlugins() {
     if (!selectedPlugin) return;
 
     try {
-      const config = JSON.parse(configJson);
+      let config: Record<string, any>;
+
+      if (configMode === 'form') {
+        config = configFormData;
+      } else {
+        config = JSON.parse(configJson);
+      }
+
       await api.updatePluginConfig(selectedPlugin.id, config);
       toast.success('Configuration updated');
       setConfigDialogOpen(false);
       await loadPlugins();
     } catch (error) {
       console.error('Failed to update configuration:', error);
-      toast.error('Invalid JSON or failed to update configuration');
+      toast.error(configMode === 'json' ? 'Invalid JSON or failed to update configuration' : 'Failed to update configuration');
+    }
+  };
+
+  const handleConfigFormChange = (data: Record<string, any>) => {
+    setConfigFormData(data);
+    setConfigJson(JSON.stringify(data, null, 2));
+  };
+
+  const handleConfigJsonChange = (json: string) => {
+    setConfigJson(json);
+    try {
+      const data = JSON.parse(json);
+      setConfigFormData(data);
+    } catch {
+      // Invalid JSON, don't update form data
     }
   };
 
@@ -127,11 +165,28 @@ export default function InstalledPlugins() {
     }
   };
 
-  const filteredPlugins = plugins.filter(plugin => {
-    if (filter === 'enabled') return plugin.enabled;
-    if (filter === 'disabled') return !plugin.enabled;
-    return true;
-  });
+  const filteredPlugins = useMemo(() => {
+    return plugins.filter(plugin => {
+      // Filter by enabled/disabled status
+      if (filter === 'enabled' && !plugin.enabled) return false;
+      if (filter === 'disabled' && plugin.enabled) return false;
+
+      // Filter by search query
+      if (searchQuery) {
+        const query = searchQuery.toLowerCase();
+        const matchesName = plugin.name?.toLowerCase().includes(query);
+        const matchesDisplayName = plugin.displayName?.toLowerCase().includes(query);
+        const matchesDescription = plugin.description?.toLowerCase().includes(query);
+        const matchesType = plugin.pluginType?.toLowerCase().includes(query);
+
+        if (!matchesName && !matchesDisplayName && !matchesDescription && !matchesType) {
+          return false;
+        }
+      }
+
+      return true;
+    });
+  }, [plugins, filter, searchQuery]);
 
   return (
     <Layout>
@@ -147,39 +202,99 @@ export default function InstalledPlugins() {
           </Box>
         </Box>
 
-        {/* Filter Tabs */}
-        <Box mb={3} display="flex" gap={1}>
-          <Chip
-            label={`All (${plugins.length})`}
-            onClick={() => setFilter('all')}
-            color={filter === 'all' ? 'primary' : 'default'}
-            variant={filter === 'all' ? 'filled' : 'outlined'}
+        {/* Search and Filter */}
+        <Box mb={3}>
+          <TextField
+            fullWidth
+            placeholder="Search installed plugins..."
+            value={searchQuery}
+            onChange={(e) => setSearchQuery(e.target.value)}
+            sx={{ mb: 2 }}
+            InputProps={{
+              startAdornment: (
+                <InputAdornment position="start">
+                  <SearchIcon />
+                </InputAdornment>
+              ),
+            }}
           />
-          <Chip
-            label={`Enabled (${plugins.filter(p => p.enabled).length})`}
-            onClick={() => setFilter('enabled')}
-            color={filter === 'enabled' ? 'primary' : 'default'}
-            variant={filter === 'enabled' ? 'filled' : 'outlined'}
-          />
-          <Chip
-            label={`Disabled (${plugins.filter(p => !p.enabled).length})`}
-            onClick={() => setFilter('disabled')}
-            color={filter === 'disabled' ? 'primary' : 'default'}
-            variant={filter === 'disabled' ? 'filled' : 'outlined'}
-          />
+          <Box display="flex" gap={1} flexWrap="wrap">
+            <Chip
+              label={`All (${plugins.length})`}
+              onClick={() => setFilter('all')}
+              color={filter === 'all' ? 'primary' : 'default'}
+              variant={filter === 'all' ? 'filled' : 'outlined'}
+            />
+            <Chip
+              label={`Enabled (${plugins.filter(p => p.enabled).length})`}
+              onClick={() => setFilter('enabled')}
+              color={filter === 'enabled' ? 'primary' : 'default'}
+              variant={filter === 'enabled' ? 'filled' : 'outlined'}
+            />
+            <Chip
+              label={`Disabled (${plugins.filter(p => !p.enabled).length})`}
+              onClick={() => setFilter('disabled')}
+              color={filter === 'disabled' ? 'primary' : 'default'}
+              variant={filter === 'disabled' ? 'filled' : 'outlined'}
+            />
+            {searchQuery && (
+              <Chip
+                label={`Search: "${searchQuery}"`}
+                size="small"
+                onDelete={() => setSearchQuery('')}
+              />
+            )}
+          </Box>
         </Box>
 
         {/* Results */}
         {loading ? (
-          <Box display="flex" justifyContent="center" py={8}>
-            <CircularProgress />
-          </Box>
+          <Grid container spacing={3}>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+                <PluginCardSkeleton />
+              </Grid>
+            ))}
+          </Grid>
         ) : filteredPlugins.length === 0 ? (
-          <Alert severity="info">
-            {filter === 'all'
-              ? 'No plugins installed yet. Browse the catalog to find plugins!'
-              : `No ${filter} plugins.`}
-          </Alert>
+          <Box
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            py={8}
+            px={2}
+            textAlign="center"
+          >
+            <NoPluginsIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+            <Typography variant="h5" gutterBottom>
+              {plugins.length === 0 ? 'No Plugins Installed' : 'No Matching Plugins'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={3} maxWidth={500}>
+              {plugins.length === 0
+                ? 'You haven\'t installed any plugins yet. Browse the plugin catalog to discover and install plugins.'
+                : searchQuery
+                ? `No plugins match "${searchQuery}". Try a different search term.`
+                : `No ${filter} plugins found.`}
+            </Typography>
+            {plugins.length === 0 ? (
+              <Button
+                variant="contained"
+                startIcon={<ShopIcon />}
+                onClick={() => navigate('/plugins/catalog')}
+              >
+                Browse Plugin Catalog
+              </Button>
+            ) : searchQuery ? (
+              <Button variant="outlined" onClick={() => setSearchQuery('')}>
+                Clear Search
+              </Button>
+            ) : (
+              <Button variant="outlined" onClick={() => setFilter('all')}>
+                Show All Plugins
+              </Button>
+            )}
+          </Box>
         ) : (
           <Grid container spacing={3}>
             {filteredPlugins.map((plugin) => (
@@ -313,18 +428,37 @@ export default function InstalledPlugins() {
             Configure {selectedPlugin?.displayName || selectedPlugin?.name}
           </DialogTitle>
           <DialogContent>
-            <Typography variant="body2" color="text.secondary" mb={2}>
-              Edit the plugin configuration as JSON. Invalid JSON will not be saved.
-            </Typography>
-            <TextField
-              fullWidth
-              multiline
-              rows={12}
-              value={configJson}
-              onChange={(e) => setConfigJson(e.target.value)}
-              placeholder="{}"
-              sx={{ fontFamily: 'monospace' }}
-            />
+            {selectedPlugin?.manifest?.configSchema && (
+              <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 2 }}>
+                <Tabs value={configMode} onChange={(_, v) => setConfigMode(v)}>
+                  <Tab label="Form" value="form" />
+                  <Tab label="JSON" value="json" />
+                </Tabs>
+              </Box>
+            )}
+
+            {configMode === 'form' ? (
+              <PluginConfigForm
+                schema={selectedPlugin?.manifest?.configSchema}
+                value={configFormData}
+                onChange={handleConfigFormChange}
+              />
+            ) : (
+              <Box>
+                <Typography variant="body2" color="text.secondary" mb={2}>
+                  Edit the plugin configuration as JSON. Invalid JSON will not be saved.
+                </Typography>
+                <TextField
+                  fullWidth
+                  multiline
+                  rows={12}
+                  value={configJson}
+                  onChange={(e) => handleConfigJsonChange(e.target.value)}
+                  placeholder="{}"
+                  sx={{ fontFamily: 'monospace' }}
+                />
+              </Box>
+            )}
           </DialogContent>
           <DialogActions>
             <Button onClick={() => setConfigDialogOpen(false)}>Cancel</Button>

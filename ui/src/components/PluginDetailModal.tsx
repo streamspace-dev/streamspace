@@ -20,6 +20,8 @@ import {
   List,
   ListItem,
   ListItemText,
+  Tooltip,
+  ListItemIcon,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -32,10 +34,37 @@ import {
   Palette as ThemeIcon,
   Security as SecurityIcon,
   Code as CodeIcon,
+  Warning as WarningIcon,
+  CheckCircle as CheckIcon,
 } from '@mui/icons-material';
 import RatingStars from './RatingStars';
 import { api, type CatalogPlugin, type PluginRating } from '../lib/api';
 import { useUserStore } from '../store/userStore';
+
+// Permission descriptions and risk levels
+const permissionInfo: Record<string, { description: string; risk: 'low' | 'medium' | 'high' }> = {
+  'read:sessions': { description: 'Read session data and status', risk: 'low' },
+  'write:sessions': { description: 'Create, modify, or delete sessions', risk: 'high' },
+  'read:users': { description: 'View user information', risk: 'medium' },
+  'write:users': { description: 'Modify user accounts and settings', risk: 'high' },
+  'read:templates': { description: 'Access template catalog', risk: 'low' },
+  'write:templates': { description: 'Create or modify templates', risk: 'medium' },
+  'admin': { description: 'Full administrative access', risk: 'high' },
+  'network': { description: 'Make external network requests', risk: 'medium' },
+  'filesystem': { description: 'Access local filesystem', risk: 'high' },
+  'execute': { description: 'Execute external commands', risk: 'high' },
+  'database': { description: 'Direct database access', risk: 'high' },
+  'api': { description: 'Access StreamSpace API', risk: 'low' },
+  'webhooks': { description: 'Create and manage webhooks', risk: 'medium' },
+  'notifications': { description: 'Send user notifications', risk: 'low' },
+};
+
+function getPermissionInfo(permission: string) {
+  return permissionInfo[permission] || {
+    description: permission,
+    risk: 'medium' as const,
+  };
+}
 
 interface PluginDetailModalProps {
   open: boolean;
@@ -259,15 +288,55 @@ export default function PluginDetailModal({
                       Required Permissions
                     </Typography>
                   </Box>
+                  <Alert severity="info" sx={{ mb: 1, fontSize: '0.8rem' }}>
+                    This plugin requires the following permissions to function properly.
+                  </Alert>
                   <List dense>
-                    {plugin.manifest.permissions.map((permission, index) => (
-                      <ListItem key={index}>
-                        <ListItemText
-                          primary={permission}
-                          primaryTypographyProps={{ variant: 'body2' }}
-                        />
-                      </ListItem>
-                    ))}
+                    {plugin.manifest.permissions.map((permission, index) => {
+                      const info = getPermissionInfo(permission);
+                      const riskColor = info.risk === 'high' ? 'error' : info.risk === 'medium' ? 'warning' : 'success';
+                      return (
+                        <Tooltip
+                          key={index}
+                          title={
+                            <Box>
+                              <Typography variant="body2" fontWeight={600} gutterBottom>
+                                {permission}
+                              </Typography>
+                              <Typography variant="caption">
+                                {info.description}
+                              </Typography>
+                              <Box mt={0.5}>
+                                <Chip
+                                  label={`${info.risk.toUpperCase()} RISK`}
+                                  size="small"
+                                  color={riskColor}
+                                  sx={{ height: 16, fontSize: '0.65rem' }}
+                                />
+                              </Box>
+                            </Box>
+                          }
+                          placement="right"
+                          arrow
+                        >
+                          <ListItem>
+                            <ListItemIcon sx={{ minWidth: 36 }}>
+                              {info.risk === 'high' ? (
+                                <WarningIcon fontSize="small" color="error" />
+                              ) : (
+                                <CheckIcon fontSize="small" color={riskColor} />
+                              )}
+                            </ListItemIcon>
+                            <ListItemText
+                              primary={permission}
+                              secondary={info.description}
+                              primaryTypographyProps={{ variant: 'body2', fontWeight: 500 }}
+                              secondaryTypographyProps={{ variant: 'caption' }}
+                            />
+                          </ListItem>
+                        </Tooltip>
+                      );
+                    })}
                   </List>
                 </Box>
               </>

@@ -6,24 +6,29 @@ import {
   TextField,
   InputAdornment,
   MenuItem,
-  CircularProgress,
   Alert,
   Pagination,
   Button,
   Chip,
+  Link,
 } from '@mui/material';
 import {
   Search as SearchIcon,
   FilterList as FilterIcon,
   Refresh as RefreshIcon,
+  ExtensionOff as NoPluginsIcon,
+  AddCircleOutline as AddIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import PluginCard from '../components/PluginCard';
+import PluginCardSkeleton from '../components/PluginCardSkeleton';
 import PluginDetailModal from '../components/PluginDetailModal';
 import { api, type CatalogPlugin, type PluginFilters } from '../lib/api';
 import { toast } from '../lib/toast';
+import { useNavigate } from 'react-router-dom';
 
 export default function PluginCatalog() {
+  const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [plugins, setPlugins] = useState<CatalogPlugin[]>([]);
   const [selectedPlugin, setSelectedPlugin] = useState<CatalogPlugin | null>(null);
@@ -235,13 +240,46 @@ export default function PluginCatalog() {
 
         {/* Results */}
         {loading ? (
-          <Box display="flex" justifyContent="center" py={8}>
-            <CircularProgress />
-          </Box>
+          <Grid container spacing={3}>
+            {Array.from({ length: 6 }).map((_, index) => (
+              <Grid item xs={12} sm={6} md={4} key={index}>
+                <PluginCardSkeleton />
+              </Grid>
+            ))}
+          </Grid>
         ) : plugins.length === 0 ? (
-          <Alert severity="info">
-            No plugins found. {hasActiveFilters ? 'Try adjusting your filters.' : 'Check back later!'}
-          </Alert>
+          <Box
+            display="flex"
+            flexDirection="column"
+            alignItems="center"
+            justifyContent="center"
+            py={8}
+            px={2}
+            textAlign="center"
+          >
+            <NoPluginsIcon sx={{ fontSize: 80, color: 'text.secondary', mb: 2, opacity: 0.5 }} />
+            <Typography variant="h5" gutterBottom>
+              {hasActiveFilters ? 'No Matching Plugins' : 'No Plugins Available'}
+            </Typography>
+            <Typography variant="body2" color="text.secondary" mb={3} maxWidth={500}>
+              {hasActiveFilters
+                ? 'Try adjusting your filters or search terms to find more plugins.'
+                : 'No plugins are currently available in the catalog. Add a plugin repository to get started.'}
+            </Typography>
+            {hasActiveFilters ? (
+              <Button variant="outlined" onClick={clearFilters}>
+                Clear All Filters
+              </Button>
+            ) : (
+              <Button
+                variant="contained"
+                startIcon={<AddIcon />}
+                onClick={() => navigate('/repositories')}
+              >
+                Add Plugin Repository
+              </Button>
+            )}
+          </Box>
         ) : (
           <>
             <Box mb={2}>
