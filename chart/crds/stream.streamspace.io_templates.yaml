@@ -1,0 +1,306 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: templates.stream.streamspace.io
+  annotations:
+    controller-gen.kubebuilder.io/version: v0.11.1
+spec:
+  group: stream.streamspace.io
+  names:
+    kind: Template
+    listKind: TemplateList
+    plural: templates
+    shortNames:
+    - tpl
+    singular: template
+  scope: Namespaced
+  versions:
+  - name: v1alpha1
+    schema:
+      openAPIV3Schema:
+        description: Template is the Schema for the templates API
+        properties:
+          apiVersion:
+            description: 'APIVersion defines the versioned schema of this representation
+              of an object. Servers should convert recognized schemas to the latest
+              internal value, and may reject unrecognized values. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#resources'
+            type: string
+          kind:
+            description: 'Kind is a string value representing the REST resource this
+              object represents. Servers may infer this from the endpoint the client
+              submits requests to. Cannot be updated. In CamelCase. More info: https://git.k8s.io/community/contributors/devel/sig-architecture/api-conventions.md#types-kinds'
+            type: string
+          metadata:
+            type: object
+          spec:
+            description: TemplateSpec defines the desired state of Template
+            properties:
+              baseImage:
+                description: BaseImage is the container image to use
+                type: string
+              capabilities:
+                description: Capabilities lists available features (Network, Audio,
+                  Clipboard, etc.)
+                items:
+                  type: string
+                type: array
+              appType:
+                description: AppType specifies whether this is a desktop or webapp application
+                enum:
+                - desktop
+                - webapp
+                type: string
+              category:
+                description: Category for organizing templates in the UI
+                type: string
+              defaultResources:
+                description: DefaultResources specifies default resource requests/limits
+                properties:
+                  limits:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Limits describes the maximum amount of compute resources
+                      allowed. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+                  requests:
+                    additionalProperties:
+                      anyOf:
+                      - type: integer
+                      - type: string
+                      pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                      x-kubernetes-int-or-string: true
+                    description: 'Requests describes the minimum amount of compute
+                      resources required. If Requests is omitted for a container,
+                      it defaults to Limits if that is explicitly specified, otherwise
+                      to an implementation-defined value. More info: https://kubernetes.io/docs/concepts/configuration/manage-resources-containers/'
+                    type: object
+                type: object
+              description:
+                description: Description provides detailed information about this
+                  template
+                type: string
+              displayName:
+                description: DisplayName is the human-readable name
+                type: string
+              env:
+                description: Env specifies environment variables
+                items:
+                  description: EnvVar represents an environment variable present in
+                    a Container.
+                  properties:
+                    name:
+                      description: Name of the environment variable. Must be a C_IDENTIFIER.
+                      type: string
+                    value:
+                      description: 'Variable references $(VAR_NAME) are expanded using
+                        the previously defined environment variables in the container
+                        and any service environment variables. If a variable cannot
+                        be resolved, the reference in the input string will be unchanged.
+                        Double $$ are reduced to a single $, which allows for escaping
+                        the $(VAR_NAME) syntax: i.e. "$$(VAR_NAME)" will produce the
+                        string literal "$(VAR_NAME)". Escaped references will never
+                        be expanded, regardless of whether the variable exists or
+                        not. Defaults to "".'
+                      type: string
+                    valueFrom:
+                      description: Source for the environment variable's value. Cannot
+                        be used if value is not empty.
+                      properties:
+                        configMapKeyRef:
+                          description: Selects a key of a ConfigMap.
+                          properties:
+                            key:
+                              description: The key to select.
+                              type: string
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                            optional:
+                              description: Specify whether the ConfigMap or its key
+                                must be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                        fieldRef:
+                          description: 'Selects a field of the pod: supports metadata.name,
+                            metadata.namespace, `metadata.labels[''<KEY>'']`, `metadata.annotations[''<KEY>'']`,
+                            spec.nodeName, spec.serviceAccountName, status.hostIP,
+                            status.podIP, status.podIPs.'
+                          properties:
+                            apiVersion:
+                              description: Version of the schema the FieldPath is
+                                written in terms of, defaults to "v1".
+                              type: string
+                            fieldPath:
+                              description: Path of the field to select in the specified
+                                API version.
+                              type: string
+                          required:
+                          - fieldPath
+                          type: object
+                        resourceFieldRef:
+                          description: 'Selects a resource of the container: only
+                            resources limits and requests (limits.cpu, limits.memory,
+                            limits.ephemeral-storage, requests.cpu, requests.memory
+                            and requests.ephemeral-storage) are currently supported.'
+                          properties:
+                            containerName:
+                              description: 'Container name: required for volumes,
+                                optional for env vars'
+                              type: string
+                            divisor:
+                              anyOf:
+                              - type: integer
+                              - type: string
+                              description: Specifies the output format of the exposed
+                                resources, defaults to "1"
+                              pattern: ^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$
+                              x-kubernetes-int-or-string: true
+                            resource:
+                              description: 'Required: resource to select'
+                              type: string
+                          required:
+                          - resource
+                          type: object
+                        secretKeyRef:
+                          description: Selects a key of a secret in the pod's namespace
+                          properties:
+                            key:
+                              description: The key of the secret to select from.  Must
+                                be a valid secret key.
+                              type: string
+                            name:
+                              description: 'Name of the referent. More info: https://kubernetes.io/docs/concepts/overview/working-with-objects/names/#names
+                                TODO: Add other useful fields. apiVersion, kind, uid?'
+                              type: string
+                            optional:
+                              description: Specify whether the Secret or its key must
+                                be defined
+                              type: boolean
+                          required:
+                          - key
+                          type: object
+                      type: object
+                  required:
+                  - name
+                  type: object
+                type: array
+              icon:
+                description: Icon is the URL to the template icon
+                type: string
+              tags:
+                description: Tags for categorization and search
+                items:
+                  type: string
+                type: array
+              vnc:
+                description: VNC defines VNC server configuration (generic, not Kasm-specific)
+                properties:
+                  enabled:
+                    description: Enabled indicates if VNC is enabled for this template
+                    type: boolean
+                  encryption:
+                    description: Encryption enables VNC encryption
+                    type: boolean
+                  port:
+                    description: Port is the VNC server port (default 5900 or 3000
+                      for LinuxServer.io)
+                    type: integer
+                  protocol:
+                    description: Protocol specifies the VNC protocol (rfb, websocket)
+                    type: string
+                type: object
+              webapp:
+                description: WebApp defines native web application configuration
+                properties:
+                  enabled:
+                    description: Enabled indicates if this is a native webapp
+                    type: boolean
+                  healthCheck:
+                    description: HealthCheck path for checking if the webapp is ready
+                    type: string
+                  path:
+                    description: Path is the URL path for the webapp (default "/")
+                    type: string
+                  port:
+                    description: Port is the webapp HTTP port
+                    type: integer
+                type: object
+              volumeMounts:
+                description: VolumeMounts specifies additional volume mounts
+                items:
+                  description: VolumeMount describes a mounting of a Volume within
+                    a container.
+                  properties:
+                    mountPath:
+                      description: Path within the container at which the volume should
+                        be mounted.  Must not contain ':'.
+                      type: string
+                    mountPropagation:
+                      description: mountPropagation determines how mounts are propagated
+                        from the host to container and the other way around. When
+                        not set, MountPropagationNone is used. This field is beta
+                        in 1.10.
+                      type: string
+                    name:
+                      description: This must match the Name of a Volume.
+                      type: string
+                    readOnly:
+                      description: Mounted read-only if true, read-write otherwise
+                        (false or unspecified). Defaults to false.
+                      type: boolean
+                    subPath:
+                      description: Path within the volume from which the container's
+                        volume should be mounted. Defaults to "" (volume's root).
+                      type: string
+                    subPathExpr:
+                      description: Expanded path within the volume from which the
+                        container's volume should be mounted. Behaves similarly to
+                        SubPath but environment variable references $(VAR_NAME) are
+                        expanded using the container's environment. Defaults to ""
+                        (volume's root). SubPathExpr and SubPath are mutually exclusive.
+                      type: string
+                  required:
+                  - mountPath
+                  - name
+                  type: object
+                type: array
+            required:
+            - baseImage
+            - displayName
+            type: object
+          status:
+            description: TemplateStatus defines the observed state of Template
+            properties:
+              message:
+                description: Message provides additional information about the template
+                  status
+                type: string
+              phase:
+                description: Phase represents the current phase (Ready, Invalid, etc.)
+                type: string
+            type: object
+        type: object
+    served: true
+    storage: true
+    subresources:
+      status: {}
+    additionalPrinterColumns:
+    - name: Display Name
+      type: string
+      jsonPath: .spec.displayName
+    - name: Category
+      type: string
+      jsonPath: .spec.category
+    - name: Phase
+      type: string
+      jsonPath: .status.phase
+    - name: Age
+      type: date
+      jsonPath: .metadata.creationTimestamp
