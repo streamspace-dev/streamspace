@@ -24,6 +24,7 @@ import {
   SignalWifiStatusbar4Bar as ConnectedIcon,
   SignalWifiStatusbarConnectedNoInternet4 as DisconnectedIcon,
 } from '@mui/icons-material';
+import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { useUpdateSessionState, useDeleteSession, useConnectSession } from '../hooks/useApi';
 import { useSessionsWebSocket } from '../hooks/useWebSocket';
@@ -31,6 +32,7 @@ import { useUserStore } from '../store/userStore';
 import { Session } from '../lib/api';
 
 export default function Sessions() {
+  const navigate = useNavigate();
   const username = useUserStore((state) => state.username);
   const [sessions, setSessions] = useState<Session[]>([]);
   const updateSessionState = useUpdateSessionState();
@@ -63,23 +65,9 @@ export default function Sessions() {
     }
   };
 
-  const handleConnect = async (session: Session) => {
-    if (!username) return;
-
-    try {
-      const result = await connectSession.mutateAsync({ id: session.name, user: username });
-
-      // Open session URL in new tab
-      if (result.sessionUrl) {
-        window.open(result.sessionUrl, '_blank');
-      } else if (session.status.url) {
-        window.open(session.status.url, '_blank');
-      }
-
-      // TODO: Start heartbeat interval
-    } catch (error) {
-      console.error('Failed to connect to session:', error);
-    }
+  const handleConnect = (session: Session) => {
+    // Navigate to the session viewer
+    navigate(`/sessions/${session.name}/viewer`);
   };
 
   const getStateColor = (state: string) => {

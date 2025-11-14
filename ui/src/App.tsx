@@ -9,6 +9,12 @@ import Sessions from './pages/Sessions';
 import Catalog from './pages/Catalog';
 import Repositories from './pages/Repositories';
 import Login from './pages/Login';
+import SessionViewer from './pages/SessionViewer';
+
+// Admin Pages
+import AdminDashboard from './pages/admin/Dashboard';
+import AdminNodes from './pages/admin/Nodes';
+import AdminQuotas from './pages/admin/Quotas';
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -61,6 +67,22 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
   return <>{children}</>;
 }
 
+// Admin Route wrapper
+function AdminRoute({ children }: { children: React.ReactNode }) {
+  const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const role = useUserStore((state) => state.role);
+
+  if (!isAuthenticated) {
+    return <Navigate to="/login" replace />;
+  }
+
+  if (role !== 'admin') {
+    return <Navigate to="/" replace />;
+  }
+
+  return <>{children}</>;
+}
+
 function App() {
   return (
     <QueryClientProvider client={queryClient}>
@@ -86,6 +108,14 @@ function App() {
               }
             />
             <Route
+              path="/sessions/:sessionId/viewer"
+              element={
+                <ProtectedRoute>
+                  <SessionViewer />
+                </ProtectedRoute>
+              }
+            />
+            <Route
               path="/catalog"
               element={
                 <ProtectedRoute>
@@ -99,6 +129,38 @@ function App() {
                 <ProtectedRoute>
                   <Repositories />
                 </ProtectedRoute>
+              }
+            />
+            <Route
+              path="/admin"
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/dashboard"
+              element={
+                <AdminRoute>
+                  <AdminDashboard />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/nodes"
+              element={
+                <AdminRoute>
+                  <AdminNodes />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/quotas"
+              element={
+                <AdminRoute>
+                  <AdminQuotas />
+                </AdminRoute>
               }
             />
           </Routes>

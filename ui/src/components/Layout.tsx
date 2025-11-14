@@ -24,6 +24,9 @@ import {
   Folder as FolderIcon,
   Settings as SettingsIcon,
   Logout as LogoutIcon,
+  AdminPanelSettings as AdminIcon,
+  Storage as StorageIcon,
+  People as PeopleIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../store/userStore';
@@ -39,7 +42,7 @@ export default function Layout({ children }: LayoutProps) {
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);
   const navigate = useNavigate();
   const location = useLocation();
-  const { username, clearUser } = useUserStore();
+  const { username, role, clearUser } = useUserStore();
 
   const handleDrawerToggle = () => {
     setMobileOpen(!mobileOpen);
@@ -65,6 +68,12 @@ export default function Layout({ children }: LayoutProps) {
     { text: 'Repositories', icon: <FolderIcon />, path: '/repositories' },
   ];
 
+  const adminMenuItems = [
+    { text: 'Admin Dashboard', icon: <AdminIcon />, path: '/admin/dashboard' },
+    { text: 'Cluster Nodes', icon: <StorageIcon />, path: '/admin/nodes' },
+    { text: 'User Quotas', icon: <PeopleIcon />, path: '/admin/quotas' },
+  ];
+
   const drawer = (
     <div>
       <Toolbar>
@@ -86,6 +95,27 @@ export default function Layout({ children }: LayoutProps) {
           </ListItem>
         ))}
       </List>
+      {role === 'admin' && (
+        <>
+          <Divider />
+          <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
+            ADMIN
+          </Typography>
+          <List>
+            {adminMenuItems.map((item) => (
+              <ListItem key={item.text} disablePadding>
+                <ListItemButton
+                  selected={location.pathname === item.path}
+                  onClick={() => navigate(item.path)}
+                >
+                  <ListItemIcon>{item.icon}</ListItemIcon>
+                  <ListItemText primary={item.text} />
+                </ListItemButton>
+              </ListItem>
+            ))}
+          </List>
+        </>
+      )}
       <Divider />
       <List>
         <ListItem disablePadding>

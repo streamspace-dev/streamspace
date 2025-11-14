@@ -104,6 +104,32 @@ export interface ConnectSessionResponse {
   message: string;
 }
 
+export interface UserQuota {
+  username: string;
+  limits: {
+    maxSessions: number;
+    maxCPU: string;
+    maxMemory: string;
+    maxStorage: string;
+  };
+  used: {
+    sessions: number;
+    cpu: string;
+    memory: string;
+    storage: string;
+  };
+  createdAt: string;
+  updatedAt: string;
+}
+
+export interface SetQuotaRequest {
+  username: string;
+  maxSessions?: number;
+  maxCPU?: string;
+  maxMemory?: string;
+  maxStorage?: string;
+}
+
 class APIClient {
   private client: AxiosInstance;
 
@@ -113,16 +139,17 @@ class APIClient {
       headers: {
         'Content-Type': 'application/json',
       },
+      withCredentials: true, // Enable cookies for SAML session
     });
 
-    // Request interceptor for adding auth tokens (future)
+    // Request interceptor for adding auth tokens
     this.client.interceptors.request.use(
       (config) => {
-        // TODO: Add JWT token from auth store
-        // const token = authStore.getState().token;
-        // if (token) {
-        //   config.headers.Authorization = `Bearer ${token}`;
-        // }
+        // Get JWT token from localStorage
+        const token = localStorage.getItem('streamspace_token');
+        if (token) {
+          config.headers.Authorization = `Bearer ${token}`;
+        }
         return config;
       },
       (error) => Promise.reject(error)
@@ -133,8 +160,10 @@ class APIClient {
       (response) => response,
       (error) => {
         if (error.response?.status === 401) {
-          // TODO: Handle unauthorized - redirect to login
-          console.error('Unauthorized - please login');
+          // Clear token and redirect to login
+          localStorage.removeItem('streamspace_token');
+          localStorage.removeItem('streamspace_user');
+          window.location.href = '/login';
         }
         return Promise.reject(error);
       }
@@ -267,6 +296,105 @@ class APIClient {
 
   async deleteRepository(id: number): Promise<void> {
     await this.client.delete(`/catalog/repositories/${id}`);
+  }
+
+  // ============================================================================
+  // Authentication
+  // ============================================================================
+
+  async login(username: string, password: string): Promise<{ token: string; user: any }> {
+    const response = await this.client.post('/auth/login', { username, password });
+    return response.data;
+  }
+
+  async samlLogin(): Promise<{ redirectUrl: string }> {
+    const response = await this.client.get('/saml/login');
+    return response.data;
+  }
+
+  async samlLogout(): Promise<void> {
+    await this.client.post('/saml/logout');
+  }
+
+  async getCurrentUser(): Promise<any> {
+    const response = await this.client.get('/auth/me');
+    return response.data;
+  }
+
+  async logout(): Promise<void> {
+    await this.client.post('/auth/logout');
+    localStorage.removeItem('streamspace_token');
+    localStorage.removeItem('streamspace_user');
+  }
+
+  // ============================================================================
+  // Node Management (Admin)
+  // ============================================================================
+
+  async listNodes(): Promise<any[]> {
+    const response = await this.client.get('/admin/nodes');
+    return response.data;
+  }
+
+  async getNode(name: string): Promise<any> {
+    const response = await this.client.get(`/admin/nodes/${name}`);
+    return response.data;
+  }
+
+  async getClusterStats(): Promise<any> {
+    const response = await this.client.get('/admin/nodes/stats');
+    return response.data;
+  }
+
+  async addNodeLabel(name: string, key: string, value: string): Promise<void> {
+    await this.client.put(`/admin/nodes/${name}/labels`, { key, value });
+  }
+
+  async removeNodeLabel(name: string, key: string): Promise<void> {
+    await this.client.delete(`/admin/nodes/${name}/labels/${key}`);
+  }
+
+  async addNodeTaint(name: string, taint: { key: string; value: string; effect: string }): Promise<void> {
+    await this.client.post(`/admin/nodes/${name}/taints`, taint);
+  }
+
+  async removeNodeTaint(name: string, key: string): Promise<void> {
+    await this.client.delete(`/admin/nodes/${name}/taints/${key}`);
+  }
+
+  async cordonNode(name: string): Promise<void> {
+    await this.client.post(`/admin/nodes/${name}/cordon`);
+  }
+
+  async uncordonNode(name: string): Promise<void> {
+    await this.client.post(`/admin/nodes/${name}/uncordon`);
+  }
+
+  async drainNode(name: string, gracePeriodSeconds?: number): Promise<void> {
+    await this.client.post(`/admin/nodes/${name}/drain`, { grace_period_seconds: gracePeriodSeconds });
+  }
+
+  // ============================================================================
+  // User Quota Management (Admin)
+  // ============================================================================
+
+  async listUserQuotas(): Promise<UserQuota[]> {
+    const response = await this.client.get<{ quotas: UserQuota[] }>('/admin/quotas');
+    return response.data.quotas;
+  }
+
+  async getUserQuota(username: string): Promise<UserQuota> {
+    const response = await this.client.get<UserQuota>(`/admin/quotas/${username}`);
+    return response.data;
+  }
+
+  async setUserQuota(data: SetQuotaRequest): Promise<UserQuota> {
+    const response = await this.client.put<UserQuota>('/admin/quotas', data);
+    return response.data;
+  }
+
+  async deleteUserQuota(username: string): Promise<void> {
+    await this.client.delete(`/admin/quotas/${username}`);
   }
 
   // ============================================================================
