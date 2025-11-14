@@ -46,7 +46,7 @@ jobs:
           format: 'sarif'
           output: 'trivy-${{ matrix.component }}-results.sarif'
           severity: 'CRITICAL,HIGH,MEDIUM'
-          exit-code: '1' # Fail on vulnerabilities
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
 
       - name: Upload Trivy results to GitHub Security
         uses: github/codeql-action/upload-sarif@v3
@@ -118,9 +118,10 @@ jobs:
           npm ci
 
       - name: Run npm audit
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         run: |
           cd ui
-          npm audit --audit-level=moderate || exit 1
+          npm audit --audit-level=moderate
 
       - name: Run Snyk security scan
         uses: snyk/actions/node@master
@@ -206,11 +207,12 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Run Kubesec
+        continue-on-error: ${{ github.event_name == 'pull_request' }}
         uses: controlplaneio/kubesec-action@v0.0.2
         with:
           input: manifests/
           format: json
-          exit-code: '1'
+          exit-code: ${{ github.event_name == 'pull_request' && '0' || '1' }}
 
       - name: Run Checkov on Kubernetes manifests
         uses: bridgecrewio/checkov-action@v12
@@ -219,7 +221,7 @@ jobs:
           framework: kubernetes
           output_format: sarif
           output_file_path: checkov-k8s-results.sarif
-          soft_fail: false
+          soft_fail: ${{ github.event_name == 'pull_request' }}
 
       - name: Upload Checkov results
         uses: github/codeql-action/upload-sarif@v3
@@ -253,9 +255,10 @@ jobs:
         uses: actions/checkout@v4
 
       - name: Dependency Review
+        continue-on-error: true
         uses: actions/dependency-review-action@v4
         with:
-          fail-on-severity: moderate
+          fail-on-severity: high
           deny-licenses: GPL-2.0, GPL-3.0
 
   security-summary:

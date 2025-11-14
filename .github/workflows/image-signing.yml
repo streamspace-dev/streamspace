@@ -68,7 +68,7 @@ jobs:
         with:
           context: ./api
           file: ./api/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -78,12 +78,14 @@ jobs:
           sbom: true
 
       - name: Sign API image with Cosign
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build-api.outputs.digest }}
 
       - name: Verify API image signature
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
@@ -130,7 +132,7 @@ jobs:
         with:
           context: ./controller
           file: ./controller/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -140,12 +142,14 @@ jobs:
           sbom: true
 
       - name: Sign Controller image with Cosign
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build-controller.outputs.digest }}
 
       - name: Verify Controller image signature
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
@@ -192,7 +196,7 @@ jobs:
         with:
           context: ./ui
           file: ./ui/Dockerfile
-          push: true
+          push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
           labels: ${{ steps.meta.outputs.labels }}
           cache-from: type=gha
@@ -202,12 +206,14 @@ jobs:
           sbom: true
 
       - name: Sign UI image with Cosign
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
           echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build-ui.outputs.digest }}
 
       - name: Verify UI image signature
+        if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
@@ -216,6 +222,7 @@ jobs:
   generate-attestations:
     name: Generate SLSA Attestations
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     needs: [build-and-sign-api, build-and-sign-controller, build-and-sign-ui]
     permissions:
       contents: read
@@ -290,6 +297,7 @@ jobs:
   security-scan:
     name: Security Scan Signed Images
     runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
     needs: [build-and-sign-api, build-and-sign-controller, build-and-sign-ui]
     strategy:
       matrix:
