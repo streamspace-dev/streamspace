@@ -30,6 +30,7 @@ func (h *UserHandler) RegisterRoutes(router *gin.RouterGroup) {
 		userRoutes.GET("", h.ListUsers)
 		userRoutes.POST("", h.CreateUser)
 		userRoutes.GET("/me", h.GetCurrentUser)
+		userRoutes.GET("/me/quota", h.GetCurrentUserQuota)
 		userRoutes.GET("/:id", h.GetUser)
 		userRoutes.PATCH("/:id", h.UpdateUser)
 		userRoutes.DELETE("/:id", h.DeleteUser)
@@ -181,6 +182,39 @@ func (h *UserHandler) GetCurrentUser(c *gin.Context) {
 	user.PasswordHash = ""
 
 	c.JSON(http.StatusOK, user)
+}
+
+// GetCurrentUserQuota godoc
+// @Summary Get current user quota
+// @Description Get quota information for the currently authenticated user
+// @Tags users, quotas
+// @Accept json
+// @Produce json
+// @Success 200 {object} models.UserQuota
+// @Failure 401 {object} ErrorResponse
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v1/users/me/quota [get]
+func (h *UserHandler) GetCurrentUserQuota(c *gin.Context) {
+	// Get user ID from context (set by auth middleware)
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, ErrorResponse{
+			Error:   "Unauthorized",
+			Message: "User not authenticated",
+		})
+		return
+	}
+
+	quota, err := h.userDB.GetUserQuota(c.Request.Context(), userID.(string))
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error:   "Quota not found",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	c.JSON(http.StatusOK, quota)
 }
 
 // UpdateUser godoc

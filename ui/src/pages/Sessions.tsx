@@ -30,6 +30,7 @@ import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import TagChip from '../components/TagChip';
 import TagManager from '../components/TagManager';
+import QuotaAlert from '../components/QuotaAlert';
 import { useUpdateSessionState, useDeleteSession } from '../hooks/useApi';
 import { useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useUserStore } from '../store/userStore';
@@ -141,6 +142,8 @@ export default function Sessions() {
   return (
     <Layout>
       <Box>
+        <QuotaAlert />
+
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
             My Sessions

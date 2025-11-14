@@ -9,6 +9,7 @@ import {
   SignalWifiStatusbarConnectedNoInternet4 as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
+import QuotaCard from '../components/QuotaCard';
 import { useTemplates, useRepositories } from '../hooks/useApi';
 import { useMetricsWebSocket, useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useUserStore } from '../store/userStore';
@@ -117,6 +118,10 @@ export default function Dashboard() {
 
         <Grid container spacing={3}>
           <Grid item xs={12} md={6}>
+            <QuotaCard />
+          </Grid>
+
+          <Grid item xs={12} md={6}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Session Overview
@@ -144,7 +149,7 @@ export default function Dashboard() {
             </Paper>
           </Grid>
 
-          <Grid item xs={12} md={6}>
+          <Grid item xs={12}>
             <Paper sx={{ p: 3 }}>
               <Typography variant="h6" sx={{ mb: 2, fontWeight: 600 }}>
                 Recent Sessions

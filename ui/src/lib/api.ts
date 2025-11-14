@@ -484,6 +484,11 @@ class APIClient {
     await this.client.delete(`/users/${id}`);
   }
 
+  async getCurrentUserQuota(): Promise<UserQuota> {
+    const response = await this.client.get<UserQuota>('/users/me/quota');
+    return response.data;
+  }
+
   async getUserQuota(id: string): Promise<UserQuota> {
     const response = await this.client.get<UserQuota>(`/users/${id}/quota`);
     return response.data;
