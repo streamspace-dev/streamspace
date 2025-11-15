@@ -3,7 +3,7 @@ name: Deploy GitHub Pages
 on:
   push:
     branches:
-      - main
+      - master
     paths:
       - 'site/**'
       - '.github/workflows/github-pages.yml'

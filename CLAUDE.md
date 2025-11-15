@@ -178,7 +178,7 @@ StreamSpace will become the leading open source alternative to commercial contai
 name: Build Container Images
 on:
   schedule: [cron: '0 0 * * 0']  # Weekly
-  push: {branches: [main]}
+  push: {branches: [master]}
 
 jobs:
   build-matrix:
@@ -720,12 +720,12 @@ make deploy IMG=your-registry/streamspace-controller:v0.1.0
 
 ### Branch Strategy
 
-**Main Branch**: `main` (protected)
+**Main Branch**: `master` (protected)
 
 **Feature Branches**:
 - Format: `claude/claude-md-<session-id>`
 - Example: `claude/claude-md-mhy5zeq2njvrp3yh-01MfcP2sWxBRw6sTTyEGW5gg`
-- Always develop on feature branches, not main
+- Always develop on feature branches, not master
 
 ### Commit Messages
 
@@ -797,7 +797,7 @@ git push -u origin claude/claude-md-<session-id>
 - Retry up to 4 times with exponential backoff (2s, 4s, 8s, 16s)
 
 **Pull Requests**:
-- Create PRs from feature branch to main
+- Create PRs from feature branch to master
 - Use PR template (see `CONTRIBUTING.md`)
 - Request review from maintainers
 - Ensure CI passes before merging
