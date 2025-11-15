@@ -220,35 +220,43 @@ export default function SecuritySettings() {
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <Card>
+              <Card sx={{ opacity: 0.6 }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <PhoneIcon sx={{ mr: 1 }} />
                     <Typography variant="h6">SMS</Typography>
+                    <Chip label="Coming Soon" size="small" sx={{ ml: 1 }} />
                   </Box>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Receive verification codes via text message.
                   </Typography>
-                  <Button variant="outlined" fullWidth onClick={() => handleStartMFASetup('sms')}>
-                    Set Up
+                  <Button variant="outlined" fullWidth disabled>
+                    Not Available
                   </Button>
+                  <Alert severity="info" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                    SMS MFA is under development. Please use TOTP for now.
+                  </Alert>
                 </CardContent>
               </Card>
             </Grid>
 
             <Grid item xs={12} md={4}>
-              <Card>
+              <Card sx={{ opacity: 0.6 }}>
                 <CardContent>
                   <Box sx={{ display: 'flex', alignItems: 'center', mb: 2 }}>
                     <EmailIcon sx={{ mr: 1 }} />
                     <Typography variant="h6">Email</Typography>
+                    <Chip label="Coming Soon" size="small" sx={{ ml: 1 }} />
                   </Box>
                   <Typography variant="body2" color="text.secondary" sx={{ mb: 2 }}>
                     Receive verification codes via email.
                   </Typography>
-                  <Button variant="outlined" fullWidth onClick={() => handleStartMFASetup('email')}>
-                    Set Up
+                  <Button variant="outlined" fullWidth disabled>
+                    Not Available
                   </Button>
+                  <Alert severity="info" sx={{ mt: 1, fontSize: '0.75rem' }}>
+                    Email MFA is under development. Please use TOTP for now.
+                  </Alert>
                 </CardContent>
               </Card>
             </Grid>
