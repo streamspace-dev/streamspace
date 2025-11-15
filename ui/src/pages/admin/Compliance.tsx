@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -44,6 +44,8 @@ import {
   Dashboard as DashboardIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
+import api from '../../lib/api';
+import { toast } from '../../lib/toast';
 
 interface ComplianceFramework {
   id: number;
@@ -88,45 +90,21 @@ interface ComplianceMetrics {
 
 export default function Compliance() {
   const [currentTab, setCurrentTab] = useState(0);
-  const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([
-    {
-      id: 1,
-      name: 'GDPR',
-      display_name: 'General Data Protection Regulation',
-      version: '2018',
-      enabled: true,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 2,
-      name: 'HIPAA',
-      display_name: 'Health Insurance Portability and Accountability Act',
-      version: '1996',
-      enabled: false,
-      created_at: new Date().toISOString(),
-    },
-    {
-      id: 3,
-      name: 'SOC2',
-      display_name: 'Service Organization Control 2',
-      version: 'Type II',
-      enabled: true,
-      created_at: new Date().toISOString(),
-    },
-  ]);
+  const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([]);
   const [policies, setPolicies] = useState<CompliancePolicy[]>([]);
   const [violations, setViolations] = useState<ComplianceViolation[]>([]);
   const [metrics, setMetrics] = useState<ComplianceMetrics>({
-    total_policies: 5,
-    active_policies: 3,
-    total_open_violations: 12,
+    total_policies: 0,
+    active_policies: 0,
+    total_open_violations: 0,
     violations_by_severity: {
-      critical: 2,
-      high: 4,
-      medium: 4,
-      low: 2,
+      critical: 0,
+      high: 0,
+      medium: 0,
+      low: 0,
     },
   });
+  const [loading, setLoading] = useState(false);
 
   const [frameworkDialog, setFrameworkDialog] = useState(false);
   const [policyDialog, setPolicyDialog] = useState(false);
@@ -142,26 +120,124 @@ export default function Compliance() {
 
   const [reportForm, setReportForm] = useState({
     framework_id: 0,
-    report_type: 'summary',
+    report_type: 'summary' as 'summary' | 'detailed' | 'attestation',
     start_date: '',
     end_date: '',
   });
 
-  const handleCreatePolicy = () => {
-    // TODO: API call
-    console.log('Create policy:', policyForm);
-    setPolicyDialog(false);
+  // Load initial data
+  useEffect(() => {
+    loadFrameworks();
+    loadPolicies();
+    loadViolations();
+    loadDashboard();
+  }, []);
+
+  const loadFrameworks = async () => {
+    try {
+      const response = await api.listComplianceFrameworks();
+      setFrameworks(response.frameworks);
+    } catch (error) {
+      console.error('Failed to load frameworks:', error);
+    }
   };
 
-  const handleGenerateReport = () => {
-    // TODO: API call
-    console.log('Generate report:', reportForm);
-    setReportDialog(false);
+  const loadPolicies = async () => {
+    try {
+      const response = await api.listCompliancePolicies();
+      setPolicies(response.policies);
+    } catch (error) {
+      console.error('Failed to load policies:', error);
+    }
   };
 
-  const handleResolveViolation = (id: number) => {
-    // TODO: API call
-    setViolations(violations.map((v) => (v.id === id ? { ...v, status: 'resolved' } : v)));
+  const loadViolations = async () => {
+    try {
+      const response = await api.listComplianceViolations();
+      setViolations(response.violations);
+    } catch (error) {
+      console.error('Failed to load violations:', error);
+    }
+  };
+
+  const loadDashboard = async () => {
+    try {
+      const dashboard = await api.getComplianceDashboard();
+      setMetrics({
+        total_policies: dashboard.total_policies,
+        active_policies: dashboard.active_policies,
+        total_open_violations: dashboard.total_open_violations,
+        violations_by_severity: dashboard.violations_by_severity,
+      });
+    } catch (error) {
+      console.error('Failed to load dashboard:', error);
+    }
+  };
+
+  const handleCreatePolicy = async () => {
+    setLoading(true);
+    try {
+      await api.createCompliancePolicy({
+        name: policyForm.name,
+        framework_id: policyForm.framework_id,
+        applies_to: {
+          all_users: policyForm.applies_to === 'all_users',
+          user_ids: policyForm.applies_to === 'specific_users' ? [] : undefined,
+          roles: policyForm.applies_to === 'specific_roles' ? [] : undefined,
+        },
+        enforcement_level: policyForm.enforcement_level as any,
+        data_retention: {
+          session_data_days: policyForm.data_retention_days,
+          recording_days: policyForm.data_retention_days,
+          audit_log_days: policyForm.data_retention_days,
+        },
+      });
+      toast.success('Compliance policy created');
+      setPolicyDialog(false);
+      loadPolicies();
+      loadDashboard();
+    } catch (error) {
+      toast.error('Failed to create policy');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleGenerateReport = async () => {
+    setLoading(true);
+    try {
+      const report = await api.generateComplianceReport({
+        framework_id: reportForm.framework_id || undefined,
+        report_type: reportForm.report_type,
+        start_date: reportForm.start_date,
+        end_date: reportForm.end_date,
+      });
+      toast.success('Compliance report generated');
+      setReportDialog(false);
+      // You could download the report as JSON or display it in a modal
+      console.log('Report:', report);
+    } catch (error) {
+      toast.error('Failed to generate report');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleResolveViolation = async (id: number) => {
+    setLoading(true);
+    try {
+      await api.resolveComplianceViolation(id, {
+        resolution: 'Violation resolved by administrator',
+        status: 'resolved',
+      });
+      toast.success('Violation resolved');
+      loadViolations();
+      loadDashboard();
+    } catch (error) {
+      toast.error('Failed to resolve violation');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getSeverityColor = (severity: string) => {

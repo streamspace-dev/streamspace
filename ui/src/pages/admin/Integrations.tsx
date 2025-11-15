@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -42,6 +42,8 @@ import {
   Pending as PendingIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
+import api from '../../lib/api';
+import { toast } from '../../lib/toast';
 
 interface Webhook {
   id: number;
@@ -100,6 +102,7 @@ export default function Integrations() {
   const [deliveryDialog, setDeliveryDialog] = useState(false);
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [webhookForm, setWebhookForm] = useState({
     name: '',
@@ -115,26 +118,90 @@ export default function Integrations() {
     config: {},
   });
 
-  const handleCreateWebhook = () => {
-    // TODO: API call to create webhook
-    console.log('Create webhook:', webhookForm);
-    setWebhookDialog(false);
+  // Load initial data
+  useEffect(() => {
+    loadWebhooks();
+    loadIntegrations();
+  }, []);
+
+  const loadWebhooks = async () => {
+    try {
+      const response = await api.listWebhooks();
+      setWebhooks(response.webhooks);
+    } catch (error) {
+      console.error('Failed to load webhooks:', error);
+    }
   };
 
-  const handleTestWebhook = (webhook: Webhook) => {
-    // TODO: API call to test webhook
-    console.log('Test webhook:', webhook.id);
+  const loadIntegrations = async () => {
+    try {
+      const response = await api.listIntegrations();
+      setIntegrations(response.integrations);
+    } catch (error) {
+      console.error('Failed to load integrations:', error);
+    }
   };
 
-  const handleViewDeliveries = (webhook: Webhook) => {
+  const handleCreateWebhook = async () => {
+    setLoading(true);
+    try {
+      await api.createWebhook({
+        name: webhookForm.name,
+        url: webhookForm.url,
+        secret: webhookForm.secret || undefined,
+        events: webhookForm.events,
+        enabled: webhookForm.enabled,
+      });
+      toast.success('Webhook created successfully');
+      setWebhookDialog(false);
+      setWebhookForm({ name: '', url: '', secret: '', events: [], enabled: true });
+      loadWebhooks();
+    } catch (error) {
+      toast.error('Failed to create webhook');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTestWebhook = async (webhook: Webhook) => {
+    setLoading(true);
+    try {
+      const response = await api.testWebhook(webhook.id);
+      toast.success(response.message || 'Test webhook sent successfully');
+    } catch (error) {
+      toast.error('Failed to test webhook');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleViewDeliveries = async (webhook: Webhook) => {
     setSelectedWebhook(webhook);
-    // TODO: Fetch deliveries for this webhook
-    setDeliveryDialog(true);
+    setLoading(true);
+    try {
+      const response = await api.getWebhookDeliveries(webhook.id);
+      setDeliveries(response.deliveries);
+      setDeliveryDialog(true);
+    } catch (error) {
+      toast.error('Failed to fetch webhook deliveries');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteWebhook = (id: number) => {
-    // TODO: API call to delete webhook
-    setWebhooks(webhooks.filter((w) => w.id !== id));
+  const handleDeleteWebhook = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this webhook?')) return;
+
+    setLoading(true);
+    try {
+      await api.deleteWebhook(id);
+      toast.success('Webhook deleted');
+      loadWebhooks();
+    } catch (error) {
+      toast.error('Failed to delete webhook');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusIcon = (status: string) => {

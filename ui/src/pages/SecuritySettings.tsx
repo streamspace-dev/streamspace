@@ -35,7 +35,7 @@
  * <SecuritySettings />
  * ```
  */
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -82,6 +82,8 @@ import {
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import { QRCodeSVG } from 'qrcode.react';
+import api from '../lib/api';
+import { toast } from '../lib/toast';
 
 /**
  * Interface for MFA method data structure.
@@ -119,6 +121,7 @@ export default function SecuritySettings() {
   const [mfaMethods, setMfaMethods] = useState<MFAMethod[]>([]);
   const [ipWhitelist, setIpWhitelist] = useState<IPWhitelistEntry[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<SecurityAlert[]>([]);
+  const [loading, setLoading] = useState(false);
 
   // MFA Setup Dialog
   const [mfaDialog, setMfaDialog] = useState(false);
@@ -128,6 +131,7 @@ export default function SecuritySettings() {
   const [totpQR, setTotpQR] = useState('');
   const [verificationCode, setVerificationCode] = useState('');
   const [backupCodes, setBackupCodes] = useState<string[]>([]);
+  const [currentMfaId, setCurrentMfaId] = useState<number | null>(null);
 
   // IP Whitelist Dialog
   const [ipDialog, setIpDialog] = useState(false);
@@ -136,57 +140,131 @@ export default function SecuritySettings() {
     description: '',
   });
 
-  const handleStartMFASetup = (type: 'totp' | 'sms' | 'email') => {
-    setMfaType(type);
-    setMfaStep(0);
-    setMfaDialog(true);
+  // Load initial data
+  useEffect(() => {
+    loadMFAMethods();
+    loadIPWhitelist();
+    loadSecurityAlerts();
+  }, []);
 
-    // TODO: API call to start MFA setup
-    if (type === 'totp') {
-      // Mock TOTP secret and QR code
-      setTotpSecret('JBSWY3DPEHPK3PXP');
-      setTotpQR('otpauth://totp/StreamSpace:user@example.com?secret=JBSWY3DPEHPK3PXP&issuer=StreamSpace');
+  const loadMFAMethods = async () => {
+    try {
+      const response = await api.listMFAMethods();
+      setMfaMethods(response.methods);
+    } catch (error) {
+      console.error('Failed to load MFA methods:', error);
     }
   };
 
-  const handleVerifyMFASetup = () => {
-    // TODO: API call to verify code
-    console.log('Verify MFA:', verificationCode);
-    setMfaStep(2);
-    // Mock backup codes
-    setBackupCodes([
-      'ABC123-456789',
-      'DEF456-123789',
-      'GHI789-456123',
-      'JKL012-789456',
-      'MNO345-012789',
-      'PQR678-345012',
-      'STU901-678345',
-      'VWX234-901678',
-      'YZA567-234901',
-      'BCD890-567234',
-    ]);
+  const loadIPWhitelist = async () => {
+    try {
+      const response = await api.listIPWhitelist();
+      setIpWhitelist(response.entries);
+    } catch (error) {
+      console.error('Failed to load IP whitelist:', error);
+    }
+  };
+
+  const loadSecurityAlerts = async () => {
+    try {
+      const response = await api.getSecurityAlerts();
+      setSecurityAlerts(response.alerts);
+    } catch (error) {
+      console.error('Failed to load security alerts:', error);
+    }
+  };
+
+  const handleStartMFASetup = async (type: 'totp' | 'sms' | 'email') => {
+    setMfaType(type);
+    setMfaStep(0);
+    setMfaDialog(true);
+    setLoading(true);
+
+    try {
+      const response = await api.setupMFA(type);
+      setCurrentMfaId(response.id);
+
+      if (type === 'totp') {
+        setTotpSecret(response.secret || '');
+        setTotpQR(response.qr_code || '');
+      }
+
+      toast.success(response.message || 'MFA setup initiated');
+    } catch (error) {
+      toast.error('Failed to start MFA setup');
+      setMfaDialog(false);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleVerifyMFASetup = async () => {
+    if (!currentMfaId) return;
+
+    setLoading(true);
+    try {
+      const response = await api.verifyMFASetup(currentMfaId, verificationCode);
+      setBackupCodes(response.backup_codes || []);
+      setMfaStep(2);
+      toast.success('MFA verified successfully');
+    } catch (error) {
+      toast.error('Invalid verification code');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const handleCompleteMFASetup = () => {
     setMfaDialog(false);
-    // TODO: Refresh MFA methods list
+    setVerificationCode('');
+    setCurrentMfaId(null);
+    loadMFAMethods();
+    toast.success('MFA setup completed');
   };
 
-  const handleDisableMFA = (id: number) => {
-    // TODO: API call to disable MFA method
-    setMfaMethods(mfaMethods.filter((m) => m.id !== id));
+  const handleDisableMFA = async (id: number) => {
+    if (!confirm('Are you sure you want to disable this MFA method?')) return;
+
+    setLoading(true);
+    try {
+      await api.disableMFA(id);
+      toast.success('MFA method disabled');
+      loadMFAMethods();
+    } catch (error) {
+      toast.error('Failed to disable MFA method');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleAddIPWhitelist = () => {
-    // TODO: API call to add IP
-    console.log('Add IP:', ipForm);
-    setIpDialog(false);
+  const handleAddIPWhitelist = async () => {
+    setLoading(true);
+    try {
+      await api.createIPWhitelist(ipForm);
+      toast.success('IP address added to whitelist');
+      setIpDialog(false);
+      setIpForm({ ip_address: '', description: '' });
+      loadIPWhitelist();
+    } catch (error) {
+      toast.error('Failed to add IP address');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDeleteIPWhitelist = (id: number) => {
-    // TODO: API call to delete IP
-    setIpWhitelist(ipWhitelist.filter((ip) => ip.id !== id));
+  const handleDeleteIPWhitelist = async (id: number) => {
+    if (!confirm('Are you sure you want to remove this IP address?')) return;
+
+    setLoading(true);
+    try {
+      await api.deleteIPWhitelist(id);
+      toast.success('IP address removed');
+      loadIPWhitelist();
+    } catch (error) {
+      toast.error('Failed to remove IP address');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getMFAIcon = (type: string) => {
