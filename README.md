@@ -720,22 +720,21 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 - [Plugin API Reference](docs/PLUGIN_API.md) - Plugin API documentation
 
 ### Deployment & Operations
-- [Getting Started](docs/GETTING_STARTED.md) - Quick start guide
-- [Deployment Guide](docs/DEPLOYMENT.md) - Production deployment instructions
-- [SAML Configuration](docs/SAML_SETUP.md) - SAML 2.0 SSO setup guide
+- [Quick Start Guide](QUICKSTART.md) - Get started quickly
+- [Deployment Guide](DEPLOYMENT.md) - Production deployment instructions
+- [SAML Configuration](docs/SAML_GUIDE.md) - SAML 2.0 SSO setup guide
 - [AWS Deployment](docs/AWS_DEPLOYMENT.md) - AWS-specific deployment guide
 - [Container Deployment](docs/CONTAINER_DEPLOYMENT.md) - Container-based deployment
 
-### User Documentation
-- [User Guide](docs/USER_GUIDE.md) - End-user documentation
-- [Admin Guide](docs/ADMIN_GUIDE.md) - Administrator documentation
-
 ### API & Development
-- [API Reference](docs/API_REFERENCE.md) - REST API documentation
+- [API Reference](api/API_REFERENCE.md) - REST API documentation
+- [User & Group Management](api/docs/USER_GROUP_MANAGEMENT.md) - User and group management API
 
 ### Security & Compliance
 - [Security Policy](SECURITY.md) - Security policy and responsible disclosure
-- [Security Documentation](docs/SECURITY.md) - Security architecture and controls
+- [Security Implementation](docs/SECURITY_IMPL_GUIDE.md) - Security architecture and controls
+- [Security Testing](docs/SECURITY_TESTING.md) - Security testing procedures
+- [Security Audit Prep](docs/SECURITY_AUDIT_PREP.md) - Security audit preparation
 
 ### Additional Resources
 - [SAAS Deployment](docs/SAAS_DEPLOYMENT.md) - SaaS architecture and scaling
@@ -768,7 +767,7 @@ kubectl get cm -n streamspace streamspace-config -o yaml
 kubectl get sessions -n streamspace -o jsonpath='{.items[*].status.lastActivity}'
 ```
 
-Common issues: [docs/TROUBLESHOOTING.md](docs/TROUBLESHOOTING.md)
+For more troubleshooting help, check the controller logs and session events as shown above.
 
 ## 📄 License
 
