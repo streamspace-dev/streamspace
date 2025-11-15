@@ -5,6 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"strings"
 	"time"
@@ -56,16 +57,16 @@ func (h *SearchHandler) RegisterRoutes(router *gin.RouterGroup) {
 	search := router.Group("/search")
 	{
 		// Search endpoints
-		search.GET("", h.Search)                              // Universal search
-		search.GET("/templates", h.SearchTemplates)           // Template-specific search
-		search.GET("/sessions", h.SearchSessions)             // Session search
-		search.GET("/suggest", h.SearchSuggestions)           // Auto-complete suggestions
-		search.GET("/advanced", h.AdvancedSearch)             // Advanced multi-filter search
+		search.GET("", h.Search)                    // Universal search
+		search.GET("/templates", h.SearchTemplates) // Template-specific search
+		search.GET("/sessions", h.SearchSessions)   // Session search
+		search.GET("/suggest", h.SearchSuggestions) // Auto-complete suggestions
+		search.GET("/advanced", h.AdvancedSearch)   // Advanced multi-filter search
 
 		// Filter endpoints
-		search.GET("/filters/categories", h.GetCategories)    // List all categories
-		search.GET("/filters/tags", h.GetPopularTags)         // List popular tags
-		search.GET("/filters/app-types", h.GetAppTypes)       // List app types
+		search.GET("/filters/categories", h.GetCategories) // List all categories
+		search.GET("/filters/tags", h.GetPopularTags)      // List popular tags
+		search.GET("/filters/app-types", h.GetAppTypes)    // List app types
 
 		// Saved searches
 		search.GET("/saved", h.ListSavedSearches)
@@ -118,7 +119,7 @@ func (h *SearchHandler) SearchTemplates(c *gin.Context) {
 	query := c.Query("q")
 	category := c.Query("category")
 	appType := c.Query("app_type")
-	tags := c.Query("tags") // Comma-separated
+	tags := c.Query("tags")      // Comma-separated
 	sortBy := c.Query("sort_by") // popularity, rating, name, recent
 	limit := 50
 
@@ -248,10 +249,10 @@ func (h *SearchHandler) SearchTemplates(c *gin.Context) {
 			r.Score = score
 
 			r.Metadata = map[string]interface{}{
-				"rating":       avgRating.Float64,
-				"installs":     installCount.Int64,
-				"views":        viewCount.Int64,
-				"featured":     isFeatured,
+				"rating":   avgRating.Float64,
+				"installs": installCount.Int64,
+				"views":    viewCount.Int64,
+				"featured": isFeatured,
 			}
 
 			results = append(results, r)
@@ -380,10 +381,10 @@ func (h *SearchHandler) SearchSuggestions(c *gin.Context) {
 // AdvancedSearch performs multi-criteria search
 func (h *SearchHandler) AdvancedSearch(c *gin.Context) {
 	var req struct {
-		Query      string                 `json:"query"`
-		Filters    map[string]interface{} `json:"filters"`
-		Sort       string                 `json:"sort"`
-		Limit      int                    `json:"limit"`
+		Query   string                 `json:"query"`
+		Filters map[string]interface{} `json:"filters"`
+		Sort    string                 `json:"sort"`
+		Limit   int                    `json:"limit"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -448,13 +449,19 @@ func (h *SearchHandler) GetPopularTags(c *gin.Context) {
 	ctx := context.Background()
 	limit := 50
 
-	// This is simplified - in production you'd want to parse the tags JSONB array
+	// Proper JSONB array handling for production
 	rows, err := h.db.DB().QueryContext(ctx, `
-		SELECT DISTINCT unnest(tags::text[]::text[]) as tag, COUNT(*) as count
-		FROM catalog_templates
-		WHERE tags IS NOT NULL AND tags != '[]'
+		SELECT tag, COUNT(*) as count
+		FROM (
+			SELECT jsonb_array_elements_text(tags) as tag
+			FROM catalog_templates
+			WHERE tags IS NOT NULL
+			  AND jsonb_typeof(tags) = 'array'
+			  AND jsonb_array_length(tags) > 0
+		) subquery
+		WHERE tag IS NOT NULL AND tag != ''
 		GROUP BY tag
-		ORDER BY count DESC
+		ORDER BY count DESC, tag ASC
 		LIMIT $1
 	`, limit)
 
@@ -468,16 +475,24 @@ func (h *SearchHandler) GetPopularTags(c *gin.Context) {
 	for rows.Next() {
 		var tag string
 		var count int
-		if err := rows.Scan(&tag, &count); err == nil {
-			// Clean up tag (remove quotes, brackets)
-			tag = strings.Trim(tag, `"{}[]`)
-			if tag != "" {
-				tags = append(tags, map[string]interface{}{
-					"name":  tag,
-					"count": count,
-				})
-			}
+		if err := rows.Scan(&tag, &count); err != nil {
+			log.Printf("[ERROR] Failed to scan tag row: %v", err)
+			continue
 		}
+
+		// jsonb_array_elements_text() already returns clean strings
+		// No manual cleanup needed
+		tags = append(tags, map[string]interface{}{
+			"name":  tag,
+			"count": count,
+		})
+	}
+
+	// Check for errors during iteration
+	if err = rows.Err(); err != nil {
+		log.Printf("[ERROR] Error iterating tag rows: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to process tags"})
+		return
 	}
 
 	c.JSON(http.StatusOK, gin.H{
