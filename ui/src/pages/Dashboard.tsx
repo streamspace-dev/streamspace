@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import { Grid, Paper, Typography, Box, Card, CardContent, Chip } from '@mui/material';
 import {
   Computer as ComputerIcon,
@@ -14,23 +14,51 @@ import { useTemplates, useRepositories } from '../hooks/useApi';
 import { useMetricsWebSocket, useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useUserStore } from '../store/userStore';
 import type { Session } from '../lib/api';
+import { useEnhancedWebSocket } from '../hooks/useWebSocketEnhancements';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
 export default function Dashboard() {
   const username = useUserStore((state) => state.user?.username);
   const [sessions, setSessions] = useState<Session[]>([]);
   const [metrics, setMetrics] = useState<any>(null);
 
+  // Track previous session states for change notifications
+  const prevStatesRef = useRef<Map<string, string>>(new Map());
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
   const { data: templates = [], isLoading: templatesLoading } = useTemplates();
   const { data: repositories = [], isLoading: reposLoading } = useRepositories();
 
-  // Real-time sessions updates via WebSocket
-  const sessionsWs = useSessionsWebSocket((updatedSessions) => {
+  // Real-time sessions updates via WebSocket with notifications
+  const baseSessionsWs = useSessionsWebSocket((updatedSessions) => {
     // Filter to only show current user's sessions
     const userSessions = username
       ? updatedSessions.filter((s: Session) => s.user === username)
       : updatedSessions;
+
+    // Check for state changes and show notifications
+    userSessions.forEach((session) => {
+      const prevState = prevStatesRef.current.get(session.name);
+      if (prevState && prevState !== session.state) {
+        addNotification({
+          message: `${session.template}: ${prevState} → ${session.state}`,
+          severity: session.state === 'running' ? 'success' : session.state === 'hibernated' ? 'warning' : 'error',
+          priority: session.state === 'terminated' ? 'high' : 'medium',
+          title: 'Session Status Changed',
+        });
+      }
+      prevStatesRef.current.set(session.name, session.state);
+    });
+
     setSessions(userSessions);
   });
+
+  // Enhanced WebSocket with connection quality and manual reconnect
+  const sessionsWs = useEnhancedWebSocket(baseSessionsWs);
 
   // Real-time metrics updates via WebSocket
   const metricsWs = useMetricsWebSocket((updatedMetrics) => {
@@ -72,27 +100,21 @@ export default function Dashboard() {
   const hibernatedSessions = sessions.filter((s) => s.state === 'hibernated');
 
   return (
-    <Layout>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Welcome back, {username}!
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            <Chip
-              icon={sessionsWs.isConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
-              label={sessionsWs.isConnected ? 'Live Updates' : 'Reconnecting...'}
-              color={sessionsWs.isConnected ? 'success' : 'warning'}
-              size="small"
-              variant="outlined"
+    <WebSocketErrorBoundary>
+      <Layout>
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Welcome back, {username}!
+            </Typography>
+
+            {/* Enhanced WebSocket Connection Status */}
+            <EnhancedWebSocketStatus
+              {...sessionsWs}
+              size="medium"
+              showDetails={true}
             />
-            {sessionsWs.reconnectAttempts > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                Attempt {sessionsWs.reconnectAttempts}
-              </Typography>
-            )}
           </Box>
-        </Box>
 
         <Grid container spacing={3} sx={{ mb: 4 }}>
           {stats.map((stat) => (
@@ -194,5 +216,6 @@ export default function Dashboard() {
         </Grid>
       </Box>
     </Layout>
+    </WebSocketErrorBoundary>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useMemo } from 'react';
+import { useState, useMemo, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -43,6 +43,10 @@ import { useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useUserStore } from '../store/userStore';
 import { Session } from '../lib/api';
 import { api } from '../lib/api';
+import { useEnhancedWebSocket } from '../hooks/useWebSocketEnhancements';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
 export default function Sessions() {
   const navigate = useNavigate();
@@ -61,14 +65,38 @@ export default function Sessions() {
   const [invitationDialogOpen, setInvitationDialogOpen] = useState(false);
   const [sessionToShare, setSessionToShare] = useState<Session | null>(null);
 
-  // Real-time sessions updates via WebSocket
-  const sessionsWs = useSessionsWebSocket((updatedSessions) => {
+  // Track previous session states for change notifications
+  const prevStatesRef = useRef<Map<string, string>>(new Map());
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time sessions updates via WebSocket with notifications
+  const baseSessionsWs = useSessionsWebSocket((updatedSessions) => {
     // Filter to only show current user's sessions
     const userSessions = username
       ? updatedSessions.filter((s: Session) => s.user === username)
       : updatedSessions;
+
+    // Check for state changes and show notifications
+    userSessions.forEach((session) => {
+      const prevState = prevStatesRef.current.get(session.name);
+      if (prevState && prevState !== session.state) {
+        addNotification({
+          message: `${session.template}: ${prevState} → ${session.state}`,
+          severity: session.state === 'running' ? 'success' : session.state === 'hibernated' ? 'warning' : 'error',
+          priority: session.state === 'terminated' ? 'high' : 'medium',
+          title: 'Session Status Changed',
+        });
+      }
+      prevStatesRef.current.set(session.name, session.state);
+    });
+
     setSessions(userSessions);
   });
+
+  // Enhanced WebSocket with connection quality and manual reconnect
+  const sessionsWs = useEnhancedWebSocket(baseSessionsWs);
 
   const handleStateChange = (id: string, state: 'running' | 'hibernated') => {
     updateSessionState.mutate({ id, state });
@@ -162,46 +190,42 @@ export default function Sessions() {
   }, [sessions, selectedTagFilter]);
 
   return (
-    <Layout>
-      <Box>
-        <QuotaAlert />
+    <WebSocketErrorBoundary>
+      <Layout>
+        <Box>
+          <QuotaAlert />
 
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            My Sessions
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
-            {allTags.length > 0 && (
-              <TextField
-                select
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              My Sessions
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              {allTags.length > 0 && (
+                <TextField
+                  select
+                  size="small"
+                  label="Filter by Tag"
+                  value={selectedTagFilter}
+                  onChange={(e) => setSelectedTagFilter(e.target.value)}
+                  sx={{ minWidth: 150 }}
+                >
+                  <MenuItem value="">All Sessions</MenuItem>
+                  {allTags.map(tag => (
+                    <MenuItem key={tag} value={tag}>
+                      {tag}
+                    </MenuItem>
+                  ))}
+                </TextField>
+              )}
+
+              {/* Enhanced WebSocket Connection Status */}
+              <EnhancedWebSocketStatus
+                {...sessionsWs}
                 size="small"
-                label="Filter by Tag"
-                value={selectedTagFilter}
-                onChange={(e) => setSelectedTagFilter(e.target.value)}
-                sx={{ minWidth: 150 }}
-              >
-                <MenuItem value="">All Sessions</MenuItem>
-                {allTags.map(tag => (
-                  <MenuItem key={tag} value={tag}>
-                    {tag}
-                  </MenuItem>
-                ))}
-              </TextField>
-            )}
-            <Chip
-              icon={sessionsWs.isConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
-              label={sessionsWs.isConnected ? 'Live Updates' : 'Reconnecting...'}
-              color={sessionsWs.isConnected ? 'success' : 'warning'}
-              size="small"
-              variant="outlined"
-            />
-            {sessionsWs.reconnectAttempts > 0 && (
-              <Typography variant="caption" color="text.secondary">
-                Attempt {sessionsWs.reconnectAttempts}
-              </Typography>
-            )}
+                showDetails={true}
+              />
+            </Box>
           </Box>
-        </Box>
 
         {filteredSessions.length === 0 && sessions.length > 0 ? (
           <Alert severity="info">
@@ -414,5 +438,6 @@ export default function Sessions() {
         )}
       </Box>
     </Layout>
+    </WebSocketErrorBoundary>
   );
 }

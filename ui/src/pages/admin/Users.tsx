@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useRef } from 'react';
 import {
   Box,
   Button,
@@ -37,6 +37,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api, type User } from '../../lib/api';
+import { useUserEvents } from '../../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 export default function Users() {
   const navigate = useNavigate();
@@ -51,6 +55,58 @@ export default function Users() {
   // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [userToDelete, setUserToDelete] = useState<User | null>(null);
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time user events via WebSocket with notifications
+  useUserEvents((data: any) => {
+    console.log('User event:', data);
+    setWsConnected(true);
+
+    // Show notifications for user events
+    if (data.event_type === 'user.created') {
+      addNotification({
+        message: `New user created: ${data.username}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'User Created',
+      });
+      // Refresh user list
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } else if (data.event_type === 'user.updated') {
+      addNotification({
+        message: `User ${data.username} has been updated`,
+        severity: 'info',
+        priority: 'low',
+        title: 'User Updated',
+      });
+      // Refresh user list
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } else if (data.event_type === 'user.deleted') {
+      addNotification({
+        message: `User ${data.username} has been deleted`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'User Deleted',
+      });
+      // Refresh user list
+      queryClient.invalidateQueries({ queryKey: ['users'] });
+    } else if (data.event_type === 'user.login') {
+      // Optional: notify about user logins
+      if (data.username) {
+        addNotification({
+          message: `User ${data.username} logged in`,
+          severity: 'success',
+          priority: 'low',
+          title: 'User Login',
+        });
+      }
+    }
+  });
 
   // Fetch users
   const { data: users = [], isLoading, refetch } = useQuery({
@@ -115,29 +171,38 @@ export default function Users() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <PersonIcon sx={{ fontSize: 40 }} />
-          <Typography variant="h4" component="h1">
-            User Management
-          </Typography>
+    <WebSocketErrorBoundary>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <PersonIcon sx={{ fontSize: 40 }} />
+            <Typography variant="h4" component="h1">
+              User Management
+            </Typography>
+
+            {/* Enhanced WebSocket Connection Status */}
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={0}
+              size="small"
+              showDetails={true}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Tooltip title="Refresh">
+              <IconButton onClick={() => refetch()}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/admin/users/create')}
+            >
+              Create User
+            </Button>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Tooltip title="Refresh">
-            <IconButton onClick={() => refetch()}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/admin/users/create')}
-          >
-            Create User
-          </Button>
-        </Box>
-      </Box>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -318,5 +383,6 @@ export default function Users() {
         </DialogActions>
       </Dialog>
     </Container>
+    </WebSocketErrorBoundary>
   );
 }

@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import {
   Box,
   Typography,
@@ -30,6 +30,10 @@ import {
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
 import { useMetricsWebSocket } from '../../hooks/useWebSocket';
+import { useEnhancedWebSocket } from '../../hooks/useWebSocketEnhancements';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 interface ClusterMetrics {
   nodes: {
@@ -80,12 +84,70 @@ export default function AdminDashboard() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
 
-  // Real-time metrics updates
-  useMetricsWebSocket((updatedMetrics) => {
+  // Track previous metrics for critical change notifications
+  const prevMetricsRef = useRef<ClusterMetrics | null>(null);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time metrics updates with critical change notifications
+  const baseMetricsWs = useMetricsWebSocket((updatedMetrics) => {
     if (updatedMetrics.cluster) {
-      setMetrics(updatedMetrics.cluster);
+      const newMetrics = updatedMetrics.cluster;
+
+      // Check for critical changes
+      if (prevMetricsRef.current) {
+        const prev = prevMetricsRef.current;
+
+        // Node health changes
+        if (newMetrics.nodes.ready < prev.nodes.ready) {
+          addNotification({
+            message: `Cluster nodes decreased: ${prev.nodes.ready} → ${newMetrics.nodes.ready} ready`,
+            severity: 'error',
+            priority: 'critical',
+            title: 'Node Health Alert',
+            duration: null, // Don't auto-dismiss critical alerts
+          });
+        }
+
+        // CPU critical threshold
+        if (newMetrics.resources.cpu.percent > 90 && prev.resources.cpu.percent <= 90) {
+          addNotification({
+            message: `CPU utilization critical: ${newMetrics.resources.cpu.percent.toFixed(1)}%`,
+            severity: 'error',
+            priority: 'high',
+            title: 'Resource Alert',
+          });
+        }
+
+        // Memory critical threshold
+        if (newMetrics.resources.memory.percent > 90 && prev.resources.memory.percent <= 90) {
+          addNotification({
+            message: `Memory utilization critical: ${newMetrics.resources.memory.percent.toFixed(1)}%`,
+            severity: 'error',
+            priority: 'high',
+            title: 'Resource Alert',
+          });
+        }
+
+        // Pod capacity warning
+        if (newMetrics.resources.pods.percent > 90 && prev.resources.pods.percent <= 90) {
+          addNotification({
+            message: `Pod capacity critical: ${newMetrics.resources.pods.percent.toFixed(1)}%`,
+            severity: 'warning',
+            priority: 'high',
+            title: 'Capacity Alert',
+          });
+        }
+      }
+
+      prevMetricsRef.current = newMetrics;
+      setMetrics(newMetrics);
     }
   });
+
+  // Enhanced WebSocket with connection quality and manual reconnect
+  const metricsWs = useEnhancedWebSocket(baseMetricsWs);
 
   useEffect(() => {
     loadDashboardData();
@@ -158,19 +220,29 @@ export default function AdminDashboard() {
   }
 
   return (
-    <Layout>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Admin Dashboard
-          </Typography>
-          <Chip
-            icon={health.icon}
-            label={`Cluster Status: ${health.status}`}
-            color={health.color as any}
-            sx={{ fontWeight: 600 }}
-          />
-        </Box>
+    <WebSocketErrorBoundary>
+      <Layout>
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Admin Dashboard
+            </Typography>
+            <Box sx={{ display: 'flex', gap: 2, alignItems: 'center' }}>
+              <Chip
+                icon={health.icon}
+                label={`Cluster Status: ${health.status}`}
+                color={health.color as any}
+                sx={{ fontWeight: 600 }}
+              />
+
+              {/* Enhanced WebSocket Connection Status */}
+              <EnhancedWebSocketStatus
+                {...metricsWs}
+                size="small"
+                showDetails={true}
+              />
+            </Box>
+          </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -466,5 +538,6 @@ export default function AdminDashboard() {
         </Paper>
       </Box>
     </Layout>
+    </WebSocketErrorBoundary>
   );
 }

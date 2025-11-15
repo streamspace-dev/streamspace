@@ -35,6 +35,10 @@ import {
 import Layout from '../../components/Layout';
 import { api, type InstalledPlugin } from '../../lib/api';
 import { toast } from '../../lib/toast';
+import { usePluginEvents } from '../../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 const pluginTypeColors: Record<string, string> = {
   extension: '#4CAF50',
@@ -51,6 +55,73 @@ export default function AdminPlugins() {
   const [detailDialogOpen, setDetailDialogOpen] = useState(false);
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [configJson, setConfigJson] = useState('');
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time plugin events via WebSocket with notifications
+  usePluginEvents((data: any) => {
+    console.log('Plugin event:', data);
+    setWsConnected(true);
+
+    // Show notifications for plugin events
+    if (data.event_type === 'plugin.installed') {
+      addNotification({
+        message: `Plugin installed: ${data.plugin_name} v${data.version}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'Plugin Installed',
+      });
+      // Refresh plugin list
+      loadPlugins();
+    } else if (data.event_type === 'plugin.uninstalled') {
+      addNotification({
+        message: `Plugin uninstalled: ${data.plugin_name}`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Plugin Uninstalled',
+      });
+      // Refresh plugin list
+      loadPlugins();
+    } else if (data.event_type === 'plugin.enabled') {
+      addNotification({
+        message: `Plugin enabled: ${data.plugin_name}`,
+        severity: 'success',
+        priority: 'low',
+        title: 'Plugin Enabled',
+      });
+      // Refresh plugin list
+      loadPlugins();
+    } else if (data.event_type === 'plugin.disabled') {
+      addNotification({
+        message: `Plugin disabled: ${data.plugin_name}`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Plugin Disabled',
+      });
+      // Refresh plugin list
+      loadPlugins();
+    } else if (data.event_type === 'plugin.updated') {
+      addNotification({
+        message: `Plugin updated: ${data.plugin_name} to v${data.new_version}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Plugin Updated',
+      });
+      // Refresh plugin list
+      loadPlugins();
+    } else if (data.event_type === 'plugin.error') {
+      addNotification({
+        message: `Plugin error: ${data.plugin_name} - ${data.error_message}`,
+        severity: 'error',
+        priority: 'high',
+        title: 'Plugin Error',
+      });
+    }
+  });
 
   useEffect(() => {
     loadPlugins();
@@ -140,25 +211,36 @@ export default function AdminPlugins() {
   };
 
   return (
-    <Layout>
-      <Box>
-        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
-          <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Plugin Management
-            </Typography>
-            <Typography variant="body2" color="text.secondary">
-              Manage system-wide plugin installations
-            </Typography>
+    <WebSocketErrorBoundary>
+      <Layout>
+        <Box>
+          <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+            <Box>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+                <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                  Plugin Management
+                </Typography>
+
+                {/* Enhanced WebSocket Connection Status */}
+                <EnhancedWebSocketStatus
+                  isConnected={wsConnected}
+                  reconnectAttempts={0}
+                  size="small"
+                  showDetails={true}
+                />
+              </Box>
+              <Typography variant="body2" color="text.secondary">
+                Manage system-wide plugin installations
+              </Typography>
+            </Box>
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={loadPlugins}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
           </Box>
-          <Button
-            startIcon={<RefreshIcon />}
-            onClick={loadPlugins}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
-        </Box>
 
         {/* Stats Cards */}
         <Grid container spacing={2} mb={3}>
@@ -414,5 +496,6 @@ export default function AdminPlugins() {
         </Dialog>
       </Box>
     </Layout>
+    </WebSocketErrorBoundary>
   );
 }

@@ -265,3 +265,19 @@ export function useScalingEvents(handler: (data: any) => void) {
 export function useComplianceViolationEvents(handler: (data: any) => void) {
   useWebSocketEvent('compliance.violation', handler);
 }
+
+export function useUserEvents(handler: (data: any) => void) {
+  useWebSocketEvent('user.event', handler);
+}
+
+export function useGroupEvents(handler: (data: any) => void) {
+  useWebSocketEvent('group.event', handler);
+}
+
+export function useQuotaEvents(handler: (data: any) => void) {
+  useWebSocketEvent('quota.event', handler);
+}
+
+export function usePluginEvents(handler: (data: any) => void) {
+  useWebSocketEvent('plugin.event', handler);
+}

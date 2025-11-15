@@ -30,6 +30,10 @@ import {
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
 import { api, UserQuota, SetQuotaRequest } from '../../lib/api';
+import { useQuotaEvents } from '../../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 export default function AdminQuotas() {
   const [quotas, setQuotas] = useState<UserQuota[]>([]);
@@ -38,6 +42,62 @@ export default function AdminQuotas() {
   const [editDialogOpen, setEditDialogOpen] = useState(false);
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [selectedQuota, setSelectedQuota] = useState<UserQuota | null>(null);
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time quota events via WebSocket with notifications
+  useQuotaEvents((data: any) => {
+    console.log('Quota event:', data);
+    setWsConnected(true);
+
+    // Show notifications for quota events
+    if (data.event_type === 'quota.created') {
+      addNotification({
+        message: `Quota created for user: ${data.username}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Quota Created',
+      });
+      // Refresh quota list
+      loadQuotas();
+    } else if (data.event_type === 'quota.updated') {
+      addNotification({
+        message: `Quota updated for user ${data.username}`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Quota Updated',
+      });
+      // Refresh quota list
+      loadQuotas();
+    } else if (data.event_type === 'quota.deleted') {
+      addNotification({
+        message: `Quota deleted for user ${data.username}`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Quota Deleted',
+      });
+      // Refresh quota list
+      loadQuotas();
+    } else if (data.event_type === 'quota.exceeded') {
+      addNotification({
+        message: `User ${data.username} has exceeded ${data.resource_type} quota`,
+        severity: 'warning',
+        priority: 'high',
+        title: 'Quota Exceeded',
+      });
+    } else if (data.event_type === 'quota.warning') {
+      addNotification({
+        message: `User ${data.username} is approaching ${data.resource_type} quota limit (${data.percentage}%)`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Quota Warning',
+      });
+    }
+  });
 
   // Form state
   const [username, setUsername] = useState('');
@@ -153,21 +213,32 @@ export default function AdminQuotas() {
   }
 
   return (
-    <Layout>
-      <Box>
-        <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            User Quotas
-          </Typography>
-          <Box sx={{ display: 'flex', gap: 2 }}>
-            <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadQuotas}>
-              Refresh
-            </Button>
-            <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>
-              Add Quota
-            </Button>
+    <WebSocketErrorBoundary>
+      <Layout>
+        <Box>
+          <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                User Quotas
+              </Typography>
+
+              {/* Enhanced WebSocket Connection Status */}
+              <EnhancedWebSocketStatus
+                isConnected={wsConnected}
+                reconnectAttempts={0}
+                size="small"
+                showDetails={true}
+              />
+            </Box>
+            <Box sx={{ display: 'flex', gap: 2 }}>
+              <Button variant="outlined" startIcon={<RefreshIcon />} onClick={loadQuotas}>
+                Refresh
+              </Button>
+              <Button variant="contained" startIcon={<AddIcon />} onClick={() => handleOpenEdit()}>
+                Add Quota
+              </Button>
+            </Box>
           </Box>
-        </Box>
 
         {error && (
           <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
@@ -393,5 +464,6 @@ export default function AdminQuotas() {
         </Dialog>
       </Box>
     </Layout>
+    </WebSocketErrorBoundary>
   );
 }

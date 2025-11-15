@@ -37,6 +37,10 @@ import {
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNavigate } from 'react-router-dom';
 import { api, type Group } from '../../lib/api';
+import { useGroupEvents } from '../../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -49,6 +53,62 @@ export default function Groups() {
   // Delete confirmation dialog
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
   const [groupToDelete, setGroupToDelete] = useState<Group | null>(null);
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time group events via WebSocket with notifications
+  useGroupEvents((data: any) => {
+    console.log('Group event:', data);
+    setWsConnected(true);
+
+    // Show notifications for group events
+    if (data.event_type === 'group.created') {
+      addNotification({
+        message: `New group created: ${data.group_name}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Group Created',
+      });
+      // Refresh group list
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    } else if (data.event_type === 'group.updated') {
+      addNotification({
+        message: `Group ${data.group_name} has been updated`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Group Updated',
+      });
+      // Refresh group list
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    } else if (data.event_type === 'group.deleted') {
+      addNotification({
+        message: `Group ${data.group_name} has been deleted`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Group Deleted',
+      });
+      // Refresh group list
+      queryClient.invalidateQueries({ queryKey: ['groups'] });
+    } else if (data.event_type === 'group.member_added') {
+      addNotification({
+        message: `Member added to group ${data.group_name}`,
+        severity: 'success',
+        priority: 'low',
+        title: 'Member Added',
+      });
+    } else if (data.event_type === 'group.member_removed') {
+      addNotification({
+        message: `Member removed from group ${data.group_name}`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Member Removed',
+      });
+    }
+  });
 
   // Fetch groups
   const { data: groups = [], isLoading, refetch } = useQuery({
@@ -100,29 +160,38 @@ export default function Groups() {
   };
 
   return (
-    <Container maxWidth="xl" sx={{ py: 4 }}>
-      <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
-        <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
-          <GroupsIcon sx={{ fontSize: 40 }} />
-          <Typography variant="h4" component="h1">
-            Group Management
-          </Typography>
+    <WebSocketErrorBoundary>
+      <Container maxWidth="xl" sx={{ py: 4 }}>
+        <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <GroupsIcon sx={{ fontSize: 40 }} />
+            <Typography variant="h4" component="h1">
+              Group Management
+            </Typography>
+
+            {/* Enhanced WebSocket Connection Status */}
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={0}
+              size="small"
+              showDetails={true}
+            />
+          </Box>
+          <Box sx={{ display: 'flex', gap: 2 }}>
+            <Tooltip title="Refresh">
+              <IconButton onClick={() => refetch()}>
+                <RefreshIcon />
+              </IconButton>
+            </Tooltip>
+            <Button
+              variant="contained"
+              startIcon={<AddIcon />}
+              onClick={() => navigate('/admin/groups/create')}
+            >
+              Create Group
+            </Button>
+          </Box>
         </Box>
-        <Box sx={{ display: 'flex', gap: 2 }}>
-          <Tooltip title="Refresh">
-            <IconButton onClick={() => refetch()}>
-              <RefreshIcon />
-            </IconButton>
-          </Tooltip>
-          <Button
-            variant="contained"
-            startIcon={<AddIcon />}
-            onClick={() => navigate('/admin/groups/create')}
-          >
-            Create Group
-          </Button>
-        </Box>
-      </Box>
 
       <Card sx={{ mb: 3 }}>
         <CardContent>
@@ -272,5 +341,6 @@ export default function Groups() {
         </DialogActions>
       </Dialog>
     </Container>
+    </WebSocketErrorBoundary>
   );
 }
