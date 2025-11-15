@@ -172,7 +172,7 @@ kubectl delete sa test-user -n streamspace
 ## Automated Security Scanning
 
 StreamSpace uses GitHub Actions for automated security scanning. The workflow runs on:
-- Every push to main/master
+- Every push to main
 - Every pull request
 - Daily at 2 AM UTC
 - Manual trigger via workflow_dispatch

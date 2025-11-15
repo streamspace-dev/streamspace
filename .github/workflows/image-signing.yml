@@ -5,14 +5,14 @@ name: Sign Container Images
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     paths:
       - 'api/**'
       - 'controller/**'
       - 'ui/**'
       - '.github/workflows/image-signing.yml'
   pull_request:
-    branches: [main, master]
+    branches: [main]
   release:
     types: [published]
   workflow_dispatch:
