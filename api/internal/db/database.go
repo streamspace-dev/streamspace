@@ -1596,6 +1596,81 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_device_posture_device_id ON device_posture_checks(device_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_security_alerts_user_id ON security_alerts(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_security_alerts_acknowledged ON security_alerts(acknowledged) WHERE acknowledged = false`,
+
+		// ========== Session Scheduling & Calendar Integration ==========
+
+		// Scheduled sessions
+		`CREATE TABLE IF NOT EXISTS scheduled_sessions (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			template_id VARCHAR(255) NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			timezone VARCHAR(100) DEFAULT 'UTC',
+			schedule JSONB NOT NULL,
+			resources JSONB,
+			auto_terminate BOOLEAN DEFAULT false,
+			terminate_after INT DEFAULT 480,
+			pre_warm BOOLEAN DEFAULT false,
+			pre_warm_minutes INT DEFAULT 5,
+			post_cleanup BOOLEAN DEFAULT true,
+			enabled BOOLEAN DEFAULT true,
+			next_run_at TIMESTAMP,
+			last_run_at TIMESTAMP,
+			last_session_id VARCHAR(255),
+			last_run_status VARCHAR(50),
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Calendar integrations
+		`CREATE TABLE IF NOT EXISTS calendar_integrations (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			provider VARCHAR(50) NOT NULL,
+			account_email VARCHAR(255) NOT NULL,
+			access_token TEXT,
+			refresh_token TEXT,
+			token_expiry TIMESTAMP,
+			calendar_id VARCHAR(255),
+			enabled BOOLEAN DEFAULT true,
+			sync_enabled BOOLEAN DEFAULT true,
+			auto_create_events BOOLEAN DEFAULT true,
+			auto_update_events BOOLEAN DEFAULT true,
+			last_synced_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, provider, account_email)
+		)`,
+
+		// Calendar events
+		`CREATE TABLE IF NOT EXISTS calendar_events (
+			id SERIAL PRIMARY KEY,
+			schedule_id INT REFERENCES scheduled_sessions(id) ON DELETE CASCADE,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			provider VARCHAR(50) NOT NULL,
+			external_event_id VARCHAR(255),
+			title VARCHAR(255) NOT NULL,
+			description TEXT,
+			start_time TIMESTAMP NOT NULL,
+			end_time TIMESTAMP NOT NULL,
+			location TEXT,
+			attendees TEXT[],
+			status VARCHAR(50) DEFAULT 'pending',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(schedule_id, provider)
+		)`,
+
+		// Create indexes for scheduling tables
+		`CREATE INDEX IF NOT EXISTS idx_scheduled_sessions_user_id ON scheduled_sessions(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduled_sessions_enabled ON scheduled_sessions(enabled) WHERE enabled = true`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduled_sessions_next_run ON scheduled_sessions(next_run_at) WHERE next_run_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_scheduled_sessions_template_id ON scheduled_sessions(template_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_integrations_user_id ON calendar_integrations(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_integrations_provider ON calendar_integrations(provider)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_schedule_id ON calendar_events(schedule_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_user_id ON calendar_events(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_calendar_events_start_time ON calendar_events(start_time)`,
 	}
 
 	// Execute migrations

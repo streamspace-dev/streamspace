@@ -586,6 +586,27 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			security.GET("/alerts", h.GetSecurityAlerts)
 		}
 
+		// Session Scheduling & Calendar Integration
+		scheduling := protected.Group("/scheduling")
+		{
+			// Scheduled sessions
+			scheduling.GET("/sessions", h.ListScheduledSessions)
+			scheduling.POST("/sessions", h.CreateScheduledSession)
+			scheduling.GET("/sessions/:scheduleId", h.GetScheduledSession)
+			scheduling.PATCH("/sessions/:scheduleId", h.UpdateScheduledSession)
+			scheduling.DELETE("/sessions/:scheduleId", h.DeleteScheduledSession)
+			scheduling.POST("/sessions/:scheduleId/enable", h.EnableScheduledSession)
+			scheduling.POST("/sessions/:scheduleId/disable", h.DisableScheduledSession)
+
+			// Calendar integrations
+			scheduling.POST("/calendar/connect", h.ConnectCalendar)
+			scheduling.GET("/calendar/oauth/callback", h.CalendarOAuthCallback)
+			scheduling.GET("/calendar/integrations", h.ListCalendarIntegrations)
+			scheduling.DELETE("/calendar/integrations/:integrationId", h.DisconnectCalendar)
+			scheduling.POST("/calendar/integrations/:integrationId/sync", h.SyncCalendar)
+			scheduling.GET("/calendar/export.ics", h.ExportICalendar)
+		}
+
 			// Templates (read: all users, write: operators/admins)
 			templates := protected.Group("/templates")
 			{
