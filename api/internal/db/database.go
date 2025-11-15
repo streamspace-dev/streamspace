@@ -1000,6 +1000,41 @@ func (d *Database) Migrate() error {
 		// Create indexes for quota policies
 		`CREATE INDEX IF NOT EXISTS idx_quota_policies_priority ON quota_policies(priority DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_quota_policies_enabled ON quota_policies(enabled) WHERE enabled = true`,
+
+		// ========== Cost Management & Billing ==========
+
+		// Invoices table (billing invoices)
+		`CREATE TABLE IF NOT EXISTS invoices (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			invoice_number VARCHAR(100) NOT NULL UNIQUE,
+			period_start TIMESTAMP NOT NULL,
+			period_end TIMESTAMP NOT NULL,
+			amount DECIMAL(10,2) NOT NULL,
+			status VARCHAR(50) DEFAULT 'pending',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			paid_at TIMESTAMP
+		)`,
+
+		// Create indexes for invoices
+		`CREATE INDEX IF NOT EXISTS idx_invoices_user_id ON invoices(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_status ON invoices(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_created_at ON invoices(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_invoices_invoice_number ON invoices(invoice_number)`,
+
+		// Payment methods table (stored payment methods)
+		`CREATE TABLE IF NOT EXISTS payment_methods (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			type VARCHAR(50) NOT NULL,
+			last4 VARCHAR(4) NOT NULL,
+			is_default BOOLEAN DEFAULT false,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for payment methods
+		`CREATE INDEX IF NOT EXISTS idx_payment_methods_user_id ON payment_methods(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_payment_methods_is_default ON payment_methods(is_default) WHERE is_default = true`,
 	}
 
 	// Execute migrations
