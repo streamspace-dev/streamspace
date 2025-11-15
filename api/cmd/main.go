@@ -563,6 +563,29 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			integrations.GET("/events", h.GetAvailableEvents)
 		}
 
+		// Security - MFA, IP Whitelisting, Zero Trust
+		security := protected.Group("/security")
+		{
+			// Multi-Factor Authentication (all users)
+			security.POST("/mfa/setup", h.SetupMFA)
+			security.POST("/mfa/:mfaId/verify-setup", h.VerifyMFASetup)
+			security.POST("/mfa/verify", h.VerifyMFA)
+			security.GET("/mfa/methods", h.ListMFAMethods)
+			security.DELETE("/mfa/:mfaId", h.DisableMFA)
+			security.POST("/mfa/backup-codes", h.GenerateBackupCodes)
+
+			// IP Whitelisting (users can manage their own, admins can manage all)
+			security.POST("/ip-whitelist", h.CreateIPWhitelist)
+			security.GET("/ip-whitelist", h.ListIPWhitelist)
+			security.DELETE("/ip-whitelist/:entryId", h.DeleteIPWhitelist)
+			security.GET("/ip-whitelist/check", h.CheckIPAccess)
+
+			// Zero Trust / Session Verification
+			security.POST("/sessions/:sessionId/verify", h.VerifySession)
+			security.POST("/device-posture", h.CheckDevicePosture)
+			security.GET("/alerts", h.GetSecurityAlerts)
+		}
+
 			// Templates (read: all users, write: operators/admins)
 			templates := protected.Group("/templates")
 			{

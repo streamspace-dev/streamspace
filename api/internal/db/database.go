@@ -1488,6 +1488,114 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_integrations_type ON integrations(type)`,
 		`CREATE INDEX IF NOT EXISTS idx_integrations_enabled ON integrations(enabled) WHERE enabled = true`,
+
+		// ========== Advanced Security ==========
+
+		// MFA methods (TOTP, SMS, Email)
+		`CREATE TABLE IF NOT EXISTS mfa_methods (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			type VARCHAR(50) NOT NULL,
+			secret VARCHAR(255),
+			phone_number VARCHAR(50),
+			email VARCHAR(255),
+			enabled BOOLEAN DEFAULT false,
+			verified BOOLEAN DEFAULT false,
+			is_primary BOOLEAN DEFAULT false,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			last_used_at TIMESTAMP,
+			UNIQUE(user_id, type)
+		)`,
+
+		// Backup codes for MFA recovery
+		`CREATE TABLE IF NOT EXISTS backup_codes (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			code VARCHAR(255) NOT NULL,
+			used BOOLEAN DEFAULT false,
+			used_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Trusted devices for MFA bypass
+		`CREATE TABLE IF NOT EXISTS trusted_devices (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_id VARCHAR(255) NOT NULL,
+			device_name VARCHAR(255),
+			user_agent TEXT,
+			ip_address VARCHAR(50),
+			trusted_until TIMESTAMP NOT NULL,
+			last_seen_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(user_id, device_id)
+		)`,
+
+		// IP whitelist for access control
+		`CREATE TABLE IF NOT EXISTS ip_whitelist (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			ip_address VARCHAR(100) NOT NULL,
+			description TEXT,
+			enabled BOOLEAN DEFAULT true,
+			created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			expires_at TIMESTAMP
+		)`,
+
+		// Session verifications for Zero Trust
+		`CREATE TABLE IF NOT EXISTS session_verifications (
+			id SERIAL PRIMARY KEY,
+			session_id VARCHAR(255) NOT NULL,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			device_id VARCHAR(255) NOT NULL,
+			ip_address VARCHAR(50),
+			location VARCHAR(255),
+			risk_score INT DEFAULT 0,
+			risk_level VARCHAR(50) DEFAULT 'low',
+			verified BOOLEAN DEFAULT false,
+			last_verified_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Device posture checks
+		`CREATE TABLE IF NOT EXISTS device_posture_checks (
+			id SERIAL PRIMARY KEY,
+			device_id VARCHAR(255) NOT NULL,
+			compliant BOOLEAN DEFAULT false,
+			issues TEXT,
+			checked_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Security alerts
+		`CREATE TABLE IF NOT EXISTS security_alerts (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+			type VARCHAR(100) NOT NULL,
+			severity VARCHAR(50) DEFAULT 'medium',
+			message TEXT NOT NULL,
+			details JSONB,
+			acknowledged BOOLEAN DEFAULT false,
+			acknowledged_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for security tables
+		`CREATE INDEX IF NOT EXISTS idx_mfa_methods_user_id ON mfa_methods(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_mfa_methods_enabled ON mfa_methods(enabled) WHERE enabled = true`,
+		`CREATE INDEX IF NOT EXISTS idx_backup_codes_user_id ON backup_codes(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_backup_codes_code ON backup_codes(code) WHERE used = false`,
+		`CREATE INDEX IF NOT EXISTS idx_trusted_devices_user_id ON trusted_devices(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_trusted_devices_device_id ON trusted_devices(device_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_trusted_devices_expiry ON trusted_devices(trusted_until)`,
+		`CREATE INDEX IF NOT EXISTS idx_ip_whitelist_user_id ON ip_whitelist(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_ip_whitelist_enabled ON ip_whitelist(enabled) WHERE enabled = true`,
+		`CREATE INDEX IF NOT EXISTS idx_session_verifications_session_id ON session_verifications(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_verifications_user_id ON session_verifications(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_verifications_risk_level ON session_verifications(risk_level)`,
+		`CREATE INDEX IF NOT EXISTS idx_device_posture_device_id ON device_posture_checks(device_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_security_alerts_user_id ON security_alerts(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_security_alerts_acknowledged ON security_alerts(acknowledged) WHERE acknowledged = false`,
 	}
 
 	// Execute migrations
