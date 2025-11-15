@@ -872,6 +872,71 @@ func (d *Database) Migrate() error {
 
 		// Add snapshot_config column to sessions table
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS snapshot_config JSONB DEFAULT '{}'`,
+
+		// ========== Session Templates & Presets ==========
+
+		// User session templates (custom reusable session configurations)
+		`CREATE TABLE IF NOT EXISTS user_session_templates (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			team_id VARCHAR(255) REFERENCES groups(id) ON DELETE SET NULL,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			icon VARCHAR(500),
+			category VARCHAR(100),
+			tags JSONB DEFAULT '[]',
+			visibility VARCHAR(50) DEFAULT 'private',
+			base_template VARCHAR(255) NOT NULL,
+			configuration JSONB DEFAULT '{}',
+			resources JSONB DEFAULT '{}',
+			environment JSONB DEFAULT '{}',
+			is_default BOOLEAN DEFAULT false,
+			usage_count INT DEFAULT 0,
+			version VARCHAR(50) DEFAULT '1.0.0',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for user session templates
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_user_id ON user_session_templates(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_team_id ON user_session_templates(team_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_visibility ON user_session_templates(visibility)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_category ON user_session_templates(category)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_usage_count ON user_session_templates(usage_count DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_is_default ON user_session_templates(is_default) WHERE is_default = true`,
+
+		// Composite index for user's default templates
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_user_default ON user_session_templates(user_id, is_default) WHERE is_default = true`,
+
+		// Composite index for public templates sorted by usage
+		`CREATE INDEX IF NOT EXISTS idx_user_session_templates_public_usage ON user_session_templates(visibility, usage_count DESC) WHERE visibility = 'public'`,
+
+		// ========== Batch Operations ==========
+
+		// Batch operations table (tracks bulk operation jobs)
+		`CREATE TABLE IF NOT EXISTS batch_operations (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			operation_type VARCHAR(100) NOT NULL,
+			resource_type VARCHAR(100) NOT NULL,
+			status VARCHAR(50) DEFAULT 'pending',
+			total_items INT DEFAULT 0,
+			processed_items INT DEFAULT 0,
+			success_count INT DEFAULT 0,
+			failure_count INT DEFAULT 0,
+			errors JSONB DEFAULT '[]',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			completed_at TIMESTAMP
+		)`,
+
+		// Create indexes for batch operations
+		`CREATE INDEX IF NOT EXISTS idx_batch_operations_user_id ON batch_operations(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_batch_operations_status ON batch_operations(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_batch_operations_created_at ON batch_operations(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_batch_operations_operation_type ON batch_operations(operation_type)`,
+
+		// Composite index for user's active operations
+		`CREATE INDEX IF NOT EXISTS idx_batch_operations_user_status ON batch_operations(user_id, status) WHERE status IN ('pending', 'processing')`,
 	}
 
 	// Execute migrations
