@@ -306,9 +306,9 @@ func (h *Handler) VerifyMFASetup(c *gin.Context) {
 	}
 
 	// Generate backup codes within transaction
-	backupCodes := make([]string, 10)
-	for i := 0; i < 10; i++ {
-		code := generateRandomCode(8)
+	backupCodes := make([]string, BackupCodesCount)
+	for i := 0; i < BackupCodesCount; i++ {
+		code := generateRandomCode(BackupCodeLength)
 		backupCodes[i] = code
 
 		// Hash and store
@@ -367,10 +367,10 @@ func (h *Handler) VerifyMFA(c *gin.Context) {
 	}
 
 	// SECURITY: Rate limiting to prevent brute force attacks
-	// Max 5 attempts per minute per user
+	// Max MFAMaxAttemptsPerMinute attempts per minute per user
 	rateLimitKey := fmt.Sprintf("mfa_verify:%s", userID)
-	if !middleware.GetRateLimiter().CheckLimit(rateLimitKey, 5, 1*time.Minute) {
-		attempts := middleware.GetRateLimiter().GetAttempts(rateLimitKey, 1*time.Minute)
+	if !middleware.GetRateLimiter().CheckLimit(rateLimitKey, MFAMaxAttemptsPerMinute, MFARateLimitWindow) {
+		attempts := middleware.GetRateLimiter().GetAttempts(rateLimitKey, MFARateLimitWindow)
 		c.JSON(http.StatusTooManyRequests, gin.H{
 			"error":       "Too many verification attempts",
 			"message":     "Please wait 1 minute before trying again",
@@ -509,7 +509,7 @@ func (h *Handler) GenerateBackupCodes(c *gin.Context) {
 	h.DB.Exec(`DELETE FROM backup_codes WHERE user_id = $1`, userID)
 
 	// Generate new codes
-	codes := h.generateBackupCodes(userID, 10)
+	codes := h.generateBackupCodes(userID, BackupCodesCount)
 
 	c.JSON(http.StatusOK, gin.H{
 		"backup_codes": codes,
@@ -522,7 +522,7 @@ func (h *Handler) generateBackupCodes(userID string, count int) []string {
 	codes := make([]string, count)
 
 	for i := 0; i < count; i++ {
-		code := generateRandomCode(8)
+		code := generateRandomCode(BackupCodeLength)
 		codes[i] = code
 
 		// Hash and store

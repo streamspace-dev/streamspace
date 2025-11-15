@@ -94,7 +94,7 @@ func (rl *RateLimiter) GetAttempts(key string, window time.Duration) int {
 
 // cleanup periodically removes old entries to prevent memory leaks
 func (rl *RateLimiter) cleanup() {
-	ticker := time.NewTicker(5 * time.Minute)
+	ticker := time.NewTicker(CleanupInterval)
 	defer ticker.Stop()
 
 	for range ticker.C {
@@ -102,10 +102,10 @@ func (rl *RateLimiter) cleanup() {
 		now := time.Now()
 
 		for key, attempts := range rl.attempts {
-			// Remove entries older than 10 minutes
+			// Remove entries older than cleanup threshold
 			validAttempts := []time.Time{}
 			for _, t := range attempts {
-				if now.Sub(t) < 10*time.Minute {
+				if now.Sub(t) < CleanupThreshold {
 					validAttempts = append(validAttempts, t)
 				}
 			}

@@ -42,8 +42,8 @@ type WebSocketHub struct {
 
 var (
 	upgrader = websocket.Upgrader{
-		ReadBufferSize:  1024,
-		WriteBufferSize: 1024,
+		ReadBufferSize:  WebSocketReadBufferSize,
+		WriteBufferSize: WebSocketWriteBufferSize,
 		CheckOrigin: func(r *http.Request) bool {
 			origin := r.Header.Get("Origin")
 
@@ -87,7 +87,7 @@ func GetWebSocketHub() *WebSocketHub {
 			Clients:    make(map[string]*WebSocketClient),
 			Register:   make(chan *WebSocketClient),
 			Unregister: make(chan *WebSocketClient),
-			Broadcast:  make(chan WebSocketMessage, 256),
+			Broadcast:  make(chan WebSocketMessage, WebSocketBufferSize),
 		}
 		go hub.Run()
 	})
@@ -187,7 +187,7 @@ func HandleEnterpriseWebSocket(c *gin.Context) {
 		ID:     fmt.Sprintf("%s-%d", userID, time.Now().UnixNano()),
 		UserID: userID.(string),
 		Conn:   conn,
-		Send:   make(chan WebSocketMessage, 256),
+		Send:   make(chan WebSocketMessage, WebSocketBufferSize),
 		Hub:    GetWebSocketHub(),
 	}
 
@@ -211,7 +211,7 @@ func HandleEnterpriseWebSocket(c *gin.Context) {
 
 // writePump pumps messages from the hub to the websocket connection
 func (c *WebSocketClient) writePump() {
-	ticker := time.NewTicker(54 * time.Second)
+	ticker := time.NewTicker(WebSocketPingInterval)
 	defer func() {
 		ticker.Stop()
 		c.Conn.Close()
@@ -220,7 +220,7 @@ func (c *WebSocketClient) writePump() {
 	for {
 		select {
 		case message, ok := <-c.Send:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
 			if !ok {
 				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
@@ -253,7 +253,7 @@ func (c *WebSocketClient) writePump() {
 			}
 
 		case <-ticker.C:
-			c.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
 			if err := c.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -268,9 +268,9 @@ func (c *WebSocketClient) readPump() {
 		c.Conn.Close()
 	}()
 
-	c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
 	c.Conn.SetPongHandler(func(string) error {
-		c.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
 		return nil
 	})
 

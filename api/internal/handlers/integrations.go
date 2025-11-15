@@ -241,9 +241,9 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 	// Set default retry policy
 	if webhook.RetryPolicy.MaxRetries == 0 {
 		webhook.RetryPolicy = WebhookRetryPolicy{
-			MaxRetries:        3,
-			RetryDelay:        60,
-			BackoffMultiplier: 2.0,
+			MaxRetries:        WebhookDefaultMaxRetries,
+			RetryDelay:        WebhookDefaultRetryDelay,
+			BackoffMultiplier: WebhookDefaultBackoffMultiplier,
 		}
 	}
 
@@ -330,7 +330,11 @@ func (h *Handler) ListWebhooks(c *gin.Context) {
 		if retryPolicy.Valid && retryPolicy.String != "" {
 			if err := json.Unmarshal([]byte(retryPolicy.String), &w.RetryPolicy); err != nil {
 				// Use default retry policy on unmarshal error
-				w.RetryPolicy = WebhookRetryPolicy{MaxRetries: 3, RetryDelay: 60, BackoffMultiplier: 2.0}
+				w.RetryPolicy = WebhookRetryPolicy{
+					MaxRetries:        WebhookDefaultMaxRetries,
+					RetryDelay:        WebhookDefaultRetryDelay,
+					BackoffMultiplier: WebhookDefaultBackoffMultiplier,
+				}
 			}
 		}
 		if filters.Valid && filters.String != "" {
@@ -854,7 +858,7 @@ func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int
 
 	// Send request with security restrictions
 	client := &http.Client{
-		Timeout: 10 * time.Second, // Reduced from 30s for security
+		Timeout: WebhookTimeout, // Reduced from 30s for security
 		// Disable redirects to prevent SSRF bypass via redirect chains
 		CheckRedirect: func(req *http.Request, via []*http.Request) error {
 			return http.ErrUseLastResponse
