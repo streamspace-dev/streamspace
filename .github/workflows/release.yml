@@ -93,10 +93,10 @@ jobs:
 
           ## Documentation
 
-          - [Installation Guide](https://github.com/${{ github.repository }}/blob/main/README.md)
-          - [Architecture Docs](https://github.com/${{ github.repository }}/blob/main/docs/ARCHITECTURE.md)
-          - [Controller Guide](https://github.com/${{ github.repository }}/blob/main/docs/CONTROLLER_GUIDE.md)
-          - [Helm Chart README](https://github.com/${{ github.repository }}/blob/main/chart/README.md)
+          - [Installation Guide](https://github.com/${{ github.repository }}/blob/master/README.md)
+          - [Architecture Docs](https://github.com/${{ github.repository }}/blob/master/docs/ARCHITECTURE.md)
+          - [Controller Guide](https://github.com/${{ github.repository }}/blob/master/docs/CONTROLLER_GUIDE.md)
+          - [Helm Chart README](https://github.com/${{ github.repository }}/blob/master/chart/README.md)
 
           ## Upgrade Instructions
 

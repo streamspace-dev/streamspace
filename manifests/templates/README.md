@@ -47,4 +47,4 @@ kubectl apply -f https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-t
 
 ## Adding Custom Templates
 
-To add your own templates, see the [Template Development Guide](https://github.com/JoshuaAFerguson/streamspace-templates/blob/main/CONTRIBUTING.md).
+To add your own templates, see the [Template Development Guide](https://github.com/JoshuaAFerguson/streamspace-templates/blob/master/CONTRIBUTING.md).
