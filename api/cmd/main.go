@@ -539,6 +539,30 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				collaboration.GET("/:collabId/stats", h.GetCollaborationStats)
 			}
 
+		// Integration Hub & Webhooks - Operator/Admin only
+		integrations := protected.Group("/integrations")
+		integrations.Use(operatorMiddleware)
+		{
+			// Webhooks
+			integrations.GET("/webhooks", h.ListWebhooks)
+			integrations.POST("/webhooks", h.CreateWebhook)
+			integrations.PATCH("/webhooks/:webhookId", h.UpdateWebhook)
+			integrations.DELETE("/webhooks/:webhookId", h.DeleteWebhook)
+			integrations.POST("/webhooks/:webhookId/test", h.TestWebhook)
+			integrations.GET("/webhooks/:webhookId/deliveries", h.GetWebhookDeliveries)
+			integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
+
+			// External Integrations
+			integrations.GET("/external", h.ListIntegrations)
+			integrations.POST("/external", h.CreateIntegration)
+			integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
+			integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
+			integrations.POST("/external/:integrationId/test", h.TestIntegration)
+
+			// Available events
+			integrations.GET("/events", h.GetAvailableEvents)
+		}
+
 			// Templates (read: all users, write: operators/admins)
 			templates := protected.Group("/templates")
 			{

@@ -1425,6 +1425,69 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_collaboration_chat_created_at ON collaboration_chat(created_at DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_collaboration_annotations_collab_id ON collaboration_annotations(collaboration_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_collaboration_annotations_expires_at ON collaboration_annotations(expires_at)`,
+
+		// ========== Integration Hub & Webhooks ==========
+
+		// Webhooks table
+		`CREATE TABLE IF NOT EXISTS webhooks (
+			id SERIAL PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			url TEXT NOT NULL,
+			secret VARCHAR(255),
+			events JSONB NOT NULL,
+			headers JSONB,
+			enabled BOOLEAN DEFAULT true,
+			retry_policy JSONB,
+			filters JSONB,
+			metadata JSONB,
+			created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Webhook deliveries table
+		`CREATE TABLE IF NOT EXISTS webhook_deliveries (
+			id SERIAL PRIMARY KEY,
+			webhook_id INT REFERENCES webhooks(id) ON DELETE CASCADE,
+			event VARCHAR(100) NOT NULL,
+			payload JSONB,
+			status VARCHAR(50) DEFAULT 'pending',
+			status_code INT,
+			response_body TEXT,
+			error_message TEXT,
+			attempts INT DEFAULT 0,
+			next_retry_at TIMESTAMP,
+			delivered_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Integrations table
+		`CREATE TABLE IF NOT EXISTS integrations (
+			id SERIAL PRIMARY KEY,
+			type VARCHAR(50) NOT NULL,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			config JSONB NOT NULL,
+			enabled BOOLEAN DEFAULT true,
+			events JSONB,
+			test_mode BOOLEAN DEFAULT false,
+			last_test_at TIMESTAMP,
+			last_success_at TIMESTAMP,
+			created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for integrations
+		`CREATE INDEX IF NOT EXISTS idx_webhooks_enabled ON webhooks(enabled) WHERE enabled = true`,
+		`CREATE INDEX IF NOT EXISTS idx_webhooks_created_by ON webhooks(created_by)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_webhook_id ON webhook_deliveries(webhook_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_status ON webhook_deliveries(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_next_retry ON webhook_deliveries(next_retry_at) WHERE next_retry_at IS NOT NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_webhook_deliveries_created_at ON webhook_deliveries(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_integrations_type ON integrations(type)`,
+		`CREATE INDEX IF NOT EXISTS idx_integrations_enabled ON integrations(enabled) WHERE enabled = true`,
 	}
 
 	// Execute migrations
