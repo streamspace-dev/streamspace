@@ -937,6 +937,33 @@ func (d *Database) Migrate() error {
 
 		// Composite index for user's active operations
 		`CREATE INDEX IF NOT EXISTS idx_batch_operations_user_status ON batch_operations(user_id, status) WHERE status IN ('pending', 'processing')`,
+
+		// ========== Advanced Monitoring & Metrics ==========
+
+		// Monitoring alerts table (tracks system alerts and incidents)
+		`CREATE TABLE IF NOT EXISTS monitoring_alerts (
+			id VARCHAR(255) PRIMARY KEY,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			severity VARCHAR(50) NOT NULL,
+			status VARCHAR(50) DEFAULT 'active',
+			condition VARCHAR(255) NOT NULL,
+			threshold FLOAT NOT NULL,
+			triggered_at TIMESTAMP,
+			acknowledged_at TIMESTAMP,
+			resolved_at TIMESTAMP,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for monitoring alerts
+		`CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_status ON monitoring_alerts(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_severity ON monitoring_alerts(severity)`,
+		`CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_triggered_at ON monitoring_alerts(triggered_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_created_at ON monitoring_alerts(created_at DESC)`,
+
+		// Composite index for active alerts by severity
+		`CREATE INDEX IF NOT EXISTS idx_monitoring_alerts_active_severity ON monitoring_alerts(status, severity) WHERE status IN ('active', 'triggered')`,
 	}
 
 	// Execute migrations

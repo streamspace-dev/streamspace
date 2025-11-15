@@ -259,6 +259,7 @@ func main() {
 	snapshotsHandler := handlers.NewSnapshotsHandler(database)
 	sessionTemplatesHandler := handlers.NewSessionTemplatesHandler(database)
 	batchHandler := handlers.NewBatchHandler(database)
+	monitoringHandler := handlers.NewMonitoringHandler(database)
 
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
@@ -274,7 +275,7 @@ func main() {
 	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, analyticsHandler, preferencesHandler, notificationsHandler, searchHandler, snapshotsHandler, sessionTemplatesHandler, batchHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, analyticsHandler, preferencesHandler, notificationsHandler, searchHandler, snapshotsHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -355,7 +356,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, analyticsHandler *handlers.AnalyticsHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, snapshotsHandler *handlers.SnapshotsHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, analyticsHandler *handlers.AnalyticsHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, snapshotsHandler *handlers.SnapshotsHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -585,6 +586,9 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 
 			// Batch operations for sessions - using dedicated handler (all authenticated users)
 			batchHandler.RegisterRoutes(protected)
+
+			// Advanced monitoring and metrics - using dedicated handler (operators/admins only)
+			monitoringHandler.RegisterRoutes(protected.Group("", operatorMiddleware))
 
 			// Metrics (operators/admins only)
 			protected.GET("/metrics", operatorMiddleware, h.GetMetrics)
