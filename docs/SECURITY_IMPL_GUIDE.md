@@ -569,7 +569,7 @@ name: SBOM Generation and Signing
 
 on:
   push:
-    branches: [main, master]
+    branches: [main]
     tags: ['v*']
   release:
     types: [published]

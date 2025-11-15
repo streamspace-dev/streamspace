@@ -23,16 +23,16 @@ Canonical: https://streamspace.local/.well-known/security.txt
 # We aim to respond within 48 hours and provide status updates within 7 days.
 #
 # For more information, see:
-# https://github.com/JoshuaAFerguson/streamspace/blob/master/SECURITY.md
+# https://github.com/JoshuaAFerguson/streamspace/blob/main/SECURITY.md
 
-Acknowledgments: https://github.com/JoshuaAFerguson/streamspace/blob/master/SECURITY.md#acknowledgments
+Acknowledgments: https://github.com/JoshuaAFerguson/streamspace/blob/main/SECURITY.md#acknowledgments
 
 # Encryption
 # Our PGP key for encrypted communications (optional - add when available)
 # Encryption: https://keys.openpgp.org/search?q=security@streamspace.io
 
 # Policy
-Policy: https://github.com/JoshuaAFerguson/streamspace/blob/master/SECURITY.md
+Policy: https://github.com/JoshuaAFerguson/streamspace/blob/main/SECURITY.md
 
 # Hiring
 # Interested in security work? Check our careers page
