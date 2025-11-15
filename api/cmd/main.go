@@ -865,6 +865,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		ws.GET("/sessions", h.SessionsWebSocket)
 		ws.GET("/cluster", operatorMiddleware, h.ClusterWebSocket)
 		ws.GET("/logs/:namespace/:pod", operatorMiddleware, h.LogsWebSocket)
+		ws.GET("/enterprise", handlers.HandleEnterpriseWebSocket) // Real-time enterprise features
 	}
 
 	// Real-time updates via WebSocket - using dedicated handler (all authenticated users)
