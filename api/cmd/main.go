@@ -249,6 +249,7 @@ func main() {
 	pluginHandler := handlers.NewPluginHandler(database)
 	auditLogHandler := handlers.NewAuditLogHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database, k8sClient)
+	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
@@ -264,7 +265,7 @@ func main() {
 	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -345,7 +346,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -504,6 +505,29 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				dashboard.GET("/users", operatorMiddleware, cache.CacheMiddleware(redisCache, 2*time.Minute), dashboardHandler.GetUserUsageStats)
 				dashboard.GET("/templates", operatorMiddleware, cache.CacheMiddleware(redisCache, 5*time.Minute), dashboardHandler.GetTemplateUsageStats)
 				dashboard.GET("/timeline", operatorMiddleware, cache.CacheMiddleware(redisCache, 5*time.Minute), dashboardHandler.GetActivityTimeline)
+			}
+
+			// Session activity recording and queries
+			sessionActivity := protected.Group("/sessions/:sessionId/activity")
+			{
+				// Log new activity event (for internal API use)
+				sessionActivity.POST("/log", sessionActivityHandler.LogActivityEvent)
+
+				// Get session activity log
+				sessionActivity.GET("", cache.CacheMiddleware(redisCache, 30*time.Second), sessionActivityHandler.GetSessionActivity)
+
+				// Get session timeline (chronological view)
+				sessionActivity.GET("/timeline", cache.CacheMiddleware(redisCache, 1*time.Minute), sessionActivityHandler.GetSessionTimeline)
+			}
+
+			// Activity statistics and user activity (admins/operators)
+			activity := protected.Group("/activity")
+			{
+				// Activity statistics (admins/operators only)
+				activity.GET("/stats", operatorMiddleware, cache.CacheMiddleware(redisCache, 2*time.Minute), sessionActivityHandler.GetActivityStats)
+
+				// User activity across all sessions (users can view their own)
+				activity.GET("/users/:userId", sessionActivityHandler.GetUserSessionActivity)
 			}
 
 			// Metrics (operators/admins only)

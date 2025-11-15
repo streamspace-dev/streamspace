@@ -500,6 +500,54 @@ func (d *Database) Migrate() error {
 		// Templates by app_type and rating (filtering by app type with sorting)
 		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_apptype_rating ON catalog_templates(app_type, avg_rating DESC)`,
 
+		// ========== Session Activity Recording ==========
+
+		// Session activity log (detailed event tracking for compliance and analytics)
+		`CREATE TABLE IF NOT EXISTS session_activity_log (
+			id SERIAL PRIMARY KEY,
+			session_id VARCHAR(255) REFERENCES sessions(id) ON DELETE CASCADE,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+			event_type VARCHAR(100) NOT NULL,
+			event_category VARCHAR(50) DEFAULT 'general',
+			description TEXT,
+			metadata JSONB,
+			ip_address VARCHAR(45),
+			user_agent TEXT,
+			timestamp TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for session activity queries
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_session_id ON session_activity_log(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_user_id ON session_activity_log(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_timestamp ON session_activity_log(timestamp DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_event_type ON session_activity_log(event_type)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_category ON session_activity_log(event_category)`,
+
+		// Composite index for session activity timeline queries
+		`CREATE INDEX IF NOT EXISTS idx_session_activity_session_timestamp ON session_activity_log(session_id, timestamp DESC)`,
+
+		// Session recordings metadata (for future video/screen recording feature)
+		`CREATE TABLE IF NOT EXISTS session_recordings (
+			id SERIAL PRIMARY KEY,
+			session_id VARCHAR(255) REFERENCES sessions(id) ON DELETE CASCADE,
+			recording_type VARCHAR(50) DEFAULT 'screen',
+			storage_path TEXT,
+			file_size_bytes BIGINT DEFAULT 0,
+			duration_seconds INT DEFAULT 0,
+			started_at TIMESTAMP,
+			ended_at TIMESTAMP,
+			status VARCHAR(50) DEFAULT 'recording',
+			error_message TEXT,
+			created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for recordings
+		`CREATE INDEX IF NOT EXISTS idx_session_recordings_session_id ON session_recordings(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_recordings_status ON session_recordings(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_recordings_created_at ON session_recordings(created_at DESC)`,
+
 		// ========== Plugin System ==========
 
 		// Catalog plugins (available plugins from repositories)
