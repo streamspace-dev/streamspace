@@ -891,9 +891,32 @@ func (h *BillingHandler) UpdatePricing(c *gin.Context) {
 		return
 	}
 
-	// TODO: Store pricing in database
+	ctx := context.Background()
+
+	// Store pricing configuration in database
+	// Using a simple key-value approach in a config table
+	_, err := h.db.DB().ExecContext(ctx, `
+		INSERT INTO billing_config (key, value, updated_at)
+		VALUES
+			('cpu_rate', $1, NOW()),
+			('memory_rate', $2, NOW()),
+			('storage_rate', $3, NOW())
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+	`, req.CPURate, req.MemoryRate, req.StorageRate)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pricing"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Pricing updated successfully",
+		"pricing": gin.H{
+			"cpuRate":     req.CPURate,
+			"memoryRate":  req.MemoryRate,
+			"storageRate": req.StorageRate,
+		},
 	})
 }
 
@@ -1047,6 +1070,9 @@ func (h *BillingHandler) GetBillingSettings(c *gin.Context) {
 
 // UpdateBillingSettings updates billing settings
 func (h *BillingHandler) UpdateBillingSettings(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	userIDStr := userID.(string)
+
 	var req struct {
 		AutoPayEnabled bool   `json:"autoPayEnabled"`
 		BillingEmail   string `json:"billingEmail"`
@@ -1058,8 +1084,31 @@ func (h *BillingHandler) UpdateBillingSettings(c *gin.Context) {
 		return
 	}
 
-	// TODO: Store settings in database
+	ctx := context.Background()
+
+	// Store billing settings in database
+	_, err := h.db.DB().ExecContext(ctx, `
+		INSERT INTO billing_settings (user_id, auto_pay_enabled, billing_email, tax_id, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (user_id)
+		DO UPDATE SET
+			auto_pay_enabled = EXCLUDED.auto_pay_enabled,
+			billing_email = EXCLUDED.billing_email,
+			tax_id = EXCLUDED.tax_id,
+			updated_at = NOW()
+	`, userIDStr, req.AutoPayEnabled, req.BillingEmail, req.TaxID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update billing settings"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Billing settings updated successfully",
+		"settings": gin.H{
+			"autoPayEnabled": req.AutoPayEnabled,
+			"billingEmail":   req.BillingEmail,
+			"taxId":          req.TaxID,
+		},
 	})
 }
