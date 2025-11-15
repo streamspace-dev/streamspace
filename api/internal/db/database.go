@@ -739,6 +739,139 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_favorite_templates_user_id ON user_favorite_templates(user_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_user_favorite_templates_template ON user_favorite_templates(template_name)`,
+
+		// ========== Notifications System ==========
+
+		// In-app notifications (stored notifications for users)
+		`CREATE TABLE IF NOT EXISTS notifications (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			type VARCHAR(100) NOT NULL,
+			title VARCHAR(500) NOT NULL,
+			message TEXT NOT NULL,
+			data JSONB DEFAULT '{}',
+			priority VARCHAR(20) DEFAULT 'normal',
+			is_read BOOLEAN DEFAULT false,
+			action_url TEXT,
+			action_text VARCHAR(100),
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			read_at TIMESTAMP
+		)`,
+
+		// Create indexes for notifications
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_id ON notifications(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_is_read ON notifications(is_read)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_created_at ON notifications(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_type ON notifications(type)`,
+		`CREATE INDEX IF NOT EXISTS idx_notifications_priority ON notifications(priority)`,
+
+		// Composite index for unread notifications query (most common)
+		`CREATE INDEX IF NOT EXISTS idx_notifications_user_unread ON notifications(user_id, is_read, created_at DESC) WHERE is_read = false`,
+
+		// Notification delivery log (tracks webhook/email delivery attempts)
+		`CREATE TABLE IF NOT EXISTS notification_delivery_log (
+			id SERIAL PRIMARY KEY,
+			notification_id VARCHAR(255) REFERENCES notifications(id) ON DELETE CASCADE,
+			channel VARCHAR(50) NOT NULL,
+			status VARCHAR(50) NOT NULL,
+			error_message TEXT,
+			delivered_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for delivery log
+		`CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_notification_id ON notification_delivery_log(notification_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_channel ON notification_delivery_log(channel)`,
+		`CREATE INDEX IF NOT EXISTS idx_notification_delivery_log_status ON notification_delivery_log(status)`,
+
+		// ========== Advanced Search & Filtering ==========
+
+		// Saved searches (user-defined search queries)
+		`CREATE TABLE IF NOT EXISTS saved_searches (
+			id VARCHAR(255) PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			query TEXT NOT NULL,
+			filters JSONB DEFAULT '{}',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for saved searches
+		`CREATE INDEX IF NOT EXISTS idx_saved_searches_user_id ON saved_searches(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_saved_searches_updated_at ON saved_searches(updated_at DESC)`,
+
+		// Search history (recent user searches for suggestions and analytics)
+		`CREATE TABLE IF NOT EXISTS search_history (
+			id SERIAL PRIMARY KEY,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			query TEXT NOT NULL,
+			search_type VARCHAR(50) DEFAULT 'universal',
+			filters JSONB DEFAULT '{}',
+			searched_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for search history
+		`CREATE INDEX IF NOT EXISTS idx_search_history_user_id ON search_history(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_search_history_searched_at ON search_history(searched_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_search_history_query ON search_history(query)`,
+
+		// Composite index for user search history queries
+		`CREATE INDEX IF NOT EXISTS idx_search_history_user_time ON search_history(user_id, searched_at DESC)`,
+
+		// ========== Session Snapshots & Restore ==========
+
+		// Session snapshots (point-in-time session backups)
+		`CREATE TABLE IF NOT EXISTS session_snapshots (
+			id VARCHAR(255) PRIMARY KEY,
+			session_id VARCHAR(255) REFERENCES sessions(id) ON DELETE CASCADE,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			name VARCHAR(255) NOT NULL,
+			description TEXT,
+			type VARCHAR(50) DEFAULT 'manual',
+			status VARCHAR(50) DEFAULT 'creating',
+			storage_path TEXT,
+			size_bytes BIGINT DEFAULT 0,
+			metadata JSONB DEFAULT '{}',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			completed_at TIMESTAMP,
+			expires_at TIMESTAMP,
+			error_message TEXT
+		)`,
+
+		// Create indexes for snapshots
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_session_id ON session_snapshots(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_user_id ON session_snapshots(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_status ON session_snapshots(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_type ON session_snapshots(type)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_created_at ON session_snapshots(created_at DESC)`,
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_expires_at ON session_snapshots(expires_at)`,
+
+		// Composite index for user's available snapshots
+		`CREATE INDEX IF NOT EXISTS idx_session_snapshots_user_available ON session_snapshots(user_id, status) WHERE status = 'available'`,
+
+		// Snapshot restore jobs (tracks restore operations)
+		`CREATE TABLE IF NOT EXISTS snapshot_restore_jobs (
+			id VARCHAR(255) PRIMARY KEY,
+			snapshot_id VARCHAR(255) REFERENCES session_snapshots(id) ON DELETE CASCADE,
+			session_id VARCHAR(255) REFERENCES sessions(id) ON DELETE SET NULL,
+			target_session_id VARCHAR(255) REFERENCES sessions(id) ON DELETE SET NULL,
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			status VARCHAR(50) DEFAULT 'pending',
+			started_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			completed_at TIMESTAMP,
+			error_message TEXT
+		)`,
+
+		// Create indexes for restore jobs
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_restore_jobs_snapshot_id ON snapshot_restore_jobs(snapshot_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_restore_jobs_user_id ON snapshot_restore_jobs(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_restore_jobs_status ON snapshot_restore_jobs(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_snapshot_restore_jobs_started_at ON snapshot_restore_jobs(started_at DESC)`,
+
+		// Add snapshot_config column to sessions table
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS snapshot_config JSONB DEFAULT '{}'`,
 	}
 
 	// Execute migrations
