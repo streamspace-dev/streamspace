@@ -2,7 +2,9 @@ package handlers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -24,18 +26,18 @@ func NewBatchHandler(database *db.Database) *BatchHandler {
 
 // BatchOperation represents a batch operation job
 type BatchOperation struct {
-	ID            string                 `json:"id"`
-	UserID        string                 `json:"userId"`
-	OperationType string                 `json:"operationType"` // terminate, hibernate, wake, delete, update
-	ResourceType  string                 `json:"resourceType"`  // sessions, snapshots, etc.
-	Status        string                 `json:"status"`        // pending, running, completed, failed
-	TotalItems    int                    `json:"totalItems"`
-	ProcessedItems int                   `json:"processedItems"`
-	SuccessCount  int                    `json:"successCount"`
-	FailureCount  int                    `json:"failureCount"`
-	Errors        []string               `json:"errors,omitempty"`
-	CreatedAt     time.Time              `json:"createdAt"`
-	CompletedAt   *time.Time             `json:"completedAt,omitempty"`
+	ID             string     `json:"id"`
+	UserID         string     `json:"userId"`
+	OperationType  string     `json:"operationType"` // terminate, hibernate, wake, delete, update
+	ResourceType   string     `json:"resourceType"`  // sessions, snapshots, etc.
+	Status         string     `json:"status"`        // pending, running, completed, failed
+	TotalItems     int        `json:"totalItems"`
+	ProcessedItems int        `json:"processedItems"`
+	SuccessCount   int        `json:"successCount"`
+	FailureCount   int        `json:"failureCount"`
+	Errors         []string   `json:"errors,omitempty"`
+	CreatedAt      time.Time  `json:"createdAt"`
+	CompletedAt    *time.Time `json:"completedAt,omitempty"`
 }
 
 // RegisterRoutes registers batch operation routes
@@ -624,14 +626,30 @@ func (h *BatchHandler) executeBatchUpdateTags(jobID, userID string, sessionIDs [
 
 	successCount := 0
 	for _, sessionID := range sessionIDs {
-		// In production, this would use JSONB operations for add/remove
-		// For now, simplified implementation
-		_, err := h.db.DB().ExecContext(ctx, `
-			UPDATE sessions SET updated_at = CURRENT_TIMESTAMP WHERE id = $1 AND user_id = $2
-		`, sessionID, userID)
+		var err error
+
+		switch operation {
+		case "add":
+			// Add tags using JSONB append with duplicate prevention
+			err = h.addTagsToSession(ctx, sessionID, userID, tags)
+
+		case "remove":
+			// Remove tags using JSONB removal
+			err = h.removeTagsFromSession(ctx, sessionID, userID, tags)
+
+		case "replace":
+			// Replace all tags with new set
+			err = h.replaceTagsInSession(ctx, sessionID, userID, tags)
+
+		default:
+			log.Printf("[ERROR] Unknown tag operation: %s", operation)
+			err = fmt.Errorf("unknown operation: %s", operation)
+		}
 
 		if err == nil {
 			successCount++
+		} else {
+			log.Printf("[ERROR] Failed to update tags for session %s: %v", sessionID, err)
 		}
 
 		h.db.DB().ExecContext(ctx, `
@@ -642,6 +660,92 @@ func (h *BatchHandler) executeBatchUpdateTags(jobID, userID string, sessionIDs [
 	h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
 	`, jobID)
+}
+
+// addTagsToSession adds tags to a session, preventing duplicates
+func (h *BatchHandler) addTagsToSession(ctx context.Context, sessionID, userID string, tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	// Build JSONB array from tags
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
+	}
+
+	// Add tags using JSONB concatenation, then remove duplicates
+	// The || operator concatenates arrays, and we use a subquery to deduplicate
+	_, err = h.db.DB().ExecContext(ctx, `
+		UPDATE sessions
+		SET tags = (
+			SELECT jsonb_agg(DISTINCT elem)
+			FROM jsonb_array_elements(tags || $1::jsonb) elem
+		),
+		updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND user_id = $3
+	`, string(tagsJSON), sessionID, userID)
+
+	if err != nil {
+		return fmt.Errorf("failed to add tags: %w", err)
+	}
+
+	log.Printf("[INFO] Added tags %v to session %s", tags, sessionID)
+	return nil
+}
+
+// removeTagsFromSession removes specified tags from a session
+func (h *BatchHandler) removeTagsFromSession(ctx context.Context, sessionID, userID string, tags []string) error {
+	if len(tags) == 0 {
+		return nil
+	}
+
+	// Remove tags one by one using JSONB - operator
+	// PostgreSQL doesn't support removing multiple elements at once with -, so we chain them
+	query := "UPDATE sessions SET tags = tags"
+	args := []interface{}{}
+	argIndex := 1
+
+	for _, tag := range tags {
+		query += fmt.Sprintf(" - $%d::text", argIndex)
+		args = append(args, tag)
+		argIndex++
+	}
+
+	query += fmt.Sprintf(", updated_at = CURRENT_TIMESTAMP WHERE id = $%d AND user_id = $%d", argIndex, argIndex+1)
+	args = append(args, sessionID, userID)
+
+	_, err := h.db.DB().ExecContext(ctx, query, args...)
+	if err != nil {
+		return fmt.Errorf("failed to remove tags: %w", err)
+	}
+
+	log.Printf("[INFO] Removed tags %v from session %s", tags, sessionID)
+	return nil
+}
+
+// replaceTagsInSession replaces all tags in a session with new set
+func (h *BatchHandler) replaceTagsInSession(ctx context.Context, sessionID, userID string, tags []string) error {
+	// Build JSONB array from tags
+	tagsJSON, err := json.Marshal(tags)
+	if err != nil {
+		return fmt.Errorf("failed to marshal tags: %w", err)
+	}
+
+	// Replace tags entirely
+	_, err = h.db.DB().ExecContext(ctx, `
+		UPDATE sessions
+		SET tags = $1::jsonb,
+		updated_at = CURRENT_TIMESTAMP
+		WHERE id = $2 AND user_id = $3
+	`, string(tagsJSON), sessionID, userID)
+
+	if err != nil {
+		return fmt.Errorf("failed to replace tags: %w", err)
+	}
+
+	log.Printf("[INFO] Replaced tags with %v for session %s", tags, sessionID)
+	return nil
 }
 
 func (h *BatchHandler) executeBatchDeleteSnapshots(jobID, userID string, snapshotIDs []string) {
