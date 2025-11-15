@@ -9,8 +9,11 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"net"
 	"net/http"
+	"net/url"
 	"strconv"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -125,6 +128,15 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 	// Validate URL
 	if webhook.URL == "" {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "URL is required"})
+		return
+	}
+
+	// SECURITY: Validate webhook URL to prevent SSRF attacks
+	if err := h.validateWebhookURL(webhook.URL); err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid webhook URL",
+			"message": err.Error(),
+		})
 		return
 	}
 
@@ -542,6 +554,66 @@ func (h *Handler) TestIntegration(c *gin.Context) {
 
 // Helper functions
 
+// validateWebhookURL validates webhook URL to prevent SSRF attacks
+func (h *Handler) validateWebhookURL(urlStr string) error {
+	parsed, err := url.Parse(urlStr)
+	if err != nil {
+		return fmt.Errorf("invalid URL format: %w", err)
+	}
+
+	// Must be http or https
+	if parsed.Scheme != "http" && parsed.Scheme != "https" {
+		return fmt.Errorf("URL must use http or https protocol")
+	}
+
+	host := parsed.Hostname()
+
+	// Resolve hostname to IP addresses
+	ips, err := net.LookupIP(host)
+	if err != nil {
+		return fmt.Errorf("could not resolve hostname: %w", err)
+	}
+
+	// Check each resolved IP
+	for _, ip := range ips {
+		// Block loopback addresses (127.0.0.0/8)
+		if ip.IsLoopback() {
+			return fmt.Errorf("webhook URL cannot point to loopback address")
+		}
+
+		// Block private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+		if ip.IsPrivate() {
+			return fmt.Errorf("webhook URL cannot point to private IP address")
+		}
+
+		// Block link-local addresses (169.254.0.0/16)
+		if ip.IsLinkLocalUnicast() {
+			return fmt.Errorf("webhook URL cannot point to link-local address")
+		}
+
+		// Block cloud metadata endpoints
+		if ip.String() == "169.254.169.254" {
+			return fmt.Errorf("webhook URL is not allowed")
+		}
+	}
+
+	// Block specific hostnames (cloud metadata endpoints)
+	blockedHosts := []string{
+		"metadata.google.internal",
+		"169.254.169.254",
+		"localhost",
+		"metadata",
+	}
+	hostLower := strings.ToLower(host)
+	for _, blocked := range blockedHosts {
+		if strings.Contains(hostLower, strings.ToLower(blocked)) {
+			return fmt.Errorf("webhook URL hostname is not allowed")
+		}
+	}
+
+	return nil
+}
+
 func (h *Handler) generateWebhookSecret() string {
 	// Generate a random 32-byte secret
 	return fmt.Sprintf("whsec_%d", time.Now().UnixNano())
@@ -574,8 +646,14 @@ func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int
 		req.Header.Set("X-StreamSpace-Signature", signature)
 	}
 
-	// Send request
-	client := &http.Client{Timeout: 30 * time.Second}
+	// Send request with security restrictions
+	client := &http.Client{
+		Timeout: 10 * time.Second, // Reduced from 30s for security
+		// Disable redirects to prevent SSRF bypass via redirect chains
+		CheckRedirect: func(req *http.Request, via []*http.Request) error {
+			return http.ErrUseLastResponse
+		},
+	}
 	resp, err := client.Do(req)
 	if err != nil {
 		return false, 0, "", err

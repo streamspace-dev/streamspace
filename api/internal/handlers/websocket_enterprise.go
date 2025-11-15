@@ -4,6 +4,9 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -42,7 +45,33 @@ var (
 		ReadBufferSize:  1024,
 		WriteBufferSize: 1024,
 		CheckOrigin: func(r *http.Request) bool {
-			return true // Configure appropriately for production
+			origin := r.Header.Get("Origin")
+
+			// Allow same-origin requests (no Origin header)
+			if origin == "" {
+				return true
+			}
+
+			// Get allowed origins from environment variables
+			// Default to localhost for development
+			allowedOrigins := []string{
+				os.Getenv("ALLOWED_WEBSOCKET_ORIGIN_1"),
+				os.Getenv("ALLOWED_WEBSOCKET_ORIGIN_2"),
+				os.Getenv("ALLOWED_WEBSOCKET_ORIGIN_3"),
+				"http://localhost:5173", // Development default (Vite)
+				"http://localhost:3000", // Development default (React)
+			}
+
+			// Check if origin is in allowed list
+			for _, allowed := range allowedOrigins {
+				if allowed != "" && strings.TrimSpace(allowed) == strings.TrimSpace(origin) {
+					return true
+				}
+			}
+
+			// Log rejected origin for security monitoring
+			log.Printf("[WebSocket Security] Rejected connection from unauthorized origin: %s", origin)
+			return false
 		},
 	}
 
@@ -85,17 +114,33 @@ func (h *WebSocketHub) Run() {
 			log.Printf("WebSocket client unregistered: %s", client.ID)
 
 		case message := <-h.Broadcast:
+			// Collect clients to remove (don't modify map during iteration)
+			clientsToRemove := make([]*WebSocketClient, 0)
+
 			h.Mu.RLock()
 			for _, client := range h.Clients {
 				select {
 				case client.Send <- message:
+					// Message sent successfully
 				default:
-					// Client send buffer full, close connection
-					close(client.Send)
-					delete(h.Clients, client.ID)
+					// Client buffer full - mark for removal
+					clientsToRemove = append(clientsToRemove, client)
 				}
 			}
 			h.Mu.RUnlock()
+
+			// Now safely remove disconnected clients with write lock
+			if len(clientsToRemove) > 0 {
+				h.Mu.Lock()
+				for _, client := range clientsToRemove {
+					if _, exists := h.Clients[client.ID]; exists {
+						close(client.Send)
+						delete(h.Clients, client.ID)
+						log.Printf("WebSocket client removed (buffer full): %s", client.ID)
+					}
+				}
+				h.Mu.Unlock()
+			}
 		}
 	}
 }

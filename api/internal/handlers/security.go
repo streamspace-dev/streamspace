@@ -14,6 +14,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
+	"streamspace/api/internal/middleware"
 )
 
 // ============================================================================
@@ -70,6 +71,17 @@ func (h *Handler) SetupMFA(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	// SECURITY: SMS and Email MFA are not yet implemented
+	// They would always return "valid=true" which bypasses security
+	if req.Type == "sms" || req.Type == "email" {
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error":   "MFA type not implemented",
+			"message": "SMS and Email MFA are not yet available. Please use TOTP (authenticator app) for multi-factor authentication.",
+			"supported_types": []string{"totp"},
+		})
 		return
 	}
 
@@ -226,6 +238,29 @@ func (h *Handler) VerifyMFA(c *gin.Context) {
 		req.MethodType = "totp" // Default to TOTP
 	}
 
+	// SECURITY: SMS and Email MFA are not implemented
+	if req.MethodType == "sms" || req.MethodType == "email" {
+		c.JSON(http.StatusNotImplemented, gin.H{
+			"error":   "MFA type not implemented",
+			"message": "SMS and Email MFA are not yet available",
+		})
+		return
+	}
+
+	// SECURITY: Rate limiting to prevent brute force attacks
+	// Max 5 attempts per minute per user
+	rateLimitKey := fmt.Sprintf("mfa_verify:%s", userID)
+	if !middleware.GetRateLimiter().CheckLimit(rateLimitKey, 5, 1*time.Minute) {
+		attempts := middleware.GetRateLimiter().GetAttempts(rateLimitKey, 1*time.Minute)
+		c.JSON(http.StatusTooManyRequests, gin.H{
+			"error":       "Too many verification attempts",
+			"message":     "Please wait 1 minute before trying again",
+			"retry_after": 60,
+			"attempts":    attempts,
+		})
+		return
+	}
+
 	valid := false
 
 	if req.MethodType == "backup_code" {
@@ -264,6 +299,9 @@ func (h *Handler) VerifyMFA(c *gin.Context) {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "invalid MFA code"})
 		return
 	}
+
+	// SECURITY: Reset rate limit on successful verification
+	middleware.GetRateLimiter().ResetLimit(rateLimitKey)
 
 	// Trust device if requested
 	if req.TrustDevice {
