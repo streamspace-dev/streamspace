@@ -1,3 +1,13 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file tests CSRF protection to ensure it correctly prevents
+// cross-site request forgery attacks while allowing legitimate requests.
+//
+// Tests validate:
+// - Tokens can be added and validated successfully
+// - Invalid tokens are rejected
+// - Expired tokens are correctly identified and rejected
+// - Cleanup removes expired tokens to prevent memory leaks
+// - Double-submit cookie pattern works correctly
 package middleware
 
 import (

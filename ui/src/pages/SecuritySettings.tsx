@@ -1,3 +1,40 @@
+/**
+ * SecuritySettings Component
+ *
+ * Provides a comprehensive security management interface for users including:
+ * - Multi-Factor Authentication (MFA) setup and management
+ * - IP Whitelisting for access control
+ * - Security overview and audit logs
+ *
+ * SECURITY FIX (2025-11-14):
+ * Disabled SMS and Email MFA options to match backend restrictions. These MFA types
+ * were incomplete and always returned "valid=true", which would allow bypassing
+ * authentication entirely. Only TOTP (authenticator apps) is currently supported.
+ *
+ * Features:
+ * - TOTP Setup: QR code scanning with authenticator apps (Google Authenticator, Authy, etc.)
+ * - Backup Codes: Single-use recovery codes for account access
+ * - IP Whitelisting: Restrict access to specific IP addresses or CIDR ranges
+ * - Security Overview: Dashboard showing enabled security features
+ *
+ * User Experience:
+ * - Clear "Coming Soon" indicators for SMS/Email MFA (disabled cards with info alerts)
+ * - Step-by-step MFA setup wizard with QR code and verification
+ * - Visual feedback for security status (enabled/disabled features)
+ * - Responsive design works on mobile and desktop
+ *
+ * Technical:
+ * - React functional component with TypeScript
+ * - Material-UI for consistent design
+ * - QRCode.react for TOTP QR code generation
+ * - State management for dialogs, tabs, and form data
+ *
+ * @component
+ * @example
+ * ```tsx
+ * <SecuritySettings />
+ * ```
+ */
 import { useState } from 'react';
 import {
   Box,
@@ -46,6 +83,10 @@ import {
 import Layout from '../components/Layout';
 import { QRCodeSVG } from 'qrcode.react';
 
+/**
+ * Interface for MFA method data structure.
+ * Represents a configured multi-factor authentication method.
+ */
 interface MFAMethod {
   id: number;
   type: string;

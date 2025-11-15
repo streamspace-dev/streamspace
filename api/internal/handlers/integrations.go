@@ -1,3 +1,42 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements enterprise integration features including webhooks and external API integrations.
+//
+// Security Features:
+// - Webhook HMAC signature validation (prevents spoofing)
+// - SSRF protection for webhook URLs (prevents internal network access)
+// - Input validation for all integration configurations
+// - Secret management (webhooks secrets never exposed in GET responses)
+// - Authorization enumeration prevention (consistent error responses)
+//
+// CRITICAL SECURITY FIXES (2025-11-14):
+// 1. SSRF Protection: validateWebhookURL prevents webhooks from targeting:
+//    - Private IP ranges (10.0.0.0/8, 172.16.0.0/12, 192.168.0.0/16)
+//    - Loopback addresses (127.0.0.0/8)
+//    - Link-local addresses (169.254.0.0/16)
+//    - Cloud metadata endpoints (169.254.169.254)
+//    - Internal hostnames (metadata.google.internal, localhost, etc.)
+//
+// 2. Secret Protection: Webhook secrets use json:"-" tags and separate response structs
+//    to ensure secrets are only shown during creation, never in GET endpoints.
+//
+// 3. Authorization Enumeration Fixes: UpdateWebhook, DeleteWebhook, TestWebhook, and
+//    TestIntegration all return consistent "not found" errors for both non-existent
+//    resources AND unauthorized access (prevents attacker enumeration).
+//
+// 4. Input Validation: Comprehensive validation for all webhook and integration fields
+//    including URL format, name length, event counts, retry configuration, etc.
+//
+// Webhook Delivery:
+// - Automatic retries with exponential backoff
+// - HMAC-SHA256 signature in X-Webhook-Signature header
+// - 10-second timeout per delivery attempt
+// - Real-time delivery status updates via WebSocket
+//
+// Integrations:
+// - External API connections (Slack, Discord, PagerDuty, etc.)
+// - OAuth 2.0 token management
+// - API key storage and rotation
+// - Connection health monitoring
 package handlers
 
 import (

@@ -1,3 +1,13 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file tests the rate limiting functionality to ensure it correctly
+// prevents brute force attacks while allowing legitimate traffic.
+//
+// Tests validate:
+// - Requests are allowed up to the limit
+// - Requests are blocked after exceeding the limit
+// - Rate limits reset after the time window expires
+// - Cleanup removes old rate limit entries to prevent memory leaks
+// - GetAttempts returns accurate attempt counts
 package middleware
 
 import (

@@ -1,3 +1,14 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file tests input validation functions to ensure they correctly
+// reject malicious or malformed input while allowing valid data.
+//
+// Tests validate:
+// - Webhook input validation (name, URL, events, retry config)
+// - Integration input validation (name, type, config)
+// - MFA setup input validation (type, phone, email)
+// - IP whitelist input validation (IP/CIDR format, description length)
+// - Edge cases like empty strings, oversized inputs, invalid formats
+// - Security: Prevents injection attacks via length and format validation
 package handlers
 
 import (
