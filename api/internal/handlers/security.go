@@ -27,13 +27,22 @@ type MFAMethod struct {
 	UserID      string    `json:"user_id"`
 	Type        string    `json:"type"` // "totp", "sms", "email", "backup_codes"
 	Enabled     bool      `json:"enabled"`
-	Secret      string    `json:"secret,omitempty"` // TOTP secret (not exposed in API)
+	Secret      string    `json:"-"` // SECURITY: Never expose secret in API responses
 	PhoneNumber string    `json:"phone_number,omitempty"`
 	Email       string    `json:"email,omitempty"`
 	IsPrimary   bool      `json:"is_primary"`
 	Verified    bool      `json:"verified"`
 	CreatedAt   time.Time `json:"created_at"`
 	LastUsedAt  time.Time `json:"last_used_at,omitempty"`
+}
+
+// MFASetupResponse is used only for SetupMFA response to show secret/QR once
+type MFASetupResponse struct {
+	ID      int64  `json:"id"`
+	Type    string `json:"type"`
+	Secret  string `json:"secret,omitempty"`  // Only for TOTP setup
+	QRCode  string `json:"qr_code,omitempty"` // Only for TOTP setup
+	Message string `json:"message"`
 }
 
 // BackupCode represents MFA backup recovery codes
@@ -132,21 +141,16 @@ func (h *Handler) SetupMFA(c *gin.Context) {
 		return
 	}
 
-	response := gin.H{
-		"id":   mfaID,
-		"type": req.Type,
+	// SECURITY: Use dedicated response struct to only expose secret during setup
+	response := MFASetupResponse{
+		ID:   mfaID,
+		Type: req.Type,
 	}
 
 	if req.Type == "totp" {
-		response["secret"] = secret
-		response["qr_code"] = qrCode
-		response["message"] = "Scan the QR code with your authenticator app and verify"
-	} else if req.Type == "sms" {
-		// TODO: Send SMS verification code
-		response["message"] = "Verification code sent to " + maskPhone(req.PhoneNumber)
-	} else if req.Type == "email" {
-		// TODO: Send email verification code
-		response["message"] = "Verification code sent to " + maskEmail(req.Email)
+		response.Secret = secret
+		response.QRCode = qrCode
+		response.Message = "Scan the QR code with your authenticator app and verify"
 	}
 
 	c.JSON(http.StatusOK, response)
@@ -166,7 +170,7 @@ func (h *Handler) VerifyMFASetup(c *gin.Context) {
 		return
 	}
 
-	// Get MFA method
+	// Get MFA method (before transaction to verify code)
 	var mfaMethod MFAMethod
 	err := h.DB.QueryRow(`
 		SELECT id, user_id, type, secret, phone_number, email
@@ -184,13 +188,10 @@ func (h *Handler) VerifyMFASetup(c *gin.Context) {
 		return
 	}
 
-	// Verify code
+	// Verify code (before starting transaction)
 	valid := false
 	if mfaMethod.Type == "totp" {
 		valid = totp.Validate(req.Code, mfaMethod.Secret)
-	} else {
-		// TODO: Verify SMS/Email code from cache/temporary storage
-		valid = true // Placeholder
 	}
 
 	if !valid {
@@ -198,8 +199,17 @@ func (h *Handler) VerifyMFASetup(c *gin.Context) {
 		return
 	}
 
+	// SECURITY: Use transaction to ensure atomicity
+	// Either both MFA enable AND backup codes succeed, or neither
+	tx, err := h.DB.Begin()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		return
+	}
+	defer tx.Rollback() // Rollback if not committed
+
 	// Enable and verify MFA method
-	_, err = h.DB.Exec(`
+	_, err = tx.Exec(`
 		UPDATE mfa_methods
 		SET verified = true, enabled = true
 		WHERE id = $1
@@ -210,8 +220,32 @@ func (h *Handler) VerifyMFASetup(c *gin.Context) {
 		return
 	}
 
-	// Generate backup codes
-	backupCodes := h.generateBackupCodes(userID, 10)
+	// Generate backup codes within transaction
+	backupCodes := make([]string, 10)
+	for i := 0; i < 10; i++ {
+		code := generateRandomCode(8)
+		backupCodes[i] = code
+
+		// Hash and store
+		hash := sha256.Sum256([]byte(code))
+		hashStr := hex.EncodeToString(hash[:])
+
+		_, err := tx.Exec(`
+			INSERT INTO backup_codes (user_id, code)
+			VALUES ($1, $2)
+		`, userID, hashStr)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate backup codes"})
+			return
+		}
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit changes"})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"message":      "MFA enabled successfully",

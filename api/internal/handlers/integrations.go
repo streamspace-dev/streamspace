@@ -25,7 +25,7 @@ type Webhook struct {
 	Name        string                 `json:"name"`
 	Description string                 `json:"description"`
 	URL         string                 `json:"url"`
-	Secret      string                 `json:"secret,omitempty"`
+	Secret      string                 `json:"-"` // SECURITY: Never expose secret in API responses
 	Events      []string               `json:"events"`
 	Headers     map[string]string      `json:"headers,omitempty"`
 	Enabled     bool                   `json:"enabled"`
@@ -35,6 +35,12 @@ type Webhook struct {
 	CreatedBy   string                 `json:"created_by"`
 	CreatedAt   time.Time              `json:"created_at"`
 	UpdatedAt   time.Time              `json:"updated_at"`
+}
+
+// WebhookWithSecret is used only for CreateWebhook response to show the secret once
+type WebhookWithSecret struct {
+	Webhook
+	Secret string `json:"secret"` // Only exposed on creation
 }
 
 // WebhookRetryPolicy defines retry behavior
@@ -176,7 +182,11 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusCreated, webhook)
+	// SECURITY: Only expose secret on creation (not in GET requests)
+	c.JSON(http.StatusCreated, WebhookWithSecret{
+		Webhook: webhook,
+		Secret:  webhook.Secret,
+	})
 }
 
 // ListWebhooks lists all webhooks
