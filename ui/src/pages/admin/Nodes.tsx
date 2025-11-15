@@ -7,7 +7,7 @@ import {
   Grid,
   Chip,
   Button,
-  
+
   Dialog,
   DialogTitle,
   DialogContent,
@@ -18,7 +18,7 @@ import {
   FormControl,
   InputLabel,
   Alert,
-  
+
   CircularProgress,
 } from '@mui/material';
 import {
@@ -32,9 +32,12 @@ import {
   Label as LabelIcon,
   LocalOffer as TaintIcon,
   Refresh as RefreshIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
 import { api } from '../../lib/api';
+import { useNodeHealthEvents } from '../../hooks/useEnterpriseWebSocket';
 
 interface NodeInfo {
   name: string;
@@ -105,6 +108,7 @@ export default function AdminNodes() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
   const [selectedNode, setSelectedNode] = useState<NodeInfo | null>(null);
+  const [wsConnected, setWsConnected] = useState(false);
 
   // Dialog states
   const [labelDialogOpen, setLabelDialogOpen] = useState(false);
@@ -114,6 +118,17 @@ export default function AdminNodes() {
   const [taintKey, setTaintKey] = useState('');
   const [taintValue, setTaintValue] = useState('');
   const [taintEffect, setTaintEffect] = useState<string>('NoSchedule');
+
+  // Real-time node health updates via WebSocket
+  useNodeHealthEvents((data: any) => {
+    console.log('Node health event:', data);
+    setWsConnected(true);
+
+    // Refresh node data when we receive a health update
+    if (data.node_name) {
+      loadNodesAndStats();
+    }
+  });
 
   useEffect(() => {
     loadNodesAndStats();
@@ -268,9 +283,17 @@ export default function AdminNodes() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Cluster Nodes
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Cluster Nodes
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Updates' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
           <Button
             variant="outlined"
             startIcon={<RefreshIcon />}

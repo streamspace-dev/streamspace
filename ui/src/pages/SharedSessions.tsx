@@ -15,11 +15,14 @@ import {
   OpenInNew as OpenIcon,
   Person as OwnerIcon,
   Share as ShareIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
 import { api } from '../lib/api';
 import { useUserStore } from '../store/userStore';
+import { useSessionsWebSocket } from '../hooks/useWebSocket';
 
 interface SharedSession {
   id: string;
@@ -41,6 +44,26 @@ export default function SharedSessions() {
   const [sessions, setSessions] = useState<SharedSession[]>([]);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
+
+  // Real-time session updates via WebSocket
+  const { isConnected, reconnectAttempts } = useSessionsWebSocket((updatedSessions) => {
+    if (!currentUser?.id || sessions.length === 0) return;
+
+    // Update shared sessions with real-time data
+    const updatedSharedSessions = sessions.map((sharedSession) => {
+      const updated = updatedSessions.find((s: any) => s.id === sharedSession.id);
+      if (updated) {
+        return {
+          ...sharedSession,
+          state: updated.state,
+          url: updated.status?.url || sharedSession.url,
+        };
+      }
+      return sharedSession;
+    });
+
+    setSessions(updatedSharedSessions);
+  });
 
   useEffect(() => {
     if (currentUser?.id) {
@@ -131,9 +154,23 @@ export default function SharedSessions() {
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
-            <Typography variant="h4" sx={{ fontWeight: 700 }}>
-              Shared with Me
-            </Typography>
+            <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+              <Typography variant="h4" sx={{ fontWeight: 700 }}>
+                Shared with Me
+              </Typography>
+              <Chip
+                icon={isConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+                label={
+                  isConnected
+                    ? 'Live Updates'
+                    : reconnectAttempts > 0
+                    ? `Reconnecting... (${reconnectAttempts})`
+                    : 'Disconnected'
+                }
+                size="small"
+                color={isConnected ? 'success' : 'default'}
+              />
+            </Box>
             <Typography variant="body2" color="text.secondary" sx={{ mt: 0.5 }}>
               Sessions that other users have shared with you
             </Typography>

@@ -31,6 +31,7 @@ import {
   ListItem,
   ListItemText,
   Divider,
+  Snackbar,
 } from '@mui/material';
 import {
   Gavel as ComplianceIcon,
@@ -42,10 +43,13 @@ import {
   CheckCircle as CheckIcon,
   Error as ErrorIcon,
   Dashboard as DashboardIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
+import { useComplianceViolationEvents } from '../../hooks/useEnterpriseWebSocket';
 
 interface ComplianceFramework {
   id: number;
@@ -105,6 +109,26 @@ export default function Compliance() {
     },
   });
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [violationNotification, setViolationNotification] = useState<string | null>(null);
+
+  // Real-time compliance violation alerts via WebSocket
+  useComplianceViolationEvents((data: any) => {
+    console.log('Compliance violation event:', data);
+    setWsConnected(true);
+
+    // Show notification for new violations
+    if (data.policy_name && data.severity) {
+      const severityIcon = data.severity === 'critical' ? '🚨' : data.severity === 'high' ? '⚠️' : 'ℹ️';
+      setViolationNotification(
+        `${severityIcon} Compliance Violation: ${data.policy_name} (${data.severity.toUpperCase()})`
+      );
+    }
+
+    // Refresh violations and metrics
+    loadViolations();
+    loadMetrics();
+  });
 
   const [frameworkDialog, setFrameworkDialog] = useState(false);
   const [policyDialog, setPolicyDialog] = useState(false);
@@ -274,9 +298,17 @@ export default function Compliance() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Compliance & Governance
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Compliance & Governance
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Violations' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
           <Button variant="contained" startIcon={<ReportIcon />} onClick={() => setReportDialog(true)}>
             Generate Report
           </Button>
@@ -671,6 +703,15 @@ export default function Compliance() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Compliance Violation Notification */}
+        <Snackbar
+          open={!!violationNotification}
+          autoHideDuration={6000}
+          onClose={() => setViolationNotification(null)}
+          message={violationNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        />
       </Box>
     </Layout>
   );

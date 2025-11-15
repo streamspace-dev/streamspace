@@ -29,6 +29,7 @@ import {
   FormControlLabel,
   Alert,
   Grid,
+  Snackbar,
 } from '@mui/material';
 import {
   Webhook as WebhookIcon,
@@ -40,10 +41,13 @@ import {
   CheckCircle as SuccessIcon,
   Error as ErrorIcon,
   Pending as PendingIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
+import { useWebhookDeliveryEvents } from '../../hooks/useEnterpriseWebSocket';
 
 interface Webhook {
   id: number;
@@ -103,6 +107,27 @@ export default function Integrations() {
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [deliveryNotification, setDeliveryNotification] = useState<string | null>(null);
+
+  // Real-time webhook delivery updates via WebSocket
+  useWebhookDeliveryEvents((data: any) => {
+    console.log('Webhook delivery event:', data);
+    setWsConnected(true);
+
+    // Show notification for webhook deliveries
+    if (data.webhook_name && data.status) {
+      const statusIcon = data.status === 'success' ? '✅' : '❌';
+      setDeliveryNotification(
+        `${statusIcon} Webhook "${data.webhook_name}": ${data.event} - ${data.status.toUpperCase()}`
+      );
+    }
+
+    // Refresh webhook deliveries if dialog is open
+    if (deliveryDialog && selectedWebhook) {
+      loadWebhookDeliveries(selectedWebhook.id);
+    }
+  });
 
   const [webhookForm, setWebhookForm] = useState({
     name: '',
@@ -221,9 +246,17 @@ export default function Integrations() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Integration Hub
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Integration Hub
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Deliveries' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
           <Button
             variant="contained"
             startIcon={<AddIcon />}
@@ -440,6 +473,15 @@ export default function Integrations() {
             <Button onClick={() => setDeliveryDialog(false)}>Close</Button>
           </DialogActions>
         </Dialog>
+
+        {/* Webhook Delivery Notification */}
+        <Snackbar
+          open={!!deliveryNotification}
+          autoHideDuration={6000}
+          onClose={() => setDeliveryNotification(null)}
+          message={deliveryNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        />
       </Box>
     </Layout>
   );

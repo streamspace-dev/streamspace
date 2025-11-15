@@ -28,6 +28,7 @@ import {
   LinearProgress,
   Alert,
   Paper,
+  Snackbar,
 } from '@mui/material';
 import {
   CloudQueue as CloudIcon,
@@ -38,10 +39,13 @@ import {
   TrendingDown as ScaleDownIcon,
   Computer as NodeIcon,
   Speed as PerformanceIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
+import { useScalingEvents } from '../../hooks/useEnterpriseWebSocket';
 
 interface LoadBalancingPolicy {
   id: number;
@@ -91,9 +95,27 @@ export default function Scaling() {
   const [asPolicies, setAsPolicies] = useState<AutoScalingPolicy[]>([]);
   const [scalingHistory, setScalingHistory] = useState<ScalingEvent[]>([]);
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [scalingEventNotification, setScalingEventNotification] = useState<string | null>(null);
 
   const [lbDialog, setLbDialog] = useState(false);
   const [asDialog, setAsDialog] = useState(false);
+
+  // Real-time scaling events via WebSocket
+  useScalingEvents((data: any) => {
+    console.log('Scaling event:', data);
+    setWsConnected(true);
+
+    // Show notification for scaling events
+    if (data.action && data.policy_name) {
+      setScalingEventNotification(
+        `Scaling ${data.action}: ${data.policy_name} (${data.previous_replicas} → ${data.new_replicas} replicas)`
+      );
+    }
+
+    // Refresh data when we receive a scaling event
+    loadAllData();
+  });
 
   const [lbForm, setLbForm] = useState({
     name: '',
@@ -244,9 +266,17 @@ export default function Scaling() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Load Balancing & Auto-scaling
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Load Balancing & Auto-scaling
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Events' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
         </Box>
 
         <Tabs value={currentTab} onChange={(_, v) => setCurrentTab(v)} sx={{ mb: 3 }}>
@@ -703,6 +733,15 @@ export default function Scaling() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Scaling Event Notification */}
+        <Snackbar
+          open={!!scalingEventNotification}
+          autoHideDuration={6000}
+          onClose={() => setScalingEventNotification(null)}
+          message={scalingEventNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        />
       </Box>
     </Layout>
   );

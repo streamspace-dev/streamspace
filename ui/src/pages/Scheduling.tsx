@@ -28,6 +28,7 @@ import {
   Alert,
   Tabs,
   Tab,
+  Snackbar,
 } from '@mui/material';
 import {
   Schedule as ScheduleIcon,
@@ -38,10 +39,13 @@ import {
   Pause as PauseIcon,
   CalendarMonth as CalendarIcon,
   Link as LinkIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
+import { useScheduleEvents } from '../hooks/useEnterpriseWebSocket';
 
 interface ScheduledSession {
   id: number;
@@ -76,6 +80,25 @@ export default function Scheduling() {
   const [scheduleDialog, setScheduleDialog] = useState(false);
   const [connectCalendarDialog, setConnectCalendarDialog] = useState(false);
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [scheduleEventNotification, setScheduleEventNotification] = useState<string | null>(null);
+
+  // Real-time schedule events via WebSocket
+  useScheduleEvents((data: any) => {
+    console.log('Schedule event:', data);
+    setWsConnected(true);
+
+    // Show notification for schedule events
+    if (data.schedule_name && data.status) {
+      const statusIcon = data.status === 'started' ? '▶️' : data.status === 'completed' ? '✅' : '❌';
+      setScheduleEventNotification(
+        `${statusIcon} Scheduled Session: ${data.schedule_name} - ${data.status.toUpperCase()}`
+      );
+    }
+
+    // Refresh schedules
+    loadSchedules();
+  });
 
   const [scheduleForm, setScheduleForm] = useState({
     name: '',
@@ -271,9 +294,17 @@ export default function Scheduling() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Session Scheduling
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Session Scheduling
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Events' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
             <Button variant="outlined" startIcon={<CalendarIcon />} onClick={handleExportICal}>
               Export iCal
@@ -639,6 +670,15 @@ export default function Scheduling() {
             <Button onClick={() => setConnectCalendarDialog(false)}>Cancel</Button>
           </DialogActions>
         </Dialog>
+
+        {/* Schedule Event Notification */}
+        <Snackbar
+          open={!!scheduleEventNotification}
+          autoHideDuration={6000}
+          onClose={() => setScheduleEventNotification(null)}
+          message={scheduleEventNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        />
       </Box>
     </Layout>
   );

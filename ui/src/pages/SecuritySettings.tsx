@@ -68,6 +68,7 @@ import {
   StepLabel,
   Paper,
   Divider,
+  Snackbar,
 } from '@mui/material';
 import {
   Security as SecurityIcon,
@@ -79,11 +80,14 @@ import {
   Check as CheckIcon,
   Warning as WarningIcon,
   Shield as ShieldIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
+import { useSecurityAlertEvents } from '../hooks/useEnterpriseWebSocket';
 
 /**
  * Interface for MFA method data structure.
@@ -122,6 +126,25 @@ export default function SecuritySettings() {
   const [ipWhitelist, setIpWhitelist] = useState<IPWhitelistEntry[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<SecurityAlert[]>([]);
   const [loading, setLoading] = useState(false);
+  const [wsConnected, setWsConnected] = useState(false);
+  const [alertNotification, setAlertNotification] = useState<string | null>(null);
+
+  // Real-time security alerts via WebSocket
+  useSecurityAlertEvents((data: any) => {
+    console.log('Security alert event:', data);
+    setWsConnected(true);
+
+    // Show notification for security alerts
+    if (data.alert_type && data.severity) {
+      const severityIcon = data.severity === 'critical' ? '🚨' : data.severity === 'high' ? '⚠️' : 'ℹ️';
+      setAlertNotification(
+        `${severityIcon} Security Alert: ${data.alert_type} (${data.severity.toUpperCase()})`
+      );
+    }
+
+    // Refresh security alerts
+    loadSecurityAlerts();
+  });
 
   // MFA Setup Dialog
   const [mfaDialog, setMfaDialog] = useState(false);
@@ -299,9 +322,17 @@ export default function SecuritySettings() {
     <Layout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
-          <Typography variant="h4" sx={{ fontWeight: 700 }}>
-            Security Settings
-          </Typography>
+          <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
+            <Typography variant="h4" sx={{ fontWeight: 700 }}>
+              Security Settings
+            </Typography>
+            <Chip
+              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+              label={wsConnected ? 'Live Alerts' : 'Polling'}
+              size="small"
+              color={wsConnected ? 'success' : 'default'}
+            />
+          </Box>
           <Chip icon={<ShieldIcon />} label="Protected" color="success" variant="outlined" />
         </Box>
 
@@ -610,6 +641,15 @@ export default function SecuritySettings() {
             </Button>
           </DialogActions>
         </Dialog>
+
+        {/* Security Alert Notification */}
+        <Snackbar
+          open={!!alertNotification}
+          autoHideDuration={6000}
+          onClose={() => setAlertNotification(null)}
+          message={alertNotification}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+        />
       </Box>
     </Layout>
   );

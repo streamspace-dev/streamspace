@@ -15,6 +15,7 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
+  Snackbar,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -25,9 +26,12 @@ import {
   Share as ShareIcon,
   People as PeopleIcon,
   Link as LinkIcon,
+  Wifi as ConnectedIcon,
+  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import { api } from '../lib/api';
 import { useUserStore } from '../store/userStore';
+import { useSessionsWebSocket } from '../hooks/useWebSocket';
 import SessionShareDialog from '../components/SessionShareDialog';
 import SessionInvitationDialog from '../components/SessionInvitationDialog';
 import SessionCollaboratorsPanel from '../components/SessionCollaboratorsPanel';
@@ -50,9 +54,36 @@ export default function SessionViewer() {
   const [collaboratorsDialogOpen, setCollaboratorsDialogOpen] = useState(false);
   const [isOwner, setIsOwner] = useState(false);
 
+  // WebSocket state
+  const [stateChangeNotification, setStateChangeNotification] = useState<string | null>(null);
+
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
   const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+
+  // Real-time session updates via WebSocket
+  const { isConnected, reconnectAttempts } = useSessionsWebSocket((updatedSessions) => {
+    if (!sessionId) return;
+
+    // Find this session in the update
+    const updatedSession = updatedSessions.find((s: any) => s.id === sessionId);
+    if (updatedSession && session) {
+      // Check if state changed
+      if (updatedSession.state !== session.state) {
+        setStateChangeNotification(
+          `Session state changed: ${session.state} → ${updatedSession.state}`
+        );
+
+        // If session was hibernated or terminated, show alert
+        if (updatedSession.state === 'hibernated' || updatedSession.state === 'terminated') {
+          setError(`Session has been ${updatedSession.state}. Please close this viewer.`);
+        }
+      }
+
+      // Update session data
+      setSession(updatedSession);
+    }
+  });
 
   useEffect(() => {
     if (!sessionId || !username) {
@@ -245,6 +276,21 @@ export default function SessionViewer() {
           <Typography variant="h6" sx={{ flexGrow: 1 }}>
             {session.template} - {session.name}
           </Typography>
+
+          {/* WebSocket Connection Status */}
+          <Chip
+            icon={isConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
+            label={
+              isConnected
+                ? 'Live Updates'
+                : reconnectAttempts > 0
+                ? `Reconnecting... (${reconnectAttempts})`
+                : 'Disconnected'
+            }
+            size="small"
+            color={isConnected ? 'success' : 'default'}
+            sx={{ mr: 2 }}
+          />
 
           <Chip
             label={`${session.activeConnections || 0} connection(s)`}
@@ -469,6 +515,15 @@ export default function SessionViewer() {
           <Button onClick={() => setInfoDialogOpen(false)}>Close</Button>
         </DialogActions>
       </Dialog>
+
+      {/* State Change Notification */}
+      <Snackbar
+        open={!!stateChangeNotification}
+        autoHideDuration={6000}
+        onClose={() => setStateChangeNotification(null)}
+        message={stateChangeNotification}
+        anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
+      />
     </Box>
   );
 }
