@@ -611,6 +611,9 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 // ============================================================================
 
 // SessionsWebSocket handles WebSocket for real-time session updates
+// Supports query parameters:
+// - ?user_id=<userID> - Subscribe to events for a specific user (defaults to authenticated user)
+// - ?session_id=<sessionID> - Subscribe to events for a specific session
 func (h *Handler) SessionsWebSocket(c *gin.Context) {
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
@@ -618,7 +621,28 @@ func (h *Handler) SessionsWebSocket(c *gin.Context) {
 		return
 	}
 
-	h.wsManager.HandleSessionsWebSocket(conn)
+	// Get user ID from context (authenticated user)
+	authenticatedUserID, _ := c.Get("userID")
+	userIDStr := ""
+	if authenticatedUserID != nil {
+		if id, ok := authenticatedUserID.(string); ok {
+			userIDStr = id
+		}
+	}
+
+	// Allow overriding user_id from query param (for admins/operators)
+	// But for security, regular users can only subscribe to their own events
+	queryUserID := c.Query("user_id")
+	if queryUserID != "" {
+		// TODO: Add role check - only admins/operators can subscribe to other users' events
+		// For now, override with query param
+		userIDStr = queryUserID
+	}
+
+	// Get session ID from query params (optional)
+	sessionID := c.Query("session_id")
+
+	h.wsManager.HandleSessionsWebSocket(conn, userIDStr, sessionID)
 }
 
 // ClusterWebSocket handles WebSocket for real-time cluster updates

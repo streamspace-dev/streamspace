@@ -22,16 +22,20 @@ type Manager struct {
 	metricsHub  *Hub
 	db          *db.Database
 	k8sClient   *k8s.Client
+	notifier    *Notifier
 }
 
 // NewManager creates a new WebSocket manager
 func NewManager(database *db.Database, k8sClient *k8s.Client) *Manager {
-	return &Manager{
+	m := &Manager{
 		sessionsHub: NewHub(),
 		metricsHub:  NewHub(),
 		db:          database,
 		k8sClient:   k8sClient,
 	}
+	// Initialize notifier with reference to manager
+	m.notifier = NewNotifier(m)
+	return m
 }
 
 // Start starts all WebSocket hubs
@@ -42,10 +46,62 @@ func (m *Manager) Start() {
 	go m.broadcastMetrics()
 }
 
+// GetNotifier returns the notifier for event-driven notifications
+func (m *Manager) GetNotifier() *Notifier {
+	return m.notifier
+}
+
 // HandleSessionsWebSocket handles WebSocket connections for session updates
-func (m *Manager) HandleSessionsWebSocket(conn *websocket.Conn) {
+// Supports subscribing to user-specific or session-specific events via query params:
+// - ?user_id=<userID> - Subscribe to all events for a specific user
+// - ?session_id=<sessionID> - Subscribe to events for a specific session
+func (m *Manager) HandleSessionsWebSocket(conn *websocket.Conn, userID, sessionID string) {
 	clientID := uuid.New().String()
+
+	// Subscribe to user or session events if specified
+	if userID != "" {
+		m.notifier.SubscribeUser(clientID, userID)
+	}
+	if sessionID != "" {
+		m.notifier.SubscribeSession(clientID, sessionID)
+	}
+
+	// Cleanup subscription on disconnect
+	defer m.notifier.UnsubscribeClient(clientID)
+
 	m.sessionsHub.ServeClient(conn, clientID)
+}
+
+// CloseAll closes all WebSocket connections and subscriptions
+func (m *Manager) CloseAll() {
+	log.Println("Closing all WebSocket connections...")
+
+	// Close notifier subscriptions
+	if m.notifier != nil {
+		m.notifier.CloseAll()
+	}
+
+	// Close session hub clients
+	if m.sessionsHub != nil {
+		m.sessionsHub.mu.Lock()
+		for client := range m.sessionsHub.clients {
+			close(client.send)
+		}
+		m.sessionsHub.clients = make(map[*Client]bool)
+		m.sessionsHub.mu.Unlock()
+	}
+
+	// Close metrics hub clients
+	if m.metricsHub != nil {
+		m.metricsHub.mu.Lock()
+		for client := range m.metricsHub.clients {
+			close(client.send)
+		}
+		m.metricsHub.clients = make(map[*Client]bool)
+		m.metricsHub.mu.Unlock()
+	}
+
+	log.Println("All WebSocket connections closed")
 }
 
 // HandleMetricsWebSocket handles WebSocket connections for metrics updates
