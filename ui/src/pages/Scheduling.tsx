@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -40,6 +40,8 @@ import {
   Link as LinkIcon,
 } from '@mui/icons-material';
 import Layout from '../components/Layout';
+import api from '../lib/api';
+import { toast } from '../lib/toast';
 
 interface ScheduledSession {
   id: number;
@@ -73,6 +75,7 @@ export default function Scheduling() {
   const [calendarIntegrations, setCalendarIntegrations] = useState<CalendarIntegration[]>([]);
   const [scheduleDialog, setScheduleDialog] = useState(false);
   const [connectCalendarDialog, setConnectCalendarDialog] = useState(false);
+  const [loading, setLoading] = useState(false);
 
   const [scheduleForm, setScheduleForm] = useState({
     name: '',
@@ -89,41 +92,157 @@ export default function Scheduling() {
     pre_warm_minutes: 5,
   });
 
-  const handleCreateSchedule = () => {
-    // TODO: API call to create scheduled session
-    console.log('Create schedule:', scheduleForm);
-    setScheduleDialog(false);
+  // Load initial data
+  useEffect(() => {
+    loadSchedules();
+    loadCalendarIntegrations();
+  }, []);
+
+  const loadSchedules = async () => {
+    try {
+      const response = await api.listScheduledSessions();
+      setSchedules(response.schedules);
+    } catch (error) {
+      console.error('Failed to load schedules:', error);
+    }
   };
 
-  const handleToggleSchedule = (id: number, enabled: boolean) => {
-    // TODO: API call to enable/disable schedule
-    setSchedules(schedules.map((s) => (s.id === id ? { ...s, enabled: !enabled } : s)));
+  const loadCalendarIntegrations = async () => {
+    try {
+      const response = await api.listCalendarIntegrations();
+      setCalendarIntegrations(response.integrations);
+    } catch (error) {
+      console.error('Failed to load calendar integrations:', error);
+    }
   };
 
-  const handleDeleteSchedule = (id: number) => {
-    // TODO: API call to delete schedule
-    setSchedules(schedules.filter((s) => s.id !== id));
+  const handleCreateSchedule = async () => {
+    setLoading(true);
+    try {
+      const requestData = {
+        name: scheduleForm.name,
+        template_id: scheduleForm.template_id,
+        timezone: scheduleForm.timezone,
+        schedule: {
+          type: scheduleForm.schedule_type as any,
+          time_of_day: scheduleForm.time_of_day,
+          days_of_week: scheduleForm.days_of_week,
+          day_of_month: scheduleForm.day_of_month,
+          cron_expr: scheduleForm.cron_expr,
+        },
+        auto_terminate: scheduleForm.auto_terminate,
+        terminate_after: scheduleForm.terminate_after,
+        pre_warm: scheduleForm.pre_warm,
+        pre_warm_minutes: scheduleForm.pre_warm_minutes,
+      };
+
+      await api.createScheduledSession(requestData);
+      toast.success('Scheduled session created successfully');
+      setScheduleDialog(false);
+      loadSchedules();
+    } catch (error) {
+      toast.error('Failed to create scheduled session');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleConnectCalendar = (provider: string) => {
-    // TODO: Initiate OAuth flow
-    console.log('Connect calendar:', provider);
-    setConnectCalendarDialog(false);
+  const handleToggleSchedule = async (id: number, enabled: boolean) => {
+    setLoading(true);
+    try {
+      if (enabled) {
+        await api.disableScheduledSession(id);
+        toast.success('Schedule disabled');
+      } else {
+        await api.enableScheduledSession(id);
+        toast.success('Schedule enabled');
+      }
+      loadSchedules();
+    } catch (error) {
+      toast.error('Failed to toggle schedule');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleDisconnectCalendar = (id: number) => {
-    // TODO: API call to disconnect calendar
-    setCalendarIntegrations(calendarIntegrations.filter((c) => c.id !== id));
+  const handleDeleteSchedule = async (id: number) => {
+    if (!confirm('Are you sure you want to delete this schedule?')) return;
+
+    setLoading(true);
+    try {
+      await api.deleteScheduledSession(id);
+      toast.success('Schedule deleted');
+      loadSchedules();
+    } catch (error) {
+      toast.error('Failed to delete schedule');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleSyncCalendar = (id: number) => {
-    // TODO: API call to trigger sync
-    console.log('Sync calendar:', id);
+  const handleConnectCalendar = async (provider: 'google' | 'outlook') => {
+    setLoading(true);
+    try {
+      const response = await api.connectCalendar(provider);
+      toast.success(response.message);
+      // Redirect to OAuth URL
+      if (response.auth_url) {
+        window.location.href = response.auth_url;
+      }
+      setConnectCalendarDialog(false);
+    } catch (error) {
+      toast.error('Failed to connect calendar');
+    } finally {
+      setLoading(false);
+    }
   };
 
-  const handleExportICal = () => {
-    // TODO: Download .ics file
-    console.log('Export iCal');
+  const handleDisconnectCalendar = async (id: number) => {
+    if (!confirm('Are you sure you want to disconnect this calendar?')) return;
+
+    setLoading(true);
+    try {
+      await api.disconnectCalendar(id);
+      toast.success('Calendar disconnected');
+      loadCalendarIntegrations();
+    } catch (error) {
+      toast.error('Failed to disconnect calendar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleSyncCalendar = async (id: number) => {
+    setLoading(true);
+    try {
+      await api.syncCalendar(id);
+      toast.success('Calendar synced successfully');
+      loadCalendarIntegrations();
+    } catch (error) {
+      toast.error('Failed to sync calendar');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleExportICal = async () => {
+    setLoading(true);
+    try {
+      const blob = await api.exportICalendar();
+      const url = window.URL.createObjectURL(blob);
+      const a = document.createElement('a');
+      a.href = url;
+      a.download = 'streamspace-schedule.ics';
+      document.body.appendChild(a);
+      a.click();
+      document.body.removeChild(a);
+      window.URL.revokeObjectURL(url);
+      toast.success('iCalendar file downloaded');
+    } catch (error) {
+      toast.error('Failed to export calendar');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getDayName = (day: number) => {

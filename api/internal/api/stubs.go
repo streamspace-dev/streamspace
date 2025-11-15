@@ -633,9 +633,19 @@ func (h *Handler) SessionsWebSocket(c *gin.Context) {
 	// Allow overriding user_id from query param (for admins/operators)
 	// But for security, regular users can only subscribe to their own events
 	queryUserID := c.Query("user_id")
-	if queryUserID != "" {
-		// TODO: Add role check - only admins/operators can subscribe to other users' events
-		// For now, override with query param
+	if queryUserID != "" && queryUserID != userIDStr {
+		// Check if user has admin or operator role
+		role := c.GetString("role")
+		if role != "admin" && role != "operator" {
+			// Regular users can only subscribe to their own events
+			log.Printf("Unauthorized attempt to subscribe to user %s by user %s (role: %s)", queryUserID, userIDStr, role)
+			conn.WriteJSON(map[string]interface{}{
+				"error": "Unauthorized: Only admins and operators can subscribe to other users' events",
+			})
+			conn.Close()
+			return
+		}
+		// Admin/operator can subscribe to any user's events
 		userIDStr = queryUserID
 	}
 
@@ -646,7 +656,19 @@ func (h *Handler) SessionsWebSocket(c *gin.Context) {
 }
 
 // ClusterWebSocket handles WebSocket for real-time cluster updates
+// Only admins and operators can view cluster-wide metrics
 func (h *Handler) ClusterWebSocket(c *gin.Context) {
+	// Check if user has admin or operator role
+	role := c.GetString("role")
+	if role != "admin" && role != "operator" {
+		userID := c.GetString("user_id")
+		log.Printf("Unauthorized attempt to access cluster metrics by user %s (role: %s)", userID, role)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Unauthorized: Only admins and operators can view cluster metrics",
+		})
+		return
+	}
+
 	conn, err := upgrader.Upgrade(c.Writer, c.Request, nil)
 	if err != nil {
 		log.Printf("Failed to upgrade WebSocket connection: %v", err)
@@ -657,7 +679,19 @@ func (h *Handler) ClusterWebSocket(c *gin.Context) {
 }
 
 // LogsWebSocket handles WebSocket for streaming pod logs
+// Only admins and operators can view pod logs
 func (h *Handler) LogsWebSocket(c *gin.Context) {
+	// Check if user has admin or operator role
+	role := c.GetString("role")
+	if role != "admin" && role != "operator" {
+		userID := c.GetString("user_id")
+		log.Printf("Unauthorized attempt to access pod logs by user %s (role: %s)", userID, role)
+		c.JSON(http.StatusForbidden, gin.H{
+			"error": "Unauthorized: Only admins and operators can view pod logs",
+		})
+		return
+	}
+
 	namespace := c.Param("namespace")
 	podName := c.Param("pod")
 

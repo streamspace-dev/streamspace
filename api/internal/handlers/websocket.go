@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"net/http"
+	"os"
+	"strings"
 	"sync"
 	"time"
 
@@ -61,10 +63,7 @@ func NewWebSocketHandler(database *db.Database) *WebSocketHandler {
 		upgrader: websocket.Upgrader{
 			ReadBufferSize:  1024,
 			WriteBufferSize: 1024,
-			CheckOrigin: func(r *http.Request) bool {
-				// TODO: Implement proper origin checking
-				return true
-			},
+			CheckOrigin:     checkWebSocketOrigin,
 		},
 		sessions:   make(map[string]*WebSocketSession),
 		broadcast:  make(chan *BroadcastMessage, 256),
@@ -76,6 +75,41 @@ func NewWebSocketHandler(database *db.Database) *WebSocketHandler {
 	go h.run()
 
 	return h
+}
+
+// checkWebSocketOrigin validates the origin of WebSocket upgrade requests
+func checkWebSocketOrigin(r *http.Request) bool {
+	origin := r.Header.Get("Origin")
+	if origin == "" {
+		// Allow requests without origin header (for non-browser clients)
+		return true
+	}
+
+	// Get allowed origins from environment variable
+	// Format: ALLOWED_ORIGINS=https://app.streamspace.io,https://streamspace.io
+	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+	if allowedOriginsEnv != "" {
+		allowedOrigins := strings.Split(allowedOriginsEnv, ",")
+		for _, allowed := range allowedOrigins {
+			if strings.TrimSpace(allowed) == origin {
+				return true
+			}
+		}
+	}
+
+	// Check if origin matches the request host (same-origin)
+	requestHost := r.Host
+	if strings.HasPrefix(origin, "http://"+requestHost) || strings.HasPrefix(origin, "https://"+requestHost) {
+		return true
+	}
+
+	// Allow localhost and 127.0.0.1 for development
+	if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
+		return true
+	}
+
+	// Reject all other origins
+	return false
 }
 
 // RegisterRoutes registers WebSocket routes

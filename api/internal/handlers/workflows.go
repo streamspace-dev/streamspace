@@ -333,8 +333,19 @@ func (h *Handler) ExecuteWorkflow(c *gin.Context) {
 		return
 	}
 
-	// TODO: Trigger actual workflow execution (async job)
-	// This would be handled by a background worker that processes the workflow steps
+	// Queue workflow execution for background worker processing
+	_, err = h.DB.Exec(`
+		INSERT INTO workflow_execution_queue (execution_id, workflow_id, priority, status, created_at)
+		VALUES ($1, $2, $3, 'queued', NOW())
+	`, executionID, workflowID, 5) // Default priority of 5
+
+	if err != nil {
+		// Log error but don't fail - execution record is created
+		fmt.Printf("Failed to queue workflow execution %d: %v\n", executionID, err)
+		// Update execution status to indicate queuing failure
+		h.DB.Exec(`UPDATE workflow_executions SET status = 'failed', error_message = $1 WHERE id = $2`,
+			"Failed to queue for execution", executionID)
+	}
 
 	c.JSON(http.StatusCreated, gin.H{
 		"execution_id": executionID,
@@ -499,7 +510,16 @@ func (h *Handler) CancelWorkflowExecution(c *gin.Context) {
 		return
 	}
 
-	// TODO: Signal the execution worker to stop processing
+	// Signal the execution worker to stop processing
+	_, err = h.DB.Exec(`
+		UPDATE workflow_execution_queue
+		SET status = 'cancelled', updated_at = NOW()
+		WHERE execution_id = $1 AND status IN ('queued', 'processing')
+	`, executionID)
+
+	if err != nil {
+		fmt.Printf("Failed to signal workflow cancellation for execution %d: %v\n", executionID, err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "execution cancelled successfully"})
 }

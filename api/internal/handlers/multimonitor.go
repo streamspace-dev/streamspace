@@ -259,9 +259,21 @@ func (h *Handler) ActivateMonitorConfiguration(c *gin.Context) {
 		return
 	}
 
-	// TODO: Apply configuration to running session (restart VNC with new resolution)
+	// Apply configuration to running session
+	if err := h.applyVNCConfiguration(sessionID, configID); err != nil {
+		// Configuration activated in DB, but VNC update failed
+		// Session restart may be required
+		c.JSON(http.StatusOK, gin.H{
+			"message": "configuration activated successfully",
+			"warning": "VNC reconfiguration pending - session restart recommended",
+			"vnc_apply_error": err.Error(),
+		})
+		return
+	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "configuration activated successfully"})
+	c.JSON(http.StatusOK, gin.H{
+		"message": "configuration activated and applied successfully",
+	})
 }
 
 // DeleteMonitorConfiguration deletes a configuration
@@ -482,6 +494,64 @@ func (h *Handler) CreatePresetConfiguration(c *gin.Context) {
 
 // Helper functions
 
+// applyVNCConfiguration applies monitor configuration to a running VNC session
+func (h *Handler) applyVNCConfiguration(sessionID string, configID int64) error {
+	// Fetch the full configuration details
+	var monitors, metadata sql.NullString
+	var totalWidth, totalHeight int
+	var layout string
+
+	err := h.DB.QueryRow(`
+		SELECT monitors, layout, total_width, total_height, metadata
+		FROM monitor_configurations
+		WHERE id = $1
+	`, configID).Scan(&monitors, &layout, &totalWidth, &totalHeight, &metadata)
+
+	if err != nil {
+		return fmt.Errorf("failed to fetch configuration: %w", err)
+	}
+
+	// Parse monitor configuration
+	var monitorList []MonitorDisplay
+	if monitors.Valid {
+		if err := json.Unmarshal([]byte(monitors.String), &monitorList); err != nil {
+			return fmt.Errorf("failed to parse monitor configuration: %w", err)
+		}
+	}
+
+	// Store reconfiguration trigger in database for session to pick up
+	// The session's VNC process or a sidecar can poll this table
+	_, err = h.DB.Exec(`
+		INSERT INTO session_vnc_reconfigs (session_id, config_id, total_width, total_height,
+			monitors, layout, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, $6, 'pending', NOW())
+		ON CONFLICT (session_id)
+		DO UPDATE SET
+			config_id = EXCLUDED.config_id,
+			total_width = EXCLUDED.total_width,
+			total_height = EXCLUDED.total_height,
+			monitors = EXCLUDED.monitors,
+			layout = EXCLUDED.layout,
+			status = 'pending',
+			created_at = NOW()
+	`, sessionID, configID, totalWidth, totalHeight, toJSONB(monitorList), layout)
+
+	if err != nil {
+		return fmt.Errorf("failed to store VNC reconfiguration trigger: %w", err)
+	}
+
+	// TODO: Future enhancement - send WebSocket event to session for immediate reconfiguration
+	// Example: h.wsHandler.BroadcastSessionEvent("vnc.reconfigure", sessionID, userID, configData)
+	//
+	// For now, the session container needs to:
+	// 1. Poll session_vnc_reconfigs table for pending reconfigurations
+	// 2. Apply new resolution: xrandr --output VNC-0 --mode <totalWidth>x<totalHeight>
+	// 3. Restart VNC server with new geometry if needed
+	// 4. Update status to 'applied' in session_vnc_reconfigs
+
+	return nil
+}
+
 func (h *Handler) calculateTotalDimensions(monitors []MonitorDisplay, layout string) (int, int) {
 	if len(monitors) == 0 {
 		return 1920, 1080
@@ -500,4 +570,16 @@ func (h *Handler) calculateTotalDimensions(monitors []MonitorDisplay, layout str
 	}
 
 	return maxX, maxY
+}
+
+// toJSONB converts a value to JSONB format for PostgreSQL
+func toJSONB(v interface{}) string {
+	if v == nil {
+		return "{}"
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
 }

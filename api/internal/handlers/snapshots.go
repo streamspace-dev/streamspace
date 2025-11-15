@@ -5,9 +5,11 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"log"
 	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -641,8 +643,80 @@ func (h *SnapshotsHandler) restoreSnapshotAsync(restoreID, snapshotID, sessionID
 }
 
 func (h *SnapshotsHandler) deleteSnapshotFiles(storagePath string) {
-	// In production, this would delete the actual snapshot files
-	// For now, just a placeholder
+	// Check if storage path is empty or invalid
+	if storagePath == "" {
+		log.Printf("Warning: Cannot delete snapshot files - empty storage path")
+		return
+	}
+
+	// Security check: Ensure path is within snapshot storage directory
+	baseDir := os.Getenv("SNAPSHOT_STORAGE_PATH")
+	if baseDir == "" {
+		baseDir = "/data/snapshots"
+	}
+
+	// Resolve absolute paths to prevent directory traversal
+	absStoragePath, err := filepath.Abs(storagePath)
+	if err != nil {
+		log.Printf("Error resolving snapshot path %s: %v", storagePath, err)
+		return
+	}
+
+	absBaseDir, err := filepath.Abs(baseDir)
+	if err != nil {
+		log.Printf("Error resolving base directory %s: %v", baseDir, err)
+		return
+	}
+
+	// Ensure the storage path is within the base directory
+	if !isSubPath(absStoragePath, absBaseDir) {
+		log.Printf("Security violation: Attempt to delete files outside snapshot storage: %s", absStoragePath)
+		return
+	}
+
+	// Check if path exists
+	if _, err := os.Stat(absStoragePath); os.IsNotExist(err) {
+		// Path doesn't exist, nothing to delete (already cleaned up or never created)
+		log.Printf("Snapshot path does not exist (already deleted): %s", absStoragePath)
+		return
+	}
+
+	// Delete the snapshot directory and all its contents
+	err = os.RemoveAll(absStoragePath)
+	if err != nil {
+		log.Printf("Error deleting snapshot files at %s: %v", absStoragePath, err)
+		return
+	}
+
+	log.Printf("Successfully deleted snapshot files at %s", absStoragePath)
+}
+
+// isSubPath checks if the child path is within the parent path
+func isSubPath(child, parent string) bool {
+	// Clean and resolve paths
+	cleanChild := filepath.Clean(child)
+	cleanParent := filepath.Clean(parent)
+
+	// Check if child starts with parent
+	rel, err := filepath.Rel(cleanParent, cleanChild)
+	if err != nil {
+		return false
+	}
+
+	// If relative path starts with "..", child is outside parent
+	return !filepath.IsAbs(rel) && !containsDotDot(rel)
+}
+
+// containsDotDot checks if a path contains ".." components
+func containsDotDot(path string) bool {
+	// Split path by separator and check each component
+	parts := strings.Split(path, string(filepath.Separator))
+	for _, part := range parts {
+		if part == ".." {
+			return true
+		}
+	}
+	return false
 }
 
 func (h *SnapshotsHandler) getDefaultSnapshotConfig() map[string]interface{} {

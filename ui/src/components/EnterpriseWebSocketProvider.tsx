@@ -43,7 +43,7 @@ export default function EnterpriseWebSocketProvider({
 
   const handleMessage = useCallback(
     (message: WebSocketMessage) => {
-      console.log('[EnterpriseWebSocket] Received message:', message);
+      // console.log('[EnterpriseWebSocket] Received message:', message);
 
       if (!enableNotifications) {
         return;
@@ -75,7 +75,8 @@ export default function EnterpriseWebSocketProvider({
           }
           break;
         default:
-          console.log('[EnterpriseWebSocket] Unknown message type:', message.type);
+          // console.log('[EnterpriseWebSocket] Unknown message type:', message.type);
+          break;
       }
     },
     [enableNotifications, addNotification]
@@ -129,7 +130,7 @@ export default function EnterpriseWebSocketProvider({
       }
     },
     onClose: () => {
-      console.log('[EnterpriseWebSocket] Connection closed');
+      // console.log('[EnterpriseWebSocket] Connection closed');
       if (enableNotifications && reconnectAttempts > 0) {
         addNotification('Reconnecting to real-time updates...', 'info');
       }

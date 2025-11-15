@@ -1,4 +1,4 @@
-import { useState } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -40,6 +40,8 @@ import {
   Speed as PerformanceIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
+import api from '../../lib/api';
+import { toast } from '../../lib/toast';
 
 interface LoadBalancingPolicy {
   id: number;
@@ -88,6 +90,7 @@ export default function Scaling() {
   const [nodes, setNodes] = useState<NodeStatus[]>([]);
   const [asPolicies, setAsPolicies] = useState<AutoScalingPolicy[]>([]);
   const [scalingHistory, setScalingHistory] = useState<ScalingEvent[]>([]);
+  const [loading, setLoading] = useState(false);
 
   const [lbDialog, setLbDialog] = useState(false);
   const [asDialog, setAsDialog] = useState(false);
@@ -109,21 +112,113 @@ export default function Scaling() {
     target_metric_value: 70,
   });
 
-  const handleCreateLBPolicy = () => {
-    // TODO: API call
-    console.log('Create LB policy:', lbForm);
-    setLbDialog(false);
+  // Load initial data
+  useEffect(() => {
+    loadLBPolicies();
+    loadNodes();
+    loadASPolicies();
+    loadScalingHistory();
+  }, []);
+
+  const loadLBPolicies = async () => {
+    try {
+      const response = await api.listLoadBalancingPolicies();
+      setLbPolicies(response.policies);
+    } catch (error) {
+      console.error('Failed to load load balancing policies:', error);
+    }
   };
 
-  const handleCreateASPolicy = () => {
-    // TODO: API call
-    console.log('Create AS policy:', asForm);
-    setAsDialog(false);
+  const loadNodes = async () => {
+    try {
+      const response = await api.getNodeStatus();
+      setNodes(response.nodes);
+    } catch (error) {
+      console.error('Failed to load nodes:', error);
+    }
   };
 
-  const handleTriggerScaling = (policyId: number, action: 'scale_up' | 'scale_down') => {
-    // TODO: API call
-    console.log('Trigger scaling:', policyId, action);
+  const loadASPolicies = async () => {
+    try {
+      const response = await api.listAutoScalingPolicies();
+      setAsPolicies(response.policies);
+    } catch (error) {
+      console.error('Failed to load auto-scaling policies:', error);
+    }
+  };
+
+  const loadScalingHistory = async () => {
+    try {
+      const response = await api.getScalingHistory();
+      setScalingHistory(response.events);
+    } catch (error) {
+      console.error('Failed to load scaling history:', error);
+    }
+  };
+
+  const handleCreateLBPolicy = async () => {
+    setLoading(true);
+    try {
+      await api.createLoadBalancingPolicy({
+        name: lbForm.name,
+        strategy: lbForm.strategy,
+        session_affinity: lbForm.session_affinity,
+      });
+      toast.success('Load balancing policy created');
+      setLbDialog(false);
+      setLbForm({ name: '', strategy: 'round_robin', session_affinity: false });
+      loadLBPolicies();
+    } catch (error) {
+      toast.error('Failed to create load balancing policy');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleCreateASPolicy = async () => {
+    setLoading(true);
+    try {
+      await api.createAutoScalingPolicy({
+        name: asForm.name,
+        target_type: asForm.target_type,
+        target_id: asForm.target_id,
+        scaling_mode: asForm.scaling_mode,
+        min_replicas: asForm.min_replicas,
+        max_replicas: asForm.max_replicas,
+        metric_type: asForm.metric_type,
+        target_metric_value: asForm.target_metric_value,
+      });
+      toast.success('Auto-scaling policy created');
+      setAsDialog(false);
+      setAsForm({
+        name: '',
+        target_type: 'template',
+        target_id: '',
+        scaling_mode: 'horizontal',
+        min_replicas: 1,
+        max_replicas: 10,
+        metric_type: 'cpu',
+        target_metric_value: 70,
+      });
+      loadASPolicies();
+    } catch (error) {
+      toast.error('Failed to create auto-scaling policy');
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  const handleTriggerScaling = async (policyId: number, action: 'scale_up' | 'scale_down') => {
+    setLoading(true);
+    try {
+      await api.triggerScaling(policyId, { action });
+      toast.success(`Scaling ${action === 'scale_up' ? 'up' : 'down'} triggered`);
+      loadScalingHistory();
+    } catch (error) {
+      toast.error('Failed to trigger scaling');
+    } finally {
+      setLoading(false);
+    }
   };
 
   const getStatusColor = (status: string) => {

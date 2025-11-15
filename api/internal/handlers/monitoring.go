@@ -6,10 +6,19 @@ import (
 	"fmt"
 	"net/http"
 	"runtime"
+	"runtime/debug"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace/streamspace/api/internal/db"
+)
+
+// Version information - can be set at build time with linker flags:
+// go build -ldflags "-X github.com/streamspace/streamspace/api/internal/handlers.Version=v1.2.3"
+var (
+	Version   = "dev"
+	GitCommit = "unknown"
+	BuildTime = "unknown"
 )
 
 // MonitoringHandler handles monitoring and metrics endpoints
@@ -605,8 +614,12 @@ func (h *MonitoringHandler) StorageHealth(c *gin.Context) {
 
 // SystemInfo returns static system information
 func (h *MonitoringHandler) SystemInfo(c *gin.Context) {
+	version := getVersionInfo()
+
 	c.JSON(http.StatusOK, gin.H{
-		"version":    "1.0.0", // TODO: Get from build info
+		"version":    version["version"],
+		"gitCommit":  version["gitCommit"],
+		"buildTime":  version["buildTime"],
 		"goVersion":  runtime.Version(),
 		"os":         runtime.GOOS,
 		"arch":       runtime.GOARCH,
@@ -882,4 +895,40 @@ func joinStrings(strings []string, separator string) string {
 		result += s
 	}
 	return result
+}
+
+// getVersionInfo returns version information from build info or defaults
+func getVersionInfo() map[string]string {
+	version := Version
+	gitCommit := GitCommit
+	buildTime := BuildTime
+
+	// Try to get version from build info if not set via linker flags
+	if version == "dev" {
+		if info, ok := debug.ReadBuildInfo(); ok {
+			if info.Main.Version != "" && info.Main.Version != "(devel)" {
+				version = info.Main.Version
+			}
+
+			// Extract git commit and build time from build settings
+			for _, setting := range info.Settings {
+				switch setting.Key {
+				case "vcs.revision":
+					if len(setting.Value) > 7 {
+						gitCommit = setting.Value[:7] // Short commit hash
+					} else {
+						gitCommit = setting.Value
+					}
+				case "vcs.time":
+					buildTime = setting.Value
+				}
+			}
+		}
+	}
+
+	return map[string]string{
+		"version":   version,
+		"gitCommit": gitCommit,
+		"buildTime": buildTime,
+	}
 }

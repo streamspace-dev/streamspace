@@ -1,13 +1,16 @@
 package handlers
 
 import (
+	"bytes"
 	"context"
 	"database/sql"
+	"encoding/csv"
 	"fmt"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/jung-kurt/gofpdf"
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
@@ -515,12 +518,150 @@ func (h *BillingHandler) PayInvoice(c *gin.Context) {
 // DownloadInvoice generates a downloadable invoice PDF
 func (h *BillingHandler) DownloadInvoice(c *gin.Context) {
 	invoiceID := c.Param("id")
+	userID, _ := c.Get("userID")
+	userIDStr := userID.(string)
 
-	// TODO: Implement PDF generation
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"message": "PDF generation not yet implemented",
-		"id":      invoiceID,
-	})
+	ctx := context.Background()
+
+	// Fetch invoice details
+	var id, targetUserID, invoiceNumber, status string
+	var periodStart, periodEnd, createdAt time.Time
+	var paidAt sql.NullTime
+	var amount float64
+
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT id, user_id, invoice_number, period_start, period_end, amount, status, created_at, paid_at
+		FROM invoices
+		WHERE id = $1
+	`, invoiceID).Scan(&id, &targetUserID, &invoiceNumber, &periodStart, &periodEnd, &amount, &status, &createdAt, &paidAt)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Invoice not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get invoice"})
+		return
+	}
+
+	// Verify ownership
+	if targetUserID != userIDStr {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Not authorized to view this invoice"})
+		return
+	}
+
+	// Fetch line items (sessions for this period)
+	rows, err := h.db.DB().QueryContext(ctx, `
+		SELECT
+			name,
+			template_name,
+			created_at,
+			terminated_at,
+			EXTRACT(EPOCH FROM (COALESCE(terminated_at, NOW()) - created_at)) / 3600 as hours,
+			EXTRACT(EPOCH FROM (COALESCE(terminated_at, NOW()) - created_at)) / 3600 *
+				((resources->>'cpu')::float * 0.01 + (resources->>'memory')::float * 0.005) as cost
+		FROM sessions
+		WHERE user_id = $1
+		AND created_at >= $2
+		AND created_at < $3
+		ORDER BY created_at
+	`, targetUserID, periodStart, periodEnd.AddDate(0, 0, 1))
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch line items"})
+		return
+	}
+	defer rows.Close()
+
+	type LineItem struct {
+		Name         string
+		Template     string
+		StartedAt    time.Time
+		TerminatedAt sql.NullTime
+		Hours        float64
+		Cost         float64
+	}
+
+	lineItems := []LineItem{}
+	for rows.Next() {
+		var item LineItem
+		rows.Scan(&item.Name, &item.Template, &item.StartedAt, &item.TerminatedAt, &item.Hours, &item.Cost)
+		lineItems = append(lineItems, item)
+	}
+
+	// Generate PDF
+	pdf := gofpdf.New("P", "mm", "A4", "")
+	pdf.AddPage()
+
+	// Header
+	pdf.SetFont("Arial", "B", 24)
+	pdf.Cell(0, 10, "StreamSpace Invoice")
+	pdf.Ln(12)
+
+	// Invoice details
+	pdf.SetFont("Arial", "", 11)
+	pdf.Cell(100, 6, "Invoice Number: "+invoiceNumber)
+	pdf.Ln(6)
+	pdf.Cell(100, 6, "Invoice Date: "+createdAt.Format("2006-01-02"))
+	pdf.Ln(6)
+	pdf.Cell(100, 6, "Period: "+periodStart.Format("2006-01-02")+" to "+periodEnd.Format("2006-01-02"))
+	pdf.Ln(6)
+	pdf.Cell(100, 6, "Status: "+status)
+	pdf.Ln(12)
+
+	// User details
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(0, 6, "Bill To:")
+	pdf.Ln(6)
+	pdf.SetFont("Arial", "", 11)
+	pdf.Cell(0, 6, "User ID: "+targetUserID)
+	pdf.Ln(12)
+
+	// Line items table
+	pdf.SetFont("Arial", "B", 11)
+	pdf.Cell(60, 8, "Session")
+	pdf.Cell(40, 8, "Template")
+	pdf.Cell(30, 8, "Hours")
+	pdf.Cell(30, 8, "Cost (USD)")
+	pdf.Ln(8)
+
+	pdf.SetFont("Arial", "", 10)
+	for _, item := range lineItems {
+		pdf.Cell(60, 6, item.Name)
+		pdf.Cell(40, 6, item.Template)
+		pdf.Cell(30, 6, fmt.Sprintf("%.2f", item.Hours))
+		pdf.Cell(30, 6, fmt.Sprintf("$%.2f", item.Cost))
+		pdf.Ln(6)
+	}
+
+	// Total
+	pdf.Ln(6)
+	pdf.SetFont("Arial", "B", 12)
+	pdf.Cell(130, 8, "Total Amount:")
+	pdf.Cell(30, 8, fmt.Sprintf("$%.2f", amount))
+	pdf.Ln(12)
+
+	// Payment status
+	if paidAt.Valid {
+		pdf.SetFont("Arial", "I", 10)
+		pdf.Cell(0, 6, "Paid on: "+paidAt.Time.Format("2006-01-02"))
+	} else {
+		pdf.SetFont("Arial", "I", 10)
+		pdf.Cell(0, 6, "Payment Status: Pending")
+	}
+
+	// Output PDF to buffer
+	var buf bytes.Buffer
+	err = pdf.Output(&buf)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate PDF"})
+		return
+	}
+
+	// Send PDF as download
+	c.Header("Content-Type", "application/pdf")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s.pdf", invoiceNumber))
+	c.Data(http.StatusOK, "application/pdf", buf.Bytes())
 }
 
 // GetSessionUsage returns session usage statistics
@@ -598,10 +739,124 @@ func (h *BillingHandler) GetStorageUsage(c *gin.Context) {
 
 // ExportUsage exports usage data in CSV format
 func (h *BillingHandler) ExportUsage(c *gin.Context) {
-	// TODO: Implement CSV export
-	c.JSON(http.StatusNotImplemented, gin.H{
-		"message": "CSV export not yet implemented",
+	userID, _ := c.Get("userID")
+	userIDStr := userID.(string)
+
+	// Get date range from query params (default to current month)
+	startDate := c.DefaultQuery("start_date", time.Now().AddDate(0, 0, -time.Now().Day()+1).Format("2006-01-02"))
+	endDate := c.DefaultQuery("end_date", time.Now().Format("2006-01-02"))
+
+	ctx := context.Background()
+
+	// Fetch usage data
+	rows, err := h.db.DB().QueryContext(ctx, `
+		SELECT
+			name,
+			template_name,
+			created_at,
+			terminated_at,
+			state,
+			resources->>'cpu' as cpu,
+			resources->>'memory' as memory,
+			EXTRACT(EPOCH FROM (COALESCE(terminated_at, NOW()) - created_at)) / 3600 as hours,
+			EXTRACT(EPOCH FROM (COALESCE(terminated_at, NOW()) - created_at)) / 3600 *
+				((resources->>'cpu')::float * 0.01 + (resources->>'memory')::float * 0.005) as cost
+		FROM sessions
+		WHERE user_id = $1
+		AND created_at >= $2::date
+		AND created_at < $3::date + INTERVAL '1 day'
+		ORDER BY created_at DESC
+	`, userIDStr, startDate, endDate)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch usage data"})
+		return
+	}
+	defer rows.Close()
+
+	// Create CSV writer
+	var buf bytes.Buffer
+	writer := csv.NewWriter(&buf)
+
+	// Write header
+	header := []string{
+		"Session Name",
+		"Template",
+		"Started At",
+		"Terminated At",
+		"State",
+		"CPU Cores",
+		"Memory (GB)",
+		"Duration (Hours)",
+		"Cost (USD)",
+	}
+	writer.Write(header)
+
+	// Write data rows
+	totalCost := 0.0
+	totalHours := 0.0
+	rowCount := 0
+
+	for rows.Next() {
+		var name, template, state, cpu, memory string
+		var createdAt time.Time
+		var terminatedAt sql.NullTime
+		var hours, cost float64
+
+		err := rows.Scan(&name, &template, &createdAt, &terminatedAt, &state, &cpu, &memory, &hours, &cost)
+		if err != nil {
+			continue
+		}
+
+		terminatedStr := "Running"
+		if terminatedAt.Valid {
+			terminatedStr = terminatedAt.Time.Format("2006-01-02 15:04:05")
+		}
+
+		row := []string{
+			name,
+			template,
+			createdAt.Format("2006-01-02 15:04:05"),
+			terminatedStr,
+			state,
+			cpu,
+			memory,
+			fmt.Sprintf("%.2f", hours),
+			fmt.Sprintf("%.2f", cost),
+		}
+		writer.Write(row)
+
+		totalCost += cost
+		totalHours += hours
+		rowCount++
+	}
+
+	// Write summary row
+	writer.Write([]string{}) // Empty row
+	writer.Write([]string{
+		"SUMMARY",
+		"",
+		"",
+		"",
+		"",
+		"",
+		fmt.Sprintf("%d sessions", rowCount),
+		fmt.Sprintf("%.2f", totalHours),
+		fmt.Sprintf("$%.2f", totalCost),
 	})
+
+	writer.Flush()
+
+	if err := writer.Error(); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to generate CSV"})
+		return
+	}
+
+	// Send CSV as download
+	filename := fmt.Sprintf("streamspace-usage-%s-to-%s.csv", startDate, endDate)
+	c.Header("Content-Type", "text/csv")
+	c.Header("Content-Disposition", fmt.Sprintf("attachment; filename=%s", filename))
+	c.Data(http.StatusOK, "text/csv", buf.Bytes())
 }
 
 // GetPricing returns current pricing configuration
@@ -636,9 +891,32 @@ func (h *BillingHandler) UpdatePricing(c *gin.Context) {
 		return
 	}
 
-	// TODO: Store pricing in database
+	ctx := context.Background()
+
+	// Store pricing configuration in database
+	// Using a simple key-value approach in a config table
+	_, err := h.db.DB().ExecContext(ctx, `
+		INSERT INTO billing_config (key, value, updated_at)
+		VALUES
+			('cpu_rate', $1, NOW()),
+			('memory_rate', $2, NOW()),
+			('storage_rate', $3, NOW())
+		ON CONFLICT (key)
+		DO UPDATE SET value = EXCLUDED.value, updated_at = NOW()
+	`, req.CPURate, req.MemoryRate, req.StorageRate)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update pricing"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Pricing updated successfully",
+		"pricing": gin.H{
+			"cpuRate":     req.CPURate,
+			"memoryRate":  req.MemoryRate,
+			"storageRate": req.StorageRate,
+		},
 	})
 }
 
@@ -792,6 +1070,9 @@ func (h *BillingHandler) GetBillingSettings(c *gin.Context) {
 
 // UpdateBillingSettings updates billing settings
 func (h *BillingHandler) UpdateBillingSettings(c *gin.Context) {
+	userID, _ := c.Get("userID")
+	userIDStr := userID.(string)
+
 	var req struct {
 		AutoPayEnabled bool   `json:"autoPayEnabled"`
 		BillingEmail   string `json:"billingEmail"`
@@ -803,8 +1084,31 @@ func (h *BillingHandler) UpdateBillingSettings(c *gin.Context) {
 		return
 	}
 
-	// TODO: Store settings in database
+	ctx := context.Background()
+
+	// Store billing settings in database
+	_, err := h.db.DB().ExecContext(ctx, `
+		INSERT INTO billing_settings (user_id, auto_pay_enabled, billing_email, tax_id, updated_at)
+		VALUES ($1, $2, $3, $4, NOW())
+		ON CONFLICT (user_id)
+		DO UPDATE SET
+			auto_pay_enabled = EXCLUDED.auto_pay_enabled,
+			billing_email = EXCLUDED.billing_email,
+			tax_id = EXCLUDED.tax_id,
+			updated_at = NOW()
+	`, userIDStr, req.AutoPayEnabled, req.BillingEmail, req.TaxID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update billing settings"})
+		return
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Billing settings updated successfully",
+		"settings": gin.H{
+			"autoPayEnabled": req.AutoPayEnabled,
+			"billingEmail":   req.BillingEmail,
+			"taxId":          req.TaxID,
+		},
 	})
 }

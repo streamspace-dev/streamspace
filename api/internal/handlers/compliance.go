@@ -3,6 +3,7 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
@@ -352,13 +353,221 @@ func (h *Handler) RecordViolation(c *gin.Context) {
 	h.DB.QueryRow(`SELECT name, violation_actions FROM compliance_policies WHERE id = $1`,
 		req.PolicyID).Scan(&policyName, &actions)
 
-	// TODO: Implement violation actions (notify, create ticket, etc.)
+	// Execute violation actions
+	h.executeViolationActions(id, req, policyName, actions)
 
 	c.JSON(http.StatusOK, gin.H{
 		"id":      id,
 		"message": "Compliance violation recorded",
 		"violation": req,
 	})
+}
+
+// executeViolationActions executes all configured actions for a compliance violation
+func (h *Handler) executeViolationActions(violationID int64, violation ComplianceViolation, policyName string, actions ViolationActionConfig) {
+	// Notify user if configured
+	if actions.NotifyUser {
+		h.notifyViolationToUser(violation, policyName)
+	}
+
+	// Notify admins if configured
+	if actions.NotifyAdmin {
+		h.notifyViolationToAdmins(violation, policyName)
+	}
+
+	// Create support ticket if configured
+	if actions.CreateTicket {
+		h.createViolationTicket(violationID, violation, policyName)
+	}
+
+	// Send escalation emails if configured
+	if len(actions.EscalationEmails) > 0 {
+		h.sendViolationEscalationEmails(violation, policyName, actions.EscalationEmails)
+	}
+
+	// Block action if configured (update user session or permissions)
+	if actions.BlockAction {
+		h.blockUserAction(violation)
+	}
+
+	// Suspend user if configured
+	if actions.SuspendUser {
+		h.suspendUserForViolation(violation, policyName)
+	}
+}
+
+// notifyViolationToUser sends a notification to the user about their violation
+func (h *Handler) notifyViolationToUser(violation ComplianceViolation, policyName string) {
+	notification := Notification{
+		UserID:   violation.UserID,
+		Type:     "compliance_violation",
+		Title:    "Compliance Policy Violation",
+		Message:  fmt.Sprintf("You have violated the policy '%s': %s", policyName, violation.Description),
+		Severity: violation.Severity,
+		Data: map[string]interface{}{
+			"policy_name":    policyName,
+			"violation_type": violation.ViolationType,
+			"severity":       violation.Severity,
+		},
+	}
+
+	// Send notification (errors logged but not propagated)
+	if err := h.SendNotification(&notification); err != nil {
+		log.Printf("Failed to send violation notification to user %s: %v", violation.UserID, err)
+	}
+}
+
+// notifyViolationToAdmins sends a notification to all admins about the violation
+func (h *Handler) notifyViolationToAdmins(violation ComplianceViolation, policyName string) {
+	// Query all admin users
+	rows, err := h.DB.Query(`SELECT user_id FROM users WHERE role = 'admin'`)
+	if err != nil {
+		log.Printf("Failed to query admin users: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	var adminIDs []string
+	for rows.Next() {
+		var adminID string
+		if err := rows.Scan(&adminID); err == nil {
+			adminIDs = append(adminIDs, adminID)
+		}
+	}
+
+	// Send notification to each admin
+	for _, adminID := range adminIDs {
+		notification := Notification{
+			UserID:   adminID,
+			Type:     "admin_compliance_alert",
+			Title:    "Compliance Violation Alert",
+			Message:  fmt.Sprintf("User %s violated policy '%s': %s", violation.UserID, policyName, violation.Description),
+			Severity: violation.Severity,
+			Data: map[string]interface{}{
+				"user_id":        violation.UserID,
+				"policy_name":    policyName,
+				"violation_type": violation.ViolationType,
+				"severity":       violation.Severity,
+			},
+		}
+
+		if err := h.SendNotification(&notification); err != nil {
+			log.Printf("Failed to send violation notification to admin %s: %v", adminID, err)
+		}
+	}
+}
+
+// createViolationTicket creates a support ticket for the violation
+func (h *Handler) createViolationTicket(violationID int64, violation ComplianceViolation, policyName string) {
+	title := fmt.Sprintf("Compliance Violation: %s", policyName)
+	description := fmt.Sprintf(
+		"User: %s\nPolicy: %s\nViolation Type: %s\nSeverity: %s\nDescription: %s",
+		violation.UserID, policyName, violation.ViolationType, violation.Severity, violation.Description,
+	)
+
+	_, err := h.DB.Exec(`
+		INSERT INTO support_tickets (user_id, title, description, priority, status, metadata, created_at)
+		VALUES ($1, $2, $3, $4, 'open', $5, NOW())
+	`, violation.UserID, title, description, violation.Severity, map[string]interface{}{
+		"violation_id":   violationID,
+		"policy_name":    policyName,
+		"violation_type": violation.ViolationType,
+		"auto_created":   true,
+	})
+
+	if err != nil {
+		log.Printf("Failed to create support ticket for violation %d: %v", violationID, err)
+	}
+}
+
+// sendViolationEscalationEmails sends escalation emails to specified addresses
+func (h *Handler) sendViolationEscalationEmails(violation ComplianceViolation, policyName string, emails []string) {
+	subject := fmt.Sprintf("ESCALATION: Compliance Violation - %s", policyName)
+	body := fmt.Sprintf(`
+A compliance policy violation requires escalation:
+
+User: %s
+Policy: %s
+Violation Type: %s
+Severity: %s
+Description: %s
+
+Time: %s
+
+Please review and take appropriate action.
+`,
+		violation.UserID, policyName, violation.ViolationType,
+		violation.Severity, violation.Description, time.Now().Format(time.RFC3339),
+	)
+
+	for _, email := range emails {
+		// Log the escalation email (actual email sending would require SMTP configuration)
+		log.Printf("Escalation email for violation would be sent to %s: %s", email, subject)
+
+		// Store escalation record
+		_, err := h.DB.Exec(`
+			INSERT INTO compliance_escalations (violation_id, escalated_to, escalation_type, created_at)
+			VALUES ($1, $2, 'email', NOW())
+		`, violation.ID, email)
+
+		if err != nil {
+			log.Printf("Failed to record escalation to %s: %v", email, err)
+		}
+	}
+}
+
+// blockUserAction blocks the user's current action or session
+func (h *Handler) blockUserAction(violation ComplianceViolation) {
+	// Update user's active sessions to mark them as blocked
+	_, err := h.DB.Exec(`
+		UPDATE sessions
+		SET metadata = jsonb_set(
+			COALESCE(metadata, '{}'::jsonb),
+			'{blocked_by_compliance}',
+			'true'::jsonb
+		)
+		WHERE user_id = $1 AND status = 'running'
+	`, violation.UserID)
+
+	if err != nil {
+		log.Printf("Failed to block user action for %s: %v", violation.UserID, err)
+	}
+}
+
+// suspendUserForViolation suspends the user account due to the violation
+func (h *Handler) suspendUserForViolation(violation ComplianceViolation, policyName string) {
+	_, err := h.DB.Exec(`
+		UPDATE users
+		SET status = 'suspended',
+		    metadata = jsonb_set(
+		        COALESCE(metadata, '{}'::jsonb),
+		        '{suspension_reason}',
+		        to_jsonb($1::text)
+		    )
+		WHERE user_id = $2
+	`, fmt.Sprintf("Suspended due to %s violation: %s", policyName, violation.Description), violation.UserID)
+
+	if err != nil {
+		log.Printf("Failed to suspend user %s: %v", violation.UserID, err)
+		return
+	}
+
+	// Terminate all active sessions
+	_, err = h.DB.Exec(`
+		UPDATE sessions
+		SET status = 'terminated',
+		    terminated_at = NOW(),
+		    metadata = jsonb_set(
+		        COALESCE(metadata, '{}'::jsonb),
+		        '{termination_reason}',
+		        '"compliance_violation"'::jsonb
+		    )
+		WHERE user_id = $1 AND status IN ('running', 'hibernated')
+	`, violation.UserID)
+
+	if err != nil {
+		log.Printf("Failed to terminate sessions for suspended user %s: %v", violation.UserID, err)
+	}
 }
 
 // ListViolations lists compliance violations

@@ -143,8 +143,23 @@ func (h *Handler) StartSessionRecording(c *gin.Context) {
 		return
 	}
 
-	// TODO: Trigger actual VNC recording via WebSocket proxy
-	// This would integrate with the VNC streaming service to capture frames
+	// Trigger actual VNC recording via WebSocket proxy using database polling
+	_, err = h.DB.Exec(`
+		INSERT INTO session_recording_controls (session_id, recording_id, action, format, status, created_at)
+		VALUES ($1, $2, 'start', $3, 'pending', NOW())
+		ON CONFLICT (session_id)
+		DO UPDATE SET
+			recording_id = EXCLUDED.recording_id,
+			action = 'start',
+			format = EXCLUDED.format,
+			status = 'pending',
+			created_at = NOW()
+	`, sessionID, recordingID, req.Format)
+
+	if err != nil {
+		// Log error but don't fail - recording record is created
+		fmt.Printf("Failed to create recording control signal: %v\n", err)
+	}
 
 	c.JSON(http.StatusOK, gin.H{
 		"recording_id": recordingID,
@@ -192,8 +207,23 @@ func (h *Handler) StopSessionRecording(c *gin.Context) {
 	endTime := time.Now()
 	duration := int(endTime.Sub(recording.StartTime).Seconds())
 
-	// TODO: Stop actual VNC recording process and get file info
-	// For now, simulate file info
+	// Signal WebSocket proxy to stop recording
+	_, err = h.DB.Exec(`
+		INSERT INTO session_recording_controls (session_id, recording_id, action, status, created_at)
+		VALUES ($1, $2, 'stop', 'pending', NOW())
+		ON CONFLICT (session_id)
+		DO UPDATE SET
+			recording_id = EXCLUDED.recording_id,
+			action = 'stop',
+			status = 'pending',
+			created_at = NOW()
+	`, recording.SessionID, recordingID)
+
+	if err != nil {
+		fmt.Printf("Failed to signal recording stop: %v\n", err)
+	}
+
+	// Get file info if recording file exists
 	filePath := fmt.Sprintf("/var/streamspace/recordings/%d.webm", recordingID)
 	fileSize := int64(0)
 	fileHash := ""

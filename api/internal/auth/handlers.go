@@ -2,6 +2,7 @@ package auth
 
 import (
 	"context"
+	"log"
 	"net/http"
 	"time"
 
@@ -285,20 +286,17 @@ func (h *AuthHandler) SAMLCallback(c *gin.Context) {
 
 	// Sync user groups from SAML assertion
 	if len(userAttrs.Groups) > 0 {
-		// TODO: Sync groups with database
-		// This would involve mapping SAML groups to local groups
-		// and updating user_groups table
+		err := h.syncSAMLGroups(ctx, user.ID, userAttrs.Groups)
+		if err != nil {
+			// Log error but don't fail authentication
+			log.Printf("Warning: Failed to sync SAML groups for user %s: %v", user.ID, err)
+		}
 	}
 
 	// Get user groups for JWT
-	groups, err := h.userDB.GetUserGroups(ctx, user.ID)
+	groupIDs, err := h.userDB.GetUserGroups(ctx, user.ID)
 	if err != nil {
-		groups = []string{} // Continue without groups if error
-	}
-
-	groupIDs := make([]string, len(groups))
-	for i, g := range groups {
-		groupIDs[i] = g.GroupID
+		groupIDs = []string{} // Continue without groups if error
 	}
 
 	// Generate JWT token
@@ -432,4 +430,94 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Password updated successfully",
 	})
+}
+
+// syncSAMLGroups synchronizes user's group memberships based on SAML assertion
+func (h *AuthHandler) syncSAMLGroups(ctx context.Context, userID string, samlGroups []string) error {
+	// Get direct database connection for group operations
+	dbConn := h.userDB.DB()
+
+	// Get existing groups user is a member of
+	existingGroups, err := h.userDB.GetUserGroups(ctx, userID)
+	if err != nil {
+		return err
+	}
+
+	// Create maps for efficient lookup
+	existingGroupMap := make(map[string]bool)
+	for _, groupID := range existingGroups {
+		existingGroupMap[groupID] = true
+	}
+
+	samlGroupMap := make(map[string]bool)
+	for _, groupName := range samlGroups {
+		samlGroupMap[groupName] = true
+	}
+
+	// For each SAML group, find matching local group and ensure membership
+	for _, samlGroupName := range samlGroups {
+		// Look up group by name
+		var groupID string
+		err := dbConn.QueryRowContext(ctx, `
+			SELECT id FROM groups WHERE name = $1
+		`, samlGroupName).Scan(&groupID)
+
+		if err != nil {
+			// Group doesn't exist in local database, skip
+			log.Printf("SAML group '%s' not found in local groups, skipping", samlGroupName)
+			continue
+		}
+
+		// Check if user is already a member
+		if !existingGroupMap[groupID] {
+			// Add user to group
+			_, err = dbConn.ExecContext(ctx, `
+				INSERT INTO group_memberships (group_id, user_id, role, added_at)
+				VALUES ($1, $2, 'member', NOW())
+				ON CONFLICT (group_id, user_id) DO NOTHING
+			`, groupID, userID)
+
+			if err != nil {
+				log.Printf("Failed to add user %s to group %s: %v", userID, groupID, err)
+			} else {
+				log.Printf("Added user %s to group %s (from SAML)", userID, groupID)
+			}
+		}
+	}
+
+	// Optional: Remove user from groups they're no longer in via SAML
+	// This is commented out by default to prevent accidental removals
+	// Uncomment if you want strict SAML group synchronization
+	/*
+	for _, groupID := range existingGroups {
+		// Get group name to check if it came from SAML
+		var groupName string
+		var isSAMLManaged bool
+		err := dbConn.QueryRowContext(ctx, `
+			SELECT name, COALESCE((metadata->>'saml_managed')::boolean, false)
+			FROM groups WHERE id = $1
+		`, groupID).Scan(&groupName, &isSAMLManaged)
+
+		if err != nil || !isSAMLManaged {
+			// Skip groups that aren't SAML-managed
+			continue
+		}
+
+		// If group is SAML-managed but not in current SAML assertion, remove membership
+		if !samlGroupMap[groupName] {
+			_, err = dbConn.ExecContext(ctx, `
+				DELETE FROM group_memberships
+				WHERE group_id = $1 AND user_id = $2
+			`, groupID, userID)
+
+			if err != nil {
+				log.Printf("Failed to remove user %s from group %s: %v", userID, groupID, err)
+			} else {
+				log.Printf("Removed user %s from group %s (no longer in SAML)", userID, groupID)
+			}
+		}
+	}
+	*/
+
+	return nil
 }

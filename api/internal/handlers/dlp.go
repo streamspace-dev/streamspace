@@ -426,9 +426,82 @@ func (h *Handler) LogDLPViolation(c *gin.Context) {
 	}
 
 	// Send notifications if configured
-	// TODO: Integrate with notification system
+	var notifyUser, notifyAdmin bool
+	h.DB.QueryRow(`SELECT notify_user, notify_admin FROM dlp_policies WHERE id = $1`,
+		violation.PolicyID).Scan(&notifyUser, &notifyAdmin)
+
+	if notifyUser || notifyAdmin {
+		h.sendDLPViolationNotifications(violation, notifyUser, notifyAdmin)
+	}
 
 	c.JSON(http.StatusCreated, violation)
+}
+
+// sendDLPViolationNotifications sends notifications for DLP violations
+func (h *Handler) sendDLPViolationNotifications(violation DLPViolation, notifyUser bool, notifyAdmin bool) {
+	// Notify user if configured
+	if notifyUser {
+		notification := Notification{
+			UserID:   violation.UserID,
+			Type:     "dlp_violation",
+			Title:    "Data Loss Prevention Alert",
+			Message:  fmt.Sprintf("DLP policy '%s' violation: %s", violation.PolicyName, violation.Description),
+			Severity: violation.Severity,
+			Data: map[string]interface{}{
+				"policy_name":    violation.PolicyName,
+				"violation_type": violation.ViolationType,
+				"session_id":     violation.SessionID,
+				"action":         violation.Action,
+			},
+		}
+
+		if err := h.SendNotification(&notification); err != nil {
+			// Log error but don't fail the request
+			fmt.Printf("Failed to send DLP notification to user %s: %v\n", violation.UserID, err)
+		}
+	}
+
+	// Notify admins if configured
+	if notifyAdmin {
+		// Query all admin users
+		rows, err := h.DB.Query(`SELECT user_id FROM users WHERE role = 'admin'`)
+		if err != nil {
+			fmt.Printf("Failed to query admin users for DLP notification: %v\n", err)
+			return
+		}
+		defer rows.Close()
+
+		var adminIDs []string
+		for rows.Next() {
+			var adminID string
+			if err := rows.Scan(&adminID); err == nil {
+				adminIDs = append(adminIDs, adminID)
+			}
+		}
+
+		// Send notification to each admin
+		for _, adminID := range adminIDs {
+			notification := Notification{
+				UserID:   adminID,
+				Type:     "admin_dlp_alert",
+				Title:    "DLP Violation Alert",
+				Message:  fmt.Sprintf("User %s violated DLP policy '%s': %s (Action: %s)", violation.UserID, violation.PolicyName, violation.Description, violation.Action),
+				Severity: violation.Severity,
+				Data: map[string]interface{}{
+					"user_id":        violation.UserID,
+					"policy_name":    violation.PolicyName,
+					"violation_type": violation.ViolationType,
+					"session_id":     violation.SessionID,
+					"action":         violation.Action,
+					"severity":       violation.Severity,
+				},
+			}
+
+			if err := h.SendNotification(&notification); err != nil {
+				fmt.Printf("Failed to send DLP notification to admin %s: %v\n", adminID, err)
+			}
+		}
+	}
 }
 
 // ListDLPViolations lists DLP violations with filtering
