@@ -252,6 +252,8 @@ func main() {
 	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database)
 	teamHandler := handlers.NewTeamHandler(database)
+	analyticsHandler := handlers.NewAnalyticsHandler(database)
+	preferencesHandler := handlers.NewPreferencesHandler(database)
 
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
@@ -267,7 +269,7 @@ func main() {
 	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, analyticsHandler, preferencesHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -348,7 +350,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, analyticsHandler *handlers.AnalyticsHandler, preferencesHandler *handlers.PreferencesHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -487,6 +489,13 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// Team-based RBAC - using dedicated handler
 			teamHandler.RegisterRoutes(protected)
 
+			// Analytics - using dedicated handler (operators and admins)
+			analyticsProtected := protected.Group("")
+			analyticsProtected.Use(operatorMiddleware)
+			{
+				analyticsHandler.RegisterRoutes(analyticsProtected)
+			}
+
 			// Audit logs (admins only for viewing, operators can view their own)
 			audit := protected.Group("/audit")
 			{
@@ -553,6 +562,9 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				// Get usage statistics for an API key
 				apiKeys.GET("/:id/usage", cache.CacheMiddleware(redisCache, 30*time.Second), apiKeyHandler.GetAPIKeyUsage)
 			}
+
+			// User preferences and settings - using dedicated handler (all authenticated users)
+			preferencesHandler.RegisterRoutes(protected)
 
 			// Metrics (operators/admins only)
 			protected.GET("/metrics", operatorMiddleware, h.GetMetrics)

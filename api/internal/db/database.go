@@ -716,6 +716,29 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_api_key_usage_log_api_key_id ON api_key_usage_log(api_key_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_key_usage_log_timestamp ON api_key_usage_log(timestamp DESC)`,
 		`CREATE INDEX IF NOT EXISTS idx_api_key_usage_log_key_timestamp ON api_key_usage_log(api_key_id, timestamp DESC)`,
+
+		// ========== User Preferences & Settings ==========
+
+		// User preferences (flexible JSONB storage for UI settings, notification preferences, defaults)
+		`CREATE TABLE IF NOT EXISTS user_preferences (
+			user_id VARCHAR(255) PRIMARY KEY REFERENCES users(id) ON DELETE CASCADE,
+			preferences JSONB DEFAULT '{}',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// User favorite templates (quick access to frequently used templates)
+		`CREATE TABLE IF NOT EXISTS user_favorite_templates (
+			user_id VARCHAR(255) REFERENCES users(id) ON DELETE CASCADE,
+			template_name VARCHAR(255) NOT NULL,
+			added_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			PRIMARY KEY (user_id, template_name)
+		)`,
+
+		// Create indexes for user preferences
+		`CREATE INDEX IF NOT EXISTS idx_user_preferences_user_id ON user_preferences(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_favorite_templates_user_id ON user_favorite_templates(user_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_user_favorite_templates_template ON user_favorite_templates(template_name)`,
 	}
 
 	// Execute migrations
