@@ -72,12 +72,12 @@ export function useEnterpriseWebSocket(
       }
 
       const wsUrl = getWebSocketUrl();
-      console.log(`[WebSocket] Connecting to ${wsUrl}`);
+      // console.log(`[WebSocket] Connecting to ${wsUrl}`);
 
       wsRef.current = new WebSocket(wsUrl);
 
       wsRef.current.onopen = () => {
-        console.log('[WebSocket] Connected to enterprise WebSocket');
+        // console.log('[WebSocket] Connected to enterprise WebSocket');
         setIsConnected(true);
         setReconnectAttempts(0);
         shouldReconnectRef.current = true;
@@ -90,7 +90,7 @@ export function useEnterpriseWebSocket(
       wsRef.current.onmessage = (event) => {
         try {
           const message: WebSocketMessage = JSON.parse(event.data);
-          console.log('[WebSocket] Received message:', message);
+          // console.log('[WebSocket] Received message:', message);
 
           setLastMessage(message);
 
@@ -112,7 +112,7 @@ export function useEnterpriseWebSocket(
       };
 
       wsRef.current.onclose = () => {
-        console.log('[WebSocket] Connection closed');
+        // console.log('[WebSocket] Connection closed');
         setIsConnected(false);
 
         if (onClose) {
@@ -125,9 +125,9 @@ export function useEnterpriseWebSocket(
           autoReconnect &&
           reconnectAttempts < maxReconnectAttempts
         ) {
-          console.log(
-            `[WebSocket] Attempting reconnection in ${reconnectInterval}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`
-          );
+          // console.log(
+          //   `[WebSocket] Attempting reconnection in ${reconnectInterval}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`
+          // );
 
           reconnectTimeoutRef.current = setTimeout(() => {
             setReconnectAttempts((prev) => prev + 1);
@@ -154,7 +154,7 @@ export function useEnterpriseWebSocket(
   ]);
 
   const disconnect = useCallback(() => {
-    console.log('[WebSocket] Disconnecting...');
+    // console.log('[WebSocket] Disconnecting...');
     shouldReconnectRef.current = false;
 
     // Clear reconnection timeout
@@ -202,7 +202,7 @@ export function useEnterpriseWebSocket(
   useEffect(() => {
     const handleVisibilityChange = () => {
       if (document.visibilityState === 'visible' && !isConnected) {
-        console.log('[WebSocket] Page visible, attempting reconnection');
+        // console.log('[WebSocket] Page visible, attempting reconnection');
         connect();
       }
     };

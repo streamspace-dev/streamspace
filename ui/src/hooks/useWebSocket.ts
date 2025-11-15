@@ -44,7 +44,7 @@ export function useWebSocket({
       const ws = new WebSocket(url);
 
       ws.onopen = () => {
-        console.log(`WebSocket connected: ${url}`);
+        // console.log(`WebSocket connected: ${url}`);
         setIsConnected(true);
         setReconnectAttempts(0);
         onOpen?.();
@@ -65,14 +65,14 @@ export function useWebSocket({
       };
 
       ws.onclose = () => {
-        console.log(`WebSocket closed: ${url}`);
+        // console.log(`WebSocket closed: ${url}`);
         setIsConnected(false);
         onClose?.();
 
         // Attempt reconnection with exponential backoff
         if (shouldReconnectRef.current && reconnectAttempts < maxReconnectAttempts) {
           const delay = Math.min(reconnectInterval * Math.pow(1.5, reconnectAttempts), 30000);
-          console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
+          // console.log(`Reconnecting in ${delay}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`);
 
           reconnectTimeoutRef.current = setTimeout(() => {
             setReconnectAttempts((prev) => prev + 1);
@@ -142,8 +142,8 @@ export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
         onUpdate(data.sessions);
       }
     },
-    onOpen: () => console.log('Sessions WebSocket connected'),
-    onClose: () => console.log('Sessions WebSocket disconnected'),
+    // onOpen: () => console.log('Sessions WebSocket connected'),
+    // onClose: () => console.log('Sessions WebSocket disconnected'),
   });
 }
 
@@ -161,8 +161,8 @@ export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
         onUpdate(data.metrics);
       }
     },
-    onOpen: () => console.log('Metrics WebSocket connected'),
-    onClose: () => console.log('Metrics WebSocket disconnected'),
+    // onOpen: () => console.log('Metrics WebSocket connected'),
+    // onClose: () => console.log('Metrics WebSocket disconnected'),
   });
 }
 
@@ -180,7 +180,7 @@ export function useLogsWebSocket(namespace: string, podName: string, onLog: (log
         onLog(data);
       }
     },
-    onOpen: () => console.log(`Logs WebSocket connected: ${namespace}/${podName}`),
-    onClose: () => console.log(`Logs WebSocket disconnected: ${namespace}/${podName}`),
+    // onOpen: () => console.log(`Logs WebSocket connected: ${namespace}/${podName}`),
+    // onClose: () => console.log(`Logs WebSocket disconnected: ${namespace}/${podName}`),
   });
 }
