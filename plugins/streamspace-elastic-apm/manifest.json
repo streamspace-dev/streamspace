@@ -1,0 +1,117 @@
+{
+  "name": "streamspace-elastic-apm",
+  "version": "1.0.0",
+  "displayName": "Elastic APM Integration",
+  "description": "Application Performance Monitoring with Elastic APM and distributed tracing",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Monitoring",
+  "tags": ["monitoring", "elastic", "apm", "performance", "tracing"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Elastic APM",
+        "description": "Enable APM monitoring with Elastic",
+        "default": true
+      },
+      "serverUrl": {
+        "type": "string",
+        "title": "APM Server URL",
+        "description": "Elastic APM Server URL (e.g., http://apm-server:8200)",
+        "default": "http://localhost:8200"
+      },
+      "secretToken": {
+        "type": "string",
+        "title": "Secret Token",
+        "description": "APM Server secret token for authentication",
+        "format": "password"
+      },
+      "apiKey": {
+        "type": "string",
+        "title": "API Key",
+        "description": "APM Server API key (alternative to secret token)",
+        "format": "password"
+      },
+      "serviceName": {
+        "type": "string",
+        "title": "Service Name",
+        "description": "Name of the service in Elastic APM",
+        "default": "streamspace"
+      },
+      "serviceVersion": {
+        "type": "string",
+        "title": "Service Version",
+        "description": "Version of the StreamSpace service",
+        "default": "1.0.0"
+      },
+      "environment": {
+        "type": "string",
+        "title": "Environment",
+        "description": "Environment name (production, staging, development)",
+        "default": "production"
+      },
+      "transactionSampleRate": {
+        "type": "number",
+        "title": "Transaction Sample Rate",
+        "description": "Percentage of transactions to sample (0.0-1.0)",
+        "default": 1.0,
+        "minimum": 0,
+        "maximum": 1
+      },
+      "captureBody": {
+        "type": "string",
+        "title": "Capture Request/Response Bodies",
+        "description": "Capture HTTP request/response bodies",
+        "enum": ["off", "errors", "transactions", "all"],
+        "default": "errors"
+      },
+      "captureHeaders": {
+        "type": "boolean",
+        "title": "Capture Headers",
+        "description": "Capture HTTP request/response headers",
+        "default": true
+      },
+      "stackTraceLimit": {
+        "type": "integer",
+        "title": "Stack Trace Limit",
+        "description": "Maximum depth of stack traces",
+        "default": 50,
+        "minimum": 0,
+        "maximum": 100
+      },
+      "transactionMaxSpans": {
+        "type": "integer",
+        "title": "Max Spans per Transaction",
+        "description": "Maximum number of spans per transaction",
+        "default": 500,
+        "minimum": 0,
+        "maximum": 1000
+      },
+      "globalLabels": {
+        "type": "object",
+        "title": "Global Labels",
+        "description": "Labels to add to all events",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {
+          "team": "platform"
+        }
+      }
+    },
+    "required": ["serverUrl", "serviceName"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.heartbeat": "OnSessionHeartbeat",
+    "user.created": "OnUserCreated"
+  }
+}

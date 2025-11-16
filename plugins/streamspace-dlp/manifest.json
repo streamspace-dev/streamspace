@@ -1,0 +1,151 @@
+{
+  "name": "streamspace-dlp",
+  "version": "1.0.0",
+  "displayName": "Data Loss Prevention (DLP)",
+  "description": "Prevent data exfiltration with comprehensive controls for clipboard, file transfers, screen capture, printing, USB devices, and network access",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Security",
+  "tags": ["dlp", "data-loss-prevention", "security", "clipboard", "file-transfer", "exfiltration"],
+  "permissions": ["database", "admin_ui", "network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable DLP",
+        "description": "Enable Data Loss Prevention policies",
+        "default": true
+      },
+      "defaultPolicy": {
+        "type": "string",
+        "title": "Default Policy Mode",
+        "description": "Default DLP enforcement mode",
+        "enum": ["permissive", "balanced", "strict"],
+        "default": "balanced"
+      },
+      "clipboardControl": {
+        "type": "object",
+        "title": "Clipboard Controls",
+        "properties": {
+          "enabled": {"type": "boolean", "default": true},
+          "direction": {
+            "type": "string",
+            "enum": ["disabled", "to_session", "from_session", "bidirectional"],
+            "default": "bidirectional"
+          },
+          "maxSize": {"type": "integer", "default": 1048576}
+        }
+      },
+      "fileTransferControl": {
+        "type": "object",
+        "title": "File Transfer Controls",
+        "properties": {
+          "enabled": {"type": "boolean", "default": true},
+          "uploadEnabled": {"type": "boolean", "default": true},
+          "downloadEnabled": {"type": "boolean", "default": true},
+          "maxFileSize": {"type": "integer", "default": 104857600},
+          "scanForMalware": {"type": "boolean", "default": true}
+        }
+      },
+      "screenCaptureControl": {
+        "type": "object",
+        "title": "Screen Capture Controls",
+        "properties": {
+          "enabled": {"type": "boolean", "default": false},
+          "watermarkEnabled": {"type": "boolean", "default": true},
+          "watermarkText": {"type": "string", "default": "{{user_id}} - {{timestamp}}"}
+        }
+      },
+      "deviceControl": {
+        "type": "object",
+        "title": "Device Controls",
+        "properties": {
+          "usbEnabled": {"type": "boolean", "default": false},
+          "audioEnabled": {"type": "boolean", "default": true},
+          "microphoneEnabled": {"type": "boolean", "default": false},
+          "webcamEnabled": {"type": "boolean", "default": false}
+        }
+      },
+      "networkControl": {
+        "type": "object",
+        "title": "Network Access Controls",
+        "properties": {
+          "enabled": {"type": "boolean", "default": true},
+          "allowedDomains": {"type": "array", "items": {"type": "string"}, "default": []},
+          "blockedDomains": {"type": "array", "items": {"type": "string"}, "default": []}
+        }
+      },
+      "violationActions": {
+        "type": "object",
+        "title": "Violation Actions",
+        "properties": {
+          "alertOnViolation": {"type": "boolean", "default": true},
+          "blockOnViolation": {"type": "boolean", "default": true},
+          "notifyUser": {"type": "boolean", "default": true},
+          "notifyAdmin": {"type": "boolean", "default": true}
+        }
+      }
+    }
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.clipboard_access": "OnClipboardAccess",
+    "session.file_transfer": "OnFileTransfer",
+    "session.screen_capture": "OnScreenCapture"
+  },
+  "database": {
+    "tables": [
+      "dlp_policies",
+      "dlp_violations",
+      "dlp_audit_log"
+    ]
+  },
+  "api": {
+    "endpoints": [
+      "/dlp/policies",
+      "/dlp/policies/:id",
+      "/dlp/violations",
+      "/dlp/violations/:id",
+      "/dlp/audit"
+    ]
+  },
+  "ui": {
+    "adminPages": [
+      {
+        "id": "dlp-dashboard",
+        "title": "DLP Dashboard",
+        "route": "/admin/dlp",
+        "component": "DLPDashboard",
+        "icon": "shield"
+      },
+      {
+        "id": "dlp-policies",
+        "title": "DLP Policies",
+        "route": "/admin/dlp/policies",
+        "component": "DLPPolicies",
+        "icon": "policy"
+      },
+      {
+        "id": "dlp-violations",
+        "title": "DLP Violations",
+        "route": "/admin/dlp/violations",
+        "component": "DLPViolations",
+        "icon": "warning"
+      }
+    ]
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "audit-dlp-policies",
+        "schedule": "0 */6 * * *",
+        "description": "Audit DLP policy effectiveness"
+      }
+    ]
+  }
+}

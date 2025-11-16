@@ -1,0 +1,79 @@
+{
+  "name": "streamspace-teams",
+  "version": "1.0.0",
+  "displayName": "Microsoft Teams Integration",
+  "description": "Send session and user event notifications to Microsoft Teams channels",
+  "author": "StreamSpace Team",
+  "license": "MIT",
+  "homepage": "https://github.com/JoshuaAFerguson/streamspace-plugins/tree/main/streamspace-teams",
+  "repository": "https://github.com/JoshuaAFerguson/streamspace-plugins",
+  "icon": "teams-icon.png",
+  "type": "webhook",
+  "category": "Integrations",
+  "tags": ["notifications", "teams", "microsoft", "integration", "messaging"],
+
+  "requirements": {
+    "streamspaceVersion": ">=1.0.0"
+  },
+
+  "entrypoints": {
+    "main": "teams_plugin.go"
+  },
+
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "webhookUrl": {
+        "type": "string",
+        "title": "Teams Webhook URL",
+        "description": "Your Microsoft Teams incoming webhook URL",
+        "pattern": "^https://.*\\.webhook\\.office\\.com/.*$"
+      },
+      "notifyOnSessionCreated": {
+        "type": "boolean",
+        "title": "Notify on Session Created",
+        "description": "Send notification when a session is created",
+        "default": true
+      },
+      "notifyOnSessionHibernated": {
+        "type": "boolean",
+        "title": "Notify on Session Hibernated",
+        "description": "Send notification when a session is hibernated",
+        "default": false
+      },
+      "notifyOnUserCreated": {
+        "type": "boolean",
+        "title": "Notify on User Created",
+        "description": "Send notification when a user is created",
+        "default": true
+      },
+      "includeDetails": {
+        "type": "boolean",
+        "title": "Include Details",
+        "description": "Include detailed information in notifications",
+        "default": true
+      },
+      "rateLimit": {
+        "type": "number",
+        "title": "Rate Limit (messages/hour)",
+        "description": "Maximum messages per hour to prevent spam",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 20
+      }
+    },
+    "required": ["webhookUrl"]
+  },
+
+  "defaultConfig": {
+    "notifyOnSessionCreated": true,
+    "notifyOnSessionHibernated": false,
+    "notifyOnUserCreated": true,
+    "includeDetails": true,
+    "rateLimit": 20
+  },
+
+  "permissions": [
+    "network"
+  ]
+}

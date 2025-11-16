@@ -1,0 +1,141 @@
+{
+  "name": "streamspace-analytics-advanced",
+  "version": "1.0.0",
+  "displayName": "Advanced Analytics & Reporting",
+  "description": "Comprehensive analytics and reporting for usage trends, session metrics, user engagement, resource utilization, and cost analysis",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Analytics",
+  "tags": ["analytics", "reporting", "metrics", "insights", "cost-analysis"],
+  "permissions": ["database", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Advanced Analytics",
+        "default": true
+      },
+      "costModel": {
+        "type": "object",
+        "title": "Cost Model Configuration",
+        "properties": {
+          "cpuCostPerHour": {
+            "type": "number",
+            "title": "CPU Cost Per Hour (USD)",
+            "default": 0.01,
+            "description": "Cost per CPU core per hour"
+          },
+          "memCostPerGBHour": {
+            "type": "number",
+            "title": "Memory Cost Per GB Hour (USD)",
+            "default": 0.005,
+            "description": "Cost per GB of memory per hour"
+          },
+          "storageCostPerGBMonth": {
+            "type": "number",
+            "title": "Storage Cost Per GB Month (USD)",
+            "default": 0.10,
+            "description": "Cost per GB of storage per month"
+          }
+        }
+      },
+      "retentionDays": {
+        "type": "integer",
+        "title": "Analytics Data Retention (Days)",
+        "default": 90,
+        "description": "How long to retain detailed analytics data"
+      },
+      "reportSchedule": {
+        "type": "object",
+        "title": "Scheduled Reports",
+        "properties": {
+          "dailyEnabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "weeklyEnabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "monthlyEnabled": {
+            "type": "boolean",
+            "default": true
+          },
+          "emailRecipients": {
+            "type": "array",
+            "items": {"type": "string", "format": "email"},
+            "default": []
+          }
+        }
+      },
+      "thresholds": {
+        "type": "object",
+        "title": "Alert Thresholds",
+        "properties": {
+          "shortSessionMinutes": {
+            "type": "integer",
+            "default": 5,
+            "description": "Sessions shorter than this are considered potential waste"
+          },
+          "idleTimeoutMinutes": {
+            "type": "integer",
+            "default": 30,
+            "description": "Idle time before recommending hibernation"
+          }
+        }
+      }
+    }
+  },
+  "database": {
+    "tables": ["analytics_cache", "analytics_reports"]
+  },
+  "api": {
+    "endpoints": [
+      "/analytics/usage/trends",
+      "/analytics/usage/by-template",
+      "/analytics/usage/by-user",
+      "/analytics/usage/by-team",
+      "/analytics/sessions/duration",
+      "/analytics/sessions/lifecycle",
+      "/analytics/sessions/peak-times",
+      "/analytics/engagement/active-users",
+      "/analytics/engagement/retention",
+      "/analytics/engagement/frequency",
+      "/analytics/resources/utilization",
+      "/analytics/resources/trends",
+      "/analytics/resources/waste",
+      "/analytics/cost/estimate",
+      "/analytics/cost/by-team",
+      "/analytics/cost/by-template",
+      "/analytics/reports/daily",
+      "/analytics/reports/weekly",
+      "/analytics/reports/monthly"
+    ]
+  },
+  "ui": {
+    "adminPages": [
+      {
+        "id": "analytics",
+        "title": "Analytics & Insights",
+        "route": "/admin/analytics",
+        "component": "Analytics",
+        "icon": "insights"
+      }
+    ]
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "generate-daily-report",
+        "schedule": "0 1 * * *",
+        "description": "Generate daily analytics report at 1 AM"
+      },
+      {
+        "name": "cleanup-old-analytics",
+        "schedule": "0 2 * * 0",
+        "description": "Clean up old analytics data weekly at 2 AM on Sundays"
+      }
+    ]
+  }
+}

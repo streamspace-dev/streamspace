@@ -252,17 +252,17 @@ func main() {
 	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database)
 	teamHandler := handlers.NewTeamHandler(database)
-	analyticsHandler := handlers.NewAnalyticsHandler(database)
+	// NOTE: Analytics is now handled by the streamspace-analytics-advanced plugin
 	preferencesHandler := handlers.NewPreferencesHandler(database)
 	notificationsHandler := handlers.NewNotificationsHandler(database)
 	searchHandler := handlers.NewSearchHandler(database)
-	snapshotsHandler := handlers.NewSnapshotsHandler(database)
+	// NOTE: Session snapshots now handled by streamspace-snapshots plugin
 	sessionTemplatesHandler := handlers.NewSessionTemplatesHandler(database)
 	batchHandler := handlers.NewBatchHandler(database)
 	monitoringHandler := handlers.NewMonitoringHandler(database)
 	quotasHandler := handlers.NewQuotasHandler(database)
 	websocketHandler := handlers.NewWebSocketHandler(database)
-	billingHandler := handlers.NewBillingHandler(database)
+	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
@@ -278,7 +278,7 @@ func main() {
 	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, analyticsHandler, preferencesHandler, notificationsHandler, searchHandler, snapshotsHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, billingHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -359,7 +359,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, analyticsHandler *handlers.AnalyticsHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, snapshotsHandler *handlers.SnapshotsHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, billingHandler *handlers.BillingHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -408,74 +408,14 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				sessions.POST("/:id/disconnect", h.DisconnectSession)
 				sessions.POST("/:id/heartbeat", h.SessionHeartbeat)
 
-				// Session recording endpoints (nested under sessions)
-				sessions.POST("/:sessionId/recordings/start", h.StartSessionRecording)
-				sessions.POST("/recordings/:recordingId/stop", h.StopSessionRecording)
-			}
+				// NOTE: Session recording is now handled by the streamspace-recording plugin
+				// Install it via: Admin → Plugins → streamspace-recording
 
-			// Session Recordings (recording management and playback)
-			recordings := protected.Group("/recordings")
-			{
-				recordings.GET("", h.ListSessionRecordings)
-				recordings.GET("/:recordingId", h.GetSessionRecording)
-				recordings.GET("/:recordingId/stream", h.StreamRecording)
-				recordings.GET("/:recordingId/download", h.DownloadRecording)
-				recordings.DELETE("/:recordingId", h.DeleteRecording)
-				recordings.GET("/stats", h.GetRecordingStats)
+		// NOTE: Data Loss Prevention (DLP) is now handled by the streamspace-dlp plugin
+		// Install it via: Admin → Plugins → streamspace-dlp
 
-				// Recording policies (admin/operator only)
-				recordingPolicies := recordings.Group("/policies")
-				recordingPolicies.Use(operatorMiddleware)
-				{
-					recordingPolicies.GET("", h.ListRecordingPolicies)
-					recordingPolicies.POST("", h.CreateRecordingPolicy)
-					recordingPolicies.PATCH("/:policyId", h.UpdateRecordingPolicy)
-					recordingPolicies.DELETE("/:policyId", h.DeleteRecordingPolicy)
-				}
-
-				// Cleanup expired recordings (admin only)
-				recordings.POST("/cleanup", operatorMiddleware, h.CleanupExpiredRecordings)
-			}
-
-			// Data Loss Prevention (DLP) - Admin/Operator only
-			dlp := protected.Group("/dlp")
-			dlp.Use(operatorMiddleware)
-			{
-				// DLP Policies
-				dlp.GET("/policies", h.ListDLPPolicies)
-				dlp.POST("/policies", h.CreateDLPPolicy)
-				dlp.GET("/policies/:policyId", h.GetDLPPolicy)
-				dlp.PATCH("/policies/:policyId", h.UpdateDLPPolicy)
-				dlp.DELETE("/policies/:policyId", h.DeleteDLPPolicy)
-
-				// DLP Violations
-				dlp.POST("/violations", h.LogDLPViolation)
-				dlp.GET("/violations", h.ListDLPViolations)
-				dlp.POST("/violations/:violationId/resolve", h.ResolveDLPViolation)
-
-				// DLP Statistics
-				dlp.GET("/stats", h.GetDLPStats)
-			}
-
-			// Workflow Automation - Operator/Admin only
-			workflows := protected.Group("/workflows")
-			workflows.Use(operatorMiddleware)
-			{
-				workflows.GET("", h.ListWorkflows)
-				workflows.POST("", h.CreateWorkflow)
-				workflows.GET("/:workflowId", h.GetWorkflow)
-				workflows.PATCH("/:workflowId", h.UpdateWorkflow)
-				workflows.DELETE("/:workflowId", h.DeleteWorkflow)
-				workflows.POST("/:workflowId/execute", h.ExecuteWorkflow)
-
-				// Workflow Executions
-				workflows.GET("/executions", h.ListWorkflowExecutions)
-				workflows.GET("/executions/:executionId", h.GetWorkflowExecution)
-				workflows.POST("/executions/:executionId/cancel", h.CancelWorkflowExecution)
-
-				// Workflow Statistics
-				workflows.GET("/stats", h.GetWorkflowStats)
-			}
+			// NOTE: Workflow Automation is now handled by the streamspace-workflows plugin
+			// Install it via: Admin → Plugins → streamspace-workflows
 
 			// In-Browser Console & File Manager
 			console := protected.Group("/console")
@@ -641,27 +581,8 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			compliance.POST("/violations", h.RecordViolation)
 			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
 
-			// Reports & Dashboard
-			compliance.POST("/reports/generate", h.GenerateComplianceReport)
-			compliance.GET("/dashboard", h.GetComplianceDashboard)
-		}
-
-			// Templates (read: all users, write: operators/admins)
-			templates := protected.Group("/templates")
-			{
-				// Cache template lists for 5 minutes (rarely changing)
-				templates.GET("", cache.CacheMiddleware(redisCache, 5*time.Minute), h.ListTemplates)
-
-				// User favorites (all authenticated users) - MUST be before /:id routes
-				templates.GET("/favorites", cache.CacheMiddleware(redisCache, 30*time.Second), h.ListUserFavoriteTemplates)
-
-				// Template details and favorite operations
-				templates.GET("/:id", cache.CacheMiddleware(redisCache, 5*time.Minute), h.GetTemplate)
-				templates.POST("/:id/favorite", cache.InvalidateCacheMiddleware(redisCache, cache.UserFavoritesPattern()), h.AddTemplateFavorite)
-				templates.DELETE("/:id/favorite", cache.InvalidateCacheMiddleware(redisCache, cache.UserFavoritesPattern()), h.RemoveTemplateFavorite)
-				templates.GET("/:id/favorite", cache.CacheMiddleware(redisCache, 30*time.Second), h.CheckTemplateFavorite)
-
-				// Write operations require operator role
+		// NOTE: Compliance & Governance is now handled by the streamspace-compliance plugin
+		// Install it via: Admin → Plugins → streamspace-compliance
 				templatesWrite := templates.Group("")
 				templatesWrite.Use(operatorMiddleware)
 				{
@@ -752,12 +673,8 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// Team-based RBAC - using dedicated handler
 			teamHandler.RegisterRoutes(protected)
 
-			// Analytics - using dedicated handler (operators and admins)
-			analyticsProtected := protected.Group("")
-			analyticsProtected.Use(operatorMiddleware)
-			{
-				analyticsHandler.RegisterRoutes(analyticsProtected)
-			}
+			// NOTE: Analytics & Reporting is now handled by the streamspace-analytics-advanced plugin
+			// Install it via: Admin → Plugins → streamspace-analytics-advanced
 
 			// Audit logs (admins only for viewing, operators can view their own)
 			audit := protected.Group("/audit")
@@ -835,8 +752,8 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// Advanced search and filtering - using dedicated handler (all authenticated users)
 			searchHandler.RegisterRoutes(protected)
 
-			// Session snapshots and restore - using dedicated handler (all authenticated users)
-			snapshotsHandler.RegisterRoutes(protected)
+			// NOTE: Session snapshots are now handled by the streamspace-snapshots plugin
+			// Install it via: Admin → Plugins → streamspace-snapshots
 
 			// Session templates and presets - using dedicated handler (all authenticated users)
 			sessionTemplatesHandler.RegisterRoutes(protected)
@@ -850,8 +767,8 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// Resource quotas and limits enforcement - using dedicated handler (operators/admins only)
 			quotasHandler.RegisterRoutes(protected.Group("", operatorMiddleware))
 
-			// Cost management and billing - using dedicated handler (all authenticated users)
-			billingHandler.RegisterRoutes(protected)
+			// NOTE: Billing is now handled by the streamspace-billing plugin
+			// Install it via: Admin → Plugins → streamspace-billing
 
 			// Metrics (operators/admins only)
 			protected.GET("/metrics", operatorMiddleware, h.GetMetrics)

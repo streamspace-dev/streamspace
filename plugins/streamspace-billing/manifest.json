@@ -1,0 +1,198 @@
+{
+  "name": "streamspace-billing",
+  "version": "1.0.0",
+  "displayName": "Billing & Usage Tracking",
+  "description": "Track resource usage, calculate costs, and manage subscriptions with Stripe integration",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Business",
+  "tags": ["billing", "stripe", "usage", "subscriptions", "invoicing"],
+  "permissions": ["network", "database", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Billing",
+        "description": "Enable billing and usage tracking",
+        "default": true
+      },
+      "billingMode": {
+        "type": "string",
+        "title": "Billing Mode",
+        "description": "How to charge users",
+        "enum": ["usage", "subscription", "hybrid"],
+        "default": "usage"
+      },
+      "stripeEnabled": {
+        "type": "boolean",
+        "title": "Enable Stripe Integration",
+        "description": "Integrate with Stripe for payment processing",
+        "default": false
+      },
+      "stripeSecretKey": {
+        "type": "string",
+        "title": "Stripe Secret Key",
+        "description": "Your Stripe API secret key (starts with sk_)",
+        "format": "password"
+      },
+      "stripeWebhookSecret": {
+        "type": "string",
+        "title": "Stripe Webhook Secret",
+        "description": "Stripe webhook signing secret",
+        "format": "password"
+      },
+      "computeRates": {
+        "type": "object",
+        "title": "Compute Rates",
+        "description": "Pricing per hour for different resource tiers",
+        "properties": {
+          "cpu_per_core_hour": {
+            "type": "number",
+            "title": "CPU per Core Hour ($)",
+            "default": 0.05
+          },
+          "memory_per_gb_hour": {
+            "type": "number",
+            "title": "Memory per GB Hour ($)",
+            "default": 0.01
+          },
+          "storage_per_gb_month": {
+            "type": "number",
+            "title": "Storage per GB Month ($)",
+            "default": 0.10
+          }
+        }
+      },
+      "subscriptionPlans": {
+        "type": "array",
+        "title": "Subscription Plans",
+        "description": "Available subscription tiers",
+        "items": {
+          "type": "object",
+          "properties": {
+            "id": {"type": "string"},
+            "name": {"type": "string"},
+            "price": {"type": "number"},
+            "interval": {"type": "string", "enum": ["month", "year"]},
+            "cpu_limit": {"type": "number"},
+            "memory_limit": {"type": "number"},
+            "storage_limit": {"type": "number"}
+          }
+        }
+      },
+      "invoiceDay": {
+        "type": "integer",
+        "title": "Invoice Day of Month",
+        "description": "Day of the month to generate invoices (1-28)",
+        "default": 1,
+        "minimum": 1,
+        "maximum": 28
+      },
+      "usageCalculationInterval": {
+        "type": "string",
+        "title": "Usage Calculation Interval",
+        "description": "How often to calculate usage (cron expression)",
+        "default": "0 * * * *"
+      },
+      "alertThreshold": {
+        "type": "number",
+        "title": "Usage Alert Threshold (%)",
+        "description": "Send alert when usage exceeds this percentage of quota",
+        "default": 80,
+        "minimum": 0,
+        "maximum": 100
+      },
+      "autoSuspendOnOverage": {
+        "type": "boolean",
+        "title": "Auto-Suspend on Overage",
+        "description": "Automatically suspend sessions when quota exceeded",
+        "default": false
+      },
+      "gracePeriodDays": {
+        "type": "integer",
+        "title": "Grace Period (Days)",
+        "description": "Days before suspending service for non-payment",
+        "default": 7,
+        "minimum": 0,
+        "maximum": 30
+      }
+    },
+    "required": []
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.heartbeat": "OnSessionHeartbeat",
+    "user.created": "OnUserCreated"
+  },
+  "database": {
+    "tables": [
+      "billing_usage_records",
+      "billing_invoices",
+      "billing_subscriptions",
+      "billing_payments",
+      "billing_credits"
+    ]
+  },
+  "api": {
+    "endpoints": [
+      "/billing/usage",
+      "/billing/invoices",
+      "/billing/subscriptions",
+      "/billing/payment-methods",
+      "/billing/create-checkout"
+    ]
+  },
+  "ui": {
+    "widgets": [
+      {
+        "id": "billing-usage-widget",
+        "title": "Current Usage",
+        "component": "BillingUsageWidget",
+        "position": "right-sidebar"
+      }
+    ],
+    "pages": [
+      {
+        "id": "billing-dashboard",
+        "title": "Billing & Usage",
+        "route": "/billing",
+        "component": "BillingDashboard",
+        "icon": "receipt"
+      }
+    ],
+    "adminPages": [
+      {
+        "id": "admin-billing",
+        "title": "Billing Management",
+        "route": "/admin/billing",
+        "component": "AdminBillingPage",
+        "icon": "account_balance"
+      }
+    ]
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "calculate-usage",
+        "schedule": "0 * * * *",
+        "description": "Calculate hourly usage"
+      },
+      {
+        "name": "generate-invoices",
+        "schedule": "0 0 1 * *",
+        "description": "Generate monthly invoices"
+      },
+      {
+        "name": "check-quotas",
+        "schedule": "*/15 * * * *",
+        "description": "Check usage quotas"
+      }
+    ]
+  }
+}

@@ -1,0 +1,142 @@
+{
+  "name": "streamspace-auth-saml",
+  "version": "1.0.0",
+  "displayName": "SAML 2.0 Authentication",
+  "description": "Enterprise SSO authentication with SAML 2.0 protocol - supports Okta, OneLogin, Azure AD, Google Workspace, JumpCloud, and Auth0",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Authentication",
+  "tags": ["saml", "sso", "authentication", "enterprise", "okta", "onelogin", "azure-ad"],
+  "permissions": ["network", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable SAML Authentication",
+        "default": false
+      },
+      "provider": {
+        "type": "string",
+        "title": "SAML Provider",
+        "enum": ["okta", "onelogin", "azure-ad", "google", "jumpcloud", "auth0", "custom"],
+        "default": "custom"
+      },
+      "entityID": {
+        "type": "string",
+        "title": "Service Provider Entity ID",
+        "description": "Unique identifier for your StreamSpace instance"
+      },
+      "metadataURL": {
+        "type": "string",
+        "title": "Identity Provider Metadata URL",
+        "description": "URL to fetch IdP metadata from (leave empty to use XML)"
+      },
+      "metadataXML": {
+        "type": "string",
+        "title": "Identity Provider Metadata XML",
+        "description": "Paste IdP metadata XML here if not using URL",
+        "format": "textarea"
+      },
+      "certificate": {
+        "type": "string",
+        "title": "Service Provider Certificate (PEM)",
+        "format": "textarea",
+        "description": "X.509 certificate for signing SAML requests"
+      },
+      "privateKey": {
+        "type": "string",
+        "title": "Service Provider Private Key (PEM)",
+        "format": "password",
+        "description": "RSA private key (keep secret!)"
+      },
+      "allowIDPInitiated": {
+        "type": "boolean",
+        "title": "Allow IdP-Initiated Login",
+        "default": true
+      },
+      "signRequest": {
+        "type": "boolean",
+        "title": "Sign SAML Requests",
+        "default": true
+      },
+      "forceAuthn": {
+        "type": "boolean",
+        "title": "Force Re-authentication",
+        "default": false,
+        "description": "Require users to re-authenticate even if they have an active IdP session"
+      },
+      "attributeMapping": {
+        "type": "object",
+        "title": "Attribute Mapping",
+        "description": "Map SAML attributes to user fields",
+        "properties": {
+          "email": {
+            "type": "string",
+            "default": "email",
+            "description": "SAML attribute name for email"
+          },
+          "username": {
+            "type": "string",
+            "default": "username",
+            "description": "SAML attribute name for username"
+          },
+          "firstName": {
+            "type": "string",
+            "default": "firstName",
+            "description": "SAML attribute name for first name"
+          },
+          "lastName": {
+            "type": "string",
+            "default": "lastName",
+            "description": "SAML attribute name for last name"
+          },
+          "groups": {
+            "type": "string",
+            "default": "groups",
+            "description": "SAML attribute name for groups/roles"
+          }
+        }
+      },
+      "autoProvisionUsers": {
+        "type": "boolean",
+        "title": "Auto-Provision Users",
+        "default": true,
+        "description": "Automatically create user accounts on first SAML login"
+      },
+      "defaultRole": {
+        "type": "string",
+        "title": "Default User Role",
+        "enum": ["user", "operator", "admin"],
+        "default": "user",
+        "description": "Default role for auto-provisioned users"
+      }
+    },
+    "required": ["entityID"]
+  },
+  "api": {
+    "endpoints": [
+      "/saml/metadata",
+      "/saml/acs",
+      "/saml/slo",
+      "/saml/login",
+      "/saml/logout"
+    ]
+  },
+  "ui": {
+    "adminPages": [
+      {
+        "id": "saml-auth",
+        "title": "SAML Configuration",
+        "route": "/admin/auth/saml",
+        "component": "SAMLAuth",
+        "icon": "shield"
+      }
+    ],
+    "loginButton": {
+      "enabled": true,
+      "label": "Sign in with SSO",
+      "icon": "business"
+    }
+  }
+}

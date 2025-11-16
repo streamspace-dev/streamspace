@@ -1,0 +1,130 @@
+{
+  "name": "streamspace-newrelic",
+  "version": "1.0.0",
+  "displayName": "New Relic Monitoring",
+  "description": "Send performance metrics, traces, and events to New Relic for full-stack observability",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Monitoring",
+  "tags": ["monitoring", "newrelic", "apm", "metrics", "observability"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable New Relic Integration",
+        "description": "Enable sending metrics and events to New Relic",
+        "default": true
+      },
+      "licenseKey": {
+        "type": "string",
+        "title": "New Relic License Key",
+        "description": "Your New Relic license key (Ingest - License)",
+        "format": "password"
+      },
+      "accountId": {
+        "type": "string",
+        "title": "Account ID",
+        "description": "Your New Relic account ID"
+      },
+      "region": {
+        "type": "string",
+        "title": "Data Center Region",
+        "description": "New Relic data center region",
+        "enum": ["US", "EU"],
+        "default": "US"
+      },
+      "appName": {
+        "type": "string",
+        "title": "Application Name",
+        "description": "Application name in New Relic",
+        "default": "StreamSpace"
+      },
+      "enableMetrics": {
+        "type": "boolean",
+        "title": "Enable Metrics",
+        "description": "Send custom metrics to New Relic",
+        "default": true
+      },
+      "enableEvents": {
+        "type": "boolean",
+        "title": "Enable Custom Events",
+        "description": "Send custom events to New Relic",
+        "default": true
+      },
+      "enableTraces": {
+        "type": "boolean",
+        "title": "Enable Distributed Tracing",
+        "description": "Send distributed traces to New Relic APM",
+        "default": true
+      },
+      "enableLogs": {
+        "type": "boolean",
+        "title": "Enable Logs",
+        "description": "Send logs to New Relic Logs",
+        "default": false
+      },
+      "metricsInterval": {
+        "type": "integer",
+        "title": "Metrics Interval (seconds)",
+        "description": "How often to send metrics to New Relic",
+        "default": 60,
+        "minimum": 5,
+        "maximum": 300
+      },
+      "trackSessionMetrics": {
+        "type": "boolean",
+        "title": "Track Session Metrics",
+        "description": "Track session lifecycle and duration",
+        "default": true
+      },
+      "trackResourceMetrics": {
+        "type": "boolean",
+        "title": "Track Resource Metrics",
+        "description": "Track CPU, memory, and storage usage",
+        "default": true
+      },
+      "trackUserMetrics": {
+        "type": "boolean",
+        "title": "Track User Metrics",
+        "description": "Track user activity and engagement",
+        "default": true
+      },
+      "customAttributes": {
+        "type": "object",
+        "title": "Custom Attributes",
+        "description": "Custom attributes to add to all events and metrics",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {
+          "environment": "production",
+          "service": "streamspace"
+        }
+      }
+    },
+    "required": ["licenseKey", "accountId"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.heartbeat": "OnSessionHeartbeat",
+    "user.created": "OnUserCreated",
+    "user.login": "OnUserLogin",
+    "user.logout": "OnUserLogout"
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "send-metrics",
+        "schedule": "*/1 * * * *",
+        "description": "Send metrics to New Relic"
+      }
+    ]
+  }
+}

@@ -1,0 +1,127 @@
+{
+  "name": "streamspace-sentry",
+  "version": "1.0.0",
+  "displayName": "Sentry Error Tracking",
+  "description": "Track errors, exceptions, and performance issues with Sentry integration",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Monitoring",
+  "tags": ["monitoring", "sentry", "errors", "exceptions", "performance"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Sentry Integration",
+        "description": "Enable error tracking and performance monitoring with Sentry",
+        "default": true
+      },
+      "dsn": {
+        "type": "string",
+        "title": "Sentry DSN",
+        "description": "Your Sentry Data Source Name (DSN)",
+        "format": "password"
+      },
+      "environment": {
+        "type": "string",
+        "title": "Environment",
+        "description": "Environment name (production, staging, development)",
+        "default": "production"
+      },
+      "release": {
+        "type": "string",
+        "title": "Release Version",
+        "description": "StreamSpace release version for tracking",
+        "default": "1.0.0"
+      },
+      "serverName": {
+        "type": "string",
+        "title": "Server Name",
+        "description": "Server/instance identifier",
+        "default": "streamspace-api"
+      },
+      "enableTracing": {
+        "type": "boolean",
+        "title": "Enable Performance Tracing",
+        "description": "Track performance and transaction data",
+        "default": true
+      },
+      "tracesSampleRate": {
+        "type": "number",
+        "title": "Traces Sample Rate",
+        "description": "Percentage of transactions to trace (0.0-1.0)",
+        "default": 0.1,
+        "minimum": 0,
+        "maximum": 1
+      },
+      "attachStacktrace": {
+        "type": "boolean",
+        "title": "Attach Stack Trace",
+        "description": "Attach stack traces to all events",
+        "default": true
+      },
+      "sendDefaultPii": {
+        "type": "boolean",
+        "title": "Send Default PII",
+        "description": "Send personally identifiable information (user IDs, IPs)",
+        "default": false
+      },
+      "captureSessionErrors": {
+        "type": "boolean",
+        "title": "Capture Session Errors",
+        "description": "Automatically capture session-related errors",
+        "default": true
+      },
+      "captureAPIErrors": {
+        "type": "boolean",
+        "title": "Capture API Errors",
+        "description": "Automatically capture API errors and failures",
+        "default": true
+      },
+      "captureUnhandledErrors": {
+        "type": "boolean",
+        "title": "Capture Unhandled Errors",
+        "description": "Capture unhandled exceptions and panics",
+        "default": true
+      },
+      "ignoreErrors": {
+        "type": "array",
+        "title": "Ignore Error Patterns",
+        "description": "Error messages to ignore (regex patterns)",
+        "items": {
+          "type": "string"
+        },
+        "default": ["context canceled", "connection reset"]
+      },
+      "beforeSend": {
+        "type": "string",
+        "title": "Before Send Hook",
+        "description": "Custom JavaScript function to modify events before sending",
+        "default": ""
+      },
+      "tags": {
+        "type": "object",
+        "title": "Global Tags",
+        "description": "Tags to attach to all Sentry events",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {
+          "service": "streamspace"
+        }
+      }
+    },
+    "required": ["dsn"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.error": "OnSessionError",
+    "user.created": "OnUserCreated"
+  }
+}

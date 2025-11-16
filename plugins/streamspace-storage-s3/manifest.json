@@ -1,0 +1,52 @@
+{
+  "name": "streamspace-storage-s3",
+  "version": "1.0.0",
+  "displayName": "S3 Object Storage",
+  "description": "AWS S3 and S3-compatible object storage backend for session recordings, snapshots, and file storage - supports AWS S3, MinIO, DigitalOcean Spaces, and Wasabi",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Storage",
+  "tags": ["storage", "s3", "aws", "minio", "object-storage", "cloud"],
+  "permissions": ["network", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": false},
+      "provider": {
+        "type": "string",
+        "enum": ["aws-s3", "minio", "digitalocean-spaces", "wasabi", "custom"],
+        "default": "aws-s3"
+      },
+      "endpoint": {"type": "string", "title": "S3 Endpoint URL", "description": "Leave empty for AWS S3"},
+      "region": {"type": "string", "default": "us-east-1"},
+      "bucket": {"type": "string", "title": "Bucket Name"},
+      "accessKeyID": {"type": "string", "title": "Access Key ID"},
+      "secretAccessKey": {"type": "string", "title": "Secret Access Key", "format": "password"},
+      "useSSL": {"type": "boolean", "default": true},
+      "pathStyle": {"type": "boolean", "title": "Use Path-Style URLs", "default": false, "description": "Required for MinIO"},
+      "storagePaths": {
+        "type": "object",
+        "properties": {
+          "recordings": {"type": "string", "default": "recordings/"},
+          "snapshots": {"type": "string", "default": "snapshots/"},
+          "uploads": {"type": "string", "default": "uploads/"}
+        }
+      },
+      "encryption": {
+        "type": "object",
+        "properties": {
+          "enabled": {"type": "boolean", "default": true},
+          "algorithm": {"type": "string", "enum": ["AES256", "aws:kms"], "default": "AES256"},
+          "kmsKeyID": {"type": "string", "description": "KMS Key ID for aws:kms encryption"}
+        }
+      }
+    },
+    "required": ["bucket", "accessKeyID", "secretAccessKey"]
+  },
+  "api": {
+    "endpoints": ["/storage/s3/upload", "/storage/s3/download", "/storage/s3/list"]
+  },
+  "ui": {
+    "adminPages": [{"id": "s3-storage", "title": "S3 Storage", "route": "/admin/storage/s3", "component": "S3Storage", "icon": "cloud"}]
+  }
+}

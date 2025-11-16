@@ -1,0 +1,116 @@
+{
+  "name": "streamspace-datadog",
+  "version": "1.0.0",
+  "displayName": "Datadog Monitoring",
+  "description": "Send metrics, traces, and logs to Datadog for comprehensive observability",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Monitoring",
+  "tags": ["monitoring", "datadog", "metrics", "apm", "observability"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Datadog Integration",
+        "description": "Enable sending metrics and traces to Datadog",
+        "default": true
+      },
+      "apiKey": {
+        "type": "string",
+        "title": "Datadog API Key",
+        "description": "Your Datadog API key",
+        "format": "password"
+      },
+      "appKey": {
+        "type": "string",
+        "title": "Datadog Application Key",
+        "description": "Your Datadog application key (optional, for advanced features)",
+        "format": "password"
+      },
+      "site": {
+        "type": "string",
+        "title": "Datadog Site",
+        "description": "Your Datadog site (e.g., datadoghq.com, datadoghq.eu)",
+        "enum": ["datadoghq.com", "us3.datadoghq.com", "us5.datadoghq.com", "datadoghq.eu", "ap1.datadoghq.com"],
+        "default": "datadoghq.com"
+      },
+      "enableMetrics": {
+        "type": "boolean",
+        "title": "Enable Metrics",
+        "description": "Send custom metrics to Datadog",
+        "default": true
+      },
+      "enableTraces": {
+        "type": "boolean",
+        "title": "Enable APM Traces",
+        "description": "Send APM traces to Datadog",
+        "default": true
+      },
+      "enableLogs": {
+        "type": "boolean",
+        "title": "Enable Logs",
+        "description": "Send logs to Datadog",
+        "default": false
+      },
+      "globalTags": {
+        "type": "array",
+        "title": "Global Tags",
+        "description": "Tags to apply to all metrics and traces",
+        "items": {
+          "type": "string"
+        },
+        "default": ["env:production", "service:streamspace"]
+      },
+      "metricsInterval": {
+        "type": "integer",
+        "title": "Metrics Interval (seconds)",
+        "description": "How often to send metrics to Datadog",
+        "default": 60,
+        "minimum": 10,
+        "maximum": 300
+      },
+      "trackSessionMetrics": {
+        "type": "boolean",
+        "title": "Track Session Metrics",
+        "description": "Track session lifecycle metrics (created, terminated, duration)",
+        "default": true
+      },
+      "trackResourceMetrics": {
+        "type": "boolean",
+        "title": "Track Resource Metrics",
+        "description": "Track CPU, memory, and storage usage metrics",
+        "default": true
+      },
+      "trackUserMetrics": {
+        "type": "boolean",
+        "title": "Track User Metrics",
+        "description": "Track user activity and counts",
+        "default": true
+      }
+    },
+    "required": ["apiKey", "site"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.heartbeat": "OnSessionHeartbeat",
+    "user.created": "OnUserCreated",
+    "user.login": "OnUserLogin",
+    "user.logout": "OnUserLogout"
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "send-metrics",
+        "schedule": "*/1 * * * *",
+        "description": "Send metrics to Datadog"
+      }
+    ]
+  }
+}

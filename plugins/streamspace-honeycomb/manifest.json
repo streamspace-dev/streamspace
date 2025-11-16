@@ -1,0 +1,121 @@
+{
+  "name": "streamspace-honeycomb",
+  "version": "1.0.0",
+  "displayName": "Honeycomb Observability",
+  "description": "High-definition observability with Honeycomb for deep system analysis and debugging",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Monitoring",
+  "tags": ["monitoring", "honeycomb", "observability", "tracing", "debugging"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Honeycomb Integration",
+        "description": "Enable observability with Honeycomb",
+        "default": true
+      },
+      "apiKey": {
+        "type": "string",
+        "title": "Honeycomb API Key",
+        "description": "Your Honeycomb write key",
+        "format": "password"
+      },
+      "dataset": {
+        "type": "string",
+        "title": "Dataset Name",
+        "description": "Honeycomb dataset to send events to",
+        "default": "streamspace"
+      },
+      "apiHost": {
+        "type": "string",
+        "title": "API Host",
+        "description": "Honeycomb API endpoint",
+        "default": "https://api.honeycomb.io"
+      },
+      "sampleRate": {
+        "type": "integer",
+        "title": "Sample Rate",
+        "description": "1 in N events to sample (1 = all events)",
+        "default": 1,
+        "minimum": 1
+      },
+      "sendFrequency": {
+        "type": "integer",
+        "title": "Send Frequency (ms)",
+        "description": "How often to batch and send events",
+        "default": 1000,
+        "minimum": 100,
+        "maximum": 60000
+      },
+      "maxBatchSize": {
+        "type": "integer",
+        "title": "Max Batch Size",
+        "description": "Maximum events per batch",
+        "default": 100,
+        "minimum": 1,
+        "maximum": 1000
+      },
+      "trackSessions": {
+        "type": "boolean",
+        "title": "Track Sessions",
+        "description": "Send session lifecycle events",
+        "default": true
+      },
+      "trackResources": {
+        "type": "boolean",
+        "title": "Track Resources",
+        "description": "Send resource usage metrics",
+        "default": true
+      },
+      "trackUsers": {
+        "type": "boolean",
+        "title": "Track Users",
+        "description": "Send user activity events",
+        "default": true
+      },
+      "enableTracing": {
+        "type": "boolean",
+        "title": "Enable Distributed Tracing",
+        "description": "Send distributed traces",
+        "default": true
+      },
+      "customFields": {
+        "type": "object",
+        "title": "Custom Fields",
+        "description": "Custom fields to add to all events",
+        "additionalProperties": {
+          "type": "string"
+        },
+        "default": {
+          "service": "streamspace",
+          "environment": "production"
+        }
+      }
+    },
+    "required": ["apiKey", "dataset"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "session.heartbeat": "OnSessionHeartbeat",
+    "user.created": "OnUserCreated",
+    "user.login": "OnUserLogin",
+    "user.logout": "OnUserLogout"
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "flush-events",
+        "schedule": "*/1 * * * *",
+        "description": "Flush buffered events to Honeycomb"
+      }
+    ]
+  }
+}

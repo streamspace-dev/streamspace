@@ -1,0 +1,35 @@
+{
+  "name": "streamspace-storage-gcs",
+  "version": "1.0.0",
+  "displayName": "Google Cloud Storage",
+  "description": "Google Cloud Storage backend for session recordings, snapshots, and file storage",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Storage",
+  "tags": ["storage", "gcs", "google-cloud", "cloud"],
+  "permissions": ["network", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": false},
+      "projectID": {"type": "string", "title": "GCP Project ID"},
+      "bucketName": {"type": "string", "title": "Bucket Name"},
+      "credentialsJSON": {"type": "string", "title": "Service Account JSON", "format": "textarea", "description": "Paste service account JSON credentials"},
+      "storagePaths": {
+        "type": "object",
+        "properties": {
+          "recordings": {"type": "string", "default": "recordings/"},
+          "snapshots": {"type": "string", "default": "snapshots/"},
+          "uploads": {"type": "string", "default": "uploads/"}
+        }
+      }
+    },
+    "required": ["projectID", "bucketName", "credentialsJSON"]
+  },
+  "api": {
+    "endpoints": ["/storage/gcs/upload", "/storage/gcs/download", "/storage/gcs/list"]
+  },
+  "ui": {
+    "adminPages": [{"id": "gcs-storage", "title": "GCS Storage", "route": "/admin/storage/gcs", "component": "GCSStorage", "icon": "cloud"}]
+  }
+}

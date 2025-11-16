@@ -1,0 +1,188 @@
+{
+  "name": "streamspace-compliance",
+  "version": "1.0.0",
+  "displayName": "Compliance & Regulatory Framework",
+  "description": "Comprehensive compliance management for GDPR, HIPAA, SOC2, ISO27001, and custom frameworks",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Security",
+  "tags": ["compliance", "gdpr", "hipaa", "soc2", "iso27001", "regulatory", "governance"],
+  "permissions": ["database", "admin_ui", "network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {
+        "type": "boolean",
+        "title": "Enable Compliance Management",
+        "description": "Enable compliance framework and policy management",
+        "default": true
+      },
+      "defaultFrameworks": {
+        "type": "array",
+        "title": "Default Frameworks to Enable",
+        "description": "Compliance frameworks to enable by default",
+        "items": {
+          "type": "string",
+          "enum": ["GDPR", "HIPAA", "SOC2", "ISO27001", "PCI-DSS", "FedRAMP"]
+        },
+        "default": ["GDPR", "SOC2"]
+      },
+      "autoEnforcement": {
+        "type": "boolean",
+        "title": "Auto-Enforce Policies",
+        "description": "Automatically enforce compliance policies",
+        "default": true
+      },
+      "defaultEnforcementLevel": {
+        "type": "string",
+        "title": "Default Enforcement Level",
+        "description": "Default policy enforcement level",
+        "enum": ["advisory", "warning", "blocking"],
+        "default": "warning"
+      },
+      "dataRetentionDays": {
+        "type": "object",
+        "title": "Default Data Retention (Days)",
+        "description": "Default retention periods for different data types",
+        "properties": {
+          "sessionData": {"type": "integer", "default": 90},
+          "recordings": {"type": "integer", "default": 365},
+          "auditLogs": {"type": "integer", "default": 2555},
+          "backups": {"type": "integer", "default": 180}
+        }
+      },
+      "violationActions": {
+        "type": "object",
+        "title": "Violation Actions",
+        "description": "Actions to take when violations occur",
+        "properties": {
+          "notifyUser": {"type": "boolean", "default": true},
+          "notifyAdmin": {"type": "boolean", "default": true},
+          "createTicket": {"type": "boolean", "default": true},
+          "suspendOnCritical": {"type": "boolean", "default": false}
+        }
+      },
+      "reportingSchedule": {
+        "type": "string",
+        "title": "Automated Reporting Schedule",
+        "description": "Cron expression for automated compliance reports",
+        "default": "0 0 1 * *"
+      },
+      "escalationEmails": {
+        "type": "array",
+        "title": "Escalation Email Addresses",
+        "description": "Email addresses for critical compliance escalations",
+        "items": {"type": "string", "format": "email"},
+        "default": []
+      },
+      "enableAutomaticChecks": {
+        "type": "boolean",
+        "title": "Enable Automatic Compliance Checks",
+        "description": "Run automated compliance control checks",
+        "default": true
+      },
+      "checkInterval": {
+        "type": "integer",
+        "title": "Check Interval (hours)",
+        "description": "How often to run automated compliance checks",
+        "default": 24,
+        "minimum": 1,
+        "maximum": 168
+      }
+    },
+    "required": []
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "user.created": "OnUserCreated",
+    "user.login": "OnUserLogin",
+    "user.data_export": "OnDataExport",
+    "session.data_accessed": "OnDataAccessed"
+  },
+  "database": {
+    "tables": [
+      "compliance_frameworks",
+      "compliance_policies",
+      "compliance_violations",
+      "compliance_reports",
+      "compliance_escalations",
+      "compliance_control_checks"
+    ]
+  },
+  "api": {
+    "endpoints": [
+      "/compliance/frameworks",
+      "/compliance/frameworks/:id",
+      "/compliance/policies",
+      "/compliance/policies/:id",
+      "/compliance/violations",
+      "/compliance/violations/:id/resolve",
+      "/compliance/reports",
+      "/compliance/reports/:id",
+      "/compliance/dashboard"
+    ]
+  },
+  "ui": {
+    "adminPages": [
+      {
+        "id": "compliance-dashboard",
+        "title": "Compliance Dashboard",
+        "route": "/admin/compliance",
+        "component": "ComplianceDashboard",
+        "icon": "verified_user"
+      },
+      {
+        "id": "compliance-frameworks",
+        "title": "Compliance Frameworks",
+        "route": "/admin/compliance/frameworks",
+        "component": "ComplianceFrameworks",
+        "icon": "gavel"
+      },
+      {
+        "id": "compliance-policies",
+        "title": "Compliance Policies",
+        "route": "/admin/compliance/policies",
+        "component": "CompliancePolicies",
+        "icon": "policy"
+      },
+      {
+        "id": "compliance-violations",
+        "title": "Policy Violations",
+        "route": "/admin/compliance/violations",
+        "component": "ComplianceViolations",
+        "icon": "report_problem"
+      },
+      {
+        "id": "compliance-reports",
+        "title": "Compliance Reports",
+        "route": "/admin/compliance/reports",
+        "component": "ComplianceReports",
+        "icon": "assessment"
+      }
+    ]
+  },
+  "scheduler": {
+    "jobs": [
+      {
+        "name": "run-compliance-checks",
+        "schedule": "0 */6 * * *",
+        "description": "Run automated compliance control checks"
+      },
+      {
+        "name": "generate-monthly-report",
+        "schedule": "0 0 1 * *",
+        "description": "Generate monthly compliance report"
+      },
+      {
+        "name": "check-data-retention",
+        "schedule": "0 2 * * *",
+        "description": "Check and enforce data retention policies"
+      }
+    ]
+  }
+}

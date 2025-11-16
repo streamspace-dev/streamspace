@@ -1,0 +1,30 @@
+{
+  "name": "streamspace-audit-advanced",
+  "version": "1.0.0",
+  "displayName": "Advanced Audit Logging",
+  "description": "Enhanced audit logging with search, export, retention policies, and compliance reports",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Security",
+  "tags": ["audit", "logging", "compliance", "security"],
+  "permissions": ["database", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": true},
+      "retentionDays": {"type": "integer", "default": 2555},
+      "logLevel": {"type": "string", "enum": ["basic", "detailed", "verbose"], "default": "detailed"},
+      "exportEnabled": {"type": "boolean", "default": true},
+      "encryptLogs": {"type": "boolean", "default": true}
+    }
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated",
+    "user.login": "OnUserLogin",
+    "user.logout": "OnUserLogout"
+  },
+  "database": {"tables": ["audit_log_advanced", "audit_exports"]},
+  "api": {"endpoints": ["/audit/logs", "/audit/export", "/audit/search"]},
+  "ui": {"adminPages": [{"id": "audit-logs", "title": "Audit Logs", "route": "/admin/audit", "component": "AuditLogs", "icon": "history"}]}
+}

@@ -1,0 +1,35 @@
+{
+  "name": "streamspace-recording",
+  "version": "1.0.0",
+  "displayName": "Session Recording & Playback",
+  "description": "Record and replay sessions with multiple formats (webm, mp4, vnc), retention policies, and compliance-driven recording",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Session Management",
+  "tags": ["recording", "playback", "compliance", "audit", "video"],
+  "permissions": ["database", "storage", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": true},
+      "defaultFormat": {"type": "string", "enum": ["webm", "mp4", "vnc"], "default": "webm"},
+      "defaultRetentionDays": {"type": "integer", "default": 365},
+      "maxFileSize": {"type": "integer", "default": 10737418240},
+      "storagePath": {"type": "string", "default": "/var/lib/streamspace/recordings"},
+      "autoRecordForCompliance": {"type": "boolean", "default": false},
+      "complianceFrameworks": {"type": "array", "items": {"type": "string"}, "default": []},
+      "encryptRecordings": {"type": "boolean", "default": true}
+    }
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.terminated": "OnSessionTerminated"
+  },
+  "database": {"tables": ["session_recordings", "recording_playback"]},
+  "api": {"endpoints": ["/recordings", "/recordings/:id", "/recordings/:id/playback", "/recordings/:id/download"]},
+  "ui": {
+    "adminPages": [{"id": "recordings", "title": "Session Recordings", "route": "/admin/recordings", "component": "Recordings", "icon": "videocam"}],
+    "userPages": [{"id": "my-recordings", "title": "My Recordings", "route": "/recordings", "component": "MyRecordings", "icon": "video_library"}]
+  },
+  "scheduler": {"jobs": [{"name": "cleanup-expired-recordings", "schedule": "0 2 * * *", "description": "Delete expired recordings"}]}
+}

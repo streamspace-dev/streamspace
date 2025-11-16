@@ -1,0 +1,125 @@
+{
+  "name": "streamspace-email",
+  "version": "1.0.0",
+  "displayName": "Email SMTP Integration",
+  "description": "Send email notifications via SMTP for session and user events",
+  "author": "StreamSpace Team",
+  "type": "integration",
+  "category": "Integrations",
+  "tags": ["email", "smtp", "notifications", "alerts"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "smtpHost": {
+        "type": "string",
+        "title": "SMTP Host",
+        "description": "SMTP server hostname (e.g., smtp.gmail.com)",
+        "examples": ["smtp.gmail.com", "smtp.office365.com", "mail.example.com"]
+      },
+      "smtpPort": {
+        "type": "integer",
+        "title": "SMTP Port",
+        "description": "SMTP server port (587 for STARTTLS, 465 for TLS, 25 for plain)",
+        "default": 587,
+        "enum": [25, 465, 587, 2525]
+      },
+      "username": {
+        "type": "string",
+        "title": "SMTP Username",
+        "description": "Username for SMTP authentication"
+      },
+      "password": {
+        "type": "string",
+        "title": "SMTP Password",
+        "description": "Password for SMTP authentication",
+        "format": "password"
+      },
+      "fromAddress": {
+        "type": "string",
+        "title": "From Email Address",
+        "description": "Email address to send from",
+        "format": "email"
+      },
+      "fromName": {
+        "type": "string",
+        "title": "From Name",
+        "description": "Display name for the sender",
+        "default": "StreamSpace Notifications"
+      },
+      "toAddresses": {
+        "type": "array",
+        "title": "To Email Addresses",
+        "description": "List of recipient email addresses",
+        "items": {
+          "type": "string",
+          "format": "email"
+        },
+        "minItems": 1
+      },
+      "ccAddresses": {
+        "type": "array",
+        "title": "CC Email Addresses",
+        "description": "List of CC recipient email addresses",
+        "items": {
+          "type": "string",
+          "format": "email"
+        }
+      },
+      "useTLS": {
+        "type": "boolean",
+        "title": "Use TLS",
+        "description": "Enable TLS encryption (recommended for port 587)",
+        "default": true
+      },
+      "notifyOnSessionCreated": {
+        "type": "boolean",
+        "title": "Notify on Session Created",
+        "description": "Send email when a session is created",
+        "default": true
+      },
+      "notifyOnSessionHibernated": {
+        "type": "boolean",
+        "title": "Notify on Session Hibernated",
+        "description": "Send email when a session is hibernated",
+        "default": true
+      },
+      "notifyOnUserCreated": {
+        "type": "boolean",
+        "title": "Notify on User Created",
+        "description": "Send email when a new user is created",
+        "default": true
+      },
+      "includeDetails": {
+        "type": "boolean",
+        "title": "Include Resource Details",
+        "description": "Include CPU and memory information in emails",
+        "default": true
+      },
+      "htmlFormat": {
+        "type": "boolean",
+        "title": "HTML Format",
+        "description": "Send HTML formatted emails (recommended)",
+        "default": true
+      },
+      "rateLimit": {
+        "type": "number",
+        "title": "Rate Limit (emails per hour)",
+        "description": "Maximum number of emails to send per hour",
+        "default": 30,
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "required": ["smtpHost", "smtpPort", "username", "password", "fromAddress", "toAddresses"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.hibernated": "OnSessionHibernated",
+    "user.created": "OnUserCreated"
+  }
+}

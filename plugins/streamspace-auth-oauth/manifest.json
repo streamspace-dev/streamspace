@@ -1,0 +1,48 @@
+{
+  "name": "streamspace-auth-oauth",
+  "version": "1.0.0",
+  "displayName": "OAuth2 / OIDC Authentication",
+  "description": "Modern OAuth2 and OpenID Connect authentication - supports Google, GitHub, GitLab, Okta, Azure AD, Auth0, Keycloak, and custom OIDC providers",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Authentication",
+  "tags": ["oauth2", "oidc", "sso", "google", "github", "azure-ad", "okta"],
+  "permissions": ["network", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": false},
+      "provider": {
+        "type": "string",
+        "enum": ["google", "github", "gitlab", "okta", "azure-ad", "auth0", "keycloak", "custom"],
+        "default": "custom"
+      },
+      "providerURL": {"type": "string", "title": "OIDC Provider URL"},
+      "clientID": {"type": "string", "title": "OAuth2 Client ID"},
+      "clientSecret": {"type": "string", "title": "OAuth2 Client Secret", "format": "password"},
+      "redirectURI": {"type": "string", "title": "Redirect URI"},
+      "scopes": {
+        "type": "array",
+        "items": {"type": "string"},
+        "default": ["openid", "profile", "email"]
+      },
+      "usernameClaim": {"type": "string", "default": "preferred_username"},
+      "emailClaim": {"type": "string", "default": "email"},
+      "groupsClaim": {"type": "string", "default": "groups"},
+      "autoProvisionUsers": {"type": "boolean", "default": true},
+      "defaultRole": {"type": "string", "enum": ["user", "operator", "admin"], "default": "user"}
+    },
+    "required": ["providerURL", "clientID", "clientSecret", "redirectURI"]
+  },
+  "api": {
+    "endpoints": ["/oauth/login", "/oauth/callback", "/oauth/logout"]
+  },
+  "ui": {
+    "adminPages": [{"id": "oauth-auth", "title": "OAuth Configuration", "route": "/admin/auth/oauth", "component": "OAuthAuth", "icon": "vpn_key"}],
+    "loginButtons": [
+      {"provider": "google", "label": "Sign in with Google", "icon": "google"},
+      {"provider": "github", "label": "Sign in with GitHub", "icon": "github"},
+      {"provider": "azure-ad", "label": "Sign in with Microsoft", "icon": "microsoft"}
+    ]
+  }
+}

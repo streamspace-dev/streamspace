@@ -1,0 +1,76 @@
+{
+  "name": "streamspace-discord",
+  "version": "1.0.0",
+  "displayName": "Discord Integration",
+  "description": "Send session and user event notifications to Discord channels",
+  "author": "StreamSpace Team",
+  "type": "webhook",
+  "category": "Integrations",
+  "tags": ["notifications", "discord", "integration"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "webhookUrl": {
+        "type": "string",
+        "title": "Discord Webhook URL",
+        "description": "Your Discord channel webhook URL",
+        "pattern": "^https://discord\\.com/api/webhooks/[0-9]+/[a-zA-Z0-9_-]+$"
+      },
+      "username": {
+        "type": "string",
+        "title": "Bot Username",
+        "description": "Override the default webhook username",
+        "default": "StreamSpace"
+      },
+      "avatarUrl": {
+        "type": "string",
+        "title": "Bot Avatar URL",
+        "description": "Override the default webhook avatar image URL",
+        "format": "uri"
+      },
+      "notifyOnSessionCreated": {
+        "type": "boolean",
+        "title": "Notify on Session Created",
+        "description": "Send notification when a session is created",
+        "default": true
+      },
+      "notifyOnSessionHibernated": {
+        "type": "boolean",
+        "title": "Notify on Session Hibernated",
+        "description": "Send notification when a session is hibernated",
+        "default": true
+      },
+      "notifyOnUserCreated": {
+        "type": "boolean",
+        "title": "Notify on User Created",
+        "description": "Send notification when a new user is created",
+        "default": true
+      },
+      "includeDetails": {
+        "type": "boolean",
+        "title": "Include Resource Details",
+        "description": "Include CPU and memory information in notifications",
+        "default": false
+      },
+      "rateLimit": {
+        "type": "number",
+        "title": "Rate Limit (messages per hour)",
+        "description": "Maximum number of messages to send per hour",
+        "default": 20,
+        "minimum": 1,
+        "maximum": 100
+      }
+    },
+    "required": ["webhookUrl"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.hibernated": "OnSessionHibernated",
+    "user.created": "OnUserCreated"
+  }
+}

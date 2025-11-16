@@ -1,0 +1,91 @@
+{
+  "name": "streamspace-pagerduty",
+  "version": "1.0.0",
+  "displayName": "PagerDuty Integration",
+  "description": "Send incident alerts to PagerDuty for critical events",
+  "author": "StreamSpace Team",
+  "type": "webhook",
+  "category": "Integrations",
+  "tags": ["monitoring", "pagerduty", "alerting", "incidents"],
+  "permissions": ["network"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "routingKey": {
+        "type": "string",
+        "title": "Integration Key (Routing Key)",
+        "description": "Your PagerDuty Events API v2 integration key",
+        "pattern": "^[a-zA-Z0-9]{32}$"
+      },
+      "notifyOnSessionCreated": {
+        "type": "boolean",
+        "title": "Notify on Session Created",
+        "description": "Send alert when a session is created",
+        "default": false
+      },
+      "notifyOnSessionHibernated": {
+        "type": "boolean",
+        "title": "Notify on Session Hibernated",
+        "description": "Send alert when a session is hibernated",
+        "default": true
+      },
+      "notifyOnUserCreated": {
+        "type": "boolean",
+        "title": "Notify on User Created",
+        "description": "Send alert when a new user is created",
+        "default": false
+      },
+      "sessionCreatedSeverity": {
+        "type": "string",
+        "title": "Session Created Severity",
+        "description": "Severity level for session created events",
+        "enum": ["info", "warning", "error", "critical"],
+        "default": "info"
+      },
+      "sessionHibernatedSeverity": {
+        "type": "string",
+        "title": "Session Hibernated Severity",
+        "description": "Severity level for session hibernated events",
+        "enum": ["info", "warning", "error", "critical"],
+        "default": "warning"
+      },
+      "userCreatedSeverity": {
+        "type": "string",
+        "title": "User Created Severity",
+        "description": "Severity level for user created events",
+        "enum": ["info", "warning", "error", "critical"],
+        "default": "info"
+      },
+      "includeDetails": {
+        "type": "boolean",
+        "title": "Include Resource Details",
+        "description": "Include CPU and memory information in custom details",
+        "default": true
+      },
+      "autoResolve": {
+        "type": "boolean",
+        "title": "Auto-Resolve Events",
+        "description": "Automatically resolve events after sending (useful for informational alerts)",
+        "default": false
+      },
+      "rateLimit": {
+        "type": "number",
+        "title": "Rate Limit (events per hour)",
+        "description": "Maximum number of events to send per hour",
+        "default": 50,
+        "minimum": 1,
+        "maximum": 200
+      }
+    },
+    "required": ["routingKey"]
+  },
+  "lifecycle": {
+    "onLoad": true,
+    "onUnload": true
+  },
+  "events": {
+    "session.created": "OnSessionCreated",
+    "session.hibernated": "OnSessionHibernated",
+    "user.created": "OnUserCreated"
+  }
+}

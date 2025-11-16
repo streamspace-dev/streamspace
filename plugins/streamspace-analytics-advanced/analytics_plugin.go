@@ -1,79 +1,85 @@
-package handlers
+package main
 
-import (
-	"context"
-	"database/sql"
-	"fmt"
-	"net/http"
-	"time"
+import ("context"; "database/sql"; "encoding/json"; "fmt"; "time"; "github.com/yourusername/streamspace/api/internal/plugins")
 
-	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-)
-
-// AnalyticsHandler handles advanced analytics and reporting
-type AnalyticsHandler struct {
-	db *db.Database
+type AnalyticsPlugin struct {
+	plugins.BasePlugin
+	config AnalyticsConfig
 }
 
-// NewAnalyticsHandler creates a new analytics handler
-func NewAnalyticsHandler(database *db.Database) *AnalyticsHandler {
-	return &AnalyticsHandler{
-		db: database,
-	}
+type AnalyticsConfig struct {
+	Enabled        bool        `json:"enabled"`
+	CostModel      CostModel   `json:"costModel"`
+	RetentionDays  int         `json:"retentionDays"`
+	ReportSchedule ReportSchedule `json:"reportSchedule"`
+	Thresholds     Thresholds  `json:"thresholds"`
 }
 
-// RegisterRoutes registers analytics routes
-func (h *AnalyticsHandler) RegisterRoutes(router *gin.RouterGroup) {
-	analytics := router.Group("/analytics")
-	{
-		// Usage analytics
-		analytics.GET("/usage/trends", h.GetUsageTrends)
-		analytics.GET("/usage/by-template", h.GetUsageByTemplate)
-		analytics.GET("/usage/by-user", h.GetUsageByUser)
-		analytics.GET("/usage/by-team", h.GetUsageByTeam)
+type CostModel struct {
+	CPUCostPerHour       float64 `json:"cpuCostPerHour"`
+	MemCostPerGBHour     float64 `json:"memCostPerGBHour"`
+	StorageCostPerGBMonth float64 `json:"storageCostPerGBMonth"`
+}
 
-		// Session analytics
-		analytics.GET("/sessions/duration", h.GetSessionDurationAnalytics)
-		analytics.GET("/sessions/lifecycle", h.GetSessionLifecycleAnalytics)
-		analytics.GET("/sessions/peak-times", h.GetPeakUsageTimes)
+type ReportSchedule struct {
+	DailyEnabled     bool     `json:"dailyEnabled"`
+	WeeklyEnabled    bool     `json:"weeklyEnabled"`
+	MonthlyEnabled   bool     `json:"monthlyEnabled"`
+	EmailRecipients  []string `json:"emailRecipients"`
+}
 
-		// User engagement
-		analytics.GET("/engagement/active-users", h.GetActiveUsersAnalytics)
-		analytics.GET("/engagement/retention", h.GetUserRetention)
-		analytics.GET("/engagement/frequency", h.GetUsageFrequency)
+type Thresholds struct {
+	ShortSessionMinutes  int `json:"shortSessionMinutes"`
+	IdleTimeoutMinutes   int `json:"idleTimeoutMinutes"`
+}
 
-		// Resource analytics
-		analytics.GET("/resources/utilization", h.GetResourceUtilization)
-		analytics.GET("/resources/trends", h.GetResourceTrends)
-		analytics.GET("/resources/waste", h.GetResourceWaste)
+func (p *AnalyticsPlugin) Initialize(ctx *plugins.PluginContext) error {
+	configBytes, _ := json.Marshal(ctx.Config)
+	json.Unmarshal(configBytes, &p.config)
 
-		// Cost analytics
-		analytics.GET("/cost/estimate", h.GetCostEstimate)
-		analytics.GET("/cost/by-team", h.GetCostByTeam)
-		analytics.GET("/cost/by-template", h.GetCostByTemplate)
-
-		// Summary reports
-		analytics.GET("/reports/daily", h.GetDailyReport)
-		analytics.GET("/reports/weekly", h.GetWeeklyReport)
-		analytics.GET("/reports/monthly", h.GetMonthlyReport)
+	if !p.config.Enabled {
+		ctx.Logger.Info("Analytics plugin is disabled")
+		return nil
 	}
+
+	p.createDatabaseTables(ctx)
+	ctx.Logger.Info("Analytics plugin initialized", "retention", p.config.RetentionDays)
+	return nil
+}
+
+func (p *AnalyticsPlugin) OnLoad(ctx *plugins.PluginContext) error {
+	ctx.Logger.Info("Advanced Analytics plugin loaded")
+	return nil
+}
+
+func (p *AnalyticsPlugin) RunScheduledJob(ctx *plugins.PluginContext, jobName string) error {
+	switch jobName {
+	case "generate-daily-report":
+		return p.generateDailyReport(ctx)
+	case "cleanup-old-analytics":
+		return p.cleanupOldAnalytics(ctx)
+	}
+	return nil
+}
+
+func (p *AnalyticsPlugin) createDatabaseTables(ctx *plugins.PluginContext) error {
+	ctx.Database.Exec(`CREATE TABLE IF NOT EXISTS analytics_cache (
+		id SERIAL PRIMARY KEY, cache_key VARCHAR(255) UNIQUE,
+		data JSONB, expires_at TIMESTAMP, created_at TIMESTAMP DEFAULT NOW()
+	)`)
+	ctx.Database.Exec(`CREATE TABLE IF NOT EXISTS analytics_reports (
+		id SERIAL PRIMARY KEY, report_type VARCHAR(100), report_date DATE,
+		data JSONB, generated_at TIMESTAMP DEFAULT NOW()
+	)`)
+	return nil
 }
 
 // GetUsageTrends returns time-series usage data
-func (h *AnalyticsHandler) GetUsageTrends(c *gin.Context) {
-	ctx := context.Background()
-
-	// Get time range from query (default: last 30 days)
-	days := 30
-	if daysStr := c.Query("days"); daysStr != "" {
-		fmt.Sscanf(daysStr, "%d", &days)
-		if days > 365 {
-			days = 365 // Max 1 year
-		}
+func (p *AnalyticsPlugin) GetUsageTrends(ctx *plugins.PluginContext, days int) (map[string]interface{}, error) {
+	if days > 365 {
+		days = 365
 	}
 
-	// Get daily session counts
 	query := fmt.Sprintf(`
 		SELECT
 			DATE(created_at) as date,
@@ -87,10 +93,9 @@ func (h *AnalyticsHandler) GetUsageTrends(c *gin.Context) {
 		ORDER BY date DESC
 	`, days)
 
-	rows, err := h.db.DB().QueryContext(ctx, query)
+	rows, err := ctx.Database.Query(query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -112,22 +117,14 @@ func (h *AnalyticsHandler) GetUsageTrends(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"trends": trends,
 		"period": fmt.Sprintf("%d days", days),
-	})
+	}, nil
 }
 
 // GetUsageByTemplate returns session counts per template
-func (h *AnalyticsHandler) GetUsageByTemplate(c *gin.Context) {
-	ctx := context.Background()
-
-	// Get time range
-	days := 30
-	if daysStr := c.Query("days"); daysStr != "" {
-		fmt.Sscanf(daysStr, "%d", &days)
-	}
-
+func (p *AnalyticsPlugin) GetUsageByTemplate(ctx *plugins.PluginContext, days int) (map[string]interface{}, error) {
 	query := fmt.Sprintf(`
 		SELECT
 			template_name,
@@ -141,10 +138,9 @@ func (h *AnalyticsHandler) GetUsageByTemplate(c *gin.Context) {
 		LIMIT 50
 	`, days)
 
-	rows, err := h.db.DB().QueryContext(ctx, query)
+	rows, err := ctx.Database.Query(query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -167,17 +163,14 @@ func (h *AnalyticsHandler) GetUsageByTemplate(c *gin.Context) {
 		})
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"templates": templates,
 		"total":     len(templates),
-	})
+	}, nil
 }
 
 // GetSessionDurationAnalytics returns session duration statistics
-func (h *AnalyticsHandler) GetSessionDurationAnalytics(c *gin.Context) {
-	ctx := context.Background()
-
-	// Duration buckets in minutes
+func (p *AnalyticsPlugin) GetSessionDurationAnalytics(ctx *plugins.PluginContext) (map[string]interface{}, error) {
 	query := `
 		WITH session_durations AS (
 			SELECT
@@ -212,10 +205,9 @@ func (h *AnalyticsHandler) GetSessionDurationAnalytics(c *gin.Context) {
 			END
 	`
 
-	rows, err := h.db.DB().QueryContext(ctx, query)
+	rows, err := ctx.Database.Query(query)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -244,7 +236,7 @@ func (h *AnalyticsHandler) GetSessionDurationAnalytics(c *gin.Context) {
 
 	// Get average, median, and percentiles
 	var avgDuration, medianDuration, p90Duration, p95Duration sql.NullFloat64
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		WITH session_durations AS (
 			SELECT
 				EXTRACT(EPOCH FROM (COALESCE(last_disconnect, NOW()) - created_at)) / 60 as duration_minutes
@@ -259,41 +251,37 @@ func (h *AnalyticsHandler) GetSessionDurationAnalytics(c *gin.Context) {
 		FROM session_durations
 	`).Scan(&avgDuration, &medianDuration, &p90Duration, &p95Duration)
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"buckets": buckets,
-		"statistics": gin.H{
+		"statistics": map[string]interface{}{
 			"avgMinutes":    avgDuration.Float64,
 			"medianMinutes": medianDuration.Float64,
 			"p90Minutes":    p90Duration.Float64,
 			"p95Minutes":    p95Duration.Float64,
 		},
 		"totalSessions": totalSessions,
-	})
+	}, nil
 }
 
 // GetActiveUsersAnalytics returns active user statistics
-func (h *AnalyticsHandler) GetActiveUsersAnalytics(c *gin.Context) {
-	ctx := context.Background()
-
-	// Daily Active Users (DAU), Weekly Active Users (WAU), Monthly Active Users (MAU)
+func (p *AnalyticsPlugin) GetActiveUsersAnalytics(ctx *plugins.PluginContext) (map[string]interface{}, error) {
 	var dau, wau, mau int
 
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(DISTINCT user_id) FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '1 day'
 	`).Scan(&dau)
 
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(DISTINCT user_id) FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '7 days'
 	`).Scan(&wau)
 
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(DISTINCT user_id) FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '30 days'
 	`).Scan(&mau)
 
-	// Engagement ratios
 	var dauWauRatio, dauMauRatio float64
 	if wau > 0 {
 		dauWauRatio = float64(dau) / float64(wau)
@@ -302,9 +290,8 @@ func (h *AnalyticsHandler) GetActiveUsersAnalytics(c *gin.Context) {
 		dauMauRatio = float64(dau) / float64(mau)
 	}
 
-	// Get power users (created 10+ sessions in last 30 days)
 	var powerUsers int
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(*)
 		FROM (
 			SELECT user_id, COUNT(*) as session_count
@@ -315,26 +302,23 @@ func (h *AnalyticsHandler) GetActiveUsersAnalytics(c *gin.Context) {
 		) power_users
 	`).Scan(&powerUsers)
 
-	c.JSON(http.StatusOK, gin.H{
-		"activeUsers": gin.H{
+	return map[string]interface{}{
+		"activeUsers": map[string]interface{}{
 			"daily":   dau,
 			"weekly":  wau,
 			"monthly": mau,
 		},
-		"engagement": gin.H{
+		"engagement": map[string]interface{}{
 			"dauWauRatio": dauWauRatio,
 			"dauMauRatio": dauMauRatio,
 			"powerUsers":  powerUsers,
 		},
 		"timestamp": time.Now(),
-	})
+	}, nil
 }
 
-// GetPeakUsageTimes returns peak usage analysis by hour and day
-func (h *AnalyticsHandler) GetPeakUsageTimes(c *gin.Context) {
-	ctx := context.Background()
-
-	// Sessions by hour of day
+// GetPeakUsageTimes returns peak usage analysis
+func (p *AnalyticsPlugin) GetPeakUsageTimes(ctx *plugins.PluginContext) (map[string]interface{}, error) {
 	hourlyQuery := `
 		SELECT
 			EXTRACT(HOUR FROM created_at) as hour,
@@ -345,10 +329,9 @@ func (h *AnalyticsHandler) GetPeakUsageTimes(c *gin.Context) {
 		ORDER BY hour
 	`
 
-	rows, err := h.db.DB().QueryContext(ctx, hourlyQuery)
+	rows, err := ctx.Database.Query(hourlyQuery)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 	defer rows.Close()
 
@@ -364,7 +347,6 @@ func (h *AnalyticsHandler) GetPeakUsageTimes(c *gin.Context) {
 		}
 	}
 
-	// Sessions by day of week
 	weekdayQuery := `
 		SELECT
 			EXTRACT(DOW FROM created_at) as day_of_week,
@@ -375,10 +357,9 @@ func (h *AnalyticsHandler) GetPeakUsageTimes(c *gin.Context) {
 		ORDER BY day_of_week
 	`
 
-	rows2, err := h.db.DB().QueryContext(ctx, weekdayQuery)
+	rows2, err := ctx.Database.Query(weekdayQuery)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
+		return nil, err
 	}
 	defer rows2.Close()
 
@@ -396,36 +377,29 @@ func (h *AnalyticsHandler) GetPeakUsageTimes(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"hourly":  hourlyData,
 		"weekday": weekdayData,
-	})
+	}, nil
 }
 
 // GetCostEstimate returns estimated cost based on resource usage
-func (h *AnalyticsHandler) GetCostEstimate(c *gin.Context) {
-	ctx := context.Background()
+func (p *AnalyticsPlugin) GetCostEstimate(ctx *plugins.PluginContext) (map[string]interface{}, error) {
+	cpuCostPerHour := p.config.CostModel.CPUCostPerHour
+	memCostPerHour := p.config.CostModel.MemCostPerGBHour
 
-	// Cost model (configurable via environment variables)
-	// Default: $0.01 per CPU hour, $0.005 per GB memory hour
-	cpuCostPerHour := 0.01
-	memCostPerHour := 0.005
-
-	// Get total resource usage (simplified - assumes 1 CPU, 2GB per session)
 	var totalSessionHours float64
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT
 			COALESCE(SUM(EXTRACT(EPOCH FROM (COALESCE(last_disconnect, NOW()) - created_at)) / 3600), 0)
 		FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '30 days'
 	`).Scan(&totalSessionHours)
 
-	// Estimate costs
 	estimatedCPUCost := totalSessionHours * cpuCostPerHour
-	estimatedMemCost := totalSessionHours * 2 * memCostPerHour // 2GB per session
+	estimatedMemCost := totalSessionHours * 2 * memCostPerHour
 	totalEstimatedCost := estimatedCPUCost + estimatedMemCost
 
-	// Get cost per user (top 10)
 	userCosts := []map[string]interface{}{}
 	userQuery := `
 		SELECT
@@ -438,7 +412,7 @@ func (h *AnalyticsHandler) GetCostEstimate(c *gin.Context) {
 		LIMIT 10
 	`
 
-	rows, err := h.db.DB().QueryContext(ctx, userQuery)
+	rows, err := ctx.Database.Query(userQuery)
 	if err == nil {
 		defer rows.Close()
 		for rows.Next() {
@@ -455,49 +429,47 @@ func (h *AnalyticsHandler) GetCostEstimate(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"period": "30 days",
-		"totalCost": gin.H{
+		"totalCost": map[string]interface{}{
 			"cpu":    estimatedCPUCost,
 			"memory": estimatedMemCost,
 			"total":  totalEstimatedCost,
 		},
 		"totalSessionHours": totalSessionHours,
-		"costModel": gin.H{
+		"costModel": map[string]interface{}{
 			"cpuCostPerHour": cpuCostPerHour,
 			"memCostPerHour": memCostPerHour,
 		},
 		"topUserCosts": userCosts,
 		"note":         "Costs are estimates based on session duration and resource allocation",
-	})
+	}, nil
 }
 
 // GetResourceWaste identifies idle or underutilized resources
-func (h *AnalyticsHandler) GetResourceWaste(c *gin.Context) {
-	ctx := context.Background()
+func (p *AnalyticsPlugin) GetResourceWaste(ctx *plugins.PluginContext) (map[string]interface{}, error) {
+	shortSessionThreshold := p.config.Thresholds.ShortSessionMinutes * 60
+	idleTimeout := p.config.Thresholds.IdleTimeoutMinutes
 
-	// Find sessions with very short duration (< 5 minutes) - potential waste
 	var shortSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '7 days'
-		  AND EXTRACT(EPOCH FROM (COALESCE(last_disconnect, NOW()) - created_at)) < 300
-	`).Scan(&shortSessions)
+		  AND EXTRACT(EPOCH FROM (COALESCE(last_disconnect, NOW()) - created_at)) < %d
+	`, shortSessionThreshold)).Scan(&shortSessions)
 
-	// Find sessions idle for more than 30 minutes with no activity
 	var longIdleSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(fmt.Sprintf(`
 		SELECT COUNT(*)
 		FROM sessions
 		WHERE state = 'running'
 		  AND last_connection IS NOT NULL
-		  AND NOW() - last_connection > INTERVAL '30 minutes'
-	`).Scan(&longIdleSessions)
+		  AND NOW() - last_connection > INTERVAL '%d minutes'
+	`, idleTimeout)).Scan(&longIdleSessions)
 
-	// Sessions that should be hibernated
 	var shouldBeHibernated int
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(*)
 		FROM sessions
 		WHERE state = 'running'
@@ -505,34 +477,30 @@ func (h *AnalyticsHandler) GetResourceWaste(c *gin.Context) {
 		  AND created_at < NOW() - INTERVAL '1 hour'
 	`).Scan(&shouldBeHibernated)
 
-	c.JSON(http.StatusOK, gin.H{
-		"waste": gin.H{
+	return map[string]interface{}{
+		"waste": map[string]interface{}{
 			"shortSessions":      shortSessions,
 			"longIdleSessions":   longIdleSessions,
 			"shouldBeHibernated": shouldBeHibernated,
 		},
 		"recommendations": []string{
-			fmt.Sprintf("Consider auto-hibernation after 30 minutes of inactivity (%d sessions affected)", longIdleSessions),
+			fmt.Sprintf("Consider auto-hibernation after %d minutes of inactivity (%d sessions affected)", idleTimeout, longIdleSessions),
 			fmt.Sprintf("Review short sessions to identify configuration issues (%d sessions)", shortSessions),
 			fmt.Sprintf("Enable aggressive hibernation to save resources (%d sessions ready)", shouldBeHibernated),
 		},
-	})
+	}, nil
 }
 
 // GetDailyReport returns a comprehensive daily summary
-func (h *AnalyticsHandler) GetDailyReport(c *gin.Context) {
-	ctx := context.Background()
-
-	date := c.Query("date")
+func (p *AnalyticsPlugin) GetDailyReport(ctx *plugins.PluginContext, date string) (map[string]interface{}, error) {
 	if date == "" {
 		date = time.Now().Format("2006-01-02")
 	}
 
-	// Get daily statistics
 	var totalSessions, uniqueUsers, totalConnections int
 	var avgDuration sql.NullFloat64
 
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT
 			COUNT(*),
 			COUNT(DISTINCT user_id),
@@ -541,15 +509,14 @@ func (h *AnalyticsHandler) GetDailyReport(c *gin.Context) {
 		WHERE DATE(created_at) = $1
 	`, date).Scan(&totalSessions, &uniqueUsers, &avgDuration)
 
-	h.db.DB().QueryRowContext(ctx, `
+	ctx.Database.QueryRow(`
 		SELECT COUNT(*)
 		FROM connections
 		WHERE DATE(connected_at) = $1
 	`, date).Scan(&totalConnections)
 
-	// Top templates for the day
 	topTemplates := []map[string]interface{}{}
-	rows, err := h.db.DB().QueryContext(ctx, `
+	rows, err := ctx.Database.Query(`
 		SELECT template_name, COUNT(*) as count
 		FROM sessions
 		WHERE DATE(created_at) = $1
@@ -571,14 +538,57 @@ func (h *AnalyticsHandler) GetDailyReport(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{
+	return map[string]interface{}{
 		"date": date,
-		"summary": gin.H{
+		"summary": map[string]interface{}{
 			"totalSessions":      totalSessions,
 			"uniqueUsers":        uniqueUsers,
 			"totalConnections":   totalConnections,
 			"avgDurationMinutes": avgDuration.Float64,
 		},
 		"topTemplates": topTemplates,
-	})
+	}, nil
+}
+
+func (p *AnalyticsPlugin) generateDailyReport(ctx *plugins.PluginContext) error {
+	ctx.Logger.Info("Generating daily analytics report")
+
+	if !p.config.ReportSchedule.DailyEnabled {
+		ctx.Logger.Info("Daily reports disabled")
+		return nil
+	}
+
+	date := time.Now().AddDate(0, 0, -1).Format("2006-01-02")
+	report, err := p.GetDailyReport(ctx, date)
+	if err != nil {
+		return err
+	}
+
+	reportJSON, _ := json.Marshal(report)
+	_, err = ctx.Database.Exec(`
+		INSERT INTO analytics_reports (report_type, report_date, data)
+		VALUES ($1, $2, $3)
+	`, "daily", date, reportJSON)
+
+	return err
+}
+
+func (p *AnalyticsPlugin) cleanupOldAnalytics(ctx *plugins.PluginContext) error {
+	ctx.Logger.Info("Cleaning up old analytics data", "retention", p.config.RetentionDays)
+
+	ctx.Database.Exec(`
+		DELETE FROM analytics_cache
+		WHERE expires_at < NOW()
+	`)
+
+	ctx.Database.Exec(fmt.Sprintf(`
+		DELETE FROM analytics_reports
+		WHERE generated_at < NOW() - INTERVAL '%d days'
+	`, p.config.RetentionDays))
+
+	return nil
+}
+
+func init() {
+	plugins.Register("streamspace-analytics-advanced", &AnalyticsPlugin{})
 }

@@ -1,0 +1,467 @@
+[
+  {
+    "name": "streamspace-slack",
+    "version": "1.0.0",
+    "displayName": "Slack Integration",
+    "description": "Send session and user event notifications to Slack channels",
+    "author": "StreamSpace Team",
+    "category": "Integrations",
+    "tags": ["notifications", "slack", "integration", "messaging"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-slack/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-slack/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-slack",
+      "version": "1.0.0",
+      "displayName": "Slack Integration",
+      "description": "Send session and user event notifications to Slack channels",
+      "author": "StreamSpace Team",
+      "type": "webhook",
+      "category": "Integrations",
+      "tags": ["notifications", "slack"],
+      "permissions": ["network"],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "webhookUrl": {
+            "type": "string",
+            "title": "Slack Webhook URL",
+            "description": "Your Slack incoming webhook URL"
+          },
+          "channel": {
+            "type": "string",
+            "title": "Default Channel",
+            "default": "#general"
+          },
+          "notifyOnSessionCreated": {
+            "type": "boolean",
+            "title": "Notify on Session Created",
+            "default": true
+          }
+        },
+        "required": ["webhookUrl"]
+      }
+    }
+  },
+  {
+    "name": "streamspace-teams",
+    "version": "1.0.0",
+    "displayName": "Microsoft Teams Integration",
+    "description": "Send notifications to Microsoft Teams channels",
+    "author": "StreamSpace Team",
+    "category": "Integrations",
+    "tags": ["notifications", "teams", "microsoft", "integration"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-teams/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-teams/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-teams",
+      "version": "1.0.0",
+      "displayName": "Microsoft Teams Integration",
+      "description": "Send notifications to Microsoft Teams channels",
+      "author": "StreamSpace Team",
+      "type": "webhook",
+      "permissions": ["network"]
+    }
+  },
+  {
+    "name": "streamspace-discord",
+    "version": "1.0.0",
+    "displayName": "Discord Integration",
+    "description": "Send notifications to Discord channels",
+    "author": "StreamSpace Team",
+    "category": "Integrations",
+    "tags": ["notifications", "discord", "integration"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-discord/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-discord/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-discord",
+      "version": "1.0.0",
+      "displayName": "Discord Integration",
+      "description": "Send notifications to Discord channels",
+      "author": "StreamSpace Team",
+      "type": "webhook",
+      "category": "Integrations",
+      "tags": ["notifications", "discord"],
+      "permissions": ["network"],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "webhookUrl": {
+            "type": "string",
+            "title": "Discord Webhook URL",
+            "description": "Your Discord channel webhook URL"
+          },
+          "username": {
+            "type": "string",
+            "title": "Bot Username",
+            "default": "StreamSpace"
+          },
+          "notifyOnSessionCreated": {
+            "type": "boolean",
+            "title": "Notify on Session Created",
+            "default": true
+          }
+        },
+        "required": ["webhookUrl"]
+      }
+    }
+  },
+  {
+    "name": "streamspace-pagerduty",
+    "version": "1.0.0",
+    "displayName": "PagerDuty Integration",
+    "description": "Send incident alerts to PagerDuty for critical events",
+    "author": "StreamSpace Team",
+    "category": "Integrations",
+    "tags": ["monitoring", "pagerduty", "alerting", "incidents"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-pagerduty/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-pagerduty/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-pagerduty",
+      "version": "1.0.0",
+      "displayName": "PagerDuty Integration",
+      "description": "Send incident alerts to PagerDuty for critical events",
+      "author": "StreamSpace Team",
+      "type": "webhook",
+      "category": "Integrations",
+      "tags": ["monitoring", "pagerduty", "alerting"],
+      "permissions": ["network"],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "routingKey": {
+            "type": "string",
+            "title": "Integration Key (Routing Key)",
+            "description": "Your PagerDuty Events API v2 integration key"
+          },
+          "notifyOnSessionHibernated": {
+            "type": "boolean",
+            "title": "Notify on Session Hibernated",
+            "default": true
+          },
+          "sessionHibernatedSeverity": {
+            "type": "string",
+            "enum": ["info", "warning", "error", "critical"],
+            "default": "warning"
+          }
+        },
+        "required": ["routingKey"]
+      }
+    }
+  },
+  {
+    "name": "streamspace-email",
+    "version": "1.0.0",
+    "displayName": "Email SMTP Integration",
+    "description": "Send email notifications via SMTP for session and user events",
+    "author": "StreamSpace Team",
+    "category": "Integrations",
+    "tags": ["email", "smtp", "notifications", "alerts"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-email/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-email/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-email",
+      "version": "1.0.0",
+      "displayName": "Email SMTP Integration",
+      "description": "Send email notifications via SMTP",
+      "author": "StreamSpace Team",
+      "type": "integration",
+      "category": "Integrations",
+      "tags": ["email", "smtp", "notifications"],
+      "permissions": ["network"],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "smtpHost": {
+            "type": "string",
+            "title": "SMTP Host",
+            "description": "SMTP server hostname"
+          },
+          "smtpPort": {
+            "type": "integer",
+            "title": "SMTP Port",
+            "default": 587
+          },
+          "username": {
+            "type": "string",
+            "title": "SMTP Username"
+          },
+          "password": {
+            "type": "string",
+            "title": "SMTP Password",
+            "format": "password"
+          },
+          "fromAddress": {
+            "type": "string",
+            "title": "From Email Address",
+            "format": "email"
+          },
+          "toAddresses": {
+            "type": "array",
+            "title": "To Email Addresses",
+            "items": {"type": "string", "format": "email"}
+          },
+          "notifyOnSessionCreated": {
+            "type": "boolean",
+            "title": "Notify on Session Created",
+            "default": true
+          },
+          "htmlFormat": {
+            "type": "boolean",
+            "title": "HTML Format",
+            "default": true
+          }
+        },
+        "required": ["smtpHost", "smtpPort", "username", "password", "fromAddress", "toAddresses"]
+      }
+    }
+  },
+  {
+    "name": "streamspace-billing",
+    "version": "1.0.0",
+    "displayName": "Billing & Usage Tracking",
+    "description": "Track resource usage, calculate costs, and manage subscriptions with Stripe integration",
+    "author": "StreamSpace Team",
+    "category": "Business",
+    "tags": ["billing", "stripe", "usage", "subscriptions", "invoicing"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-billing/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-billing/plugin.tar.gz",
+    "manifest": {
+      "name": "streamspace-billing",
+      "version": "1.0.0",
+      "displayName": "Billing & Usage Tracking",
+      "description": "Track resource usage, calculate costs, and manage subscriptions",
+      "author": "StreamSpace Team",
+      "type": "system",
+      "category": "Business",
+      "tags": ["billing", "stripe", "usage"],
+      "permissions": ["network", "database", "admin_ui"],
+      "configSchema": {
+        "type": "object",
+        "properties": {
+          "enabled": {
+            "type": "boolean",
+            "title": "Enable Billing",
+            "default": true
+          },
+          "billingMode": {
+            "type": "string",
+            "title": "Billing Mode",
+            "enum": ["usage", "subscription", "hybrid"],
+            "default": "usage"
+          },
+          "stripeEnabled": {
+            "type": "boolean",
+            "title": "Enable Stripe Integration",
+            "default": false
+          },
+          "stripeSecretKey": {
+            "type": "string",
+            "title": "Stripe Secret Key",
+            "format": "password"
+          },
+          "computeRates": {
+            "type": "object",
+            "title": "Compute Rates",
+            "properties": {
+              "cpu_per_core_hour": {"type": "number", "default": 0.05},
+              "memory_per_gb_hour": {"type": "number", "default": 0.01},
+              "storage_per_gb_month": {"type": "number", "default": 0.10}
+            }
+          },
+          "alertThreshold": {
+            "type": "number",
+            "title": "Usage Alert Threshold (%)",
+            "default": 80
+          }
+        }
+      }
+    }
+  },
+  {
+    "name": "streamspace-datadog",
+    "version": "1.0.0",
+    "displayName": "Datadog Monitoring",
+    "description": "Send metrics, traces, and logs to Datadog for comprehensive observability",
+    "author": "StreamSpace Team",
+    "category": "Monitoring",
+    "tags": ["monitoring", "datadog", "metrics", "apm", "observability"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-datadog/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-datadog/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-newrelic",
+    "version": "1.0.0",
+    "displayName": "New Relic Monitoring",
+    "description": "Send performance metrics, traces, and events to New Relic for full-stack observability",
+    "author": "StreamSpace Team",
+    "category": "Monitoring",
+    "tags": ["monitoring", "newrelic", "apm", "metrics", "observability"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-newrelic/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-newrelic/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-sentry",
+    "version": "1.0.0",
+    "displayName": "Sentry Error Tracking",
+    "description": "Track errors, exceptions, and performance issues with Sentry integration",
+    "author": "StreamSpace Team",
+    "category": "Monitoring",
+    "tags": ["monitoring", "sentry", "errors", "exceptions", "performance"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-sentry/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-sentry/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-elastic-apm",
+    "version": "1.0.0",
+    "displayName": "Elastic APM Integration",
+    "description": "Application Performance Monitoring with Elastic APM and distributed tracing",
+    "author": "StreamSpace Team",
+    "category": "Monitoring",
+    "tags": ["monitoring", "elastic", "apm", "performance", "tracing"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-elastic-apm/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-elastic-apm/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-honeycomb",
+    "version": "1.0.0",
+    "displayName": "Honeycomb Observability",
+    "description": "High-definition observability with Honeycomb for deep system analysis and debugging",
+    "author": "StreamSpace Team",
+    "category": "Monitoring",
+    "tags": ["monitoring", "honeycomb", "observability", "tracing", "debugging"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-honeycomb/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-honeycomb/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-compliance",
+    "version": "1.0.0",
+    "displayName": "Compliance & Regulatory Framework",
+    "description": "Comprehensive compliance management for GDPR, HIPAA, SOC2, ISO27001, and custom frameworks",
+    "author": "StreamSpace Team",
+    "category": "Security",
+    "tags": ["compliance", "gdpr", "hipaa", "soc2", "iso27001", "regulatory", "governance"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-compliance/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-compliance/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-dlp",
+    "version": "1.0.0",
+    "displayName": "Data Loss Prevention (DLP)",
+    "description": "Prevent data exfiltration with comprehensive controls for clipboard, file transfers, screen capture, printing, USB devices, and network access",
+    "author": "StreamSpace Team",
+    "category": "Security",
+    "tags": ["dlp", "data-loss-prevention", "security", "clipboard", "file-transfer", "exfiltration"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-dlp/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-dlp/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-audit-advanced",
+    "version": "1.0.0",
+    "displayName": "Advanced Audit Logging",
+    "description": "Enhanced audit logging with search, export, retention policies, and compliance reports",
+    "author": "StreamSpace Team",
+    "category": "Security",
+    "tags": ["audit", "logging", "compliance", "security"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-audit-advanced/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-audit-advanced/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-recording",
+    "version": "1.0.0",
+    "displayName": "Session Recording",
+    "description": "Record and replay sessions with multiple formats (webm, mp4, vnc), retention policies, and compliance recording",
+    "author": "StreamSpace Team",
+    "category": "Session Management",
+    "tags": ["recording", "playback", "compliance", "audit", "session"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-recording/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-recording/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-snapshots",
+    "version": "1.0.0",
+    "displayName": "Session Snapshots & Restore",
+    "description": "Create, manage, and restore session snapshots with scheduling, sharing, compression, and encryption",
+    "author": "StreamSpace Team",
+    "category": "Session Management",
+    "tags": ["snapshots", "backup", "restore", "scheduling", "session"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-snapshots/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-snapshots/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-workflows",
+    "version": "1.0.0",
+    "displayName": "Workflow Automation",
+    "description": "Automate session lifecycle with event-driven workflows, triggers, actions, and conditional logic",
+    "author": "StreamSpace Team",
+    "category": "Automation",
+    "tags": ["workflows", "automation", "triggers", "actions", "events"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-workflows/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-workflows/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-analytics-advanced",
+    "version": "1.0.0",
+    "displayName": "Advanced Analytics & Reporting",
+    "description": "Comprehensive analytics and reporting for usage trends, session metrics, user engagement, resource utilization, and cost analysis",
+    "author": "StreamSpace Team",
+    "category": "Analytics",
+    "tags": ["analytics", "reporting", "metrics", "insights", "cost-analysis", "dashboard"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-analytics-advanced/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-analytics-advanced/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-auth-saml",
+    "version": "1.0.0",
+    "displayName": "SAML 2.0 Authentication",
+    "description": "Enterprise SSO authentication with SAML 2.0 protocol - supports Okta, OneLogin, Azure AD, Google Workspace, JumpCloud, and Auth0",
+    "author": "StreamSpace Team",
+    "category": "Authentication",
+    "tags": ["saml", "sso", "authentication", "enterprise", "okta", "onelogin", "azure-ad"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-auth-saml/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-auth-saml/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-auth-oauth",
+    "version": "1.0.0",
+    "displayName": "OAuth2 / OIDC Authentication",
+    "description": "Modern OAuth2 and OpenID Connect authentication - supports Google, GitHub, GitLab, Okta, Azure AD, Auth0, Keycloak, and custom OIDC providers",
+    "author": "StreamSpace Team",
+    "category": "Authentication",
+    "tags": ["oauth2", "oidc", "sso", "google", "github", "azure-ad", "okta"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-auth-oauth/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-auth-oauth/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-storage-s3",
+    "version": "1.0.0",
+    "displayName": "S3 Object Storage",
+    "description": "AWS S3 and S3-compatible object storage backend for session recordings, snapshots, and file storage - supports AWS S3, MinIO, DigitalOcean Spaces, and Wasabi",
+    "author": "StreamSpace Team",
+    "category": "Storage",
+    "tags": ["storage", "s3", "aws", "minio", "object-storage", "cloud"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-storage-s3/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-storage-s3/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-storage-azure",
+    "version": "1.0.0",
+    "displayName": "Azure Blob Storage",
+    "description": "Microsoft Azure Blob Storage backend for session recordings, snapshots, and file storage",
+    "author": "StreamSpace Team",
+    "category": "Storage",
+    "tags": ["storage", "azure", "blob-storage", "cloud", "microsoft"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-storage-azure/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-storage-azure/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-storage-gcs",
+    "version": "1.0.0",
+    "displayName": "Google Cloud Storage",
+    "description": "Google Cloud Storage backend for session recordings, snapshots, and file storage",
+    "author": "StreamSpace Team",
+    "category": "Storage",
+    "tags": ["storage", "gcs", "google-cloud", "cloud"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-storage-gcs/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-storage-gcs/plugin.tar.gz"
+  }
+]

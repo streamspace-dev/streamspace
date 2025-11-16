@@ -1,0 +1,27 @@
+{
+  "name": "streamspace-snapshots",
+  "version": "1.0.0",
+  "displayName": "Session Snapshots & Restore",
+  "description": "Create, manage, and restore session snapshots with scheduling, sharing, and storage management",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Session Management",
+  "tags": ["snapshots", "backup", "restore", "state-management"],
+  "permissions": ["database", "storage", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": true},
+      "maxSnapshotsPerSession": {"type": "integer", "default": 10},
+      "defaultRetentionDays": {"type": "integer", "default": 90},
+      "storagePath": {"type": "string", "default": "/var/lib/streamspace/snapshots"},
+      "compressionEnabled": {"type": "boolean", "default": true},
+      "encryptSnapshots": {"type": "boolean", "default": true}
+    }
+  },
+  "events": {"session.created": "OnSessionCreated"},
+  "database": {"tables": ["session_snapshots", "snapshot_schedules"]},
+  "api": {"endpoints": ["/snapshots", "/snapshots/:id", "/snapshots/:id/restore", "/snapshots/:id/share"]},
+  "ui": {"userPages": [{"id": "snapshots", "title": "Snapshots", "route": "/snapshots", "component": "Snapshots", "icon": "camera_alt"}]},
+  "scheduler": {"jobs": [{"name": "cleanup-old-snapshots", "schedule": "0 3 * * *", "description": "Delete old snapshots"}]}
+}

@@ -1,0 +1,36 @@
+{
+  "name": "streamspace-storage-azure",
+  "version": "1.0.0",
+  "displayName": "Azure Blob Storage",
+  "description": "Microsoft Azure Blob Storage backend for session recordings, snapshots, and file storage",
+  "author": "StreamSpace Team",
+  "type": "system",
+  "category": "Storage",
+  "tags": ["storage", "azure", "blob-storage", "cloud", "microsoft"],
+  "permissions": ["network", "admin_ui"],
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enabled": {"type": "boolean", "default": false},
+      "accountName": {"type": "string", "title": "Storage Account Name"},
+      "accountKey": {"type": "string", "title": "Storage Account Key", "format": "password"},
+      "containerName": {"type": "string", "title": "Container Name"},
+      "endpoint": {"type": "string", "title": "Blob Service Endpoint", "description": "Optional custom endpoint"},
+      "storagePaths": {
+        "type": "object",
+        "properties": {
+          "recordings": {"type": "string", "default": "recordings/"},
+          "snapshots": {"type": "string", "default": "snapshots/"},
+          "uploads": {"type": "string", "default": "uploads/"}
+        }
+      }
+    },
+    "required": ["accountName", "accountKey", "containerName"]
+  },
+  "api": {
+    "endpoints": ["/storage/azure/upload", "/storage/azure/download", "/storage/azure/list"]
+  },
+  "ui": {
+    "adminPages": [{"id": "azure-storage", "title": "Azure Storage", "route": "/admin/storage/azure", "component": "AzureStorage", "icon": "cloud"}]
+  }
+}
