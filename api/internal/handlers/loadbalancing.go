@@ -73,6 +73,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace/streamspace/api/internal/db"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -81,6 +82,16 @@ import (
 	metricsv1beta1 "k8s.io/metrics/pkg/apis/metrics/v1beta1"
 	metricsclientset "k8s.io/metrics/pkg/client/clientset/versioned"
 )
+
+// LoadBalancingHandler handles load balancing and node distribution requests.
+type LoadBalancingHandler struct {
+	DB *db.Database
+}
+
+// NewLoadBalancingHandler creates a new load balancing handler.
+func NewLoadBalancingHandler(database *db.Database) *LoadBalancingHandler {
+	return &LoadBalancingHandler{DB: database}
+}
 
 // ============================================================================
 // LOAD BALANCING
@@ -145,7 +156,7 @@ type NodeStatus struct {
 }
 
 // CreateLoadBalancingPolicy creates a new load balancing policy
-func (h *Handler) CreateLoadBalancingPolicy(c *gin.Context) {
+func (h *LoadBalancingHandler) CreateLoadBalancingPolicy(c *gin.Context) {
 	createdBy := c.GetString("user_id")
 	role := c.GetString("role")
 
@@ -196,7 +207,7 @@ func (h *Handler) CreateLoadBalancingPolicy(c *gin.Context) {
 }
 
 // ListLoadBalancingPolicies lists all load balancing policies
-func (h *Handler) ListLoadBalancingPolicies(c *gin.Context) {
+func (h *LoadBalancingHandler) ListLoadBalancingPolicies(c *gin.Context) {
 	rows, err := h.DB.DB().Query(`
 		SELECT id, name, description, strategy, enabled, session_affinity,
 		       health_check_config, node_selector, node_weights, geo_preferences,
@@ -228,7 +239,7 @@ func (h *Handler) ListLoadBalancingPolicies(c *gin.Context) {
 }
 
 // GetNodeStatus gets current status of all cluster nodes
-func (h *Handler) GetNodeStatus(c *gin.Context) {
+func (h *LoadBalancingHandler) GetNodeStatus(c *gin.Context) {
 	// Try to fetch real node metrics from Kubernetes API
 	// If K8s integration is not available, fall back to database
 	nodes, err := h.fetchKubernetesNodeMetrics()
@@ -245,7 +256,7 @@ func (h *Handler) GetNodeStatus(c *gin.Context) {
 }
 
 // fetchNodeStatusFromDatabase fetches node status from database cache
-func (h *Handler) fetchNodeStatusFromDatabase() ([]NodeStatus, error) {
+func (h *LoadBalancingHandler) fetchNodeStatusFromDatabase() ([]NodeStatus, error) {
 	rows, err := h.DB.DB().Query(`
 		SELECT node_name, status, cpu_allocated, cpu_capacity, memory_allocated,
 		       memory_capacity, active_sessions, health_status, last_health_check,
@@ -291,7 +302,7 @@ func (h *Handler) fetchNodeStatusFromDatabase() ([]NodeStatus, error) {
 }
 
 // fetchKubernetesNodeMetrics fetches real-time node metrics from Kubernetes API
-func (h *Handler) fetchKubernetesNodeMetrics() ([]NodeStatus, error) {
+func (h *LoadBalancingHandler) fetchKubernetesNodeMetrics() ([]NodeStatus, error) {
 	ctx := context.Background()
 
 	// Create Kubernetes config
@@ -353,7 +364,7 @@ func (h *Handler) fetchKubernetesNodeMetrics() ([]NodeStatus, error) {
 }
 
 // getKubernetesConfig gets Kubernetes configuration from kubeconfig or in-cluster config
-func (h *Handler) getKubernetesConfig() (*rest.Config, error) {
+func (h *LoadBalancingHandler) getKubernetesConfig() (*rest.Config, error) {
 	// Try in-cluster config first (for pods running in cluster)
 	config, err := rest.InClusterConfig()
 	if err == nil {
@@ -380,7 +391,7 @@ func (h *Handler) getKubernetesConfig() (*rest.Config, error) {
 }
 
 // convertNodeToNodeStatus converts a Kubernetes Node to our NodeStatus struct
-func (h *Handler) convertNodeToNodeStatus(node corev1.Node, metricsMap map[string]metricsv1beta1.NodeMetrics, sessionCounts map[string]int) NodeStatus {
+func (h *LoadBalancingHandler) convertNodeToNodeStatus(node corev1.Node, metricsMap map[string]metricsv1beta1.NodeMetrics, sessionCounts map[string]int) NodeStatus {
 	ns := NodeStatus{
 		NodeName: node.Name,
 		Labels:   node.Labels,
@@ -467,7 +478,7 @@ func (h *Handler) convertNodeToNodeStatus(node corev1.Node, metricsMap map[strin
 }
 
 // getSessionCountsByNode gets the count of active sessions per node from database
-func (h *Handler) getSessionCountsByNode() (map[string]int, error) {
+func (h *LoadBalancingHandler) getSessionCountsByNode() (map[string]int, error) {
 	rows, err := h.DB.DB().Query(`
 		SELECT node_name, COUNT(*) as session_count
 		FROM sessions
@@ -493,7 +504,7 @@ func (h *Handler) getSessionCountsByNode() (map[string]int, error) {
 }
 
 // cacheNodeStatusInDatabase caches node status in database for fallback
-func (h *Handler) cacheNodeStatusInDatabase(nodes []NodeStatus) {
+func (h *LoadBalancingHandler) cacheNodeStatusInDatabase(nodes []NodeStatus) {
 	for _, node := range nodes {
 		// Use UPSERT pattern to update or insert
 		h.DB.DB().Exec(`
@@ -523,7 +534,7 @@ func (h *Handler) cacheNodeStatusInDatabase(nodes []NodeStatus) {
 }
 
 // scaleKubernetesDeployment scales a Kubernetes deployment to the specified replica count
-func (h *Handler) scaleKubernetesDeployment(deploymentName string, replicas int) error {
+func (h *LoadBalancingHandler) scaleKubernetesDeployment(deploymentName string, replicas int) error {
 	ctx := context.Background()
 
 	// Create Kubernetes config
@@ -598,7 +609,7 @@ func calculateClusterTotals(nodes []NodeStatus) (totalCPU, usedCPU float64, tota
 }
 
 // SelectNode selects best node for a new session based on policy
-func (h *Handler) SelectNode(c *gin.Context) {
+func (h *LoadBalancingHandler) SelectNode(c *gin.Context) {
 	var req struct {
 		PolicyID       int64             `json:"policy_id,omitempty"`
 		RequiredCPU    float64           `json:"required_cpu"`
@@ -812,7 +823,7 @@ type ScalingEvent struct {
 }
 
 // CreateAutoScalingPolicy creates a new auto-scaling policy
-func (h *Handler) CreateAutoScalingPolicy(c *gin.Context) {
+func (h *LoadBalancingHandler) CreateAutoScalingPolicy(c *gin.Context) {
 	createdBy := c.GetString("user_id")
 	role := c.GetString("role")
 
@@ -864,7 +875,7 @@ func (h *Handler) CreateAutoScalingPolicy(c *gin.Context) {
 }
 
 // ListAutoScalingPolicies lists all auto-scaling policies
-func (h *Handler) ListAutoScalingPolicies(c *gin.Context) {
+func (h *LoadBalancingHandler) ListAutoScalingPolicies(c *gin.Context) {
 	rows, err := h.DB.DB().Query(`
 		SELECT id, name, description, target_type, target_id, enabled, scaling_mode,
 		       min_replicas, max_replicas, metric_type, target_metric_value,
@@ -897,7 +908,7 @@ func (h *Handler) ListAutoScalingPolicies(c *gin.Context) {
 }
 
 // TriggerScaling manually triggers a scaling action
-func (h *Handler) TriggerScaling(c *gin.Context) {
+func (h *LoadBalancingHandler) TriggerScaling(c *gin.Context) {
 	policyID := c.Param("policyId")
 
 	var req struct {
@@ -1025,7 +1036,7 @@ func (h *Handler) TriggerScaling(c *gin.Context) {
 }
 
 // GetScalingHistory gets scaling event history
-func (h *Handler) GetScalingHistory(c *gin.Context) {
+func (h *LoadBalancingHandler) GetScalingHistory(c *gin.Context) {
 	policyID := c.Query("policy_id")
 	limit := c.DefaultQuery("limit", "50")
 

@@ -254,6 +254,7 @@ func main() {
 	consoleHandler := handlers.NewConsoleHandler(database)
 	collaborationHandler := handlers.NewCollaborationHandler(database)
 	integrationsHandler := handlers.NewIntegrationsHandler(database)
+	loadBalancingHandler := handlers.NewLoadBalancingHandler(database)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication
@@ -264,7 +265,7 @@ func main() {
 	}
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, consoleHandler, collaborationHandler, integrationsHandler, jwtManager, userDB, redisCache, webhookSecret)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, jwtManager, userDB, redisCache, webhookSecret)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -345,7 +346,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -536,16 +537,16 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		scaling.Use(operatorMiddleware)
 		{
 			// Load balancing policies
-			scaling.GET("/load-balancing/policies", h.ListLoadBalancingPolicies)
-			scaling.POST("/load-balancing/policies", h.CreateLoadBalancingPolicy)
-			scaling.GET("/load-balancing/nodes", h.GetNodeStatus)
-			scaling.POST("/load-balancing/select-node", h.SelectNode)
+			scaling.GET("/load-balancing/policies", loadBalancingHandler.ListLoadBalancingPolicies)
+			scaling.POST("/load-balancing/policies", loadBalancingHandler.CreateLoadBalancingPolicy)
+			scaling.GET("/load-balancing/nodes", loadBalancingHandler.GetNodeStatus)
+			scaling.POST("/load-balancing/select-node", loadBalancingHandler.SelectNode)
 
 			// Auto-scaling policies
-			scaling.GET("/autoscaling/policies", h.ListAutoScalingPolicies)
-			scaling.POST("/autoscaling/policies", h.CreateAutoScalingPolicy)
-			scaling.POST("/autoscaling/policies/:policyId/trigger", h.TriggerScaling)
-			scaling.GET("/autoscaling/history", h.GetScalingHistory)
+			scaling.GET("/autoscaling/policies", loadBalancingHandler.ListAutoScalingPolicies)
+			scaling.POST("/autoscaling/policies", loadBalancingHandler.CreateAutoScalingPolicy)
+			scaling.POST("/autoscaling/policies/:policyId/trigger", loadBalancingHandler.TriggerScaling)
+			scaling.GET("/autoscaling/history", loadBalancingHandler.GetScalingHistory)
 		}
 
 		// Compliance & Governance - Admin only
