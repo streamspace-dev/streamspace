@@ -1,3 +1,43 @@
+// Package errors provides standardized error handling for StreamSpace API.
+//
+// This package implements a consistent error format across all API endpoints:
+//   - Structured error responses with error codes
+//   - Automatic HTTP status code mapping
+//   - Optional error details for debugging
+//   - Machine-readable error codes for client error handling
+//
+// Error Structure:
+//   - Code: Machine-readable error identifier (e.g., "QUOTA_EXCEEDED")
+//   - Message: Human-readable error message
+//   - Details: Optional additional context (wrapped errors, stack traces)
+//   - StatusCode: HTTP status code (400, 401, 403, 404, 500, etc.)
+//
+// Error Categories:
+//   - Client Errors (4xx): Bad request, unauthorized, forbidden, not found
+//   - Server Errors (5xx): Internal errors, database errors, service unavailable
+//
+// Usage patterns:
+//
+//	// Simple error
+//	return errors.NotFound("session")
+//
+//	// Error with custom message
+//	return errors.QuotaExceeded("Maximum 5 sessions allowed")
+//
+//	// Wrap underlying error
+//	return errors.DatabaseError(err)
+//
+//	// In HTTP handler
+//	c.JSON(err.StatusCode, err.ToResponse())
+//
+// JSON Response Format:
+//
+//	{
+//	  "error": "QUOTA_EXCEEDED",
+//	  "message": "Session quota exceeded",
+//	  "code": "QUOTA_EXCEEDED",
+//	  "details": "5/5 sessions active"
+//	}
 package errors
 
 import (
@@ -5,12 +45,43 @@ import (
 	"net/http"
 )
 
-// AppError represents a standardized application error
+// AppError represents a standardized application error with HTTP context.
+//
+// AppError provides:
+//   - Machine-readable error code for client error handling
+//   - Human-readable message for display to users
+//   - Optional details for debugging (not always shown to clients)
+//   - Automatic HTTP status code mapping
+//
+// Example:
+//
+//	err := &AppError{
+//	    Code: "QUOTA_EXCEEDED",
+//	    Message: "Session quota exceeded: 5/5 sessions active",
+//	    Details: "user1 has 5 running sessions, max allowed is 5",
+//	    StatusCode: 403,
+//	}
 type AppError struct {
-	Code       string `json:"code"`
-	Message    string `json:"message"`
-	Details    string `json:"details,omitempty"`
-	StatusCode int    `json:"-"`
+	// Code is a machine-readable error identifier.
+	// Format: UPPER_SNAKE_CASE (e.g., "QUOTA_EXCEEDED", "NOT_FOUND")
+	// Used by clients for programmatic error handling.
+	Code string `json:"code"`
+
+	// Message is a human-readable error description.
+	// Should be suitable for display to end users.
+	// Example: "Session quota exceeded: 5/5 sessions active"
+	Message string `json:"message"`
+
+	// Details provides additional context for debugging (optional).
+	// May contain wrapped error messages, stack traces, or technical details.
+	// Should not be shown to end users in production.
+	// Example: "database query failed: connection timeout"
+	Details string `json:"details,omitempty"`
+
+	// StatusCode is the HTTP status code to return.
+	// Automatically set based on error code.
+	// Not included in JSON response (marked with `json:"-"`)
+	StatusCode int `json:"-"`
 }
 
 // Error implements the error interface
