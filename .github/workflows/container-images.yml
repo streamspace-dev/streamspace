@@ -1,0 +1,524 @@
+name: Container Images - Build, Sign & Publish
+
+on:
+  push:
+    branches:
+      - main
+      - develop
+    tags:
+      - 'v*'
+    paths:
+      - 'api/**'
+      - 'controller/**'
+      - 'ui/**'
+      - '.github/workflows/container-images.yml'
+  pull_request:
+    branches:
+      - main
+      - develop
+  workflow_dispatch:
+
+env:
+  REGISTRY: ghcr.io
+  IMAGE_PREFIX: ghcr.io/${{ github.repository_owner }}/streamspace
+
+permissions:
+  contents: write
+  packages: write
+  id-token: write
+  security-events: write
+  attestations: write
+
+jobs:
+  build-and-sign-controller:
+    name: Build & Sign Controller
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.2'
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-controller
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}" >> $GITHUB_OUTPUT
+          echo "COMMIT=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+
+      - name: Build and push Controller image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./controller
+          file: ./controller/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.VERSION }}
+            COMMIT=${{ steps.vars.outputs.COMMIT }}
+            BUILD_DATE=${{ steps.vars.outputs.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Sign Controller image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build.outputs.digest }}
+
+      - name: Generate SBOM for Controller
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./controller
+          artifact-name: streamspace-controller-sbom.spdx.json
+          output-file: sbom-controller.spdx.json
+          format: spdx-json
+
+      - name: Attest Controller SBOM
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign attest --yes --type spdxjson \
+            --predicate sbom-controller.spdx.json \
+            ${{ env.IMAGE_PREFIX }}-controller@${{ steps.build.outputs.digest }}
+
+      - name: Upload Controller SBOM
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-controller
+          path: sbom-controller.spdx.json
+          retention-days: 90
+
+  build-and-sign-api:
+    name: Build & Sign API
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.2'
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-api
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}" >> $GITHUB_OUTPUT
+          echo "COMMIT=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+
+      - name: Build and push API image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./api
+          file: ./api/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.VERSION }}
+            COMMIT=${{ steps.vars.outputs.COMMIT }}
+            BUILD_DATE=${{ steps.vars.outputs.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Sign API image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build.outputs.digest }}
+
+      - name: Generate SBOM for API
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./api
+          artifact-name: streamspace-api-sbom.spdx.json
+          output-file: sbom-api.spdx.json
+          format: spdx-json
+
+      - name: Attest API SBOM
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign attest --yes --type spdxjson \
+            --predicate sbom-api.spdx.json \
+            ${{ env.IMAGE_PREFIX }}-api@${{ steps.build.outputs.digest }}
+
+      - name: Upload API SBOM
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-api
+          path: sbom-api.spdx.json
+          retention-days: 90
+
+  build-and-sign-ui:
+    name: Build & Sign UI
+    runs-on: ubuntu-latest
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+
+      - name: Set up Docker Buildx
+        uses: docker/setup-buildx-action@v3
+
+      - name: Log in to GitHub Container Registry
+        if: github.event_name != 'pull_request'
+        uses: docker/login-action@v3
+        with:
+          registry: ${{ env.REGISTRY }}
+          username: ${{ github.actor }}
+          password: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Install Cosign
+        if: github.event_name != 'pull_request'
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.2'
+
+      - name: Extract metadata
+        id: meta
+        uses: docker/metadata-action@v5
+        with:
+          images: ${{ env.IMAGE_PREFIX }}-ui
+          tags: |
+            type=ref,event=branch
+            type=ref,event=pr
+            type=semver,pattern={{version}}
+            type=semver,pattern={{major}}.{{minor}}
+            type=semver,pattern={{major}}
+            type=sha,prefix={{branch}}-
+            type=raw,value=latest,enable={{is_default_branch}}
+
+      - name: Set build variables
+        id: vars
+        run: |
+          echo "VERSION=${{ fromJSON(steps.meta.outputs.json).labels['org.opencontainers.image.version'] }}" >> $GITHUB_OUTPUT
+          echo "COMMIT=${{ github.sha }}" >> $GITHUB_OUTPUT
+          echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
+
+      - name: Build and push UI image
+        id: build
+        uses: docker/build-push-action@v5
+        with:
+          context: ./ui
+          file: ./ui/Dockerfile
+          platforms: linux/amd64,linux/arm64
+          push: ${{ github.event_name != 'pull_request' }}
+          tags: ${{ steps.meta.outputs.tags }}
+          labels: ${{ steps.meta.outputs.labels }}
+          build-args: |
+            VERSION=${{ steps.vars.outputs.VERSION }}
+            COMMIT=${{ steps.vars.outputs.COMMIT }}
+            BUILD_DATE=${{ steps.vars.outputs.BUILD_DATE }}
+          cache-from: type=gha
+          cache-to: type=gha,mode=max
+          provenance: true
+          sbom: true
+
+      - name: Sign UI image
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          echo "${{ steps.meta.outputs.tags }}" | xargs -I {} cosign sign --yes {}@${{ steps.build.outputs.digest }}
+
+      - name: Generate SBOM for UI
+        if: github.event_name != 'pull_request'
+        uses: anchore/sbom-action@v0
+        with:
+          path: ./ui
+          artifact-name: streamspace-ui-sbom.spdx.json
+          output-file: sbom-ui.spdx.json
+          format: spdx-json
+
+      - name: Attest UI SBOM
+        if: github.event_name != 'pull_request'
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign attest --yes --type spdxjson \
+            --predicate sbom-ui.spdx.json \
+            ${{ env.IMAGE_PREFIX }}-ui@${{ steps.build.outputs.digest }}
+
+      - name: Upload UI SBOM
+        if: github.event_name != 'pull_request'
+        uses: actions/upload-artifact@v4
+        with:
+          name: sbom-ui
+          path: sbom-ui.spdx.json
+          retention-days: 90
+
+  security-scan:
+    name: Security Scan
+    runs-on: ubuntu-latest
+    if: github.event_name != 'pull_request'
+    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    strategy:
+      matrix:
+        component: [controller, api, ui]
+    steps:
+      - name: Install Cosign
+        uses: sigstore/cosign-installer@v3
+        with:
+          cosign-release: 'v2.2.2'
+
+      - name: Verify image signature
+        env:
+          COSIGN_EXPERIMENTAL: "true"
+        run: |
+          cosign verify ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:latest
+
+      - name: Run Trivy vulnerability scanner
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:latest
+          format: 'sarif'
+          output: 'trivy-${{ matrix.component }}-results.sarif'
+          severity: 'CRITICAL,HIGH'
+
+      - name: Upload Trivy results to GitHub Security
+        uses: github/codeql-action/upload-sarif@v3
+        with:
+          sarif_file: 'trivy-${{ matrix.component }}-results.sarif'
+          category: 'trivy-${{ matrix.component }}'
+
+      - name: Generate Trivy report
+        uses: aquasecurity/trivy-action@master
+        with:
+          image-ref: ${{ env.IMAGE_PREFIX }}-${{ matrix.component }}:latest
+          format: 'table'
+          severity: 'CRITICAL,HIGH,MEDIUM'
+
+  update-helm-chart:
+    name: Update Helm Chart
+    runs-on: ubuntu-latest
+    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          token: ${{ secrets.GITHUB_TOKEN }}
+
+      - name: Extract version
+        id: version
+        run: echo "VERSION=${GITHUB_REF#refs/tags/}" >> $GITHUB_OUTPUT
+
+      - name: Update Chart.yaml
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sed -i "s/^version:.*/version: ${VERSION#v}/" chart/Chart.yaml
+          sed -i "s/^appVersion:.*/appVersion: \"${VERSION}\"/" chart/Chart.yaml
+
+      - name: Update values.yaml
+        run: |
+          VERSION=${{ steps.version.outputs.VERSION }}
+          sed -i "s/tag: \".*\"/tag: \"${VERSION}\"/" chart/values.yaml
+
+      - name: Commit changes
+        run: |
+          git config --local user.email "github-actions[bot]@users.noreply.github.com"
+          git config --local user.name "github-actions[bot]"
+          git add chart/Chart.yaml chart/values.yaml
+          git commit -m "chore: bump chart version to ${{ steps.version.outputs.VERSION }}" || echo "No changes to commit"
+          git push origin HEAD:main || echo "No changes to push"
+
+  create-release:
+    name: Create GitHub Release
+    runs-on: ubuntu-latest
+    needs: [security-scan, update-helm-chart]
+    if: startsWith(github.ref, 'refs/tags/v')
+    steps:
+      - name: Checkout code
+        uses: actions/checkout@v4
+        with:
+          fetch-depth: 0
+
+      - name: Extract version
+        id: version
+        run: |
+          VERSION=${GITHUB_REF#refs/tags/}
+          echo "VERSION=$VERSION" >> $GITHUB_OUTPUT
+          echo "VERSION_NUM=${VERSION#v}" >> $GITHUB_OUTPUT
+
+      - name: Generate changelog
+        id: changelog
+        run: |
+          PREV_TAG=$(git describe --tags --abbrev=0 HEAD^ 2>/dev/null || echo "")
+          if [ -z "$PREV_TAG" ]; then
+            CHANGELOG=$(git log --pretty=format:"- %s (%h)" --no-merges)
+          else
+            CHANGELOG=$(git log ${PREV_TAG}..HEAD --pretty=format:"- %s (%h)" --no-merges)
+          fi
+          echo "$CHANGELOG" > CHANGELOG.txt
+
+      - name: Set up Helm
+        uses: azure/setup-helm@v4
+        with:
+          version: 'v3.14.0'
+
+      - name: Package Helm chart
+        run: |
+          helm package chart/ --version ${{ steps.version.outputs.VERSION_NUM }} --app-version ${{ steps.version.outputs.VERSION }}
+          mv streamspace-${{ steps.version.outputs.VERSION_NUM }}.tgz streamspace-helm-chart.tgz
+
+      - name: Download SBOMs
+        uses: actions/download-artifact@v4
+        with:
+          path: sboms
+
+      - name: Create Release Notes
+        run: |
+          cat > RELEASE_NOTES.md <<EOF
+          # StreamSpace ${{ steps.version.outputs.VERSION }}
+
+          ## Container Images
+
+          All images are multi-platform (linux/amd64, linux/arm64) and signed with Cosign:
+
+          - Controller: \`${{ env.IMAGE_PREFIX }}-controller:${{ steps.version.outputs.VERSION }}\`
+          - API: \`${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.VERSION }}\`
+          - UI: \`${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.VERSION }}\`
+
+          ## Security
+
+          ✅ All images are signed with Cosign (keyless)
+          ✅ SBOMs generated and attached
+          ✅ Vulnerability scanned with Trivy
+
+          ### Verifying Image Signatures
+
+          \`\`\`bash
+          cosign verify ${{ env.IMAGE_PREFIX }}-controller:${{ steps.version.outputs.VERSION }}
+          \`\`\`
+
+          ## Installation
+
+          ### Using Helm
+
+          \`\`\`bash
+          helm install streamspace streamspace-helm-chart.tgz \\
+            --namespace streamspace \\
+            --create-namespace
+          \`\`\`
+
+          ## What's Changed
+
+          $(cat CHANGELOG.txt)
+
+          ## Documentation
+
+          - [README](https://github.com/${{ github.repository }}/blob/main/README.md)
+          - [Architecture](https://github.com/${{ github.repository }}/blob/main/docs/ARCHITECTURE.md)
+          - [Helm Chart](https://github.com/${{ github.repository }}/blob/main/chart/README.md)
+          EOF
+
+      - name: Create GitHub Release
+        uses: softprops/action-gh-release@v1
+        with:
+          body_path: RELEASE_NOTES.md
+          files: |
+            streamspace-helm-chart.tgz
+            sboms/**/*.spdx.json
+          draft: false
+          prerelease: ${{ contains(steps.version.outputs.VERSION, '-') }}
+        env:
+          GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
+
+  build-summary:
+    name: Build Summary
+    runs-on: ubuntu-latest
+    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    if: always()
+    steps:
+      - name: Generate summary
+        run: |
+          echo "## 🐳 Container Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Images" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-controller:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-api:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-ui:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Platforms" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY
+          echo "- linux/arm64" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Security Features" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Signed with Cosign" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ SBOM generated" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Provenance attestation" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ Vulnerability scanned" >> $GITHUB_STEP_SUMMARY

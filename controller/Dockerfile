@@ -5,6 +5,8 @@ FROM golang:1.21 AS builder
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE
+# Docker Buildx automatically provides TARGETARCH
+ARG TARGETARCH
 
 WORKDIR /workspace
 
@@ -20,8 +22,8 @@ COPY api/ api/
 COPY controllers/ controllers/
 COPY pkg/ pkg/
 
-# Build the controller with version info
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a \
+# Build the controller with version info for the target architecture
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a \
     -ldflags "-w -s -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
     -o manager cmd/main.go
 
