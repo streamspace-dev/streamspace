@@ -1,3 +1,90 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements resource quota management and enforcement.
+//
+// RESOURCE QUOTA SYSTEM OVERVIEW:
+//
+// The quota system prevents resource exhaustion and ensures fair usage by limiting:
+// - Number of concurrent sessions per user or team
+// - Total CPU allocation (measured in millicores, e.g., 1000m = 1 CPU core)
+// - Total memory allocation (measured in megabytes)
+// - Total storage usage (measured in gigabytes)
+//
+// QUOTA HIERARCHY:
+//
+// StreamSpace supports three levels of quotas, applied in this order:
+//
+// 1. Default Quotas (global):
+//    - Applies to all users unless overridden
+//    - Configurable by platform admins
+//    - Example: 10 sessions, 4 cores, 8GB RAM, 100GB storage per user
+//
+// 2. User-Specific Quotas:
+//    - Overrides defaults for specific users
+//    - Allows customization for power users or restricted accounts
+//    - Example: Premium user gets 50 sessions, 20 cores, 40GB RAM
+//
+// 3. Team/Group Quotas:
+//    - Shared quota pool for all team members
+//    - Prevents one team from monopolizing resources
+//    - Example: Engineering team gets 200 sessions, 100 cores
+//
+// QUOTA ENFORCEMENT:
+//
+// Quotas are enforced at multiple points:
+// - Session creation: CheckQuota endpoint verifies before creating session
+// - Session startup: Controller checks quotas before scheduling pods
+// - API responses: Quota status shown in user dashboards
+// - Violations logged: Audit trail of quota violations for compliance
+//
+// USAGE CALCULATION:
+//
+// Resource usage is calculated in real-time from:
+// - Active sessions: Sessions in "running", "starting", or "pending" states
+// - Resource requests: CPU and memory from session specs (not actual usage)
+// - Storage: Sum of snapshot sizes plus persistent home directories
+//
+// Note: Quotas are based on REQUESTED resources (reservations), not actual
+// usage. This ensures predictable capacity planning. If a session requests
+// 2GB RAM but only uses 500MB, it still counts as 2GB toward the quota.
+//
+// QUOTA STATUS LEVELS:
+//
+// - "ok": Usage below 80% of quota (green)
+// - "warning": Usage between 80-100% of quota (yellow)
+// - "exceeded": Usage above 100% of quota (red, blocks new sessions)
+//
+// EXAMPLE QUOTA LIFECYCLE:
+//
+// 1. User has quota: 10 sessions, 10000m CPU, 20480 MB memory
+// 2. User creates 8 sessions using 8000m CPU, 16384 MB memory
+// 3. Status: "ok" (80% of session quota, 80% of resources)
+// 4. User creates 2 more sessions using 2000m CPU, 4096 MB memory
+// 5. Status: "warning" (100% of session quota)
+// 6. User tries to create 11th session
+// 7. System blocks request with "quota exceeded" error
+//
+// TEAM QUOTAS VS USER QUOTAS:
+//
+// Team quotas are SHARED across all members:
+// - Team of 10 users with team quota of 50 sessions
+// - Each user can create sessions up to the team limit
+// - If 5 users create 10 sessions each = 50 total (team quota reached)
+// - Remaining 5 users cannot create any sessions until others terminate
+//
+// User quotas are INDIVIDUAL limits:
+// - Even within a team, each user has their own session limit
+// - User quota prevents one team member from using all team resources
+//
+// STORAGE QUOTA DETAILS:
+//
+// Storage quota includes:
+// - Session snapshots: Saved states of sessions for resume/backup
+// - Persistent home directories: User's /home directory across sessions
+// - Template storage: Custom container images (future feature)
+//
+// Storage usage is calculated as:
+// - Sum of completed snapshot sizes (in-progress snapshots not counted)
+// - Estimated persistent home size (10GB default, actual size if available)
 package handlers
 
 import (
@@ -12,7 +99,13 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
-// QuotasHandler handles resource quotas and limits
+// QuotasHandler handles resource quotas and limits.
+//
+// This handler provides endpoints for:
+// - Getting and setting quotas for users and teams
+// - Checking current resource usage against quotas
+// - Detecting and reporting quota violations
+// - Managing quota policies and rules
 type QuotasHandler struct {
 	db *db.Database
 }

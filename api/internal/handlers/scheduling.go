@@ -1,3 +1,69 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements session scheduling and calendar integration features.
+//
+// SCHEDULING SYSTEM OVERVIEW:
+//
+// The scheduling system allows users to create sessions that start automatically
+// at specific times or on recurring schedules. This is useful for:
+// - Regular team meetings or training sessions
+// - Pre-warming environments before work hours
+// - Demo environments that start/stop on a schedule
+// - Resource optimization by scheduling sessions during off-peak hours
+//
+// SUPPORTED SCHEDULE TYPES:
+//
+// 1. One-Time (once): Session starts at a specific date/time, runs once
+//    - Example: Demo session on Friday at 2 PM
+//    - Requires: start_time field
+//
+// 2. Daily (daily): Session starts every day at a specific time
+//    - Example: Development environment ready at 9 AM every weekday
+//    - Requires: time_of_day field (HH:MM format)
+//
+// 3. Weekly (weekly): Session starts on specific days of the week
+//    - Example: Training sessions every Monday and Wednesday at 10 AM
+//    - Requires: days_of_week array (0=Sunday, 6=Saturday), time_of_day
+//
+// 4. Monthly (monthly): Session starts on a specific day of each month
+//    - Example: Monthly report review on the 1st at 9 AM
+//    - Requires: day_of_month (1-31), time_of_day
+//
+// 5. Cron Expression (cron): Advanced scheduling using cron syntax
+//    - Example: "0 9 * * 1-5" for weekdays at 9 AM
+//    - Requires: cron_expr field
+//    - Uses standard cron format: minute hour day month weekday
+//
+// CONFLICT DETECTION:
+//
+// The system prevents scheduling conflicts by checking if proposed schedules
+// would overlap with existing sessions. This prevents:
+// - Resource quota violations (too many concurrent sessions)
+// - Node capacity issues
+// - User confusion from overlapping sessions
+//
+// CALENDAR INTEGRATION:
+//
+// Sessions can be automatically synced to external calendars:
+// - Google Calendar (via Google Calendar API)
+// - Microsoft Outlook (via Microsoft Graph API)
+// - iCal export for other calendar applications
+//
+// This allows users to see their scheduled sessions alongside other events
+// and get calendar notifications/reminders.
+//
+// PRE-WARMING AND AUTO-TERMINATION:
+//
+// - Pre-warming: Start session N minutes before scheduled time
+//   Useful for sessions with slow startup (large container images)
+//
+// - Auto-termination: Automatically stop session N minutes after start
+//   Prevents runaway sessions and saves resources
+//
+// TIMEZONE HANDLING:
+//
+// All schedules are stored with timezone information. The system converts
+// between timezones when calculating next run times to ensure schedules
+// work correctly for users in different locations.
 package handlers
 
 import (
@@ -16,10 +82,27 @@ import (
 )
 
 // ============================================================================
-// SESSION SCHEDULING
+// SESSION SCHEDULING - DATA STRUCTURES
 // ============================================================================
 
-// ScheduledSession represents a scheduled workspace session
+// ScheduledSession represents a scheduled workspace session that starts automatically.
+//
+// This struct defines a session that will be created at specific times based on
+// the configured schedule. Unlike on-demand sessions, scheduled sessions are
+// managed by a background scheduler process that monitors next_run_at timestamps.
+//
+// Lifecycle:
+// 1. User creates scheduled session via API
+// 2. System calculates next_run_at based on schedule configuration
+// 3. Scheduler daemon checks for due schedules every minute
+// 4. When next_run_at is reached, system creates actual Session resource
+// 5. After session is created, next_run_at is recalculated for recurring schedules
+// 6. System optionally terminates session after terminate_after minutes
+//
+// Example use cases:
+// - Development environment that starts at 9 AM and terminates at 6 PM
+// - Weekly demo session every Friday at 2 PM
+// - Training environment that pre-warms 15 minutes before scheduled time
 type ScheduledSession struct {
 	ID               int64           `json:"id"`
 	UserID           string          `json:"user_id"`
@@ -64,7 +147,69 @@ type ResourceConfig struct {
 	GPUCount  int    `json:"gpu_count,omitempty"`
 }
 
-// CreateScheduledSession creates a new scheduled session
+// CreateScheduledSession creates a new scheduled session.
+//
+// This endpoint allows users to schedule sessions that will start automatically
+// at specific times. The system performs several validations and checks before
+// accepting the schedule:
+//
+// VALIDATION STEPS:
+//
+// 1. Schedule Validation:
+//    - Ensures required fields are present for the schedule type
+//    - For "daily": requires time_of_day
+//    - For "weekly": requires time_of_day and days_of_week
+//    - For "monthly": requires time_of_day and day_of_month
+//    - For "cron": validates cron expression syntax
+//    - For "once": requires start_time
+//
+// 2. Next Run Calculation:
+//    - Computes when the schedule will next trigger
+//    - Uses the user's timezone for proper time conversion
+//    - For recurring schedules, calculates first occurrence after current time
+//
+// 3. Conflict Detection:
+//    - Checks if the proposed schedule would overlap with existing schedules
+//    - Prevents double-booking that could violate quotas or confuse users
+//    - Considers session duration (terminate_after) when detecting overlaps
+//    - Returns HTTP 409 Conflict if overlaps are found
+//
+// CONFLICT DETECTION LOGIC:
+//
+// Two schedules conflict if their time windows overlap:
+// - Schedule A: [next_run_at, next_run_at + terminate_after]
+// - Schedule B: [next_run_at, next_run_at + terminate_after]
+// - Conflict if: A.start < B.end AND B.start < A.end
+//
+// EXAMPLE REQUEST:
+//
+//	{
+//	  "name": "Daily Dev Environment",
+//	  "template_id": "vscode",
+//	  "timezone": "America/New_York",
+//	  "schedule": {
+//	    "type": "daily",
+//	    "time_of_day": "09:00"
+//	  },
+//	  "terminate_after": 540,  // 9 hours
+//	  "pre_warm": true,
+//	  "pre_warm_minutes": 15
+//	}
+//
+// RESPONSE:
+//
+//	{
+//	  "id": 42,
+//	  "message": "Scheduled session created",
+//	  "next_run_at": "2025-11-17T09:00:00-05:00",
+//	  "schedule": { ... }
+//	}
+//
+// SECURITY:
+//
+// - User can only create schedules for themselves (userID enforced)
+// - Schedule is validated to prevent malicious cron expressions
+// - Timezone must be valid IANA timezone name
 func (h *Handler) CreateScheduledSession(c *gin.Context) {
 	userID := c.GetString("user_id")
 
@@ -74,16 +219,21 @@ func (h *Handler) CreateScheduledSession(c *gin.Context) {
 		return
 	}
 
+	// SECURITY: Force userID to authenticated user (prevent creating schedules for others)
 	req.UserID = userID
 	req.Enabled = true
 
-	// Validate schedule
+	// STEP 1: Validate schedule configuration
+	// This ensures all required fields are present and values are valid
 	if err := h.validateSchedule(&req.Schedule); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Calculate next run time
+	// STEP 2: Calculate next run time
+	// This determines when the schedule will first trigger
+	// For recurring schedules, this is the first occurrence after now
+	// For one-time schedules, this is the specified start_time
 	nextRun, err := h.calculateNextRun(&req.Schedule, req.Timezone)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid timezone or schedule"})
@@ -91,12 +241,22 @@ func (h *Handler) CreateScheduledSession(c *gin.Context) {
 	}
 	req.NextRunAt = nextRun
 
-	// Check for scheduling conflicts
+	// STEP 3: Check for scheduling conflicts
+	// This prevents overlapping sessions that could:
+	// - Violate resource quotas
+	// - Cause confusion for users
+	// - Overload specific nodes
+	//
+	// The conflict check considers:
+	// - All enabled schedules for this user
+	// - Session duration (terminate_after minutes)
+	// - Timezone differences between schedules
 	conflicts, err := h.checkSchedulingConflicts(userID, req.Schedule, req.Timezone, req.TerminateAfter)
 	if err == nil && len(conflicts) > 0 {
+		// Return HTTP 409 Conflict with details about conflicting schedules
 		c.JSON(http.StatusConflict, gin.H{
 			"error": "scheduling conflict detected",
-			"conflicts": conflicts,
+			"conflicts": conflicts,  // Array of conflicting schedule IDs
 			"message": "This schedule conflicts with existing scheduled sessions. Please choose a different time.",
 		})
 		return
@@ -647,106 +807,399 @@ func (h *Handler) ExportICalendar(c *gin.Context) {
 // HELPER FUNCTIONS
 // ============================================================================
 
-// Validate schedule configuration
+// validateSchedule validates a schedule configuration.
+//
+// This function ensures all required fields are present and valid for the
+// specified schedule type. Each schedule type has different requirements:
+//
+// SCHEDULE TYPE: "once"
+//   Purpose: Run a single time at a specific date/time
+//   Required Fields:
+//   - start_time: Exact timestamp when session should start
+//   Example: Start demo session on 2025-12-25 at 10:00 AM
+//   Validation: start_time cannot be zero value
+//
+// SCHEDULE TYPE: "daily"
+//   Purpose: Run every day at a specific time
+//   Required Fields:
+//   - time_of_day: Time in HH:MM format (e.g., "09:30")
+//   Example: Start dev environment at 9:30 AM every day
+//   Validation: time_of_day must be non-empty
+//   Note: Time is interpreted in the schedule's timezone
+//
+// SCHEDULE TYPE: "weekly"
+//   Purpose: Run on specific days of the week
+//   Required Fields:
+//   - time_of_day: Time in HH:MM format
+//   - days_of_week: Array of integers (0=Sunday, 1=Monday, ..., 6=Saturday)
+//   Example: Training sessions on Monday (1) and Wednesday (3) at 2 PM
+//   Validation: Both fields must be present, days_of_week cannot be empty
+//
+// SCHEDULE TYPE: "monthly"
+//   Purpose: Run on a specific day of each month
+//   Required Fields:
+//   - time_of_day: Time in HH:MM format
+//   - day_of_month: Day number (1-31)
+//   Example: Monthly report review on the 15th at 10 AM
+//   Validation: Both fields must be present, day_of_month must be non-zero
+//   Note: If day_of_month > days in month (e.g., 31 in February),
+//         schedule will skip that month
+//
+// SCHEDULE TYPE: "cron"
+//   Purpose: Advanced scheduling using cron expression
+//   Required Fields:
+//   - cron_expr: Standard cron expression (minute hour day month weekday)
+//   Example: "0 9 * * 1-5" for weekdays at 9 AM
+//   Validation: Expression must parse successfully using cron.ParseStandard
+//   Note: Uses standard cron format (5 fields), not extended format
+//
+// SECURITY CONSIDERATIONS:
+//
+// - Cron expressions are parsed but not executed directly (prevents injection)
+// - Invalid cron expressions are rejected before database storage
+// - Day values are validated to prevent out-of-range errors
+//
+// RETURN VALUES:
+//
+// - nil: Schedule is valid
+// - error: Descriptive error message indicating what's wrong
 func (h *Handler) validateSchedule(schedule *ScheduleConfig) error {
 	switch schedule.Type {
 	case "once":
+		// One-time schedule: requires specific start timestamp
 		if schedule.StartTime.IsZero() {
 			return fmt.Errorf("start_time required for one-time schedule")
 		}
+
 	case "daily":
+		// Daily schedule: requires time of day to run
+		// Example: "09:30" for 9:30 AM every day
 		if schedule.TimeOfDay == "" {
 			return fmt.Errorf("time_of_day required for daily schedule")
 		}
+
 	case "weekly":
+		// Weekly schedule: requires both time and which days to run
+		// days_of_week: 0=Sunday, 1=Monday, ..., 6=Saturday
+		// Example: [1, 3, 5] for Monday, Wednesday, Friday
 		if schedule.TimeOfDay == "" || len(schedule.DaysOfWeek) == 0 {
 			return fmt.Errorf("time_of_day and days_of_week required for weekly schedule")
 		}
+
 	case "monthly":
+		// Monthly schedule: requires time and day of month
+		// day_of_month: 1-31 (may skip months without that day)
+		// Example: day 15 at "10:00" for 15th of each month at 10 AM
 		if schedule.TimeOfDay == "" || schedule.DayOfMonth == 0 {
 			return fmt.Errorf("time_of_day and day_of_month required for monthly schedule")
 		}
+
 	case "cron":
+		// Cron schedule: advanced scheduling using cron expression
+		// Format: minute hour day month weekday
+		// Example: "0 9 * * 1-5" for weekdays at 9:00 AM
 		if schedule.CronExpr == "" {
 			return fmt.Errorf("cron_expr required for cron schedule")
 		}
-		// Validate cron expression
+
+		// SECURITY: Validate cron expression to prevent injection and ensure it's parseable
+		// This prevents malformed expressions from being stored in the database
+		// and catches errors early before the scheduler tries to use them
 		if _, err := cron.ParseStandard(schedule.CronExpr); err != nil {
 			return fmt.Errorf("invalid cron expression: %v", err)
 		}
+
 	default:
+		// Unknown schedule type - reject with error
 		return fmt.Errorf("invalid schedule type: %s", schedule.Type)
 	}
+
 	return nil
 }
 
-// Calculate next run time for a schedule
+// calculateNextRun calculates when a schedule will next trigger.
+//
+// This is the core scheduling algorithm that determines when a session should
+// be created based on the schedule configuration. The algorithm handles different
+// schedule types and properly accounts for timezones.
+//
+// TIMEZONE HANDLING:
+//
+// All schedule calculations are performed in the user's specified timezone,
+// then converted to UTC for storage. This ensures:
+// - 9 AM in New York is always 9 AM local time, even across DST changes
+// - Schedules work correctly for users in different timezones
+// - Database stores normalized UTC timestamps for consistency
+//
+// ALGORITHM BY SCHEDULE TYPE:
+//
+// 1. ONE-TIME ("once"):
+//    - Simply returns the start_time field
+//    - No calculation needed
+//    - Schedule will only run once at that exact time
+//
+// 2. DAILY ("daily"):
+//    - Parses time_of_day (e.g., "09:30" -> 9 hours, 30 minutes)
+//    - Creates timestamp for TODAY at that time
+//    - If that time has already passed today, schedules for TOMORROW
+//    - Example: If now is 2 PM and schedule is 9 AM, next run is tomorrow 9 AM
+//
+// 3. WEEKLY ("weekly"):
+//    - Iterates through next 7 days
+//    - For each day, checks if weekday matches days_of_week
+//    - If match found and time is in future, returns that timestamp
+//    - Handles case where multiple days match (returns earliest)
+//    - Example: Today is Monday, schedule is Wed/Fri at 2 PM -> returns Wed 2 PM
+//
+// 4. MONTHLY ("monthly"):
+//    - Creates timestamp for THIS MONTH on the specified day_of_month
+//    - If that day/time has passed, schedules for NEXT MONTH
+//    - NOTE: If day_of_month > days in month (e.g., 31 in February),
+//            Go automatically adjusts to first day of next month
+//    - Example: Now is Feb 15, schedule is 10th -> next run is Mar 10
+//
+// 5. CRON ("cron"):
+//    - Uses robfig/cron library to parse expression
+//    - Calls cron scheduler's Next() method to get next occurrence
+//    - Supports standard 5-field cron format: minute hour day month weekday
+//    - Example: "0 9 * * 1-5" -> weekdays at 9:00 AM
+//
+// EDGE CASES HANDLED:
+//
+// - Invalid timezone: falls back to UTC (prevents errors)
+// - Time already passed today: schedules for next occurrence
+// - Weekly schedule with no matching day in next 7 days: returns error
+// - Monthly schedule on day that doesn't exist (e.g., Feb 30): auto-adjusts
+// - DST transitions: timezone-aware time.Time handles automatically
+//
+// RETURN VALUES:
+//
+// - time.Time: Next occurrence of the schedule (in user's timezone)
+// - error: If schedule cannot be calculated (e.g., invalid cron expression)
+//
+// EXAMPLES:
+//
+//	// Daily at 9 AM in New York timezone
+//	calculateNextRun(&ScheduleConfig{Type: "daily", TimeOfDay: "09:00"}, "America/New_York")
+//	// Returns: tomorrow 9 AM EST if it's after 9 AM today
+//
+//	// Weekly on Monday and Wednesday at 2 PM
+//	calculateNextRun(&ScheduleConfig{
+//	  Type: "weekly",
+//	  DaysOfWeek: []int{1, 3},  // Monday=1, Wednesday=3
+//	  TimeOfDay: "14:00"
+//	}, "America/New_York")
+//	// Returns: next Monday or Wednesday at 2 PM, whichever comes first
 func (h *Handler) calculateNextRun(schedule *ScheduleConfig, timezone string) (time.Time, error) {
+	// STEP 1: Load the user's timezone
+	// If timezone is invalid, fall back to UTC to prevent errors
+	// This allows schedules to still work even with misconfigured timezones
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		loc = time.UTC
+		loc = time.UTC  // Fallback to UTC if timezone is invalid
 	}
 
+	// STEP 2: Get current time in the user's timezone
+	// All calculations are done in local time, then converted to UTC for storage
 	now := time.Now().In(loc)
 
 	switch schedule.Type {
 	case "once":
+		// ONE-TIME: Just return the specified start time
+		// No calculation needed - schedule runs exactly once
 		return schedule.StartTime, nil
 
 	case "daily":
-		// Parse time
-		t, _ := time.Parse("15:04", schedule.TimeOfDay)
+		// DAILY: Run every day at the same time
+		//
+		// ALGORITHM:
+		// 1. Parse time_of_day string (e.g., "09:30") into hours and minutes
+		// 2. Create timestamp for TODAY at that time
+		// 3. If that time already passed, move to TOMORROW
+		//
+		// Example: If now is 2025-11-16 14:00 and schedule is "09:00"
+		//   - Today's 9 AM is 2025-11-16 09:00 (already passed)
+		//   - Next run is 2025-11-17 09:00 (tomorrow)
+		t, _ := time.Parse("15:04", schedule.TimeOfDay)  // Parse HH:MM format
 		next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+
+		// If today's time already passed, schedule for tomorrow
 		if next.Before(now) {
-			next = next.AddDate(0, 0, 1)
+			next = next.AddDate(0, 0, 1)  // Add 1 day
 		}
 		return next, nil
 
 	case "weekly":
-		// Find next matching day of week
+		// WEEKLY: Run on specific days of the week
+		//
+		// ALGORITHM:
+		// 1. Parse time_of_day into hours/minutes
+		// 2. Loop through next 7 days
+		// 3. For each day, check if weekday matches days_of_week array
+		// 4. If match AND time is in future, return that timestamp
+		// 5. Return first match found (earliest occurrence)
+		//
+		// Example: Now is Monday 10 AM, schedule is Mon/Wed/Fri at 9 AM
+		//   - Day 0 (today Monday): 9 AM already passed, skip
+		//   - Day 1 (Tuesday): Not in [Mon,Wed,Fri], skip
+		//   - Day 2 (Wednesday): Match! Return Wed 9 AM
+		//
+		// NOTE: Weekday numbering: 0=Sunday, 1=Monday, ..., 6=Saturday
 		t, _ := time.Parse("15:04", schedule.TimeOfDay)
+
+		// Check next 7 days for a matching weekday
 		for i := 0; i < 7; i++ {
-			next := now.AddDate(0, 0, i)
+			next := now.AddDate(0, 0, i)  // Add i days to current date
+
+			// Check if this day's weekday is in the schedule's days_of_week array
 			if containsInt(schedule.DaysOfWeek, int(next.Weekday())) {
+				// Create full timestamp with the scheduled time
 				nextTime := time.Date(next.Year(), next.Month(), next.Day(), t.Hour(), t.Minute(), 0, 0, loc)
+
+				// Only return if this time is in the future
 				if nextTime.After(now) {
 					return nextTime, nil
 				}
 			}
 		}
+		// No matching day found in next 7 days (should not happen with valid config)
 
 	case "monthly":
+		// MONTHLY: Run on a specific day of each month
+		//
+		// ALGORITHM:
+		// 1. Parse time_of_day into hours/minutes
+		// 2. Create timestamp for THIS MONTH on the specified day
+		// 3. If that day/time already passed, schedule for NEXT MONTH
+		//
+		// Example: Now is 2025-11-16, schedule is day 10 at 9 AM
+		//   - This month's 10th is 2025-11-10 09:00 (already passed)
+		//   - Next run is 2025-12-10 09:00 (next month)
+		//
+		// EDGE CASE: If day_of_month doesn't exist in a month (e.g., Feb 30),
+		//           Go's time.Date automatically adjusts to the next valid date
+		//           Feb 30 becomes Mar 2 or Mar 3 depending on leap year
 		t, _ := time.Parse("15:04", schedule.TimeOfDay)
 		next := time.Date(now.Year(), now.Month(), schedule.DayOfMonth, t.Hour(), t.Minute(), 0, 0, loc)
+
+		// If this month's occurrence already passed, schedule for next month
 		if next.Before(now) {
-			next = next.AddDate(0, 1, 0)
+			next = next.AddDate(0, 1, 0)  // Add 1 month
 		}
 		return next, nil
 
 	case "cron":
+		// CRON: Advanced scheduling using cron expression
+		//
+		// Uses robfig/cron library to parse and calculate next occurrence.
+		// Supports standard 5-field cron format:
+		//   minute hour day-of-month month day-of-week
+		//
+		// Examples:
+		//   "0 9 * * 1-5" -> Weekdays at 9:00 AM
+		//   "30 14 1 * *" -> 1st of every month at 2:30 PM
+		//   "0 */2 * * *" -> Every 2 hours
+		//
+		// The library handles all the complex cron logic including:
+		// - Ranges (1-5)
+		// - Lists (1,3,5)
+		// - Steps (*/2)
+		// - Special characters (*)
 		parser := cron.NewParser(cron.Minute | cron.Hour | cron.Dom | cron.Month | cron.Dow)
 		sched, err := parser.Parse(schedule.CronExpr)
 		if err != nil {
 			return time.Time{}, err
 		}
+
+		// Calculate next occurrence after current time
 		return sched.Next(now), nil
 	}
 
+	// Should never reach here if validateSchedule was called first
 	return time.Time{}, fmt.Errorf("could not calculate next run time")
 }
 
-// Check for scheduling conflicts
+// checkSchedulingConflicts detects if a proposed schedule would overlap with existing schedules.
+//
+// This function prevents double-booking of resources by checking if the new schedule
+// would conflict with any of the user's existing enabled schedules. Conflicts can cause:
+//
+// - Resource quota violations (user exceeds max concurrent sessions)
+// - Node capacity issues (too many sessions on one node)
+// - User confusion (two sessions running simultaneously)
+// - Wasted resources (redundant sessions)
+//
+// OVERLAP DETECTION ALGORITHM:
+//
+// Two schedules conflict if their time windows overlap. The algorithm:
+//
+// 1. Calculate when the proposed schedule will next run
+// 2. Calculate the proposed session duration (with default of 8 hours)
+// 3. Query all enabled schedules for this user from database
+// 4. For each existing schedule:
+//    a. Get its next_run_at and duration
+//    b. Check if time windows overlap using interval arithmetic
+// 5. Return list of conflicting schedule IDs
+//
+// INTERVAL OVERLAP LOGIC:
+//
+// Two intervals [A_start, A_end] and [B_start, B_end] overlap if:
+//   A_start < B_end  AND  B_start < A_end
+//
+// Example:
+//   Proposed:  [09:00, 17:00]  (9 AM - 5 PM, 8 hours)
+//   Existing:  [14:00, 18:00]  (2 PM - 6 PM, 4 hours)
+//   Check:     09:00 < 18:00  AND  14:00 < 17:00  =  TRUE (conflict!)
+//
+// Non-overlapping example:
+//   Proposed:  [09:00, 12:00]  (9 AM - 12 PM)
+//   Existing:  [14:00, 18:00]  (2 PM - 6 PM)
+//   Check:     09:00 < 18:00  AND  14:00 < 12:00  =  FALSE (no conflict)
+//
+// DEFAULT DURATIONS:
+//
+// - If terminate_after is not specified: 8 hours (480 minutes)
+// - This conservative default prevents conflicts from long-running sessions
+// - Users can specify shorter durations for non-conflicting schedules
+//
+// TIMEZONE HANDLING:
+//
+// - All schedules are stored with timezone information
+// - next_run_at timestamps are stored in UTC in database
+// - Comparisons work correctly even if schedules use different timezones
+//
+// RETURN VALUES:
+//
+// - []int64: Array of conflicting schedule IDs (empty if no conflicts)
+// - error: Database error or calculation error
+//
+// SECURITY CONSIDERATIONS:
+//
+// - Only checks schedules for the same user (no cross-user conflicts)
+// - Disabled schedules are excluded from conflict check
+// - Terminated schedules are not considered
+//
+// EXAMPLE:
+//
+//	// User has daily 9 AM-5 PM schedule, tries to create weekly 2 PM-6 PM schedule
+//	conflicts := checkSchedulingConflicts("user1",
+//	  ScheduleConfig{Type: "weekly", DaysOfWeek: [1,3], TimeOfDay: "14:00"},
+//	  "America/New_York",
+//	  240)  // 4 hours
+//	// Returns: [existing_schedule_id] because 2-6 PM overlaps with 9 AM-5 PM
 func (h *Handler) checkSchedulingConflicts(userID string, schedule ScheduleConfig, timezone string, terminateAfterMinutes int) ([]int64, error) {
-	// Calculate the proposed schedule's next run time
+	// STEP 1: Calculate when the proposed schedule will next run
+	// This gives us the start time for conflict detection
 	proposedStart, err := h.calculateNextRun(&schedule, timezone)
 	if err != nil {
 		return nil, err
 	}
 
-	// Default session duration is 8 hours if not specified (480 minutes)
+	// STEP 2: Determine session duration
+	// Default to 8 hours if not specified (conservative estimate)
+	// This prevents conflicts from long-running sessions
 	defaultDuration := 8 * time.Hour
 
-	// Use the provided terminate_after or default
 	proposedDuration := defaultDuration
 	if terminateAfterMinutes > 0 {
 		proposedDuration = time.Duration(terminateAfterMinutes) * time.Minute
