@@ -11,27 +11,127 @@ import (
 	"gopkg.in/yaml.v3"
 )
 
-// TemplateParser parses template manifests from repositories
+// TemplateParser parses Kubernetes Template manifests from Git repositories.
+//
+// The parser discovers and validates Template resources in YAML format.
+// It walks repository directories, identifies Template manifests, and
+// extracts metadata for catalog indexing.
+//
+// Manifest discovery:
+//   - Searches for *.yaml and *.yml files
+//   - Validates kind: Template and apiVersion
+//   - Skips non-Template YAML files (no errors)
+//   - Skips .git directories
+//
+// Validation:
+//   - Required fields: name, displayName, baseImage
+//   - API version: stream.streamspace.io/v1alpha1
+//   - App type inference: desktop (VNC) or webapp (HTTP)
+//
+// Example usage:
+//
+//	parser := NewTemplateParser()
+//	templates, err := parser.ParseRepository("/tmp/streamspace-templates")
+//	for _, t := range templates {
+//	    fmt.Printf("Found template: %s (%s)\n", t.DisplayName, t.Category)
+//	}
 type TemplateParser struct{}
 
-// NewTemplateParser creates a new template parser
+// NewTemplateParser creates a new template parser instance.
+//
+// The parser is stateless and can be reused for multiple repositories.
+//
+// Example:
+//
+//	parser := NewTemplateParser()
+//	templates1, _ := parser.ParseRepository("/tmp/repo1")
+//	templates2, _ := parser.ParseRepository("/tmp/repo2")
 func NewTemplateParser() *TemplateParser {
 	return &TemplateParser{}
 }
 
-// ParsedTemplate represents a parsed template from a repository
+// ParsedTemplate represents a template extracted from a repository manifest.
+//
+// This structure contains metadata for catalog database insertion.
+// The full manifest is stored as JSON for future reference and validation.
+//
+// Field mappings:
+//   - Name: metadata.name from YAML
+//   - DisplayName: spec.displayName (UI-friendly name)
+//   - Description: spec.description (markdown supported)
+//   - Category: spec.category (for catalog grouping)
+//   - AppType: "desktop" (VNC) or "webapp" (HTTP)
+//   - Icon: URL to icon image
+//   - Manifest: Full YAML manifest as JSON string
+//   - Tags: Keywords for search/filtering
+//
+// Example:
+//
+//	template := &ParsedTemplate{
+//	    Name: "firefox-browser",
+//	    DisplayName: "Firefox Web Browser",
+//	    Category: "Web Browsers",
+//	    AppType: "desktop",
+//	    Tags: []string{"browser", "web", "privacy"},
+//	}
 type ParsedTemplate struct {
-	Name        string
+	// Name is the unique identifier from metadata.name.
+	// Format: lowercase, hyphens, no spaces
+	// Example: "firefox-browser", "vscode-dev"
+	Name string
+
+	// DisplayName is the human-readable name shown in UI.
+	// Example: "Firefox Web Browser", "Visual Studio Code"
 	DisplayName string
+
+	// Description explains what this template provides.
+	// Markdown formatting is supported.
 	Description string
-	Category    string
-	AppType     string
-	Icon        string
-	Manifest    string   // JSON-encoded full manifest
-	Tags        []string
+
+	// Category organizes templates in the catalog.
+	// Examples: "Web Browsers", "Development", "Design"
+	Category string
+
+	// AppType indicates the application streaming type.
+	// Valid values: "desktop" (VNC), "webapp" (HTTP)
+	AppType string
+
+	// Icon is the URL to the template's icon image.
+	// Can be relative (in repo) or absolute (CDN)
+	Icon string
+
+	// Manifest is the full YAML manifest encoded as JSON.
+	// Stored in database for template instantiation.
+	Manifest string
+
+	// Tags are keywords for search and filtering.
+	// Example: ["browser", "web", "privacy"]
+	Tags []string
 }
 
-// TemplateManifest represents the YAML structure of a template file
+// TemplateManifest represents the complete YAML structure of a Template resource.
+//
+// This structure mirrors the Kubernetes Template CRD defined in:
+//   controller/api/v1alpha1/template_types.go
+//
+// The manifest is parsed from YAML files in repositories and validated
+// before being stored in the catalog database as JSON.
+//
+// Example YAML:
+//
+//	apiVersion: stream.streamspace.io/v1alpha1
+//	kind: Template
+//	metadata:
+//	  name: firefox-browser
+//	spec:
+//	  displayName: Firefox Web Browser
+//	  description: Modern, privacy-focused web browser
+//	  category: Web Browsers
+//	  baseImage: lscr.io/linuxserver/firefox:latest
+//	  vnc:
+//	    enabled: true
+//	    port: 3000
+//	  tags: [browser, web, privacy]
 type TemplateManifest struct {
 	APIVersion string `yaml:"apiVersion"`
 	Kind       string `yaml:"kind"`
@@ -72,7 +172,36 @@ type TemplateManifest struct {
 	} `yaml:"spec"`
 }
 
-// ParseRepository parses all template manifests in a repository
+// ParseRepository parses all Template manifests in a Git repository.
+//
+// Discovery process:
+//  1. Walk all directories in repository
+//  2. Find files with .yaml or .yml extension
+//  3. Parse YAML and check if kind: Template
+//  4. Extract metadata and validate
+//  5. Skip invalid files (continue processing others)
+//
+// Behavior:
+//   - Skips .git directory (performance)
+//   - Skips non-Template YAML files (no error)
+//   - Logs parse errors but continues (partial success)
+//   - Returns all successfully parsed templates
+//
+// Parameters:
+//   - repoPath: Local filesystem path to Git repository
+//
+// Returns:
+//   - Array of parsed templates (may be empty)
+//   - Error only if directory walk fails (not for individual parse errors)
+//
+// Example:
+//
+//	parser := NewTemplateParser()
+//	templates, err := parser.ParseRepository("/tmp/streamspace-templates")
+//	if err != nil {
+//	    log.Fatal("Failed to walk repository:", err)
+//	}
+//	log.Printf("Found %d templates", len(templates))
 func (p *TemplateParser) ParseRepository(repoPath string) ([]*ParsedTemplate, error) {
 	var templates []*ParsedTemplate
 
@@ -116,7 +245,36 @@ func (p *TemplateParser) ParseRepository(repoPath string) ([]*ParsedTemplate, er
 	return templates, nil
 }
 
-// ParseTemplateFile parses a single template YAML file
+// ParseTemplateFile parses a single Template YAML file.
+//
+// Parsing steps:
+//  1. Read file from disk
+//  2. Unmarshal YAML into TemplateManifest struct
+//  3. Validate kind == "Template"
+//  4. Validate apiVersion == "stream.streamspace.io/v1alpha1"
+//  5. Validate required fields (name, displayName, baseImage)
+//  6. Infer appType from VNC/WebApp config if not specified
+//  7. Convert manifest to JSON for database storage
+//
+// App type inference:
+//   - If spec.webapp.enabled: appType = "webapp"
+//   - Otherwise: appType = "desktop" (VNC-based)
+//
+// Parameters:
+//   - filePath: Absolute path to YAML file
+//
+// Returns:
+//   - ParsedTemplate with extracted metadata
+//   - Error if file cannot be read, parsed, or validated
+//
+// Example:
+//
+//	template, err := parser.ParseTemplateFile("/tmp/repo/browsers/firefox.yaml")
+//	if err != nil {
+//	    log.Printf("Invalid template: %v", err)
+//	    return nil, err
+//	}
+//	fmt.Printf("Parsed: %s\n", template.DisplayName)
 func (p *TemplateParser) ParseTemplateFile(filePath string) (*ParsedTemplate, error) {
 	// Read file
 	data, err := os.ReadFile(filePath)
@@ -274,50 +432,226 @@ func (p *TemplateParser) ValidateTemplateManifest(yamlContent string) error {
 
 // ========== Plugin Parsing ==========
 
-// PluginParser parses plugin manifests from repositories
+// PluginParser parses plugin manifests from Git repositories.
+//
+// The parser discovers and validates plugin manifest.json files.
+// Unlike templates (YAML), plugins use JSON manifests with a different
+// structure optimized for extension system metadata.
+//
+// Manifest discovery:
+//   - Searches for files named "manifest.json"
+//   - Validates required fields (name, version, displayName, type)
+//   - Validates plugin type (extension, webhook, api, ui, theme)
+//   - Skips .git directories
+//
+// Plugin types:
+//   - extension: General-purpose plugin (most common)
+//   - webhook: Responds to webhook events
+//   - api: Adds new API endpoints
+//   - ui: Adds UI components or pages
+//   - theme: Visual theme customization
+//
+// Example usage:
+//
+//	parser := NewPluginParser()
+//	plugins, err := parser.ParseRepository("/tmp/streamspace-plugins")
+//	for _, p := range plugins {
+//	    fmt.Printf("Found plugin: %s v%s\n", p.DisplayName, p.Version)
+//	}
 type PluginParser struct{}
 
-// NewPluginParser creates a new plugin parser
+// NewPluginParser creates a new plugin parser instance.
+//
+// The parser is stateless and can be reused for multiple repositories.
+//
+// Example:
+//
+//	parser := NewPluginParser()
+//	plugins1, _ := parser.ParseRepository("/tmp/official-plugins")
+//	plugins2, _ := parser.ParseRepository("/tmp/community-plugins")
 func NewPluginParser() *PluginParser {
 	return &PluginParser{}
 }
 
-// ParsedPlugin represents a parsed plugin from a repository
+// ParsedPlugin represents a plugin extracted from a repository manifest.
+//
+// This structure contains metadata for catalog database insertion.
+// The full manifest is stored as JSON for configuration and installation.
+//
+// Field mappings:
+//   - Name: Unique plugin identifier (lowercase, hyphens)
+//   - Version: Semantic version (MAJOR.MINOR.PATCH)
+//   - DisplayName: Human-readable name for UI
+//   - Description: Plugin purpose and features
+//   - Category: Catalog organization (Analytics, Security, etc.)
+//   - PluginType: Architecture type (extension, webhook, api, ui, theme)
+//   - Icon: URL to icon image
+//   - Manifest: Full manifest.json as JSON string
+//   - Tags: Keywords for search/filtering
+//
+// Example:
+//
+//	plugin := &ParsedPlugin{
+//	    Name: "streamspace-analytics-advanced",
+//	    Version: "1.2.0",
+//	    DisplayName: "Advanced Analytics",
+//	    PluginType: "api",
+//	    Tags: []string{"analytics", "reporting"},
+//	}
 type ParsedPlugin struct {
-	Name        string
-	Version     string
+	// Name is the unique plugin identifier.
+	// Format: lowercase, hyphens, no spaces
+	// Example: "streamspace-analytics-advanced", "streamspace-billing"
+	Name string
+
+	// Version is the semantic version.
+	// Format: MAJOR.MINOR.PATCH (e.g., "1.2.0", "2.0.0-beta.1")
+	Version string
+
+	// DisplayName is the human-readable plugin name shown in UI.
+	// Example: "Advanced Analytics", "Billing Integration"
 	DisplayName string
+
+	// Description explains what this plugin does.
 	Description string
-	Category    string
-	PluginType  string
-	Icon        string
-	Manifest    string   // JSON-encoded full manifest
-	Tags        []string
+
+	// Category organizes plugins in the catalog.
+	// Examples: "Analytics", "Security", "Integrations", "UI Enhancements"
+	Category string
+
+	// PluginType indicates the plugin's architecture.
+	// Valid values: "extension", "webhook", "api", "ui", "theme"
+	PluginType string
+
+	// Icon is the URL to the plugin's icon image.
+	// Can be relative (in repo) or absolute (CDN)
+	Icon string
+
+	// Manifest is the full manifest.json encoded as JSON string.
+	// Stored in database for plugin installation and configuration.
+	Manifest string
+
+	// Tags are keywords for search and filtering.
+	// Example: ["analytics", "reporting", "metrics"]
+	Tags []string
 }
 
-// PluginManifest represents the structure of a plugin manifest.json file
+// PluginManifest represents the complete JSON structure of a plugin manifest.
+//
+// This structure is read from manifest.json files in plugin repositories.
+// It defines all metadata, configuration schema, and requirements for a plugin.
+//
+// Example manifest.json:
+//
+//	{
+//	  "name": "streamspace-analytics-advanced",
+//	  "version": "1.2.0",
+//	  "displayName": "Advanced Analytics",
+//	  "description": "Comprehensive analytics and reporting",
+//	  "author": "StreamSpace Team",
+//	  "license": "MIT",
+//	  "type": "api",
+//	  "category": "Analytics",
+//	  "configSchema": {
+//	    "retentionDays": {"type": "number", "default": 90},
+//	    "exportFormat": {"type": "string", "enum": ["json", "csv"]}
+//	  },
+//	  "permissions": ["sessions:read", "analytics:write"]
+//	}
 type PluginManifest struct {
-	Name          string            `json:"name"`
-	Version       string            `json:"version"`
-	DisplayName   string            `json:"displayName"`
-	Description   string            `json:"description"`
-	Author        string            `json:"author"`
-	Homepage      string            `json:"homepage,omitempty"`
-	Repository    string            `json:"repository,omitempty"`
-	License       string            `json:"license,omitempty"`
-	Type          string            `json:"type"`
-	Category      string            `json:"category,omitempty"`
-	Tags          []string          `json:"tags,omitempty"`
-	Icon          string            `json:"icon,omitempty"`
-	Requirements  map[string]string `json:"requirements,omitempty"`
-	Entrypoints   map[string]string `json:"entrypoints,omitempty"`
-	ConfigSchema  map[string]interface{} `json:"configSchema,omitempty"`
+	// Name is the unique plugin identifier (required).
+	// Format: lowercase, hyphens, no spaces
+	Name string `json:"name"`
+
+	// Version is the semantic version (required).
+	// Format: MAJOR.MINOR.PATCH
+	Version string `json:"version"`
+
+	// DisplayName is the human-readable name (required).
+	DisplayName string `json:"displayName"`
+
+	// Description explains the plugin's purpose (required).
+	Description string `json:"description"`
+
+	// Author is the plugin developer/organization.
+	Author string `json:"author"`
+
+	// Homepage is a URL to the plugin's website or documentation.
+	Homepage string `json:"homepage,omitempty"`
+
+	// Repository is the source code repository URL.
+	Repository string `json:"repository,omitempty"`
+
+	// License is the SPDX license identifier (e.g., "MIT", "Apache-2.0").
+	License string `json:"license,omitempty"`
+
+	// Type is the plugin architecture type (required).
+	// Valid values: "extension", "webhook", "api", "ui", "theme"
+	Type string `json:"type"`
+
+	// Category organizes plugins in the catalog.
+	Category string `json:"category,omitempty"`
+
+	// Tags are keywords for search and filtering.
+	Tags []string `json:"tags,omitempty"`
+
+	// Icon is a relative path to the icon file in the plugin directory.
+	Icon string `json:"icon,omitempty"`
+
+	// Requirements specifies platform version and dependency requirements.
+	// Example: {"streamspaceVersion": ">=0.2.0"}
+	Requirements map[string]string `json:"requirements,omitempty"`
+
+	// Entrypoints define where to load plugin code.
+	// Example: {"main": "index.js", "api": "api/routes.js"}
+	Entrypoints map[string]string `json:"entrypoints,omitempty"`
+
+	// ConfigSchema is a JSON Schema defining valid configuration.
+	// Used to generate UI forms and validate config on save.
+	ConfigSchema map[string]interface{} `json:"configSchema,omitempty"`
+
+	// DefaultConfig provides default values for configuration.
 	DefaultConfig map[string]interface{} `json:"defaultConfig,omitempty"`
-	Permissions   []string          `json:"permissions,omitempty"`
-	Dependencies  map[string]string `json:"dependencies,omitempty"`
+
+	// Permissions lists required API permissions.
+	// Examples: "sessions:read", "sessions:write", "analytics:write"
+	Permissions []string `json:"permissions,omitempty"`
+
+	// Dependencies lists other required plugins with version constraints.
+	// Format: {"plugin-name": ">=1.0.0", "other-plugin": "^2.0.0"}
+	Dependencies map[string]string `json:"dependencies,omitempty"`
 }
 
-// ParseRepository parses all plugin manifests in a repository
+// ParseRepository parses all plugin manifests in a Git repository.
+//
+// Discovery process:
+//  1. Walk all directories in repository
+//  2. Find files named "manifest.json"
+//  3. Parse JSON and validate structure
+//  4. Extract metadata and validate required fields
+//  5. Skip invalid files (continue processing others)
+//
+// Behavior:
+//   - Skips .git directory (performance)
+//   - Only processes files named exactly "manifest.json"
+//   - Logs parse errors but continues (partial success)
+//   - Returns all successfully parsed plugins
+//
+// Parameters:
+//   - repoPath: Local filesystem path to Git repository
+//
+// Returns:
+//   - Array of parsed plugins (may be empty)
+//   - Error only if directory walk fails (not for individual parse errors)
+//
+// Example:
+//
+//	parser := NewPluginParser()
+//	plugins, err := parser.ParseRepository("/tmp/streamspace-plugins")
+//	if err != nil {
+//	    log.Fatal("Failed to walk repository:", err)
+//	}
+//	log.Printf("Found %d plugins", len(plugins))
 func (p *PluginParser) ParseRepository(repoPath string) ([]*ParsedPlugin, error) {
 	var plugins []*ParsedPlugin
 
@@ -353,7 +687,43 @@ func (p *PluginParser) ParseRepository(repoPath string) ([]*ParsedPlugin, error)
 	return plugins, nil
 }
 
-// ParsePluginFile parses a single plugin manifest.json file
+// ParsePluginFile parses a single plugin manifest.json file.
+//
+// Parsing steps:
+//  1. Read file from disk
+//  2. Unmarshal JSON into PluginManifest struct
+//  3. Validate required fields (name, version, displayName, type)
+//  4. Validate plugin type is one of: extension, webhook, api, ui, theme
+//  5. Convert manifest to JSON for database storage
+//
+// Required fields:
+//   - name: Unique plugin identifier
+//   - version: Semantic version
+//   - displayName: Human-readable name
+//   - type: Plugin architecture type
+//
+// Plugin type validation:
+//   - "extension": General-purpose extension (most common)
+//   - "webhook": Responds to webhook events
+//   - "api": Adds new API endpoints
+//   - "ui": Adds UI components or pages
+//   - "theme": Visual theme customization
+//
+// Parameters:
+//   - filePath: Absolute path to manifest.json file
+//
+// Returns:
+//   - ParsedPlugin with extracted metadata
+//   - Error if file cannot be read, parsed, or validated
+//
+// Example:
+//
+//	plugin, err := parser.ParsePluginFile("/tmp/repo/analytics/manifest.json")
+//	if err != nil {
+//	    log.Printf("Invalid plugin: %v", err)
+//	    return nil, err
+//	}
+//	fmt.Printf("Parsed: %s v%s\n", plugin.DisplayName, plugin.Version)
 func (p *PluginParser) ParsePluginFile(filePath string) (*ParsedPlugin, error) {
 	// Read file
 	data, err := os.ReadFile(filePath)

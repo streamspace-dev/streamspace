@@ -1,3 +1,32 @@
+// Package sync provides repository synchronization for StreamSpace templates and plugins.
+//
+// The sync service enables StreamSpace to:
+//   - Clone and pull from external Git repositories
+//   - Parse template and plugin manifests
+//   - Update the catalog database with discovered resources
+//   - Run periodic background synchronization
+//
+// Architecture:
+//   - SyncService: Orchestrates the sync process
+//   - GitClient: Handles Git operations (clone, pull, authentication)
+//   - TemplateParser: Parses template YAML manifests
+//   - PluginParser: Parses plugin JSON manifests
+//
+// Workflow:
+//  1. Administrator adds repository via API
+//  2. Sync service clones repository to work directory
+//  3. Parsers discover manifests in repository
+//  4. Catalog database is updated with new/updated resources
+//  5. Users can browse and install from catalog
+//  6. Periodic sync keeps catalog up-to-date
+//
+// Example repositories:
+//   - https://github.com/JoshuaAFerguson/streamspace-templates (official templates)
+//   - https://github.com/JoshuaAFerguson/streamspace-plugins (official plugins)
+//
+// Configuration:
+//   - SYNC_WORK_DIR: Directory for cloned repositories (default: /tmp/streamspace-repos)
+//   - SYNC_INTERVAL: Time between automatic syncs (default: 1h)
 package sync
 
 import (
@@ -12,16 +41,75 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
-// SyncService manages template and plugin repository synchronization
+// SyncService manages template and plugin repository synchronization.
+//
+// The service handles:
+//   - Git repository cloning and pulling
+//   - Manifest parsing (templates and plugins)
+//   - Catalog database updates
+//   - Scheduled background synchronization
+//   - Error handling and retry logic
+//
+// Thread safety:
+//   - Safe for concurrent SyncRepository calls (different repos)
+//   - Uses database transactions to prevent conflicts
+//   - Git operations are isolated per repository directory
+//
+// Example usage:
+//
+//	syncService, err := sync.NewSyncService(database)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Sync specific repository
+//	err = syncService.SyncRepository(ctx, repoID)
+//
+//	// Or sync all repositories
+//	err = syncService.SyncAllRepositories(ctx)
+//
+//	// Start background sync (every 1 hour)
+//	go syncService.StartScheduledSync(ctx, 1*time.Hour)
 type SyncService struct {
-	db           *db.Database
-	workDir      string
-	gitClient    *GitClient
-	parser       *TemplateParser
+	// db is the PostgreSQL database connection for catalog updates.
+	db *db.Database
+
+	// workDir is the filesystem directory where repositories are cloned.
+	// Default: /tmp/streamspace-repos
+	// Configurable via SYNC_WORK_DIR environment variable
+	workDir string
+
+	// gitClient handles Git operations (clone, pull, authentication).
+	gitClient *GitClient
+
+	// parser parses Template YAML manifests from repositories.
+	parser *TemplateParser
+
+	// pluginParser parses Plugin JSON manifests from repositories.
 	pluginParser *PluginParser
 }
 
-// NewSyncService creates a new sync service
+// NewSyncService creates a new sync service instance.
+//
+// The service is initialized with:
+//   - Database connection for catalog updates
+//   - Work directory for cloning repositories
+//   - Git client for repository operations
+//   - Template and plugin parsers
+//
+// Environment variables:
+//   - SYNC_WORK_DIR: Override default work directory (/tmp/streamspace-repos)
+//
+// Returns an error if:
+//   - Work directory cannot be created
+//   - Permissions are insufficient
+//
+// Example:
+//
+//	syncService, err := NewSyncService(database)
+//	if err != nil {
+//	    log.Fatalf("Failed to create sync service: %v", err)
+//	}
 func NewSyncService(database *db.Database) (*SyncService, error) {
 	workDir := os.Getenv("SYNC_WORK_DIR")
 	if workDir == "" {
@@ -46,7 +134,53 @@ func NewSyncService(database *db.Database) (*SyncService, error) {
 	}, nil
 }
 
-// SyncRepository synchronizes a template repository
+// SyncRepository synchronizes a single repository.
+//
+// The sync process:
+//  1. Fetch repository details from database
+//  2. Update status to "syncing"
+//  3. Clone repository (if new) or pull latest changes
+//  4. Parse template manifests (YAML files)
+//  5. Parse plugin manifests (plugin.json files)
+//  6. Update catalog database with parsed resources
+//  7. Update repository status to "synced" or "failed"
+//  8. Record sync timestamp and resource counts
+//
+// Git operations:
+//   - First sync: git clone <url> <work-dir>/repo-<id>
+//   - Subsequent syncs: git pull in <work-dir>/repo-<id>
+//   - Supports authentication (SSH keys, tokens)
+//
+// Parsing:
+//   - Templates: Searches for *.yaml files with template metadata
+//   - Plugins: Searches for plugin.json manifest files
+//   - Invalid manifests are logged but don't fail the sync
+//
+// Database updates:
+//   - Existing resources are updated (upsert)
+//   - Missing resources are removed (cleanup)
+//   - Transactions ensure consistency
+//
+// Error handling:
+//   - Git errors: Mark repository as "failed", log details
+//   - Parse errors: Log warnings, continue with valid resources
+//   - Database errors: Roll back transaction, return error
+//
+// Parameters:
+//   - ctx: Context for cancellation and timeouts
+//   - repoID: Database ID of the repository to sync
+//
+// Returns an error if:
+//   - Repository not found in database
+//   - Git clone/pull fails
+//   - Catalog update fails
+//
+// Example:
+//
+//	err := syncService.SyncRepository(ctx, 1)
+//	if err != nil {
+//	    log.Printf("Sync failed: %v", err)
+//	}
 func (s *SyncService) SyncRepository(ctx context.Context, repoID int) error {
 	log.Printf("Starting sync for repository %d", repoID)
 
@@ -136,7 +270,39 @@ func (s *SyncService) SyncRepository(ctx context.Context, repoID int) error {
 	return nil
 }
 
-// SyncAllRepositories synchronizes all repositories
+// SyncAllRepositories synchronizes all enabled repositories.
+//
+// This method:
+//  1. Queries all repositories from database
+//  2. Filters out repositories currently syncing
+//  3. Syncs each repository sequentially
+//  4. Logs success/failure counts
+//
+// Behavior:
+//   - Skips repositories with status="syncing" (avoid concurrent syncs)
+//   - Continues on individual failures (doesn't abort entire sync)
+//   - Returns nil even if some repositories fail
+//   - Logs detailed results for each repository
+//
+// Use cases:
+//   - Manual "Sync All" button in admin UI
+//   - Scheduled background sync (every hour)
+//   - Initial platform setup
+//
+// Performance:
+//   - Sequential processing (one repo at a time)
+//   - Can be slow with many large repositories
+//   - Consider running in background goroutine
+//
+// Example:
+//
+//	// Sync all repositories in background
+//	go func() {
+//	    err := syncService.SyncAllRepositories(context.Background())
+//	    if err != nil {
+//	        log.Printf("Sync all failed: %v", err)
+//	    }
+//	}()
 func (s *SyncService) SyncAllRepositories(ctx context.Context) error {
 	rows, err := s.db.DB().QueryContext(ctx, `
 		SELECT id FROM repositories
