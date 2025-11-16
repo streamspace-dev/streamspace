@@ -253,6 +253,7 @@ func main() {
 	websocketHandler := handlers.NewWebSocketHandler(database)
 	consoleHandler := handlers.NewConsoleHandler(database)
 	collaborationHandler := handlers.NewCollaborationHandler(database)
+	integrationsHandler := handlers.NewIntegrationsHandler(database)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication
@@ -263,7 +264,7 @@ func main() {
 	}
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, consoleHandler, collaborationHandler, jwtManager, userDB, redisCache, webhookSecret)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, consoleHandler, collaborationHandler, integrationsHandler, jwtManager, userDB, redisCache, webhookSecret)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -344,7 +345,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -465,23 +466,25 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		integrations.Use(operatorMiddleware)
 		{
 			// Webhooks
-			integrations.GET("/webhooks", h.ListWebhooks)
-			integrations.POST("/webhooks", h.CreateWebhook)
-			integrations.PATCH("/webhooks/:webhookId", h.UpdateWebhook)
-			integrations.DELETE("/webhooks/:webhookId", h.DeleteWebhook)
-			integrations.POST("/webhooks/:webhookId/test", h.TestWebhook)
-			integrations.GET("/webhooks/:webhookId/deliveries", h.GetWebhookDeliveries)
-			integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
+			integrations.GET("/webhooks", integrationsHandler.ListWebhooks)
+			integrations.POST("/webhooks", integrationsHandler.CreateWebhook)
+			integrations.PATCH("/webhooks/:webhookId", integrationsHandler.UpdateWebhook)
+			integrations.DELETE("/webhooks/:webhookId", integrationsHandler.DeleteWebhook)
+			integrations.POST("/webhooks/:webhookId/test", integrationsHandler.TestWebhook)
+			integrations.GET("/webhooks/:webhookId/deliveries", integrationsHandler.GetWebhookDeliveries)
+			// NOTE: Webhook retry not yet implemented
+			// integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
 
 			// External Integrations
-			integrations.GET("/external", h.ListIntegrations)
-			integrations.POST("/external", h.CreateIntegration)
-			integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
-			integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
-			integrations.POST("/external/:integrationId/test", h.TestIntegration)
+			integrations.GET("/external", integrationsHandler.ListIntegrations)
+			integrations.POST("/external", integrationsHandler.CreateIntegration)
+			// NOTE: Update and delete integrations not yet implemented
+			// integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
+			// integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
+			integrations.POST("/external/:integrationId/test", integrationsHandler.TestIntegration)
 
 			// Available events
-			integrations.GET("/events", h.GetAvailableEvents)
+			integrations.GET("/events", integrationsHandler.GetAvailableEvents)
 		}
 
 		// Security - MFA, IP Whitelisting, Zero Trust

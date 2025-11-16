@@ -56,7 +56,18 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
+
+// IntegrationsHandler handles webhook and external integration requests.
+type IntegrationsHandler struct {
+	DB *db.Database
+}
+
+// NewIntegrationsHandler creates a new integrations handler.
+func NewIntegrationsHandler(database *db.Database) *IntegrationsHandler {
+	return &IntegrationsHandler{DB: database}
+}
 
 // ============================================================================
 // INPUT VALIDATION
@@ -260,7 +271,7 @@ var AvailableEvents = []string{
 }
 
 // CreateWebhook creates a new webhook
-func (h *Handler) CreateWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) CreateWebhook(c *gin.Context) {
 	var webhook Webhook
 	if err := c.ShouldBindJSON(&webhook); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -326,7 +337,7 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 }
 
 // ListWebhooks lists all webhooks
-func (h *Handler) ListWebhooks(c *gin.Context) {
+func (h *IntegrationsHandler) ListWebhooks(c *gin.Context) {
 	enabled := c.Query("enabled")
 
 	query := `
@@ -405,7 +416,7 @@ func (h *Handler) ListWebhooks(c *gin.Context) {
 }
 
 // UpdateWebhook updates an existing webhook
-func (h *Handler) UpdateWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -483,7 +494,7 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 }
 
 // DeleteWebhook deletes a webhook
-func (h *Handler) DeleteWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) DeleteWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -521,7 +532,7 @@ func (h *Handler) DeleteWebhook(c *gin.Context) {
 }
 
 // TestWebhook sends a test event to a webhook
-func (h *Handler) TestWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) TestWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -602,7 +613,7 @@ func (h *Handler) TestWebhook(c *gin.Context) {
 }
 
 // GetWebhookDeliveries retrieves delivery history
-func (h *Handler) GetWebhookDeliveries(c *gin.Context) {
+func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -660,7 +671,7 @@ func (h *Handler) GetWebhookDeliveries(c *gin.Context) {
 // Integrations
 
 // CreateIntegration creates a new integration
-func (h *Handler) CreateIntegration(c *gin.Context) {
+func (h *IntegrationsHandler) CreateIntegration(c *gin.Context) {
 	var integration Integration
 	if err := c.ShouldBindJSON(&integration); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -697,7 +708,7 @@ func (h *Handler) CreateIntegration(c *gin.Context) {
 }
 
 // ListIntegrations lists all integrations
-func (h *Handler) ListIntegrations(c *gin.Context) {
+func (h *IntegrationsHandler) ListIntegrations(c *gin.Context) {
 	integrationType := c.Query("type")
 	enabled := c.Query("enabled")
 
@@ -754,7 +765,7 @@ func (h *Handler) ListIntegrations(c *gin.Context) {
 }
 
 // TestIntegration tests an integration
-func (h *Handler) TestIntegration(c *gin.Context) {
+func (h *IntegrationsHandler) TestIntegration(c *gin.Context) {
 	integrationID, err := strconv.ParseInt(c.Param("integrationId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid integration ID"})
@@ -815,7 +826,7 @@ func (h *Handler) TestIntegration(c *gin.Context) {
 // Helper functions
 
 // validateWebhookURL validates webhook URL to prevent SSRF attacks
-func (h *Handler) validateWebhookURL(urlStr string) error {
+func (h *IntegrationsHandler) validateWebhookURL(urlStr string) error {
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return fmt.Errorf("invalid URL format: %w", err)
@@ -874,12 +885,12 @@ func (h *Handler) validateWebhookURL(urlStr string) error {
 	return nil
 }
 
-func (h *Handler) generateWebhookSecret() string {
+func (h *IntegrationsHandler) generateWebhookSecret() string {
 	// Generate a random 32-byte secret
 	return fmt.Sprintf("whsec_%d", time.Now().UnixNano())
 }
 
-func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int, string, error) {
+func (h *IntegrationsHandler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int, string, error) {
 	// Prepare payload
 	payload, _ := json.Marshal(event)
 
@@ -927,13 +938,13 @@ func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int
 	return success, resp.StatusCode, string(responseBody), nil
 }
 
-func (h *Handler) calculateHMAC(payload []byte, secret string) string {
+func (h *IntegrationsHandler) calculateHMAC(payload []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func (h *Handler) testIntegration(integration Integration) (bool, string) {
+func (h *IntegrationsHandler) testIntegration(integration Integration) (bool, string) {
 	// NOTE: Slack, Teams, Discord, PagerDuty, and Email integrations are now handled by plugins.
 	// Users should install the respective plugins from the plugin marketplace instead.
 	//
@@ -953,6 +964,6 @@ func (h *Handler) testIntegration(integration Integration) (bool, string) {
 }
 
 // GetAvailableEvents returns list of available webhook events
-func (h *Handler) GetAvailableEvents(c *gin.Context) {
+func (h *IntegrationsHandler) GetAvailableEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"events": AvailableEvents})
 }
