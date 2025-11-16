@@ -654,7 +654,7 @@ func (r *SessionReconciler) createUserPVC(session *streamv1alpha1.Session) *core
 			AccessModes: []corev1.PersistentVolumeAccessMode{
 				corev1.ReadWriteMany, // NFS support
 			},
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: resource.MustParse(storageSize),
 				},

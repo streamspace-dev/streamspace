@@ -258,7 +258,43 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
+
+// Handler handles collaboration-related HTTP requests.
+type Handler struct {
+	// DB is the database connection for collaboration queries and updates.
+	DB *db.Database
+}
+
+// NewCollaborationHandler creates a new collaboration handler.
+func NewCollaborationHandler(database *db.Database) *Handler {
+	return &Handler{DB: database}
+}
+
+// canAccessSession checks if a user has access to a session.
+// This is a placeholder implementation - replace with actual authorization logic.
+func (h *Handler) canAccessSession(userID, sessionID string) bool {
+	// TODO: Implement proper session access check
+	// For now, query the sessions table to see if user owns the session
+	var exists bool
+	err := h.DB.QueryRow(`
+		SELECT EXISTS(SELECT 1 FROM sessions WHERE id = $1 AND user_id = $2)
+	`, sessionID, userID).Scan(&exists)
+	return err == nil && exists
+}
+
+// toJSONB converts a Go value to JSON string for JSONB storage.
+func toJSONB(v interface{}) string {
+	if v == nil {
+		return "{}"
+	}
+	data, err := json.Marshal(v)
+	if err != nil {
+		return "{}"
+	}
+	return string(data)
+}
 
 // CollaborationSession represents a collaborative multi-user session.
 //
