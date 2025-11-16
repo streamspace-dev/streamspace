@@ -364,5 +364,38 @@
     "tags": ["audit", "logging", "compliance", "security"],
     "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-audit-advanced/icon.png",
     "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-audit-advanced/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-recording",
+    "version": "1.0.0",
+    "displayName": "Session Recording",
+    "description": "Record and replay sessions with multiple formats (webm, mp4, vnc), retention policies, and compliance recording",
+    "author": "StreamSpace Team",
+    "category": "Session Management",
+    "tags": ["recording", "playback", "compliance", "audit", "session"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-recording/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-recording/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-snapshots",
+    "version": "1.0.0",
+    "displayName": "Session Snapshots & Restore",
+    "description": "Create, manage, and restore session snapshots with scheduling, sharing, compression, and encryption",
+    "author": "StreamSpace Team",
+    "category": "Session Management",
+    "tags": ["snapshots", "backup", "restore", "scheduling", "session"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-snapshots/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-snapshots/plugin.tar.gz"
+  },
+  {
+    "name": "streamspace-workflows",
+    "version": "1.0.0",
+    "displayName": "Workflow Automation",
+    "description": "Automate session lifecycle with event-driven workflows, triggers, actions, and conditional logic",
+    "author": "StreamSpace Team",
+    "category": "Automation",
+    "tags": ["workflows", "automation", "triggers", "actions", "events"],
+    "iconUrl": "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main/streamspace-workflows/icon.png",
+    "downloadUrl": "https://github.com/JoshuaAFerguson/streamspace-plugins/raw/main/streamspace-workflows/plugin.tar.gz"
   }
 ]
