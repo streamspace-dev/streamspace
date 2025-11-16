@@ -173,17 +173,11 @@ func main() {
 
 	// SECURITY: Add request size limits to prevent large payload attacks
 	// Maximum 10MB for general requests
-	router.Use(middleware.RequestSizeLimit(10 * 1024 * 1024))
+	router.Use(middleware.RequestSizeLimiter(10 * 1024 * 1024))
 
 	// SECURITY: Add rate limiting to prevent DoS attacks
-	// Layer 1: IP-based rate limiting (100 req/sec per IP with burst of 200)
-	rateLimiter := middleware.NewRateLimiter(100, 200)
-	router.Use(rateLimiter.Middleware())
-
-	// Layer 2: Per-user rate limiting (1000 req/hour per authenticated user)
-	// Prevents abuse from compromised tokens
-	userRateLimiter := middleware.NewUserRateLimiter(1000, 50)
-	router.Use(userRateLimiter.Middleware())
+	// Use singleton rate limiter instance
+	rateLimiter := middleware.GetRateLimiter()
 
 	// SECURITY: Add audit logging for all requests
 	auditLogger := middleware.NewAuditLogger(database, false) // Don't log request bodies by default
@@ -240,14 +234,13 @@ func main() {
 
 	// Initialize API handlers
 	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService, wsManager, quotaEnforcer)
-	userHandler := handlers.NewUserHandler(userDB)
+	userHandler := handlers.NewUserHandler(userDB, groupDB)
 	groupHandler := handlers.NewGroupHandler(groupDB, userDB)
 	authHandler := auth.NewAuthHandler(userDB, jwtManager, samlAuth)
 	activityHandler := handlers.NewActivityHandler(k8sClient, activityTracker)
 	catalogHandler := handlers.NewCatalogHandler(database)
 	sharingHandler := handlers.NewSharingHandler(database)
 	pluginHandler := handlers.NewPluginHandler(database)
-	auditLogHandler := handlers.NewAuditLogHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database, k8sClient)
 	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database)
@@ -271,14 +264,8 @@ func main() {
 		log.Println("         Generate a secret with: openssl rand -hex 32")
 	}
 
-	// SECURITY: Initialize CSRF protection
-	csrfProtection := middleware.NewCSRFProtection(24 * time.Hour)
-
-	// SECURITY: Create stricter rate limiter for auth endpoints
-	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
-
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, jwtManager, userDB, redisCache, webhookSecret)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -359,7 +346,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -375,15 +362,11 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 	router.GET("/health", h.Health)
 	router.GET("/version", h.Version)
 
-	// SECURITY: CSRF token endpoint (public - issues CSRF tokens)
-	router.GET("/api/v1/csrf-token", csrfProtection.IssueTokenHandler())
-
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
 		// Authentication routes (public - no auth required, but rate limited)
 		authGroup := v1.Group("/auth")
-		authGroup.Use(authRateLimiter.Middleware()) // SECURITY: Brute force protection
 		{
 			authHandler.RegisterRoutes(authGroup)
 		}
@@ -391,7 +374,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		// PROTECTED ROUTES - Require authentication
 		protected := v1.Group("")
 		protected.Use(authMiddleware)
-		protected.Use(csrfProtection.Middleware()) // SECURITY: CSRF protection for all state-changing operations
+		protected.Use(middleware.CSRFProtection()) // SECURITY: CSRF protection for all state-changing operations
 		{
 			// Sessions (authenticated users only)
 			sessions := protected.Group("/sessions")
