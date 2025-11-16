@@ -99,8 +99,14 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Digest: ${{ steps.build.outputs.digest }}"
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${{ steps.build.outputs.digest }}"
+          echo "Raw digest: ${{ steps.build.outputs.digest }}"
+          # Remove newlines/CRs and take first comma-separated token
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: unexpected digest format: $DIGEST"
+            exit 1
+          fi
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
           echo "Image reference: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
@@ -118,7 +124,8 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${{ steps.build.outputs.digest }}"
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-controller.spdx.json \
             "$IMAGE_REF"
@@ -200,8 +207,14 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Digest: ${{ steps.build.outputs.digest }}"
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${{ steps.build.outputs.digest }}"
+          echo "Raw digest: ${{ steps.build.outputs.digest }}"
+          # Remove newlines/CRs and take first comma-separated token
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: unexpected digest format: $DIGEST"
+            exit 1
+          fi
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${DIGEST}"
           echo "Image reference: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
@@ -219,7 +232,8 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${{ steps.build.outputs.digest }}"
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-api.spdx.json \
             "$IMAGE_REF"
@@ -301,8 +315,14 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Digest: ${{ steps.build.outputs.digest }}"
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${{ steps.build.outputs.digest }}"
+          echo "Raw digest: ${{ steps.build.outputs.digest }}"
+          # Remove newlines/CRs and take first comma-separated token
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
+            echo "ERROR: unexpected digest format: $DIGEST"
+            exit 1
+          fi
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${DIGEST}"
           echo "Image reference: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
@@ -320,7 +340,8 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${{ steps.build.outputs.digest }}"
+          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-ui.spdx.json \
             "$IMAGE_REF"
