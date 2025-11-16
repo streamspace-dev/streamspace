@@ -309,6 +309,10 @@ type LoadedPlugin struct {
 	// LoadedAt is the timestamp when the plugin was loaded into the runtime.
 	// Used for uptime monitoring and debugging load order issues.
 	LoadedAt time.Time
+
+	// IsBuiltin indicates whether the plugin is bundled with StreamSpace.
+	// Builtin plugins cannot be uninstalled and may have elevated permissions.
+	IsBuiltin bool
 }
 
 // PluginHandler is the interface that all plugins must implement.

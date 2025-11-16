@@ -186,7 +186,6 @@
 package plugins
 
 import (
-	"context"
 	"database/sql"
 	"fmt"
 

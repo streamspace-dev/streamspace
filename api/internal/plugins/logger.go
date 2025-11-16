@@ -61,7 +61,6 @@ package plugins
 
 import (
 	"encoding/json"
-	"fmt"
 	"log"
 	"time"
 )
