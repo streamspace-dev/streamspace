@@ -88,6 +88,9 @@ import { QRCodeSVG } from 'qrcode.react';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
 import { useSecurityAlertEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
 /**
  * Interface for MFA method data structure.
@@ -120,26 +123,36 @@ interface SecurityAlert {
   created_at: string;
 }
 
-export default function SecuritySettings() {
+function SecuritySettingsContent() {
   const [currentTab, setCurrentTab] = useState(0);
   const [mfaMethods, setMfaMethods] = useState<MFAMethod[]>([]);
   const [ipWhitelist, setIpWhitelist] = useState<IPWhitelistEntry[]>([]);
   const [securityAlerts, setSecurityAlerts] = useState<SecurityAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [alertNotification, setAlertNotification] = useState<string | null>(null);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
 
   // Real-time security alerts via WebSocket
   useSecurityAlertEvents((data: any) => {
     console.log('Security alert event:', data);
     setWsConnected(true);
+    setWsReconnectAttempts(0);
 
     // Show notification for security alerts
-    if (data.alert_type && data.severity) {
-      const severityIcon = data.severity === 'critical' ? '🚨' : data.severity === 'high' ? '⚠️' : 'ℹ️';
-      setAlertNotification(
-        `${severityIcon} Security Alert: ${data.alert_type} (${data.severity.toUpperCase()})`
-      );
+    if (data.event_type === 'security.alert') {
+      const severity = data.severity === 'critical' || data.severity === 'high' ? 'error' : 'warning';
+      const priority = data.severity === 'critical' ? 'critical' : data.severity === 'high' ? 'high' : 'medium';
+
+      addNotification({
+        message: `${data.alert_type || 'Security Alert'}: ${data.message || 'Detected'}`,
+        severity: severity as 'error' | 'warning',
+        priority: priority as 'critical' | 'high' | 'medium',
+        title: `Security Alert (${data.severity?.toUpperCase() || 'UNKNOWN'})`,
+        autoDismiss: data.severity !== 'critical',
+      });
     }
 
     // Refresh security alerts
@@ -326,11 +339,10 @@ export default function SecuritySettings() {
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               Security Settings
             </Typography>
-            <Chip
-              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
-              label={wsConnected ? 'Live Alerts' : 'Polling'}
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
               size="small"
-              color={wsConnected ? 'success' : 'default'}
             />
           </Box>
           <Chip icon={<ShieldIcon />} label="Protected" color="success" variant="outlined" />
@@ -641,16 +653,15 @@ export default function SecuritySettings() {
             </Button>
           </DialogActions>
         </Dialog>
-
-        {/* Security Alert Notification */}
-        <Snackbar
-          open={!!alertNotification}
-          autoHideDuration={6000}
-          onClose={() => setAlertNotification(null)}
-          message={alertNotification}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        />
       </Box>
     </Layout>
+  );
+}
+
+export default function SecuritySettings() {
+  return (
+    <WebSocketErrorBoundary>
+      <SecuritySettingsContent />
+    </WebSocketErrorBoundary>
   );
 }

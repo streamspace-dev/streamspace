@@ -23,8 +23,12 @@ import TemplateCard from '../components/TemplateCard';
 import TemplateDetailModal from '../components/TemplateDetailModal';
 import { api, type CatalogTemplate, type CatalogFilters } from '../lib/api';
 import { useNavigate } from 'react-router-dom';
+import { useTemplateEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
-export default function EnhancedCatalog() {
+function EnhancedCatalogContent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [templates, setTemplates] = useState<CatalogTemplate[]>([]);
@@ -43,6 +47,60 @@ export default function EnhancedCatalog() {
   const [totalPages, setTotalPages] = useState(1);
   const [categories, setCategories] = useState<string[]>([]);
   const [appTypes, setAppTypes] = useState<string[]>([]);
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time template events via WebSocket
+  useTemplateEvents((data: any) => {
+    setWsConnected(true);
+    setWsReconnectAttempts(0);
+
+    // Show notifications for template events
+    if (data.event_type === 'template.created' || data.event_type === 'template.added') {
+      addNotification({
+        message: `New template available: ${data.template_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'New Template',
+      });
+      // Refresh template list
+      loadTemplates();
+    } else if (data.event_type === 'template.updated') {
+      addNotification({
+        message: `Template updated: ${data.template_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Template Updated',
+      });
+      // Refresh template list
+      loadTemplates();
+    } else if (data.event_type === 'template.deleted') {
+      addNotification({
+        message: `Template removed: ${data.template_name || 'Unknown'}`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Template Removed',
+      });
+      // Refresh template list
+      loadTemplates();
+    } else if (data.event_type === 'template.featured') {
+      addNotification({
+        message: `New featured template: ${data.template_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'high',
+        title: 'Featured Template',
+      });
+      // Refresh template list if showing featured
+      if (filters.featured) {
+        loadTemplates();
+      }
+    }
+  });
 
   useEffect(() => {
     loadTemplates();
@@ -133,13 +191,20 @@ export default function EnhancedCatalog() {
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
             Template Catalog
           </Typography>
-          <Button
-            startIcon={<RefreshIcon />}
-            onClick={loadTemplates}
-            disabled={loading}
-          >
-            Refresh
-          </Button>
+          <Box display="flex" gap={2} alignItems="center">
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
+              size="small"
+            />
+            <Button
+              startIcon={<RefreshIcon />}
+              onClick={loadTemplates}
+              disabled={loading}
+            >
+              Refresh
+            </Button>
+          </Box>
         </Box>
 
         {/* Search and Filters */}
@@ -287,5 +352,13 @@ export default function EnhancedCatalog() {
         />
       </Box>
     </Layout>
+  );
+}
+
+export default function EnhancedCatalog() {
+  return (
+    <WebSocketErrorBoundary>
+      <EnhancedCatalogContent />
+    </WebSocketErrorBoundary>
   );
 }

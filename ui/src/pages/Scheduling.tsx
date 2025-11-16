@@ -46,6 +46,9 @@ import Layout from '../components/Layout';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
 import { useScheduleEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
 interface ScheduledSession {
   id: number;
@@ -73,7 +76,7 @@ interface CalendarIntegration {
   last_synced_at?: string;
 }
 
-export default function Scheduling() {
+function SchedulingContent() {
   const [currentTab, setCurrentTab] = useState(0);
   const [schedules, setSchedules] = useState<ScheduledSession[]>([]);
   const [calendarIntegrations, setCalendarIntegrations] = useState<CalendarIntegration[]>([]);
@@ -81,19 +84,47 @@ export default function Scheduling() {
   const [connectCalendarDialog, setConnectCalendarDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [scheduleEventNotification, setScheduleEventNotification] = useState<string | null>(null);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
 
   // Real-time schedule events via WebSocket
   useScheduleEvents((data: any) => {
     console.log('Schedule event:', data);
     setWsConnected(true);
+    setWsReconnectAttempts(0);
 
     // Show notification for schedule events
-    if (data.schedule_name && data.status) {
-      const statusIcon = data.status === 'started' ? '▶️' : data.status === 'completed' ? '✅' : '❌';
-      setScheduleEventNotification(
-        `${statusIcon} Scheduled Session: ${data.schedule_name} - ${data.status.toUpperCase()}`
-      );
+    if (data.event_type === 'schedule.started') {
+      addNotification({
+        message: `Scheduled session started: ${data.schedule_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'Schedule Started',
+      });
+    } else if (data.event_type === 'schedule.completed') {
+      addNotification({
+        message: `Scheduled session completed: ${data.schedule_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'low',
+        title: 'Schedule Completed',
+      });
+    } else if (data.event_type === 'schedule.failed') {
+      addNotification({
+        message: `Scheduled session failed: ${data.schedule_name || 'Unknown'} - ${data.error || 'Unknown error'}`,
+        severity: 'error',
+        priority: 'high',
+        title: 'Schedule Failed',
+        autoDismiss: false,
+      });
+    } else if (data.event_type === 'schedule.created' || data.event_type === 'schedule.updated') {
+      addNotification({
+        message: `Schedule ${data.event_type === 'schedule.created' ? 'created' : 'updated'}: ${data.schedule_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'low',
+        title: data.event_type === 'schedule.created' ? 'Schedule Created' : 'Schedule Updated',
+      });
     }
 
     // Refresh schedules
@@ -298,11 +329,10 @@ export default function Scheduling() {
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               Session Scheduling
             </Typography>
-            <Chip
-              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
-              label={wsConnected ? 'Live Events' : 'Polling'}
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
               size="small"
-              color={wsConnected ? 'success' : 'default'}
             />
           </Box>
           <Box sx={{ display: 'flex', gap: 1 }}>
@@ -671,15 +701,15 @@ export default function Scheduling() {
           </DialogActions>
         </Dialog>
 
-        {/* Schedule Event Notification */}
-        <Snackbar
-          open={!!scheduleEventNotification}
-          autoHideDuration={6000}
-          onClose={() => setScheduleEventNotification(null)}
-          message={scheduleEventNotification}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        />
       </Box>
     </Layout>
+  );
+}
+
+export default function Scheduling() {
+  return (
+    <WebSocketErrorBoundary>
+      <SchedulingContent />
+    </WebSocketErrorBoundary>
   );
 }

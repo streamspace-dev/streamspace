@@ -50,6 +50,9 @@ import Layout from '../../components/Layout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { useComplianceViolationEvents } from '../../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
 interface ComplianceFramework {
   id: number;
@@ -92,7 +95,7 @@ interface ComplianceMetrics {
   };
 }
 
-export default function Compliance() {
+function ComplianceContent() {
   const [currentTab, setCurrentTab] = useState(0);
   const [frameworks, setFrameworks] = useState<ComplianceFramework[]>([]);
   const [policies, setPolicies] = useState<CompliancePolicy[]>([]);
@@ -110,19 +113,29 @@ export default function Compliance() {
   });
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
-  const [violationNotification, setViolationNotification] = useState<string | null>(null);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
 
   // Real-time compliance violation alerts via WebSocket
   useComplianceViolationEvents((data: any) => {
     console.log('Compliance violation event:', data);
     setWsConnected(true);
+    setWsReconnectAttempts(0);
 
     // Show notification for new violations
-    if (data.policy_name && data.severity) {
-      const severityIcon = data.severity === 'critical' ? '🚨' : data.severity === 'high' ? '⚠️' : 'ℹ️';
-      setViolationNotification(
-        `${severityIcon} Compliance Violation: ${data.policy_name} (${data.severity.toUpperCase()})`
-      );
+    if (data.event_type === 'compliance.violation') {
+      const severity = data.severity === 'critical' || data.severity === 'high' ? 'error' : 'warning';
+      const priority = data.severity === 'critical' ? 'critical' : data.severity === 'high' ? 'high' : 'medium';
+
+      addNotification({
+        message: `${data.policy_name || 'Compliance Violation'}: ${data.description || 'Policy violation detected'}`,
+        severity: severity as 'error' | 'warning',
+        priority: priority as 'critical' | 'high' | 'medium',
+        title: `Compliance Violation (${data.severity?.toUpperCase() || 'UNKNOWN'})`,
+        autoDismiss: data.severity !== 'critical',
+      });
     }
 
     // Refresh violations and metrics
@@ -302,11 +315,10 @@ export default function Compliance() {
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
               Compliance & Governance
             </Typography>
-            <Chip
-              icon={wsConnected ? <ConnectedIcon /> : <DisconnectedIcon />}
-              label={wsConnected ? 'Live Violations' : 'Polling'}
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
               size="small"
-              color={wsConnected ? 'success' : 'default'}
             />
           </Box>
           <Button variant="contained" startIcon={<ReportIcon />} onClick={() => setReportDialog(true)}>
@@ -703,16 +715,15 @@ export default function Compliance() {
             </Button>
           </DialogActions>
         </Dialog>
-
-        {/* Compliance Violation Notification */}
-        <Snackbar
-          open={!!violationNotification}
-          autoHideDuration={6000}
-          onClose={() => setViolationNotification(null)}
-          message={violationNotification}
-          anchorOrigin={{ vertical: 'bottom', horizontal: 'right' }}
-        />
       </Box>
     </Layout>
+  );
+}
+
+export default function Compliance() {
+  return (
+    <WebSocketErrorBoundary>
+      <ComplianceContent />
+    </WebSocketErrorBoundary>
   );
 }

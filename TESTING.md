@@ -899,6 +899,7 @@ pkill -f "port-forward.*8000:8000"
 
 ### ✅ Real-Time Updates (WebSocket)
 
+#### Basic WebSocket Functionality
 - [ ] WebSocket connection established
 - [ ] Session updates broadcast every 3s
 - [ ] Cluster metrics broadcast every 5s
@@ -908,6 +909,71 @@ pkill -f "port-forward.*8000:8000"
 - [ ] Connection status indicator works
 - [ ] Reconnection works after disconnect
 - [ ] Exponential backoff working
+
+#### Enhanced WebSocket Features (16 Pages)
+- [ ] EnhancedWebSocketStatus component displays connection state correctly
+- [ ] WebSocketErrorBoundary handles connection errors gracefully
+- [ ] NotificationQueue shows priority-based notifications
+- [ ] Reconnect attempts tracked and displayed accurately
+- [ ] Connection quality indicator shows correct status
+
+#### Page-Specific WebSocket Integration
+**Core Pages (4 pages):**
+- [ ] Dashboard - Session state notifications with EnhancedWebSocketStatus
+- [ ] Sessions - Real-time session updates with priority notifications
+- [ ] SessionViewer - Live session status and connection monitoring
+- [ ] SharedSessions - Collaboration events with real-time notifications
+
+**Admin Pages (9 pages):**
+- [ ] admin/Dashboard - Cluster metrics with enhanced status
+- [ ] admin/Nodes - Node state changes with real-time alerts
+- [ ] admin/Scaling - Scaling events with priority notifications
+- [ ] admin/Users - User lifecycle events with enhanced status
+- [ ] admin/Groups - Group membership changes with notifications
+- [ ] admin/Quotas - Quota updates and violations with alerts
+- [ ] admin/Plugins - Plugin install/update/error notifications
+- [ ] admin/Compliance - Compliance violations with severity-based priority
+- [ ] admin/Integrations - Webhook delivery notifications with status-based severity
+
+**Feature Pages (3 pages):**
+- [ ] EnhancedCatalog - Template updates with featured notifications
+- [ ] Catalog - Real-time template additions with Enhanced WebSocket status
+- [ ] EnhancedRepositories - Repository sync events with failure alerts
+- [ ] InstalledPlugins - Real-time plugin status with error tracking
+- [ ] Scheduling - Schedule execution alerts with improved notifications
+- [ ] SecuritySettings - Security alerts with severity-based priority
+
+#### Event Hook Testing
+- [ ] useSessionEvents - Session lifecycle events (created, started, hibernated, terminated)
+- [ ] useUserEvents - User creation, updates, deletion
+- [ ] useGroupEvents - Group creation, membership changes
+- [ ] useQuotaViolationEvents - Quota violations and enforcement
+- [ ] usePluginEvents - Plugin install, update, uninstall, errors
+- [ ] useTemplateEvents - Template creation, updates, featured status
+- [ ] useRepositoryEvents - Repository sync, add, delete, failures
+- [ ] useIntegrationEvents - Integration test and webhook events
+- [ ] useSecurityAlertEvents - Security alerts with severity levels
+- [ ] useComplianceViolationEvents - Compliance policy violations
+- [ ] useWebhookDeliveryEvents - Webhook delivery status notifications
+
+#### Notification Priority System
+- [ ] Critical priority notifications (non-dismissible, top of stack)
+- [ ] High priority notifications (important alerts)
+- [ ] Medium priority notifications (standard updates)
+- [ ] Low priority notifications (informational)
+- [ ] Auto-dismiss behavior works correctly
+- [ ] Non-dismissible critical alerts require manual dismissal
+- [ ] Notification stacking order matches priority
+- [ ] Multiple notifications display correctly
+
+#### Error Handling & Recovery
+- [ ] WebSocketErrorBoundary catches connection errors
+- [ ] Fallback UI displays when WebSocket fails
+- [ ] Auto-reconnect attempts with exponential backoff
+- [ ] Reconnect attempt counter increments correctly
+- [ ] Connection restored after network interruption
+- [ ] Graceful degradation when WebSocket unavailable
+- [ ] Error notifications for connection failures
 
 ### ✅ Monitoring & Observability
 

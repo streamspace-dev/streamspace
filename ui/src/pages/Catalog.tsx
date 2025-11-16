@@ -22,8 +22,13 @@ import { Add as AddIcon } from '@mui/icons-material';
 import Layout from '../components/Layout';
 import { useTemplates, useCatalogTemplates, useCreateSession } from '../hooks/useApi';
 import { useUserStore } from '../store/userStore';
+import { useTemplateEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
+import { useQueryClient } from '@tanstack/react-query';
 
-export default function Catalog() {
+function CatalogContent() {
   const username = useUserStore((state) => state.user?.username);
   const [tabValue, setTabValue] = useState(0);
   const [createDialogOpen, setCreateDialogOpen] = useState(false);
@@ -32,6 +37,53 @@ export default function Catalog() {
   const { data: catalogResponse, isLoading: catalogLoading } = useCatalogTemplates();
   const catalogTemplates = catalogResponse?.templates || [];
   const createSession = useCreateSession();
+  const queryClient = useQueryClient();
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time template events via WebSocket
+  useTemplateEvents((data: any) => {
+    setWsConnected(true);
+    setWsReconnectAttempts(0);
+
+    // Show notifications for template events
+    if (data.event_type === 'template.created' || data.event_type === 'template.added') {
+      addNotification({
+        message: `New template available: ${data.template_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'New Template',
+      });
+      // Refresh template lists
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      queryClient.invalidateQueries({ queryKey: ['catalogTemplates'] });
+    } else if (data.event_type === 'template.updated') {
+      addNotification({
+        message: `Template updated: ${data.template_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'low',
+        title: 'Template Updated',
+      });
+      // Refresh template lists
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      queryClient.invalidateQueries({ queryKey: ['catalogTemplates'] });
+    } else if (data.event_type === 'template.deleted') {
+      addNotification({
+        message: `Template removed: ${data.template_name || 'Unknown'}`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Template Removed',
+      });
+      // Refresh template lists
+      queryClient.invalidateQueries({ queryKey: ['templates'] });
+      queryClient.invalidateQueries({ queryKey: ['catalogTemplates'] });
+    }
+  });
 
   const handleCreateSession = () => {
     if (!selectedTemplate || !username) return;
@@ -57,9 +109,16 @@ export default function Catalog() {
   return (
     <Layout>
       <Box>
-        <Typography variant="h4" sx={{ mb: 3, fontWeight: 700 }}>
-          Template Catalog
-        </Typography>
+        <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
+          <Typography variant="h4" sx={{ fontWeight: 700 }}>
+            Template Catalog
+          </Typography>
+          <EnhancedWebSocketStatus
+            isConnected={wsConnected}
+            reconnectAttempts={wsReconnectAttempts}
+            size="small"
+          />
+        </Box>
 
         <Box sx={{ borderBottom: 1, borderColor: 'divider', mb: 3 }}>
           <Tabs value={tabValue} onChange={(_, v) => setTabValue(v)}>
@@ -158,5 +217,13 @@ export default function Catalog() {
         </Dialog>
       </Box>
     </Layout>
+  );
+}
+
+export default function Catalog() {
+  return (
+    <WebSocketErrorBoundary>
+      <CatalogContent />
+    </WebSocketErrorBoundary>
   );
 }

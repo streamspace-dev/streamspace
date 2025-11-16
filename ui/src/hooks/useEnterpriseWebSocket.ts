@@ -281,3 +281,15 @@ export function useQuotaEvents(handler: (data: any) => void) {
 export function usePluginEvents(handler: (data: any) => void) {
   useWebSocketEvent('plugin.event', handler);
 }
+
+export function useTemplateEvents(handler: (data: any) => void) {
+  useWebSocketEvent('template.event', handler);
+}
+
+export function useRepositoryEvents(handler: (data: any) => void) {
+  useWebSocketEvent('repository.event', handler);
+}
+
+export function useIntegrationEvents(handler: (data: any) => void) {
+  useWebSocketEvent('integration.event', handler);
+}

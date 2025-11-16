@@ -41,6 +41,10 @@ import PluginConfigForm from '../components/PluginConfigForm';
 import { api, type InstalledPlugin } from '../lib/api';
 import { toast } from '../lib/toast';
 import { useNavigate } from 'react-router-dom';
+import { usePluginEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
 const pluginTypeIcons: Record<string, JSX.Element> = {
   extension: <ExtensionIcon fontSize="small" />,
@@ -58,7 +62,7 @@ const pluginTypeColors: Record<string, string> = {
   theme: '#E91E63',
 };
 
-export default function InstalledPlugins() {
+function InstalledPluginsContent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
   const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
@@ -69,6 +73,70 @@ export default function InstalledPlugins() {
   const [configJson, setConfigJson] = useState('');
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
   const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time plugin events via WebSocket
+  usePluginEvents((data: any) => {
+    setWsConnected(true);
+    setWsReconnectAttempts(0);
+
+    // Show notifications for plugin events
+    if (data.event_type === 'plugin.installed') {
+      addNotification({
+        message: `Plugin installed: ${data.plugin_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'Plugin Installed',
+      });
+      loadPlugins();
+    } else if (data.event_type === 'plugin.enabled') {
+      addNotification({
+        message: `Plugin enabled: ${data.plugin_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'low',
+        title: 'Plugin Enabled',
+      });
+      loadPlugins();
+    } else if (data.event_type === 'plugin.disabled') {
+      addNotification({
+        message: `Plugin disabled: ${data.plugin_name || 'Unknown'}`,
+        severity: 'warning',
+        priority: 'low',
+        title: 'Plugin Disabled',
+      });
+      loadPlugins();
+    } else if (data.event_type === 'plugin.uninstalled') {
+      addNotification({
+        message: `Plugin uninstalled: ${data.plugin_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Plugin Uninstalled',
+      });
+      loadPlugins();
+    } else if (data.event_type === 'plugin.error') {
+      addNotification({
+        message: `Plugin error: ${data.plugin_name || 'Unknown'} - ${data.error || 'Unknown error'}`,
+        severity: 'error',
+        priority: 'high',
+        title: 'Plugin Error',
+        autoDismiss: false,
+      });
+    } else if (data.event_type === 'plugin.updated') {
+      addNotification({
+        message: `Plugin updated: ${data.plugin_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Plugin Updated',
+      });
+      loadPlugins();
+    }
+  });
 
   useEffect(() => {
     loadPlugins();
@@ -199,6 +267,17 @@ export default function InstalledPlugins() {
             <Typography variant="body2" color="text.secondary">
               Manage your installed plugins
             </Typography>
+          </Box>
+          <Box display="flex" gap={2} alignItems="center">
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
+              size="small"
+            />
+            <Button variant="outlined" onClick={() => navigate('/plugin-catalog')}>
+              <ShopIcon sx={{ mr: 1 }} />
+              Browse Catalog
+            </Button>
           </Box>
         </Box>
 
@@ -469,5 +548,13 @@ export default function InstalledPlugins() {
         </Dialog>
       </Box>
     </Layout>
+  );
+}
+
+export default function InstalledPlugins() {
+  return (
+    <WebSocketErrorBoundary>
+      <InstalledPluginsContent />
+    </WebSocketErrorBoundary>
   );
 }

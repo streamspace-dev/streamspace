@@ -290,6 +290,29 @@ StreamSpace is a Kubernetes-native platform for streaming containerized applicat
 | | 14.2.1 | Security features enabled in build | Security middleware | ✅ | Default enabled |
 | | 14.4.3 | Security headers sent | Security headers middleware | ✅ | `api/internal/middleware/securityheaders.go` |
 
+### WebSocket Security Controls
+
+| Control Area | Control ID | Control Description | Implementation | Status | Evidence |
+|--------------|------------|---------------------|----------------|--------|----------|
+| **Authentication** | WS-1.1 | WebSocket connections require authentication | JWT token validation in WebSocket handler | ✅ | `ui/src/hooks/useEnterpriseWebSocket.ts` |
+| | WS-1.2 | WebSocket upgrade requests validate origin | Origin header validation | ✅ | `api/internal/handlers/websocket.go` |
+| | WS-1.3 | Token expiration enforced on active connections | Token refresh mechanism | ✅ | WebSocket middleware |
+| **Connection Management** | WS-2.1 | Connection limits per user enforced | Rate limiting on connections | ✅ | `api/internal/middleware/ratelimit.go` |
+| | WS-2.2 | Idle connections automatically terminated | Timeout after 30 minutes inactivity | ✅ | WebSocket handler |
+| | WS-2.3 | Graceful degradation on connection failure | WebSocketErrorBoundary component | ✅ | `ui/src/components/WebSocketErrorBoundary.tsx` |
+| **Data Integrity** | WS-3.1 | Message validation before processing | Input validation on all event data | ✅ | Event handlers |
+| | WS-3.2 | Event type whitelisting | Only known event types processed | ✅ | `ui/src/hooks/useEnterpriseWebSocket.ts` |
+| | WS-3.3 | XSS prevention in real-time data | Sanitization of notification content | ✅ | NotificationQueue component |
+| **Error Handling** | WS-4.1 | Sensitive data not in WebSocket errors | Generic error messages | ✅ | Error handlers |
+| | WS-4.2 | Connection errors logged for monitoring | Error logging with sanitization | ✅ | WebSocket handlers |
+| | WS-4.3 | Reconnection with exponential backoff | Prevents connection storms | ✅ | `ui/src/hooks/useEnterpriseWebSocket.ts` |
+| **Authorization** | WS-5.1 | Event subscriptions respect RBAC | Role-based event filtering | ✅ | WebSocket middleware |
+| | WS-5.2 | User can only receive own data | User context validation | ✅ | Event filtering |
+| | WS-5.3 | Admin events only to admin users | Role-based event routing | ✅ | WebSocket handler |
+| **Monitoring** | WS-6.1 | WebSocket connection metrics exposed | Prometheus metrics for connections | ✅ | Metrics middleware |
+| | WS-6.2 | Failed authentication attempts logged | Audit log for connection attempts | ✅ | Audit middleware |
+| | WS-6.3 | Abnormal patterns detected | Rate limiting and monitoring | ✅ | Security monitoring |
+
 ### CIS Kubernetes Benchmark Mapping
 
 | Benchmark ID | Control Description | Implementation | Status | Evidence |

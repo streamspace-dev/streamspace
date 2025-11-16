@@ -37,8 +37,12 @@ import {
   useSyncAllRepositories,
 } from '../hooks/useApi';
 import { Repository } from '../lib/api';
+import { useRepositoryEvents } from '../hooks/useEnterpriseWebSocket';
+import { useNotificationQueue } from '../components/NotificationQueue';
+import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
+import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
-export default function EnhancedRepositories() {
+function EnhancedRepositoriesContent() {
   const { data: repositories = [], isLoading, refetch } = useRepositories();
   const addRepository = useAddRepository();
   const updateRepository = useUpdateRepository();
@@ -55,6 +59,68 @@ export default function EnhancedRepositories() {
     open: false,
     message: '',
     severity: 'success',
+  });
+
+  // WebSocket connection state
+  const [wsConnected, setWsConnected] = useState(false);
+  const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Enhanced notification system
+  const { addNotification } = useNotificationQueue();
+
+  // Real-time repository events via WebSocket
+  useRepositoryEvents((data: any) => {
+    setWsConnected(true);
+    setWsReconnectAttempts(0);
+
+    // Show notifications for repository events
+    if (data.event_type === 'repository.sync.started') {
+      addNotification({
+        message: `Repository sync started: ${data.repository_name || 'Unknown'}`,
+        severity: 'info',
+        priority: 'medium',
+        title: 'Sync Started',
+      });
+      // Refresh repository list
+      refetch();
+    } else if (data.event_type === 'repository.sync.completed') {
+      addNotification({
+        message: `Repository synced successfully: ${data.repository_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'Sync Complete',
+      });
+      // Refresh repository list
+      refetch();
+    } else if (data.event_type === 'repository.sync.failed') {
+      addNotification({
+        message: `Repository sync failed: ${data.repository_name || 'Unknown'} - ${data.error || 'Unknown error'}`,
+        severity: 'error',
+        priority: 'high',
+        title: 'Sync Failed',
+        autoDismiss: false,
+      });
+      // Refresh repository list
+      refetch();
+    } else if (data.event_type === 'repository.added') {
+      addNotification({
+        message: `New repository added: ${data.repository_name || 'Unknown'}`,
+        severity: 'success',
+        priority: 'medium',
+        title: 'Repository Added',
+      });
+      // Refresh repository list
+      refetch();
+    } else if (data.event_type === 'repository.deleted') {
+      addNotification({
+        message: `Repository removed: ${data.repository_name || 'Unknown'}`,
+        severity: 'warning',
+        priority: 'medium',
+        title: 'Repository Removed',
+      });
+      // Refresh repository list
+      refetch();
+    }
   });
 
   // Auto-refresh every 10 seconds
@@ -181,7 +247,12 @@ export default function EnhancedRepositories() {
               Manage external template repositories and sync status
             </Typography>
           </Box>
-          <Box sx={{ display: 'flex', gap: 1 }}>
+          <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
+            <EnhancedWebSocketStatus
+              isConnected={wsConnected}
+              reconnectAttempts={wsReconnectAttempts}
+              size="small"
+            />
             <Button
               variant="outlined"
               startIcon={<RefreshIcon />}
@@ -361,5 +432,13 @@ export default function EnhancedRepositories() {
         `}</style>
       </Box>
     </Layout>
+  );
+}
+
+export default function EnhancedRepositories() {
+  return (
+    <WebSocketErrorBoundary>
+      <EnhancedRepositoriesContent />
+    </WebSocketErrorBoundary>
   );
 }
