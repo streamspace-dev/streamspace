@@ -340,3 +340,22 @@ func validateEmailFormat(email string) error {
 
 	return nil
 }
+
+// ============================================================================
+// ROUTE REGISTRATION
+// ============================================================================
+
+// RegisterRoutes registers setup wizard endpoints
+// These routes are public (no authentication required) as they are needed
+// for initial admin account setup before authentication is possible.
+//
+// Routes:
+//   GET  /setup/status - Check if setup wizard is enabled
+//   POST /setup        - Configure admin account
+func (h *SetupHandler) RegisterRoutes(router *gin.RouterGroup) {
+	// GET /api/v1/auth/setup/status - Check setup status
+	router.GET("/setup/status", h.GetSetupStatus)
+
+	// POST /api/v1/auth/setup - Execute setup wizard
+	router.POST("/setup", h.SetupAdmin)
+}
