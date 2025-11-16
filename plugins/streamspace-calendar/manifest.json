@@ -1,0 +1,34 @@
+{
+  "name": "streamspace-calendar",
+  "version": "1.0.0",
+  "displayName": "Calendar Integration",
+  "description": "Google Calendar and Outlook Calendar integration with iCal export for automated session scheduling",
+  "author": "StreamSpace Team",
+  "license": "MIT",
+  "type": "integration",
+  "category": "Integrations",
+  "tags": ["calendar", "google-calendar", "outlook", "scheduling", "automation"],
+  "requirements": {"streamspaceVersion": ">=1.0.0"},
+  "entrypoints": {"main": "calendar_plugin.go"},
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "googleClientId": {"type": "string", "title": "Google OAuth Client ID"},
+      "googleClientSecret": {"type": "string", "title": "Google OAuth Client Secret"},
+      "microsoftClientId": {"type": "string", "title": "Microsoft OAuth Client ID"},
+      "microsoftClientSecret": {"type": "string", "title": "Microsoft OAuth Client Secret"},
+      "autoSyncInterval": {"type": "number", "default": 300, "minimum": 60, "maximum": 3600, "title": "Auto-sync interval (seconds)"},
+      "createEventsForScheduledSessions": {"type": "boolean", "default": true}
+    }
+  },
+  "defaultConfig": {"autoSyncInterval": 300, "createEventsForScheduledSessions": true},
+  "permissions": ["database", "api", "network", "scheduler"],
+  "apiEndpoints": [
+    {"method": "POST", "path": "/calendar/integrations/:provider", "description": "Connect calendar (google/outlook)"},
+    {"method": "GET", "path": "/calendar/oauth/callback", "description": "OAuth callback handler"},
+    {"method": "GET", "path": "/calendar/integrations", "description": "List calendar integrations"},
+    {"method": "DELETE", "path": "/calendar/integrations/:integrationId", "description": "Disconnect calendar"},
+    {"method": "POST", "path": "/calendar/integrations/:integrationId/sync", "description": "Sync calendar"},
+    {"method": "GET", "path": "/calendar/export", "description": "Export iCalendar (.ics)"}
+  ]
+}

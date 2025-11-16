@@ -1,0 +1,204 @@
+{
+  "name": "streamspace-node-manager",
+  "version": "1.0.0",
+  "displayName": "Kubernetes Node Manager",
+  "description": "Advanced Kubernetes node management including labels, taints, cordon/uncordon, drain operations, and cluster statistics",
+  "author": "StreamSpace Team",
+  "license": "MIT",
+  "homepage": "https://github.com/JoshuaAFerguson/streamspace-plugins/tree/main/streamspace-node-manager",
+  "repository": "https://github.com/JoshuaAFerguson/streamspace-plugins",
+  "icon": "node-manager-icon.png",
+  "type": "system",
+  "category": "Infrastructure",
+  "tags": ["kubernetes", "nodes", "infrastructure", "cluster-management", "admin"],
+
+  "requirements": {
+    "streamspaceVersion": ">=1.0.0",
+    "kubernetes": ">=1.19.0"
+  },
+
+  "entrypoints": {
+    "main": "node_manager_plugin.go"
+  },
+
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "enableAutoScaling": {
+        "type": "boolean",
+        "title": "Enable Auto-Scaling",
+        "description": "Automatically scale nodes based on resource usage (requires cluster autoscaler)",
+        "default": false
+      },
+      "scaleUpThreshold": {
+        "type": "number",
+        "title": "Scale Up Threshold (%)",
+        "description": "CPU/Memory usage threshold to trigger scale up",
+        "minimum": 50,
+        "maximum": 95,
+        "default": 80
+      },
+      "scaleDownThreshold": {
+        "type": "number",
+        "title": "Scale Down Threshold (%)",
+        "description": "CPU/Memory usage threshold to trigger scale down",
+        "minimum": 5,
+        "maximum": 50,
+        "default": 20
+      },
+      "nodeSelectionStrategy": {
+        "type": "string",
+        "title": "Node Selection Strategy",
+        "description": "Strategy for selecting nodes for session placement",
+        "enum": ["least-sessions", "most-resources", "random", "round-robin"],
+        "default": "least-sessions"
+      },
+      "healthCheckInterval": {
+        "type": "number",
+        "title": "Health Check Interval (seconds)",
+        "description": "How often to check node health status",
+        "minimum": 30,
+        "maximum": 600,
+        "default": 60
+      },
+      "metricsEnabled": {
+        "type": "boolean",
+        "title": "Enable Metrics",
+        "description": "Collect and display node resource usage metrics (requires metrics-server)",
+        "default": true
+      },
+      "alertOnNodeFailure": {
+        "type": "boolean",
+        "title": "Alert on Node Failure",
+        "description": "Send alerts when nodes become NotReady",
+        "default": true
+      },
+      "minNodes": {
+        "type": "number",
+        "title": "Minimum Nodes",
+        "description": "Minimum number of nodes to maintain in cluster",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 1
+      },
+      "maxNodes": {
+        "type": "number",
+        "title": "Maximum Nodes",
+        "description": "Maximum number of nodes allowed in cluster",
+        "minimum": 1,
+        "maximum": 1000,
+        "default": 10
+      }
+    }
+  },
+
+  "defaultConfig": {
+    "enableAutoScaling": false,
+    "scaleUpThreshold": 80,
+    "scaleDownThreshold": 20,
+    "nodeSelectionStrategy": "least-sessions",
+    "healthCheckInterval": 60,
+    "metricsEnabled": true,
+    "alertOnNodeFailure": true,
+    "minNodes": 1,
+    "maxNodes": 10
+  },
+
+  "permissions": [
+    "kubernetes",
+    "admin_ui",
+    "api",
+    "scheduler"
+  ],
+
+  "adminUI": {
+    "pages": [
+      {
+        "id": "node-management",
+        "title": "Node Management",
+        "icon": "server",
+        "path": "/admin/nodes",
+        "description": "Manage Kubernetes nodes"
+      }
+    ],
+    "widgets": [
+      {
+        "id": "cluster-health",
+        "title": "Cluster Health",
+        "description": "Overview of cluster node status",
+        "position": "top",
+        "width": "half"
+      },
+      {
+        "id": "node-resources",
+        "title": "Node Resources",
+        "description": "Cluster resource utilization",
+        "position": "top",
+        "width": "half"
+      }
+    ]
+  },
+
+  "apiEndpoints": [
+    {
+      "method": "GET",
+      "path": "/nodes",
+      "description": "List all Kubernetes nodes",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "GET",
+      "path": "/nodes/stats",
+      "description": "Get cluster statistics",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "GET",
+      "path": "/nodes/:name",
+      "description": "Get node details",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "PUT",
+      "path": "/nodes/:name/labels",
+      "description": "Add label to node",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "DELETE",
+      "path": "/nodes/:name/labels/:key",
+      "description": "Remove label from node",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "POST",
+      "path": "/nodes/:name/taints",
+      "description": "Add taint to node",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "DELETE",
+      "path": "/nodes/:name/taints/:key",
+      "description": "Remove taint from node",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "POST",
+      "path": "/nodes/:name/cordon",
+      "description": "Mark node as unschedulable",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "POST",
+      "path": "/nodes/:name/uncordon",
+      "description": "Mark node as schedulable",
+      "permissions": ["admin"]
+    },
+    {
+      "method": "POST",
+      "path": "/nodes/:name/drain",
+      "description": "Drain all pods from node",
+      "permissions": ["admin"]
+    }
+  ]
+}

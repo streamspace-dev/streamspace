@@ -402,6 +402,13 @@ type CalendarEvent struct {
 	CreatedAt       time.Time `json:"created_at"`
 }
 
+// ============================================================================
+// CALENDAR INTEGRATION
+// TODO(plugin-migration): Extract calendar functions to streamspace-calendar plugin
+// Functions to extract: ConnectCalendar, CalendarOAuthCallback, ListCalendarIntegrations,
+// DisconnectCalendar, SyncCalendar, ExportICalendar, and related Google/Outlook helpers
+// ============================================================================
+
 // ConnectCalendar initiates calendar OAuth flow
 func (h *Handler) ConnectCalendar(c *gin.Context) {
 	userID := c.GetString("user_id")
