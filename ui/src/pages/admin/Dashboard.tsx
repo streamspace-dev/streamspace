@@ -35,6 +35,71 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * AdminDashboard - Platform administration overview and metrics
+ *
+ * Provides comprehensive administrative dashboard with real-time platform statistics,
+ * cluster health monitoring, resource utilization metrics, and recent activity overview.
+ * Central control panel for platform administrators to monitor system health, user
+ * activity, resource consumption, and receive critical alerts.
+ *
+ * Features:
+ * - Real-time cluster metrics via WebSocket
+ * - Cluster health status indicator
+ * - Node status monitoring (ready/not ready)
+ * - Active sessions and user tracking
+ * - CPU and memory utilization graphs
+ * - Pod capacity monitoring
+ * - Session distribution visualization
+ * - Recent sessions table
+ * - Critical alert notifications
+ *
+ * Administrative capabilities:
+ * - Monitor all active sessions across the platform
+ * - Track cluster node health in real-time
+ * - View resource utilization trends
+ * - Identify capacity bottlenecks
+ * - Receive automatic alerts for critical events
+ * - Quick access to detailed admin functions
+ *
+ * Real-time metrics:
+ * - Cluster nodes (total, ready, not ready)
+ * - Sessions (total, running, hibernated, terminated)
+ * - Users (total, active)
+ * - CPU utilization (used, total, percentage)
+ * - Memory utilization (used, total, percentage)
+ * - Pod capacity (used, total, percentage)
+ *
+ * Critical notifications:
+ * - Node health degradation
+ * - CPU utilization > 90%
+ * - Memory utilization > 90%
+ * - Pod capacity > 90%
+ *
+ * User workflows:
+ * - Monitor platform health at a glance
+ * - Identify resource bottlenecks
+ * - Track user activity patterns
+ * - Respond to critical alerts
+ * - Navigate to detailed admin functions
+ *
+ * @page
+ * @route /admin - Platform administration dashboard
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Administrative dashboard with real-time platform metrics
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin" element={<AdminDashboard />} />
+ *
+ * @see Users for user management
+ * @see Nodes for detailed cluster node monitoring
+ * @see Plugins for plugin administration
+ * @see Scaling for load balancing and auto-scaling
+ */
 interface ClusterMetrics {
   nodes: {
     total: number;

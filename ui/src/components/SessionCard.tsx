@@ -34,6 +34,55 @@ interface SessionCardProps {
   isUpdating?: boolean;
 }
 
+/**
+ * SessionCard - Display card for a containerized session
+ *
+ * Presents session information with state management controls, resource usage,
+ * activity indicators, and collaboration features. Supports session lifecycle
+ * actions (connect, pause, delete) and sharing capabilities. Includes real-time
+ * activity monitoring with idle timer and connection count.
+ *
+ * Features:
+ * - Session state and phase indicators with color coding
+ * - Activity indicator (active/idle/hibernated)
+ * - Idle timer with auto-hibernation countdown
+ * - Resource usage display (CPU/memory)
+ * - Active connections counter
+ * - Session URL display
+ * - Tag management
+ * - Sharing and invitation links
+ * - Connect, pause/resume, and delete actions
+ * - Memoized for performance optimization
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {Session} props.session - Session data to display
+ * @param {Function} props.onConnect - Callback to connect to session
+ * @param {Function} props.onStateChange - Callback to change session state (run/hibernate)
+ * @param {Function} props.onDelete - Callback to delete session
+ * @param {Function} props.onManageTags - Callback to open tag management dialog
+ * @param {Function} props.onShare - Callback to open share dialog
+ * @param {Function} props.onInvitation - Callback to open invitation dialog
+ * @param {boolean} [props.isUpdating=false] - Whether session is currently updating
+ *
+ * @returns {JSX.Element} Rendered session card
+ *
+ * @example
+ * <SessionCard
+ *   session={sessionData}
+ *   onConnect={handleConnect}
+ *   onStateChange={handleStateChange}
+ *   onDelete={handleDelete}
+ *   onManageTags={handleManageTags}
+ *   onShare={handleShare}
+ *   onInvitation={handleInvitation}
+ * />
+ *
+ * @see IdleTimer for idle time display
+ * @see ActivityIndicator for activity status
+ * @see TagChip for tag display
+ */
 function SessionCard({
   session,
   onConnect,

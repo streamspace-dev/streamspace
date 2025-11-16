@@ -35,6 +35,43 @@ import {
   useSyncAllRepositories,
 } from '../hooks/useApi';
 
+/**
+ * Repositories - Template repository management page
+ *
+ * Provides interface for managing external Git repositories containing application templates.
+ * Users can add, sync, and remove template repositories to populate the catalog with
+ * available applications. Repositories are synchronized to pull the latest templates,
+ * which become available in the template catalog for session creation.
+ *
+ * Features:
+ * - Add new Git repositories with authentication options
+ * - Manual and automatic repository synchronization
+ * - View sync status and template counts
+ * - Delete repositories and their templates
+ * - Bulk sync all repositories
+ * - Real-time sync status updates
+ *
+ * User workflows:
+ * - Add custom template repositories (GitHub, GitLab, etc.)
+ * - Sync repositories to update template catalog
+ * - Monitor sync progress and status
+ * - Remove outdated or unused repositories
+ *
+ * @page
+ * @route /repositories - Template repository management
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Repository management interface with sync controls
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/repositories" element={<Repositories />} />
+ *
+ * @see EnhancedRepositories for advanced repository management with WebSocket updates
+ * @see TemplateCatalog for browsing templates from repositories
+ */
 export default function Repositories() {
   const { data: repositories = [], isLoading, refetch } = useRepositories();
   const addRepository = useAddRepository();

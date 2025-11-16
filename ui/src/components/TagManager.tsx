@@ -21,6 +21,42 @@ interface TagManagerProps {
   onSave: (tags: string[]) => Promise<void>;
 }
 
+/**
+ * TagManager - Dialog for managing session tags
+ *
+ * Allows users to add and remove tags for organizing sessions. Tags must follow
+ * a specific format (lowercase letters, numbers, and hyphens only). Provides
+ * validation, duplicate prevention, and keyboard shortcuts for quick tag entry.
+ *
+ * Features:
+ * - Add tags with validation (lowercase, alphanumeric, hyphens)
+ * - Remove tags with delete button
+ * - Duplicate tag prevention
+ * - Enter key to add tags quickly
+ * - Tag format validation feedback
+ * - Display current tags with TagChip component
+ * - Save changes to backend
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the dialog is open
+ * @param {Session} props.session - Session to manage tags for
+ * @param {Function} props.onClose - Callback when dialog is closed
+ * @param {Function} props.onSave - Async callback to save tags (returns Promise)
+ *
+ * @returns {JSX.Element} Rendered tag manager dialog
+ *
+ * @example
+ * <TagManager
+ *   open={isOpen}
+ *   session={sessionData}
+ *   onClose={() => setIsOpen(false)}
+ *   onSave={async (tags) => await api.updateSessionTags(session.id, tags)}
+ * />
+ *
+ * @see TagChip for tag display component
+ */
 export default function TagManager({ open, session, onClose, onSave }: TagManagerProps) {
   const [tags, setTags] = useState<string[]>(session.tags || []);
   const [newTag, setNewTag] = useState('');

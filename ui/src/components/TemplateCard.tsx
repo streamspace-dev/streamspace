@@ -26,6 +26,46 @@ interface TemplateCardProps {
   mode?: 'catalog' | 'installed';
 }
 
+/**
+ * TemplateCard - Display card for an application template
+ *
+ * Presents application template information in a card format with icon, rating,
+ * description, tags, and action buttons. Supports both catalog mode (install) and
+ * installed mode (create session). Shows template statistics including install
+ * count and view count. Features hover effects and memoization for performance.
+ *
+ * Features:
+ * - Template icon and display name
+ * - Featured template indicator (star badge)
+ * - Star rating with review count
+ * - Truncated description with ellipsis
+ * - Category and app type chips
+ * - Tag display (first 3 + count)
+ * - Install and view count statistics
+ * - Install/Create Session and View Details actions
+ * - Memoized to prevent unnecessary re-renders
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {CatalogTemplate} props.template - Template data to display
+ * @param {Function} [props.onInstall] - Callback when install/create button clicked
+ * @param {Function} [props.onViewDetails] - Callback when info button clicked
+ * @param {'catalog' | 'installed'} [props.mode='catalog'] - Display mode
+ *
+ * @returns {JSX.Element} Rendered template card
+ *
+ * @example
+ * <TemplateCard
+ *   template={templateData}
+ *   mode="catalog"
+ *   onInstall={handleInstall}
+ *   onViewDetails={handleViewDetails}
+ * />
+ *
+ * @see RatingStars for rating display
+ * @see TemplateDetailModal for detailed view
+ */
 function TemplateCard({
   template,
   onInstall,

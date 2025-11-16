@@ -27,6 +27,57 @@ import { api, type CatalogPlugin, type PluginFilters } from '../lib/api';
 import { toast } from '../lib/toast';
 import { useNavigate } from 'react-router-dom';
 
+/**
+ * PluginCatalog - Marketplace catalog for discovering and installing plugins
+ *
+ * Comprehensive plugin discovery interface providing:
+ * - Search across plugin names, descriptions, and authors
+ * - Multi-level filtering (category, type, tags)
+ * - Sorting options (popular, rating, recent, downloads)
+ * - Paginated results with configurable page size
+ * - Plugin detail modal with full metadata
+ * - One-click installation with version selection
+ * - Plugin ratings and download statistics
+ * - Featured plugin highlighting
+ *
+ * Features:
+ * - Text search with real-time filtering
+ * - Category filtering (e.g., "Authentication", "Analytics", "UI Enhancement")
+ * - Plugin type filtering (extension, webhook, API, UI, theme)
+ * - Tag-based filtering for granular discovery
+ * - Active filter chips with individual removal
+ * - Sort by popularity, rating, recency, or download count
+ * - Plugin cards with ratings, download counts, and screenshots
+ * - Detailed plugin modal with description, permissions, and changelog
+ * - Install with automatic dependency resolution
+ * - Navigate to installed plugins after installation
+ * - Empty state with helpful guidance
+ *
+ * User workflows:
+ * - Search plugins by name or functionality
+ * - Filter by category and type
+ * - View plugin details before installing
+ * - Install plugin and configure settings
+ * - Navigate to "Installed Plugins" to manage
+ * - Clear filters to browse all available plugins
+ *
+ * @page
+ * @route /plugins/catalog - Plugin marketplace catalog
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Plugin catalog page with search and filters
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/plugins/catalog" element={<PluginCatalog />} />
+ * <Route path="/plugins/marketplace" element={<PluginCatalog />} />
+ *
+ * @see InstalledPlugins for managing installed plugins
+ * @see PluginCard for plugin card display component
+ * @see PluginDetailModal for plugin details modal
+ */
 export default function PluginCatalog() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);

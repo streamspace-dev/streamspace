@@ -48,6 +48,52 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * Sessions - Session management page for viewing and controlling user sessions
+ *
+ * Comprehensive session management interface providing:
+ * - Grid view of all user sessions with detailed status
+ * - Session state control (start, pause/hibernate, terminate/delete)
+ * - Real-time session updates via WebSocket
+ * - Tag management for organizing sessions
+ * - Session sharing with other users or via invitation links
+ * - Resource usage and activity monitoring
+ * - Idle timeout tracking with visual progress indicators
+ * - Tag-based filtering of sessions
+ * - Quota alerts for resource limits
+ *
+ * Session actions available:
+ * - Connect to running sessions (opens SessionViewer)
+ * - Hibernate sessions to save resources
+ * - Wake hibernated sessions
+ * - Delete/terminate sessions
+ * - Share sessions with specific users (direct sharing)
+ * - Create invitation links for session access
+ * - Manage session tags for organization
+ *
+ * Real-time features:
+ * - Session state change notifications
+ * - Activity indicators (active/idle status)
+ * - Resource usage updates
+ * - Active connection counts
+ * - Idle time countdown with auto-hibernate warnings
+ *
+ * @page
+ * @route /sessions - User sessions management page
+ * @access user - Shows only current user's sessions
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Sessions management page with session cards and controls
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/sessions" element={<Sessions />} />
+ *
+ * @see SessionViewer for connecting to running sessions
+ * @see Catalog for creating new sessions from templates
+ * @see SharedSessions for viewing sessions shared by others
+ */
 export default function Sessions() {
   const navigate = useNavigate();
   const username = useUserStore((state) => state.user?.username);

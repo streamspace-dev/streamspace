@@ -1,3 +1,75 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file implements team-based role-based access control (RBAC).
+//
+// Purpose:
+// The team RBAC middleware provides fine-grained access control for multi-tenant
+// StreamSpace deployments where users belong to teams/groups and have different
+// permission levels within each team. This enables enterprise features like
+// shared sessions, team resource quotas, and delegated administration.
+//
+// Implementation Details:
+// - Database-backed permissions: Roles and permissions stored in PostgreSQL
+// - Per-team roles: Users can have different roles in different teams
+// - Permission-based checks: Middleware validates specific permissions (not just roles)
+// - Session-level access: Can check if user can access sessions owned by team
+// - Hierarchical model: Teams → Users → Roles → Permissions
+//
+// Permission Model:
+//
+// 1. Teams (groups table):
+//    - Organizations or departments
+//    - Example: "Engineering", "Sales", "Data Science"
+//
+// 2. Team Memberships (group_memberships table):
+//    - Links users to teams with specific roles
+//    - Example: alice@example.com is "admin" in Engineering team
+//
+// 3. Roles (team_role_permissions table):
+//    - Named permission sets
+//    - Example: "admin", "member", "viewer"
+//
+// 4. Permissions:
+//    - Fine-grained capabilities
+//    - Example: "sessions.create", "sessions.delete", "team.manage"
+//
+// Common Permissions:
+// - sessions.view: View team sessions
+// - sessions.create: Create sessions for team
+// - sessions.delete: Delete team sessions
+// - sessions.share: Share sessions with team members
+// - team.manage: Add/remove team members
+// - team.billing: View/manage team billing
+//
+// Security Notes:
+// This middleware enforces the principle of least privilege:
+// - Users only have access to their own sessions OR team sessions where they have permission
+// - Team admins can manage team resources but not other teams
+// - Platform admins have global permissions across all teams
+//
+// Thread Safety:
+// Safe for concurrent use. Database queries are isolated per request.
+//
+// Usage:
+//   // Create team RBAC middleware
+//   teamRBAC := middleware.NewTeamRBAC(database)
+//
+//   // Require specific team permission
+//   router.POST("/api/teams/:teamId/sessions",
+//       teamRBAC.RequireTeamPermission("sessions.create"),
+//       handlers.CreateTeamSession,
+//   )
+//
+//   // Require session access (owner OR team member with permission)
+//   router.GET("/api/sessions/:id",
+//       teamRBAC.RequireSessionAccess("sessions.view"),
+//       handlers.GetSession,
+//   )
+//
+//   // Check permissions manually in handler
+//   hasPermission, err := teamRBAC.CheckTeamPermission(ctx, userID, teamID, "sessions.delete")
+//   if !hasPermission {
+//       return c.JSON(403, gin.H{"error": "Insufficient permissions"})
+//   }
 package middleware
 
 import (

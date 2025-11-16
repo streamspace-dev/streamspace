@@ -14,6 +14,40 @@ interface State {
   errorInfo: ErrorInfo | null;
 }
 
+/**
+ * ErrorBoundary - React error boundary for graceful error handling
+ *
+ * Catches JavaScript errors anywhere in the child component tree, logs those errors,
+ * and displays a fallback UI instead of crashing the entire application. Provides
+ * user-friendly error messages and recovery options.
+ *
+ * Features:
+ * - Catches and displays React component errors
+ * - Custom fallback UI with recovery options
+ * - Error details in development mode
+ * - Optional error callback for logging
+ * - Reload page, retry, or go home actions
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components to wrap with error boundary
+ * @param {ReactNode} [props.fallback] - Custom fallback UI to display on error
+ * @param {Function} [props.onError] - Callback function called when error is caught
+ *
+ * @returns {JSX.Element} Children or error fallback UI
+ *
+ * @example
+ * <ErrorBoundary onError={(error, errorInfo) => logToService(error)}>
+ *   <App />
+ * </ErrorBoundary>
+ *
+ * @example
+ * // With custom fallback
+ * <ErrorBoundary fallback={<CustomErrorPage />}>
+ *   <RiskyComponent />
+ * </ErrorBoundary>
+ */
 class ErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);

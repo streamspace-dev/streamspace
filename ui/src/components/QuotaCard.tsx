@@ -27,6 +27,32 @@ interface QuotaMetric {
   color: 'primary' | 'secondary' | 'success' | 'warning' | 'error';
 }
 
+/**
+ * QuotaCard - Display user's resource quota usage in a card
+ *
+ * Shows current resource usage against allocated quotas for sessions, CPU,
+ * memory, and storage. Displays progress bars with color coding based on
+ * usage percentage. Automatically fetches current user's quota on mount.
+ *
+ * Features:
+ * - Real-time resource usage display
+ * - Progress bars with color coding (green/yellow/red)
+ * - Sessions, CPU, memory, and storage metrics
+ * - Warning indicator when approaching limits (75%+)
+ * - Automatic unit conversion (GiB for memory/storage, cores for CPU)
+ * - Loading skeleton state
+ * - Error handling with user-friendly messages
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Rendered quota card
+ *
+ * @example
+ * <QuotaCard />
+ *
+ * @see api.getCurrentUserQuota for quota data fetching
+ * @see QuotaAlert for alert-style quota warnings
+ */
 export default function QuotaCard() {
   const [quota, setQuota] = useState<UserQuota | null>(null);
   const [loading, setLoading] = useState(true);

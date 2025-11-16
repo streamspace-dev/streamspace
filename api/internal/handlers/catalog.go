@@ -1,3 +1,55 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements template catalog browsing, ratings, and statistics.
+//
+// CATALOG FEATURES:
+// - Template discovery with advanced search and filtering
+// - Featured, trending, and popular template lists
+// - User ratings and reviews system
+// - View and install tracking for analytics
+//
+// SEARCH AND FILTERING:
+// - Full-text search across template names and descriptions
+// - Filter by category, tags, app type
+// - Sort by popularity, rating, recency, or install count
+// - Pagination support with customizable page size
+//
+// RATINGS AND REVIEWS:
+// - Add, update, and delete template ratings
+// - Star ratings (1-5 scale)
+// - User comments and reviews
+// - Average rating calculation
+// - Rating count tracking
+//
+// STATISTICS:
+// - View count tracking (catalog impressions)
+// - Install count tracking (template usage)
+// - Trending calculation based on recent activity
+// - Popular templates based on install count
+//
+// API Endpoints:
+// - GET    /api/v1/catalog/templates - List templates with filters and search
+// - GET    /api/v1/catalog/templates/:id - Get template details
+// - GET    /api/v1/catalog/templates/featured - List featured templates
+// - GET    /api/v1/catalog/templates/trending - List trending templates
+// - GET    /api/v1/catalog/templates/popular - List popular templates
+// - POST   /api/v1/catalog/templates/:id/ratings - Add rating/review
+// - GET    /api/v1/catalog/templates/:id/ratings - Get template ratings
+// - PUT    /api/v1/catalog/templates/:id/ratings/:ratingId - Update rating
+// - DELETE /api/v1/catalog/templates/:id/ratings/:ratingId - Delete rating
+// - POST   /api/v1/catalog/templates/:id/view - Record template view
+// - POST   /api/v1/catalog/templates/:id/install - Record template install
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: catalog_templates, repositories, template_ratings tables
+// - External Services: Repository sync for template metadata
+//
+// Example Usage:
+//
+//	handler := NewCatalogHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

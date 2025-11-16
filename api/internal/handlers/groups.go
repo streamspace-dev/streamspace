@@ -1,3 +1,52 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements group management and group-level resource operations.
+//
+// GROUP MANAGEMENT:
+// - Group CRUD operations (list, create, read, update, delete)
+// - Group filtering by type or parent group (supports hierarchical groups)
+// - Group member management (add, remove, update roles)
+// - Member enrichment with user information
+//
+// GROUP MEMBERSHIP:
+// - Add users to groups with specific roles
+// - Remove users from groups
+// - Update member roles within groups
+// - List all members with enriched user details
+// - User existence validation before adding to groups
+//
+// GROUP QUOTAS:
+// - Shared resource quotas for group members
+// - Group-level limits for sessions, CPU, memory, storage
+// - Quota retrieval and modification
+//
+// API Endpoints:
+// - GET    /api/v1/groups - List all groups with optional filters
+// - POST   /api/v1/groups - Create new group
+// - GET    /api/v1/groups/:id - Get group by ID
+// - PATCH  /api/v1/groups/:id - Update group information
+// - DELETE /api/v1/groups/:id - Delete group
+// - GET    /api/v1/groups/:id/members - List group members
+// - POST   /api/v1/groups/:id/members - Add user to group
+// - DELETE /api/v1/groups/:id/members/:userId - Remove user from group
+// - PATCH  /api/v1/groups/:id/members/:userId - Update member role
+// - GET    /api/v1/groups/:id/quota - Get group quota
+// - PUT    /api/v1/groups/:id/quota - Set group quota
+//
+// Security:
+// - Password hashes removed from user objects in member lists
+// - User existence validated before membership operations
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: groups, group_members, group_quotas, users tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewGroupHandler(groupDB, userDB)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

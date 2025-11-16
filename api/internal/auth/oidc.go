@@ -1,3 +1,186 @@
+// Package auth provides authentication and authorization mechanisms for StreamSpace.
+// This file implements OpenID Connect (OIDC) authentication for integration with
+// modern identity providers supporting OAuth 2.0 and OIDC standards.
+//
+// OIDC AUTHENTICATION OVERVIEW:
+//
+// OpenID Connect is an identity layer built on top of OAuth 2.0 that provides:
+// - User authentication (not just authorization like OAuth 2.0)
+// - Standard claims for user identity (sub, email, name, etc.)
+// - ID tokens (JWT) containing user information
+// - UserInfo endpoint for additional user details
+// - Discovery mechanism for automatic configuration
+//
+// SUPPORTED IDENTITY PROVIDERS:
+//
+// - Keycloak (open source identity provider)
+// - Okta (enterprise SSO platform)
+// - Auth0 (identity as a service)
+// - Google Workspace (Google accounts)
+// - Azure AD / Microsoft Entra ID
+// - GitHub (limited OIDC support)
+// - GitLab (self-hosted or cloud)
+// - Generic OIDC providers
+//
+// OIDC AUTHENTICATION FLOW (Authorization Code Flow):
+//
+// 1. User Initiates Login:
+//    - User clicks "Login with [Provider]"
+//    - App redirects to /auth/oidc/login
+//
+// 2. Authorization Request:
+//    - App generates state parameter (CSRF protection)
+//    - App redirects user to IdP's authorization endpoint
+//    - URL includes: client_id, redirect_uri, scope, state
+//    - Example: https://accounts.google.com/o/oauth2/v2/auth?client_id=...
+//
+// 3. User Authentication:
+//    - User authenticates at IdP (username/password, MFA, etc.)
+//    - IdP shows consent screen (if first time)
+//    - User approves requested scopes (openid, profile, email)
+//
+// 4. Authorization Code:
+//    - IdP redirects back to app with authorization code
+//    - URL: https://streamspace.example.com/auth/oidc/callback?code=abc123&state=xyz
+//    - App validates state matches (CSRF protection)
+//
+// 5. Token Exchange:
+//    - App exchanges authorization code for tokens
+//    - POST to IdP's token endpoint with code and client_secret
+//    - IdP returns: access_token, id_token, refresh_token (optional)
+//
+// 6. ID Token Validation:
+//    - App validates ID token signature using IdP's public key
+//    - App verifies claims: issuer, audience, expiration
+//    - App extracts user info from ID token claims
+//
+// 7. UserInfo Request (Optional):
+//    - App calls IdP's UserInfo endpoint with access token
+//    - Retrieves additional user attributes not in ID token
+//    - Merges with ID token claims
+//
+// 8. User Provisioning:
+//    - App creates or updates user in local database
+//    - Syncs user attributes from OIDC claims
+//    - Syncs group memberships if provided
+//
+// 9. Session Creation:
+//    - App generates JWT token for StreamSpace API
+//    - User is authenticated and can access protected resources
+//
+// SECURITY FEATURES:
+//
+// - State parameter validation (CSRF protection)
+// - ID token signature validation (prevents tampering)
+// - Nonce validation (prevents replay attacks)
+// - Token expiration checking
+// - TLS certificate validation for IdP connections
+// - Client secret protection (never exposed to browser)
+//
+// CONFIGURATION EXAMPLE:
+//
+//   config := &OIDCConfig{
+//       Enabled:      true,
+//       ProviderURL:  "https://accounts.google.com",  // Discovery URL
+//       ClientID:     "123456.apps.googleusercontent.com",
+//       ClientSecret: "your-client-secret",
+//       RedirectURI:  "https://streamspace.example.com/auth/oidc/callback",
+//       Scopes:       []string{"openid", "profile", "email", "groups"},
+//       UsernameClaim: "preferred_username",
+//       EmailClaim:    "email",
+//       GroupsClaim:   "groups",
+//   }
+//
+// SECURITY BEST PRACTICES:
+//
+// 1. Discovery URL:
+//    - Use HTTPS for provider URL
+//    - Validate TLS certificates (don't skip verification in production)
+//    - Provider URL should end at issuer root (not /...well-known/...)
+//
+// 2. Client Secret:
+//    - Never commit to version control
+//    - Load from environment variables or secret manager
+//    - Rotate periodically
+//    - Use separate secrets for dev/staging/production
+//
+// 3. Redirect URI:
+//    - Must exactly match URI registered with IdP
+//    - Use HTTPS in production (HTTP only for localhost dev)
+//    - Validate redirect URI to prevent open redirect attacks
+//
+// 4. State Parameter:
+//    - Generate cryptographically random state for each request
+//    - Store in cookie or session for validation
+//    - Prevents CSRF attacks
+//
+// 5. Token Validation:
+//    - Always validate ID token signature
+//    - Check expiration (exp claim)
+//    - Verify audience matches client_id (aud claim)
+//    - Verify issuer matches provider (iss claim)
+//
+// COMMON OIDC VULNERABILITIES TO AVOID:
+//
+// 1. Missing State Validation:
+//    - Attack: Attacker initiates flow, tricks victim to complete
+//    - Prevention: Always validate state parameter matches
+//
+// 2. ID Token Signature Not Verified:
+//    - Attack: Attacker creates fake ID token with elevated privileges
+//    - Prevention: Always verify signature using IdP's public key
+//
+// 3. Open Redirect:
+//    - Attack: Attacker uses redirect_uri to redirect to malicious site
+//    - Prevention: Whitelist allowed redirect URIs
+//
+// 4. Client Secret Exposure:
+//    - Attack: Secret leaked in client-side code or logs
+//    - Prevention: Never include secret in frontend, use environment variables
+//
+// ATTRIBUTE MAPPING:
+//
+// Different IdPs use different claim names for user attributes. The
+// OIDCConfig allows mapping IdP-specific claims to StreamSpace fields:
+//
+// Keycloak:
+//   UsernameClaim: "preferred_username"
+//   EmailClaim:    "email"
+//   GroupsClaim:   "groups"
+//
+// Google:
+//   UsernameClaim: "email"
+//   EmailClaim:    "email"
+//   GroupsClaim:   "groups" (Google Workspace only)
+//
+// Azure AD:
+//   UsernameClaim: "preferred_username"
+//   EmailClaim:    "email"
+//   GroupsClaim:   "groups"
+//
+// EXAMPLE USAGE:
+//
+//   // Initialize OIDC authenticator
+//   oidcAuth, err := NewOIDCAuthenticator(config)
+//   if err != nil {
+//       log.Fatal(err)
+//   }
+//
+//   // Register routes
+//   router.GET("/auth/oidc/login", oidcAuth.OIDCLoginHandler)
+//   router.GET("/auth/oidc/callback", oidcAuth.OIDCCallbackHandler(userManager))
+//
+//   // User flow:
+//   // 1. Visit /auth/oidc/login
+//   // 2. Redirect to IdP
+//   // 3. Authenticate at IdP
+//   // 4. Redirect to /auth/oidc/callback with code
+//   // 5. Receive JWT token and user info
+//
+// THREAD SAFETY:
+//
+// The OIDCAuthenticator is thread-safe and can handle concurrent authentication
+// requests. Each request maintains its own state and session isolation.
 package auth
 
 import (

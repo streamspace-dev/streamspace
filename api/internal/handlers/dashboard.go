@@ -1,3 +1,48 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements dashboard statistics and resource usage queries.
+//
+// DASHBOARD FEATURES:
+// - Platform-wide statistics (users, sessions, templates, connections)
+// - Resource usage tracking (CPU, memory, storage quotas)
+// - Recent activity metrics (last 24 hours)
+// - Real-time data from Kubernetes and database
+//
+// PLATFORM STATISTICS:
+// - Total and active user counts
+// - Session counts by state (running, hibernated, total)
+// - Template count from Kubernetes CRDs
+// - Active connection count
+// - 24-hour activity metrics
+//
+// RESOURCE USAGE:
+// - Quota utilization per user or platform-wide
+// - CPU usage (millicores)
+// - Memory usage (bytes/GB)
+// - Storage usage (bytes/GB)
+// - Session count against quotas
+//
+// DATA SOURCES:
+// - Database: User, session, connection tables
+// - Kubernetes: Template CRDs, resource quotas
+// - Hybrid queries for comprehensive metrics
+//
+// API Endpoints:
+// - GET /api/v1/dashboard/platform-stats - Overall platform statistics
+// - GET /api/v1/dashboard/resource-usage - Resource usage metrics
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Kubernetes client operations are thread-safe
+//
+// Dependencies:
+// - Database: users, sessions, connections tables
+// - Kubernetes: Template CRDs, namespace resources
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewDashboardHandler(database, k8sClient)
+//	// Routes registered in main API router
 package handlers
 
 import (

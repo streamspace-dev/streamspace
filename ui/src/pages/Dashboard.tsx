@@ -19,6 +19,44 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * Dashboard - User home page displaying session and platform overview
+ *
+ * Provides a comprehensive overview of the user's StreamSpace account including:
+ * - Session statistics (running, hibernated, total sessions)
+ * - Resource quota usage and limits
+ * - Available templates and repositories counts
+ * - Real-time active connections metrics
+ * - Recent sessions quick view (last 5 sessions)
+ * - Real-time WebSocket status indicator
+ *
+ * Features real-time updates via WebSocket for:
+ * - Session state changes (running → hibernated → terminated)
+ * - Active connection counts
+ * - Resource usage metrics
+ * - Session status notifications
+ *
+ * User workflows:
+ * - Quick view of account status at a glance
+ * - Monitor resource usage and quotas
+ * - See recent session activity
+ * - Navigate to other pages from stats cards
+ *
+ * @page
+ * @route / - Main dashboard route (requires authentication)
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Dashboard page with statistics cards and session overview
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/" element={<Dashboard />} />
+ *
+ * @see Sessions for managing active sessions
+ * @see Catalog for browsing available templates
+ */
 export default function Dashboard() {
   const username = useUserStore((state) => state.user?.username);
   const [sessions, setSessions] = useState<Session[]>([]);

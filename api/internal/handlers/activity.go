@@ -1,3 +1,48 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements session activity tracking and heartbeat management.
+//
+// ACTIVITY TRACKING:
+// - Session heartbeat recording to prevent auto-hibernation
+// - Activity status queries (active, idle, hibernation eligibility)
+// - Idle duration calculation
+// - Last activity timestamp tracking
+//
+// HEARTBEAT MECHANISM:
+// - Clients send periodic heartbeats to indicate active usage
+// - Updates session's lastActivity timestamp
+// - Prevents idle timeout and auto-hibernation
+// - Typically sent every 30-60 seconds from active sessions
+//
+// ACTIVITY STATUS:
+// - Is session currently active (recent heartbeat)
+// - Is session idle (exceeded idle threshold)
+// - Time since last activity
+// - Should session be hibernated (idle + threshold exceeded)
+// - Configurable idle thresholds per session
+//
+// USE CASES:
+// - Auto-hibernation prevention for active sessions
+// - Resource optimization by hibernating idle sessions
+// - User activity analytics
+// - Session health monitoring
+//
+// API Endpoints:
+// - POST /api/v1/sessions/:id/heartbeat - Record session heartbeat
+// - GET  /api/v1/sessions/:id/activity - Get session activity status
+//
+// Thread Safety:
+// - Activity tracker is thread-safe with mutex protection
+// - Kubernetes client operations are thread-safe
+//
+// Dependencies:
+// - Kubernetes: Session CRDs with status updates
+// - Activity Tracker: In-memory tracking with persistence
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewActivityHandler(k8sClient, activityTracker)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

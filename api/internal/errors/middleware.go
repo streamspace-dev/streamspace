@@ -1,3 +1,61 @@
+// Package errors provides standardized error handling for StreamSpace API.
+//
+// This file implements error handling middleware for Gin framework.
+//
+// Purpose:
+// - Centralize error handling across all API endpoints
+// - Convert AppError to consistent JSON responses
+// - Log errors with appropriate severity levels
+// - Recover from panics gracefully
+// - Provide helper functions for error responses
+//
+// Features:
+// - Automatic error logging (ERROR for 5xx, WARN for 4xx)
+// - Panic recovery with error response
+// - Consistent error response format
+// - Error severity classification
+// - Request abort on critical errors
+//
+// Middleware Functions:
+//   - ErrorHandler: Handles AppError and generic errors
+//   - Recovery: Recovers from panics
+//   - HandleError: Helper for error responses in handlers
+//   - AbortWithError: Helper to abort request with error
+//
+// Implementation Details:
+// - Integrates with Gin's error handling mechanism (c.Errors)
+// - Logs errors using standard library log (consider upgrading to structured logging)
+// - Preserves error details for debugging
+// - Automatically sets HTTP status codes
+//
+// Thread Safety:
+// - Middleware is thread-safe
+// - Safe for concurrent requests
+//
+// Dependencies:
+// - github.com/gin-gonic/gin for HTTP framework
+//
+// Example Usage:
+//
+//	// Apply error handling middleware
+//	router.Use(errors.Recovery())
+//	router.Use(errors.ErrorHandler())
+//
+//	// In handler: return error and let middleware handle it
+//	func handler(c *gin.Context) {
+//	    session, err := getSession(id)
+//	    if err != nil {
+//	        errors.HandleError(c, errors.SessionNotFound(id))
+//	        return
+//	    }
+//	    c.JSON(200, session)
+//	}
+//
+//	// Or abort immediately
+//	if !authorized {
+//	    errors.AbortWithError(c, errors.Forbidden("Access denied"))
+//	    return
+//	}
 package errors
 
 import (

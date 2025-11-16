@@ -1,3 +1,61 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements API key management for programmatic API access.
+//
+// API KEY FEATURES:
+// - Secure API key generation with cryptographic randomness
+// - API key CRUD operations (create, list, revoke, delete)
+// - Key metadata (name, description, scopes, rate limits)
+// - Expiration support with configurable durations
+// - Usage tracking (last used timestamp, use count)
+// - Active/inactive state management
+//
+// SECURITY:
+// - Keys hashed with SHA-256 before storage (never stored in plaintext)
+// - Prefix-based identification (first 8 characters for UI display)
+// - Keys prefixed with "sk_" for easy identification
+// - 32 bytes of cryptographic randomness (256 bits)
+// - Keys only shown once during creation (cannot be retrieved later)
+//
+// API KEY STRUCTURE:
+// - Format: sk_{base64_encoded_random_bytes}
+// - Storage: SHA-256 hash in database
+// - Display: First 8 characters (sk_xxxxx...)
+//
+// SCOPE MANAGEMENT:
+// - Configurable scopes limit API key permissions
+// - Examples: sessions:read, sessions:write, admin:all
+// - Scope validation during API requests
+//
+// RATE LIMITING:
+// - Per-key rate limits independent of user limits
+// - Configurable requests per time window
+// - Tracked via use_count and last_used_at
+//
+// EXPIRATION:
+// - Optional expiration with duration strings (30d, 1y, etc.)
+// - Automatic enforcement during authentication
+// - Expired keys cannot authenticate
+//
+// API Endpoints:
+// - POST   /api/v1/apikeys - Create new API key
+// - GET    /api/v1/apikeys - List user's API keys
+// - GET    /api/v1/apikeys/:id - Get API key details
+// - PUT    /api/v1/apikeys/:id - Update API key metadata
+// - DELETE /api/v1/apikeys/:id - Delete/revoke API key
+// - POST   /api/v1/apikeys/:id/rotate - Rotate API key (generate new)
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Cryptographic random generation is thread-safe
+//
+// Dependencies:
+// - Database: api_keys table
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewAPIKeyHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

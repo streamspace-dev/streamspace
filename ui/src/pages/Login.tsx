@@ -19,6 +19,48 @@ import { api } from '../lib/api';
 const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'jwt';
 const SAML_LOGIN_URL = import.meta.env.VITE_SAML_LOGIN_URL || '/saml/login';
 
+/**
+ * Login - User authentication page
+ *
+ * Provides authentication interface supporting multiple authentication modes including
+ * JWT (local), SAML SSO, and hybrid mode. Handles user login, token management, and
+ * redirect to the application after successful authentication.
+ *
+ * Features:
+ * - JWT/Local authentication with username and password
+ * - SAML 2.0 SSO integration
+ * - Hybrid mode supporting both authentication methods
+ * - Demo mode for development (no password required)
+ * - Error handling and validation
+ * - Loading states during authentication
+ * - Automatic token storage and session management
+ *
+ * Authentication modes (configurable via VITE_AUTH_MODE):
+ * - jwt: Local authentication with JWT tokens
+ * - saml: SAML 2.0 SSO redirect
+ * - hybrid: Both JWT and SAML options
+ * - demo: Development mode with simplified auth
+ *
+ * User workflows:
+ * - Enter credentials for local authentication
+ * - Click SSO button for SAML authentication
+ * - Automatic redirect to dashboard on success
+ * - Error messages for failed authentication
+ *
+ * @page
+ * @route /login - User authentication
+ * @access public - Available to unauthenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Login form with authentication options
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/login" element={<Login />} />
+ *
+ * @see Dashboard for post-login destination
+ */
 export default function Login() {
   const [username, setUsername] = useState('');
   const [password, setPassword] = useState('');

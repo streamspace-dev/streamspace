@@ -28,6 +28,9 @@ import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 import { useQueryClient } from '@tanstack/react-query';
 
+/**
+ * CatalogContent - Internal component for Catalog page logic
+ */
 function CatalogContent() {
   const username = useUserStore((state) => state.user?.username);
   const [tabValue, setTabValue] = useState(0);
@@ -220,6 +223,47 @@ function CatalogContent() {
   );
 }
 
+/**
+ * Catalog - Basic template catalog for browsing and creating sessions
+ *
+ * Provides a simple two-tab interface for viewing templates:
+ * - Installed Templates tab: Templates installed locally in the cluster
+ * - Marketplace tab: Templates available from external repositories
+ *
+ * Features:
+ * - Tab-based navigation between installed and marketplace templates
+ * - Template cards showing name, description, category, and tags
+ * - Quick session creation from installed templates
+ * - Install action for marketplace templates (stub)
+ * - Real-time template updates via WebSocket
+ * - Template event notifications (added, updated, deleted)
+ * - WebSocket connection status indicator
+ *
+ * User workflows:
+ * - Browse available templates by category and tags
+ * - Create new sessions from installed templates with default settings
+ * - View template metadata (display name, description, app type)
+ * - Monitor template catalog updates in real-time
+ *
+ * Note: This is the basic catalog. For advanced features like search,
+ * filtering, sorting, and detailed views, see EnhancedCatalog.
+ *
+ * @page
+ * @route /catalog - Basic template catalog (alternative to /enhanced-catalog)
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Template catalog page with tabs and template cards
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/catalog" element={<Catalog />} />
+ *
+ * @see EnhancedCatalog for advanced catalog features (search, filters, sorting)
+ * @see Sessions for managing created sessions
+ * @see Repositories for managing template sources
+ */
 export default function Catalog() {
   return (
     <WebSocketErrorBoundary>

@@ -73,6 +73,44 @@ interface PluginDetailModalProps {
   onInstall?: (plugin: CatalogPlugin) => void;
 }
 
+/**
+ * PluginDetailModal - Detailed plugin information modal with tabs
+ *
+ * Displays comprehensive plugin information in a modal dialog with tabbed interface.
+ * Shows plugin details including permissions, dependencies, entry points, and user
+ * reviews. Allows users to rate and review plugins, and install them directly.
+ *
+ * Features:
+ * - Tabbed interface for Details and Reviews
+ * - Permission display with risk levels and tooltips
+ * - Dependency listing
+ * - Entry point indicators
+ * - User rating and review submission
+ * - Review history with user avatars
+ * - Install action button
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the modal is open
+ * @param {CatalogPlugin | null} props.plugin - Plugin data to display
+ * @param {Function} props.onClose - Callback when modal is closed
+ * @param {Function} [props.onInstall] - Callback when install button is clicked
+ *
+ * @returns {JSX.Element | null} Rendered modal or null if no plugin
+ *
+ * @example
+ * <PluginDetailModal
+ *   open={isOpen}
+ *   plugin={selectedPlugin}
+ *   onClose={() => setIsOpen(false)}
+ *   onInstall={handleInstall}
+ * />
+ *
+ * @see RatingStars for rating display
+ * @see api.getPluginRatings for loading reviews
+ * @see api.ratePlugin for submitting ratings
+ */
 const pluginTypeIcons: Record<string, JSX.Element> = {
   extension: <ExtensionIcon />,
   webhook: <WebhookIcon />,

@@ -1,3 +1,103 @@
+// Package auth provides authentication and authorization mechanisms for StreamSpace.
+// This file implements HTTP handlers for authentication endpoints including local,
+// SAML, and password management operations.
+//
+// AUTHENTICATION HANDLERS:
+// - Local authentication (username/password)
+// - SAML SSO authentication (enterprise identity providers)
+// - Token refresh (JWT token renewal)
+// - Password change (local users only)
+// - Logout (session termination)
+//
+// SUPPORTED AUTHENTICATION FLOWS:
+//
+// 1. Local Authentication (POST /auth/login):
+//    - User submits username and password
+//    - System verifies credentials against database
+//    - Returns JWT token for subsequent requests
+//    - Supports account status validation (active/disabled)
+//
+// 2. SAML SSO Authentication (GET /auth/saml/login):
+//    - User initiates SSO flow
+//    - Redirects to enterprise IdP (Okta, Azure AD, etc.)
+//    - IdP sends SAML assertion after authentication
+//    - System validates assertion and creates local session
+//    - Returns JWT token for API access
+//
+// 3. Token Refresh (POST /auth/refresh):
+//    - Client submits existing JWT token
+//    - System validates token is within refresh window
+//    - Issues new token with extended expiration
+//    - Prevents indefinite token refresh (7-day window)
+//
+// 4. Password Change (POST /auth/password):
+//    - Local users can change their password
+//    - Requires current password verification
+//    - Not available for SSO users (SAML/OIDC)
+//
+// SECURITY FEATURES:
+//
+// - Password verification with bcrypt hashing
+// - Account status validation (prevent disabled accounts from logging in)
+// - JWT token generation with configurable expiration
+// - SAML group synchronization for role-based access control
+// - Secure cookie handling for SAML return URLs
+// - Auto-provisioning of SSO users on first login
+//
+// SAML GROUP SYNCHRONIZATION:
+//
+// When users authenticate via SAML, their group memberships are automatically
+// synchronized with StreamSpace groups:
+// - SAML assertion contains groups claim from IdP
+// - System matches SAML group names to local groups
+// - Adds user to matching groups (does not remove from other groups by default)
+// - Enables role-based access control based on IdP group membership
+//
+// SECURITY CONSIDERATIONS:
+//
+// 1. Password Security:
+//    - Passwords hashed with bcrypt (cost factor 10+)
+//    - Never return password hashes in API responses
+//    - Minimum password length enforced (8 characters)
+//
+// 2. Account Lockout:
+//    - Disabled accounts cannot authenticate
+//    - Returns 403 Forbidden for disabled accounts
+//    - Prevents unauthorized access to suspended accounts
+//
+// 3. Token Security:
+//    - JWT tokens include user ID, role, and groups
+//    - Tokens expire after configured duration (default: 24 hours)
+//    - Refresh tokens only valid within 7-day window
+//    - See jwt.go for detailed token security
+//
+// 4. SAML Security:
+//    - Assertion signatures validated by middleware
+//    - Return URLs stored in secure cookies
+//    - SAML groups synced on every login
+//    - See saml.go for detailed SAML security
+//
+// EXAMPLE USAGE:
+//
+//   // Initialize handler with dependencies
+//   handler := NewAuthHandler(userDB, jwtManager, samlAuth)
+//
+//   // Register routes
+//   router := gin.Default()
+//   handler.RegisterRoutes(router.Group("/api/v1"))
+//
+//   // Routes will be available at:
+//   // - POST /api/v1/auth/login (local authentication)
+//   // - POST /api/v1/auth/refresh (token refresh)
+//   // - POST /api/v1/auth/logout (logout)
+//   // - GET  /api/v1/auth/saml/login (initiate SAML SSO)
+//   // - POST /api/v1/auth/saml/acs (SAML callback)
+//   // - GET  /api/v1/auth/saml/metadata (SAML SP metadata)
+//
+// THREAD SAFETY:
+//
+// All handler methods are thread-safe and can handle concurrent requests.
+// Database operations use connection pooling for safe concurrent access.
 package auth
 
 import (

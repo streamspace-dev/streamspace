@@ -46,6 +46,67 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * InstalledPlugins - Management page for installed StreamSpace plugins
+ *
+ * Comprehensive plugin management interface providing:
+ * - Grid view of all installed plugins with status
+ * - Enable/disable toggle for each plugin
+ * - Configuration management for plugin settings
+ * - Uninstallation with confirmation dialogs
+ * - Real-time plugin status updates via WebSocket
+ * - Tab-based filtering (All, Enabled, Disabled)
+ * - Search functionality for finding plugins
+ * - Plugin type icons and categorization
+ *
+ * Plugin management features:
+ * - Quick enable/disable toggle switches
+ * - Configure button opens plugin-specific settings form
+ * - View plugin details (version, author, description)
+ * - Uninstall with dependency checking
+ * - Real-time status updates (enabled → disabled)
+ * - Plugin event notifications (installed, updated, uninstalled)
+ * - Empty state with link to plugin catalog
+ *
+ * Plugin types supported:
+ * - Extension: Core platform extensions
+ * - Webhook: External webhook integrations
+ * - API: API integrations and connectors
+ * - UI: User interface components and themes
+ * - Theme: Visual themes for the platform
+ *
+ * User workflows:
+ * - View all installed plugins at a glance
+ * - Enable/disable plugins without uninstalling
+ * - Configure plugin settings via config modal
+ * - Uninstall plugins with confirmation
+ * - Filter by status (enabled/disabled)
+ * - Search plugins by name
+ * - Navigate to catalog to install more plugins
+ *
+ * Real-time features:
+ * - Plugin state change notifications
+ * - Installation/uninstallation events
+ * - Configuration update events
+ * - WebSocket connection status indicator
+ *
+ * @page
+ * @route /plugins - Installed plugins management page
+ * @access user - Shows only user-accessible plugins
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Installed plugins page with management controls
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/plugins" element={<InstalledPlugins />} />
+ * <Route path="/plugins/installed" element={<InstalledPlugins />} />
+ *
+ * @see PluginCatalog for installing new plugins
+ * @see PluginConfigForm for plugin configuration interface
+ */
+
 const pluginTypeIcons: Record<string, JSX.Element> = {
   extension: <ExtensionIcon fontSize="small" />,
   webhook: <WebhookIcon fontSize="small" />,

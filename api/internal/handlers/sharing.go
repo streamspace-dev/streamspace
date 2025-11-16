@@ -1,3 +1,75 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements session sharing and collaboration features.
+//
+// SESSION SHARING FEATURES:
+// - Direct user-to-user session sharing with permission levels
+// - Shareable invitation links with expiration and usage limits
+// - Share revocation and ownership transfer
+// - Collaborator tracking and activity monitoring
+//
+// PERMISSION LEVELS:
+// - view: Read-only access to view the session
+// - collaborate: Can interact but has limited control
+// - control: Full control equivalent to owner
+//
+// SHARING METHODS:
+//
+// 1. Direct Shares:
+//   - Share with specific users by user ID
+//   - Owner-only operation
+//   - Requires user existence validation
+//   - Supports expiration timestamps
+//   - Generates unique share tokens
+//
+// 2. Invitation Links:
+//   - Generate shareable invitation tokens
+//   - Configurable max uses and expiration
+//   - Anyone with link can accept (until exhausted/expired)
+//   - Tracks usage count
+//
+// OWNERSHIP TRANSFER:
+// - Transfer session ownership to another user
+// - Requires current owner authorization
+// - Validates new owner exists
+//
+// COLLABORATOR MANAGEMENT:
+// - Track active collaborators in sessions
+// - Update activity timestamps
+// - Remove collaborators
+// - Permission inheritance from shares
+//
+// API Endpoints:
+// - POST   /api/v1/sessions/:id/share - Create direct share with user
+// - GET    /api/v1/sessions/:id/shares - List all shares for session
+// - DELETE /api/v1/sessions/:id/shares/:shareId - Revoke a share
+// - POST   /api/v1/sessions/:id/transfer - Transfer ownership
+// - POST   /api/v1/sessions/:id/invitations - Create invitation link
+// - GET    /api/v1/sessions/:id/invitations - List invitations
+// - DELETE /api/v1/invitations/:token - Revoke invitation
+// - POST   /api/v1/invitations/:token/accept - Accept invitation
+// - GET    /api/v1/sessions/:id/collaborators - List active collaborators
+// - POST   /api/v1/sessions/:id/collaborators/:userId/activity - Update activity
+// - DELETE /api/v1/sessions/:id/collaborators/:userId - Remove collaborator
+// - GET    /api/v1/shared-sessions - List sessions shared with user
+//
+// Security:
+// - Owner-only operations for sharing and transfer
+// - User existence validation
+// - Expiration and usage limit enforcement
+// - Authorization checks for all operations
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Atomic upsert operations for collaborators and shares
+//
+// Dependencies:
+// - Database: sessions, session_shares, session_share_invitations, session_collaborators, users tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewSharingHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

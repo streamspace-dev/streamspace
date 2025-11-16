@@ -40,6 +40,64 @@ interface SharedSession {
   url?: string;
 }
 
+/**
+ * SharedSessions - View and access sessions shared by other users
+ *
+ * Displays sessions that have been shared with the current user, providing:
+ * - Grid view of all shared sessions
+ * - Session metadata (owner, template, state, creation time)
+ * - Permission level indicator (view, edit, control)
+ * - Quick access to shared session viewers
+ * - Real-time session status updates via WebSocket
+ * - Empty state with helpful guidance
+ *
+ * Features:
+ * - Session cards with owner information
+ * - Template name and app type display
+ * - Session state chips (running, hibernated, terminated)
+ * - Permission level badges (view-only, editor, controller)
+ * - "Shared At" timestamp showing when access was granted
+ * - Connect button to open session viewer
+ * - Real-time state change notifications
+ * - Session state change alerts (running → hibernated → terminated)
+ * - WebSocket connection status indicator
+ *
+ * Permission levels:
+ * - View: Can view session (read-only access)
+ * - Edit: Can interact with session
+ * - Control: Full control including session management
+ *
+ * User workflows:
+ * - View all sessions shared with current user
+ * - Check session status before connecting
+ * - Open shared session in viewer
+ * - Monitor session owner and sharing details
+ * - Receive notifications when shared sessions change state
+ *
+ * Real-time features:
+ * - Session state change notifications
+ * - Session termination alerts
+ * - Sharing revocation notifications
+ * - New share notifications
+ * - WebSocket connection status
+ *
+ * @page
+ * @route /shared-sessions - Sessions shared with current user
+ * @access user - Shows only sessions shared with the authenticated user
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Shared sessions page with session cards
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/shared-sessions" element={<SharedSessions />} />
+ * <Route path="/sessions/shared" element={<SharedSessions />} />
+ *
+ * @see Sessions for managing own sessions
+ * @see SessionViewer for viewing shared sessions
+ * @see SessionShareDialog for sharing workflow (from owner perspective)
+ */
 export default function SharedSessions() {
   const navigate = useNavigate();
   const currentUser = useUserStore((state) => state.user);

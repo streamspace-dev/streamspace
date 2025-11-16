@@ -1,3 +1,48 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements team-based Role-Based Access Control (RBAC) operations.
+//
+// TEAM RBAC FEATURES:
+// - Team permissions and role management
+// - User permission queries within teams
+// - Team session access control
+// - Permission checking for authorization
+//
+// TEAM PERMISSIONS:
+// - Role-based permissions (owner, admin, member, viewer, etc.)
+// - Permission inheritance from team roles
+// - User-specific permission queries
+// - Permission validation for resource access
+//
+// TEAM SESSIONS:
+// - List sessions belonging to a specific team
+// - Permission-based access control (requires team.sessions.view)
+// - Team member authorization
+//
+// API Endpoints:
+// - GET /api/v1/teams/:teamId/permissions - Get all team role permissions
+// - GET /api/v1/teams/:teamId/role-info - Get available team roles
+// - GET /api/v1/teams/:teamId/my-permissions - Get current user's permissions
+// - GET /api/v1/teams/:teamId/check-permission/:permission - Check specific permission
+// - GET /api/v1/teams/:teamId/sessions - List team sessions (requires permission)
+// - GET /api/v1/teams/my-teams - Get current user's team memberships
+//
+// Security:
+// - Authentication required for all endpoints
+// - Permission-based authorization for sensitive operations
+// - Safe type assertions to prevent panics
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: teams, team_members, team_role_permissions, sessions tables
+// - Middleware: TeamRBAC for permission checks
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewTeamHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

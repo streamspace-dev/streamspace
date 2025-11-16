@@ -1,3 +1,84 @@
+// Package db provides PostgreSQL database access and management for StreamSpace.
+//
+// This file implements user management and authentication data access.
+//
+// Purpose:
+// - CRUD operations for user accounts
+// - Password hashing and verification with bcrypt
+// - User authentication and authorization
+// - User quota and resource limit management
+// - User preferences and settings storage
+// - Group membership management
+//
+// Features:
+// - Secure password hashing with bcrypt (cost factor 10)
+// - User search and filtering by username/email/role/provider
+// - Quota enforcement integration with quota system
+// - User group membership tracking
+// - OAuth provider linking (OIDC, SAML)
+// - MFA (TOTP) configuration storage support
+// - Last login tracking for auditing
+//
+// Database Schema:
+//   - users table: Core user account data
+//     - id (varchar): Primary key (UUID)
+//     - username (varchar): Unique username
+//     - email (varchar): Unique email address
+//     - password_hash (varchar): bcrypt hashed password (local auth only)
+//     - role (varchar): User role (user, admin, superadmin)
+//     - provider (varchar): Auth provider (local, saml, oidc)
+//     - active (boolean): Account active status
+//     - created_at, updated_at: Timestamps
+//     - last_login: Last successful authentication
+//
+//   - user_quotas table: Resource limits per user
+//     - user_id: Foreign key to users
+//     - max_sessions, max_cpu, max_memory, max_storage: Limits
+//     - used_sessions, used_cpu, used_memory, used_storage: Current usage
+//
+// Implementation Details:
+// - Passwords never stored in plaintext (bcrypt with cost 10)
+// - User lookups indexed by username and email for performance
+// - Quota stored as separate table with foreign key constraint
+// - Group membership managed via group_memberships junction table
+// - Default quota created automatically on user creation
+// - Supports multiple authentication providers (local, SAML, OIDC)
+//
+// Thread Safety:
+// - All database operations are thread-safe via database/sql pool
+// - Safe for concurrent access from multiple goroutines
+// - bcrypt operations are CPU-intensive but safe for concurrent use
+//
+// Dependencies:
+// - golang.org/x/crypto/bcrypt for password hashing
+// - github.com/google/uuid for ID generation
+// - models package for data structures
+//
+// Example Usage:
+//
+//	userDB := db.NewUserDB(database.DB())
+//
+//	// Create user with password
+//	user, err := userDB.CreateUser(ctx, &models.CreateUserRequest{
+//	    Username: "alice",
+//	    Email:    "alice@example.com",
+//	    Password: "securepassword",
+//	    FullName: "Alice Smith",
+//	    Role:     "user",
+//	    Provider: "local",
+//	})
+//
+//	// Authenticate user
+//	user, err := userDB.VerifyPassword(ctx, "alice", "securepassword")
+//
+//	// Update user quota
+//	maxSessions := 10
+//	err := userDB.SetUserQuota(ctx, userID, &models.SetQuotaRequest{
+//	    MaxSessions: &maxSessions,
+//	})
+//
+//	// Get or create SAML user (SSO)
+//	user, err := userDB.GetOrCreateSAMLUser(ctx, "bob", "bob@company.com", "Bob Jones", "saml-provider")
 package db
 
 import (

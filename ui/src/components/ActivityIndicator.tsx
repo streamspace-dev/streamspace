@@ -14,6 +14,49 @@ interface ActivityIndicatorProps {
   showLabel?: boolean;
 }
 
+/**
+ * ActivityIndicator - Display session activity status with visual indicator
+ *
+ * Shows session activity state with color-coded chip or icon. Combines session
+ * state (running/hibernated/terminated) with activity flags (active/idle) to
+ * display appropriate status. Includes tooltip with detailed description.
+ *
+ * Features:
+ * - Multiple activity states (active/idle/hibernated/terminated)
+ * - Color-coded chips (green/yellow/gray/red)
+ * - Icon-only or chip with label display
+ * - Tooltip with status description
+ * - Configurable size (small/medium)
+ * - Memoized for performance
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} [props.isActive=false] - Whether session has recent activity
+ * @param {boolean} [props.isIdle=false] - Whether session is idle
+ * @param {'running' | 'hibernated' | 'terminated'} [props.state='running'] - Session state
+ * @param {'small' | 'medium'} [props.size='small'] - Indicator size
+ * @param {boolean} [props.showLabel=true] - Whether to show text label
+ *
+ * @returns {JSX.Element} Rendered activity indicator
+ *
+ * @example
+ * <ActivityIndicator
+ *   isActive={session.isActive}
+ *   isIdle={session.isIdle}
+ *   state={session.state}
+ * />
+ *
+ * @example
+ * // Icon only (no label)
+ * <ActivityIndicator
+ *   isActive={true}
+ *   showLabel={false}
+ *   size="medium"
+ * />
+ *
+ * @see SessionCard for usage with sessions
+ */
 function ActivityIndicator({
   isActive = false,
   isIdle = false,

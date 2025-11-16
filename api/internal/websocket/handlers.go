@@ -1,3 +1,64 @@
+// Package websocket provides real-time WebSocket communication for StreamSpace.
+//
+// This file implements WebSocket managers and broadcasting for real-time updates.
+//
+// Purpose:
+// - Manage multiple WebSocket hubs (sessions, metrics, logs)
+// - Periodically broadcast session and metric updates to connected clients
+// - Stream pod logs in real-time via WebSocket
+// - Integrate database and Kubernetes for live data
+//
+// Features:
+// - Multi-hub architecture (sessions, metrics separate channels)
+// - Periodic broadcast intervals (sessions: 3s, metrics: 5s)
+// - Database-enriched session data (active connections, activity status)
+// - Real-time pod log streaming
+// - Event-driven notifications via Notifier integration
+// - Graceful shutdown with connection cleanup
+//
+// Architecture:
+//   - Manager: Coordinates all hubs and data sources
+//   - Hub: Manages WebSocket connections and message delivery
+//   - Notifier: Routes targeted notifications to subscribed clients
+//   - Broadcast goroutines: Fetch and push updates periodically
+//
+// Broadcast Strategy:
+//   - Sessions: Every 3 seconds, fetch all sessions from Kubernetes
+//   - Metrics: Every 5 seconds, aggregate counts from database
+//   - Skip broadcasts when no clients connected (performance)
+//   - Enriched data includes database fields (active_connections)
+//
+// Implementation Details:
+// - Uses gorilla/websocket for WebSocket protocol
+// - Kubernetes client for session data (k8s.Client)
+// - Database for enrichment (active connections, metrics)
+// - JSON-encoded messages for all broadcasts
+//
+// Thread Safety:
+// - Manager is thread-safe
+// - Hub operations use mutex protection
+// - Broadcast goroutines run concurrently
+//
+// Dependencies:
+// - github.com/gorilla/websocket for WebSocket protocol
+// - internal/db for database access
+// - internal/k8s for Kubernetes API
+//
+// Example Usage:
+//
+//	// Create manager with database and K8s client
+//	manager := websocket.NewManager(database, k8sClient)
+//	manager.Start()
+//
+//	// Handle WebSocket connections
+//	router.GET("/ws/sessions", func(c *gin.Context) {
+//	    userID := c.Query("user_id")
+//	    conn, _ := upgrader.Upgrade(c.Writer, c.Request, nil)
+//	    manager.HandleSessionsWebSocket(conn, userID, "")
+//	})
+//
+//	// Shutdown cleanly
+//	defer manager.CloseAll()
 package websocket
 
 import (

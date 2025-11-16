@@ -1,3 +1,52 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file implements comprehensive input validation and sanitization.
+//
+// Purpose:
+// The input validation middleware protects against injection attacks by validating
+// and sanitizing all user input including query parameters, path parameters, and
+// request bodies. This prevents SQL injection, XSS, command injection, LDAP injection,
+// and path traversal attacks.
+//
+// Implementation Details:
+// - Path validation: Detects path traversal patterns (../, %2e%2e, etc.)
+// - Query parameter validation: Checks for injection patterns in all query strings
+// - JSON sanitization: Recursively sanitizes nested objects and arrays using bluemonday
+// - Format validation: Validates usernames, emails, Kubernetes resource names, container images
+// - Length limits: Prevents buffer overflow with 10KB max input size
+// - Pattern detection: Regex-based detection of SQL, command, and LDAP injection attempts
+//
+// Security Notes:
+// This middleware provides defense-in-depth against common web vulnerabilities:
+// - SQL Injection: Detects UNION, SELECT, DROP, etc. patterns
+// - XSS (Cross-Site Scripting): Bluemonday strips all HTML tags and dangerous content
+// - Command Injection: Blocks shell metacharacters (;, |, &, backticks, $())
+// - LDAP Injection: Detects LDAP special characters when used in combinations
+// - Path Traversal: Prevents directory traversal attacks (../, ..\, null bytes)
+// - Buffer Overflow: Enforces 10KB limit on input values
+//
+// Thread Safety:
+// Safe for concurrent use. Each request gets its own validation context.
+// The bluemonday policy is thread-safe and shared across all requests.
+//
+// Usage:
+//   // Basic input validation on all routes
+//   validator := middleware.NewInputValidator()
+//   router.Use(validator.Middleware())
+//
+//   // JSON sanitization for API endpoints
+//   router.Use(validator.SanitizeJSONMiddleware())
+//
+//   // Standalone validation functions
+//   if err := middleware.ValidateUsername(username); err != nil {
+//       return err
+//   }
+//   if err := middleware.ValidateEmail(email); err != nil {
+//       return err
+//   }
+//
+// Configuration:
+//   // Bluemonday uses StrictPolicy by default (strips ALL HTML)
+//   // To customize, modify the policy in NewInputValidator()
 package middleware
 
 import (

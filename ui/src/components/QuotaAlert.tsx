@@ -6,6 +6,41 @@ interface QuotaAlertProps {
   onQuotaLoad?: (quota: UserQuota) => void;
 }
 
+/**
+ * QuotaAlert - Alert banner for resource quota warnings
+ *
+ * Displays a dismissible alert when user's resource usage exceeds 75% of their
+ * allocated quota. Shows detailed breakdown of resources approaching or at limits
+ * with progress bars. Only renders when threshold is exceeded.
+ *
+ * Features:
+ * - Conditional rendering (only shows when usage >= 75%)
+ * - Severity levels (warning at 75%, error at 90%)
+ * - Detailed resource breakdown with progress bars
+ * - Sessions, CPU, memory, and storage metrics
+ * - Silent failure (optional display)
+ * - Callback when quota data loads
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {Function} [props.onQuotaLoad] - Callback with quota data when loaded
+ *
+ * @returns {JSX.Element | null} Rendered alert or null if under threshold
+ *
+ * @example
+ * <QuotaAlert onQuotaLoad={(quota) => console.log(quota)} />
+ *
+ * @example
+ * // Typical placement at top of dashboard
+ * <Box>
+ *   <QuotaAlert />
+ *   <Dashboard />
+ * </Box>
+ *
+ * @see api.getCurrentUserQuota for quota data fetching
+ * @see QuotaCard for detailed quota display
+ */
 export default function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
   const [quota, setQuota] = useState<UserQuota | null>(null);
   const [loading, setLoading] = useState(true);

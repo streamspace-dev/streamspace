@@ -11,6 +11,50 @@ interface RatingStarsProps {
   onRate?: (rating: number) => void;
 }
 
+/**
+ * RatingStars - Star rating display and input component
+ *
+ * Displays a 5-star rating with full, half, and empty stars. Supports both
+ * read-only display mode and interactive rating mode. Shows review count or
+ * average rating value. Memoized to prevent unnecessary re-renders.
+ *
+ * Features:
+ * - Full, half, and empty star icons
+ * - Configurable size (small/medium/large)
+ * - Optional review count display
+ * - Optional average rating display
+ * - Interactive mode for user rating input
+ * - Click handlers for each star
+ * - Memoized for performance
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {number} props.rating - Average rating (0-5)
+ * @param {number} [props.count] - Number of reviews/ratings
+ * @param {'small' | 'medium' | 'large'} [props.size='small'] - Star size
+ * @param {boolean} [props.showCount=true] - Whether to show review count
+ * @param {boolean} [props.interactive=false] - Whether stars are clickable
+ * @param {Function} [props.onRate] - Callback when star is clicked (rating: number)
+ *
+ * @returns {JSX.Element} Rendered rating stars
+ *
+ * @example
+ * // Display mode
+ * <RatingStars rating={4.5} count={120} size="medium" />
+ *
+ * @example
+ * // Interactive mode
+ * <RatingStars
+ *   rating={userRating}
+ *   interactive={true}
+ *   onRate={setUserRating}
+ *   showCount={false}
+ * />
+ *
+ * @see PluginDetailModal for usage in plugin ratings
+ * @see TemplateDetailModal for usage in template ratings
+ */
 function RatingStars({
   rating,
   count,

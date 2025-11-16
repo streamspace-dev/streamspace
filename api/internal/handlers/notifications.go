@@ -1,3 +1,83 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements notification delivery and management across multiple channels.
+//
+// NOTIFICATION FEATURES:
+// - In-app notification management (create, read, delete)
+// - Email notifications via SMTP
+// - Webhook notifications with HMAC signatures
+// - Multiple notification types (session events, quotas, teams, alerts)
+// - Priority levels (low, normal, high, urgent)
+// - Read/unread tracking
+// - Notification preferences per user
+//
+// NOTIFICATION TYPES:
+// - session.created: New session launched
+// - session.idle: Session idle timeout warning
+// - session.shared: Session shared with user
+// - quota.warning: Approaching quota limits (80% threshold)
+// - quota.exceeded: Quota limits exceeded
+// - team.invitation: Invited to join team
+// - system.alert: System-wide alerts
+//
+// NOTIFICATION CHANNELS:
+// - In-app: Stored in database, retrieved via API
+// - Email: Sent via SMTP with HTML templates
+// - Webhook: HTTP POST to user-configured URLs
+// - Integration: Slack, Teams, Discord (via integrations handler)
+//
+// PRIORITY LEVELS:
+// - low: Non-urgent informational messages
+// - normal: Standard notifications
+// - high: Important notifications requiring attention
+// - urgent: Critical notifications requiring immediate action
+//
+// IN-APP NOTIFICATIONS:
+// - Persistent storage in database
+// - Unread count tracking
+// - Mark as read individually or in bulk
+// - Delete individually or clear all
+// - Action URLs for quick navigation
+// - Pagination support
+//
+// EMAIL NOTIFICATIONS:
+// - HTML template rendering
+// - SMTP configuration (host, port, auth)
+// - Configurable from/reply-to addresses
+// - Environment variable configuration
+// - Test email endpoint for debugging
+//
+// WEBHOOK NOTIFICATIONS:
+// - HMAC-SHA256 signature for verification
+// - JSON payload with notification data
+// - User-configured webhook URLs
+// - Test webhook endpoint for debugging
+//
+// API Endpoints:
+// - GET    /api/v1/notifications - List user notifications
+// - GET    /api/v1/notifications/unread - Get unread notifications
+// - GET    /api/v1/notifications/count - Get unread count
+// - POST   /api/v1/notifications/:id/read - Mark as read
+// - POST   /api/v1/notifications/read-all - Mark all as read
+// - DELETE /api/v1/notifications/:id - Delete notification
+// - DELETE /api/v1/notifications/clear-all - Clear all notifications
+// - POST   /api/v1/notifications/send - Send notification (admin)
+// - GET    /api/v1/notifications/preferences - Get notification preferences
+// - PUT    /api/v1/notifications/preferences - Update notification preferences
+// - POST   /api/v1/notifications/test/email - Test email delivery
+// - POST   /api/v1/notifications/test/webhook - Test webhook delivery
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - SMTP client is created per-request
+//
+// Dependencies:
+// - Database: notifications, user_preferences tables
+// - External Services: SMTP server for email delivery
+//
+// Example Usage:
+//
+//	handler := NewNotificationsHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

@@ -20,6 +20,43 @@ import Layout from '../components/Layout';
 import { api } from '../lib/api';
 import { useUserStore } from '../store/userStore';
 
+/**
+ * InvitationAccept - Session invitation acceptance page
+ *
+ * Handles the workflow for accepting session sharing invitations. Users who receive
+ * an invitation link can use this page to accept the invitation and gain access to
+ * a shared session. Requires user authentication before accepting the invitation.
+ *
+ * Features:
+ * - Display invitation details and token
+ * - Show accepting user information
+ * - Validate invitation token
+ * - Automatic redirect to login if not authenticated
+ * - Success confirmation with auto-redirect to session
+ * - Error handling for invalid or expired invitations
+ *
+ * User workflows:
+ * - Receive invitation link via email or direct sharing
+ * - Authenticate if not already logged in
+ * - Review invitation details
+ * - Accept invitation to join shared session
+ * - Automatic redirect to session viewer
+ *
+ * @page
+ * @route /invite/:token - Accept session invitation
+ * @access public - Available to all users with valid invitation link
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Invitation acceptance interface with token validation
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/invite/:token" element={<InvitationAccept />} />
+ *
+ * @see SessionShare for session sharing management
+ * @see SessionViewer for viewing shared sessions
+ */
 export default function InvitationAccept() {
   const { token } = useParams<{ token: string }>();
   const navigate = useNavigate();

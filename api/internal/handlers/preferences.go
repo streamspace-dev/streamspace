@@ -1,3 +1,79 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements user preference management and customization settings.
+//
+// PREFERENCE FEATURES:
+// - User-specific preference storage (JSON-based)
+// - UI preferences (theme, layout, language, timezone)
+// - Notification preferences (enabled channels, frequency)
+// - Default session settings (resources, templates)
+// - Favorite templates management
+// - Recent session tracking
+//
+// PREFERENCE CATEGORIES:
+//
+// 1. UI Preferences:
+//   - Theme (light, dark, auto)
+//   - Layout preferences (sidebar, density)
+//   - Language and locale
+//   - Timezone for timestamps
+//   - Default view modes
+//
+// 2. Notification Preferences:
+//   - Email notifications enabled/disabled
+//   - In-app notifications enabled/disabled
+//   - Webhook notifications
+//   - Notification types to receive
+//   - Notification frequency/batching
+//
+// 3. Default Session Settings:
+//   - Default template selection
+//   - Default resource allocations (CPU, memory)
+//   - Default idle timeout
+//   - Default hibernation settings
+//   - Auto-start preferences
+//
+// 4. Favorites:
+//   - Favorite template list
+//   - Quick access templates
+//   - Template ordering
+//
+// 5. Recent Sessions:
+//   - Recently accessed sessions
+//   - Session history limit
+//   - Timestamp tracking
+//
+// PREFERENCE STORAGE:
+// - JSON-based flexible schema
+// - Per-user preference isolation
+// - Default preferences for new users
+// - Merge strategy for partial updates
+//
+// API Endpoints:
+// - GET    /api/v1/preferences - Get all user preferences
+// - PUT    /api/v1/preferences - Update all preferences
+// - DELETE /api/v1/preferences - Reset to defaults
+// - GET    /api/v1/preferences/ui - Get UI preferences
+// - PUT    /api/v1/preferences/ui - Update UI preferences
+// - GET    /api/v1/preferences/notifications - Get notification preferences
+// - PUT    /api/v1/preferences/notifications - Update notification preferences
+// - GET    /api/v1/preferences/defaults - Get default session settings
+// - PUT    /api/v1/preferences/defaults - Update default session settings
+// - GET    /api/v1/preferences/favorites - Get favorite templates
+// - POST   /api/v1/preferences/favorites/:templateName - Add favorite
+// - DELETE /api/v1/preferences/favorites/:templateName - Remove favorite
+// - GET    /api/v1/preferences/recent - Get recent sessions
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: user_preferences table
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewPreferencesHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

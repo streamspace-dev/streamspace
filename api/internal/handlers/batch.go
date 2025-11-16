@@ -1,3 +1,73 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements batch operations for bulk resource management.
+//
+// BATCH OPERATION FEATURES:
+// - Bulk session operations (terminate, hibernate, wake, delete)
+// - Bulk snapshot operations (create, delete)
+// - Bulk template operations (install, delete)
+// - Asynchronous job execution with progress tracking
+// - Job status monitoring and cancellation
+//
+// OPERATION TYPES:
+// - terminate: Stop multiple running sessions
+// - hibernate: Put multiple sessions into hibernated state
+// - wake: Resume multiple hibernated sessions
+// - delete: Remove multiple sessions/snapshots/templates
+// - update: Bulk update tags or resource limits
+//
+// BATCH JOB LIFECYCLE:
+// 1. Job creation: Create batch_operations record
+// 2. Async execution: Process items in background goroutine
+// 3. Progress tracking: Update processed/success/failure counts
+// 4. Completion: Mark job as completed or failed
+// 5. Cleanup: Jobs can be cancelled or deleted
+//
+// JOB STATUS TRACKING:
+// - Total items to process
+// - Processed items count
+// - Success count
+// - Failure count
+// - Errors array for failed items
+// - Created/completed timestamps
+//
+// ASYNC EXECUTION:
+// - All batch operations run asynchronously
+// - Immediate job ID returned to client
+// - Client polls job status endpoint for progress
+// - WebSocket notifications for real-time updates
+//
+// ERROR HANDLING:
+// - Partial failures: Continue processing remaining items
+// - Error collection: Record all errors for debugging
+// - Job status reflects overall success/failure
+//
+// API Endpoints:
+// - POST   /api/v1/batch/sessions/terminate - Terminate multiple sessions
+// - POST   /api/v1/batch/sessions/hibernate - Hibernate multiple sessions
+// - POST   /api/v1/batch/sessions/wake - Wake multiple sessions
+// - POST   /api/v1/batch/sessions/delete - Delete multiple sessions
+// - POST   /api/v1/batch/sessions/update-tags - Update session tags
+// - POST   /api/v1/batch/sessions/update-resources - Update resource limits
+// - POST   /api/v1/batch/snapshots/delete - Delete multiple snapshots
+// - POST   /api/v1/batch/snapshots/create - Create multiple snapshots
+// - POST   /api/v1/batch/templates/install - Install multiple templates
+// - POST   /api/v1/batch/templates/delete - Delete multiple templates
+// - GET    /api/v1/batch/jobs - List batch jobs
+// - GET    /api/v1/batch/jobs/:id - Get batch job status
+// - DELETE /api/v1/batch/jobs/:id - Cancel batch job
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Goroutines for async execution are properly managed
+//
+// Dependencies:
+// - Database: batch_operations, sessions, snapshots, templates tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewBatchHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

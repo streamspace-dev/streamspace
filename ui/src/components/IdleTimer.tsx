@@ -10,6 +10,51 @@ interface IdleTimerProps {
   compact?: boolean;
 }
 
+/**
+ * IdleTimer - Display session idle time with auto-hibernation countdown
+ *
+ * Shows time elapsed since last session activity with optional progress bar
+ * toward hibernation threshold. Updates every second for real-time countdown.
+ * Supports both compact and expanded display modes with color coding for
+ * idle status.
+ *
+ * Features:
+ * - Real-time countdown (updates every second)
+ * - Human-readable duration formatting (s, m, h, d)
+ * - Progress bar toward hibernation threshold
+ * - Color coding (green/yellow/red based on threshold)
+ * - Compact mode for inline display
+ * - Tooltip with detailed information
+ * - Time until auto-hibernation display
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {string} [props.lastActivity] - ISO timestamp of last activity
+ * @param {number} [props.idleDuration=0] - Current idle duration in seconds
+ * @param {number} [props.idleThreshold=0] - Hibernation threshold in seconds
+ * @param {boolean} [props.showProgress=false] - Whether to show progress bar
+ * @param {boolean} [props.compact=false] - Whether to use compact display
+ *
+ * @returns {JSX.Element} Rendered idle timer
+ *
+ * @example
+ * <IdleTimer
+ *   lastActivity={session.lastActivity}
+ *   idleThreshold={session.idleThreshold}
+ *   showProgress={true}
+ * />
+ *
+ * @example
+ * // Compact mode
+ * <IdleTimer
+ *   idleDuration={300}
+ *   idleThreshold={1800}
+ *   compact={true}
+ * />
+ *
+ * @see SessionCard for usage with sessions
+ */
 export default function IdleTimer({
   lastActivity,
   idleDuration = 0,

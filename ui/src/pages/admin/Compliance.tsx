@@ -54,6 +54,84 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * Compliance - Compliance framework and policy management for administrators
+ *
+ * Administrative interface for managing compliance frameworks (SOC2, HIPAA, GDPR),
+ * enforcing policies, tracking violations, and generating compliance reports. Provides
+ * real-time compliance monitoring with automatic violation detection, remediation
+ * tracking, and comprehensive audit capabilities.
+ *
+ * Features:
+ * - Compliance framework management (SOC2, HIPAA, GDPR)
+ * - Policy creation and enforcement
+ * - Violation tracking and resolution
+ * - Compliance dashboard with metrics
+ * - Report generation (summary, detailed, attestation)
+ * - Data retention policy configuration
+ * - Real-time violation alerts via WebSocket
+ * - Severity-based prioritization
+ *
+ * Administrative capabilities:
+ * - Enable/disable compliance frameworks
+ * - Create policies with enforcement levels
+ * - Monitor violations by severity
+ * - Generate compliance reports
+ * - Resolve and remediate violations
+ * - Configure data retention policies
+ * - Audit compliance status
+ *
+ * Compliance frameworks:
+ * - SOC2: Service Organization Control 2
+ * - HIPAA: Health Insurance Portability and Accountability Act
+ * - GDPR: General Data Protection Regulation
+ * - PCI-DSS: Payment Card Industry Data Security Standard
+ * - ISO27001: Information Security Management
+ *
+ * Enforcement levels:
+ * - advisory: Log only (no blocking)
+ * - warning: Alert users and admins
+ * - blocking: Prevent non-compliant actions
+ *
+ * Violation severities:
+ * - critical: Immediate attention required
+ * - high: Urgent remediation needed
+ * - medium: Address within SLA
+ * - low: Monitor and track
+ *
+ * Report types:
+ * - summary: High-level compliance overview
+ * - detailed: Comprehensive violation details
+ * - attestation: Formal compliance certification
+ *
+ * Real-time features:
+ * - Live violation notifications (critical/high priority)
+ * - Automatic dashboard refresh
+ * - WebSocket connection monitoring
+ * - Event-driven alerts
+ *
+ * User workflows:
+ * - Enable compliance frameworks
+ * - Create policies for user groups
+ * - Monitor violations dashboard
+ * - Resolve open violations
+ * - Generate compliance reports
+ * - Configure data retention policies
+ *
+ * @page
+ * @route /admin/compliance - Compliance and governance management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Compliance management interface with policy enforcement
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/compliance" element={<Compliance />} />
+ *
+ * @see Integrations for compliance notification webhooks
+ */
 interface ComplianceFramework {
   id: number;
   name: string;

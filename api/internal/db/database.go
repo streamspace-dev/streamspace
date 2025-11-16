@@ -1,3 +1,69 @@
+// Package db provides PostgreSQL database access and management for StreamSpace.
+//
+// This file implements the core database connection and lifecycle management.
+//
+// Purpose:
+// - Establish and maintain PostgreSQL connection pool
+// - Initialize database schema on startup (82+ tables)
+// - Provide centralized database instance for all API handlers
+// - Execute raw SQL queries and transactions
+// - Validate database configuration for security
+//
+// Features:
+// - Connection pooling with configurable limits (25 max open, 5 max idle)
+// - Comprehensive schema migrations (82+ tables, 200+ indexes)
+// - Health check and ping capabilities
+// - Graceful connection cleanup on shutdown
+// - Configuration validation (prevents SQL injection in connection strings)
+// - SSL/TLS warnings for production security
+//
+// Database Schema:
+//   - 82+ tables covering users, sessions, templates, plugins, quotas, audit logs
+//   - 200+ indexes for query performance optimization
+//   - JSONB columns for flexible metadata storage
+//   - Foreign key constraints for referential integrity
+//   - Composite indexes for common query patterns
+//
+// Implementation Details:
+// - Uses database/sql with lib/pq PostgreSQL driver
+// - Connection pool configured for optimal performance (5min max lifetime)
+// - Schema initialization runs CREATE TABLE IF NOT EXISTS on startup
+// - Thread-safe connection pooling handled by database/sql package
+// - Validates hostname, port, username, database name, SSL mode
+//
+// Thread Safety:
+// - Database connections are thread-safe and managed by database/sql pool
+// - Safe for concurrent use across multiple goroutines
+// - Connection pool prevents resource exhaustion
+//
+// Dependencies:
+// - PostgreSQL 12+ (required)
+// - lib/pq driver for database/sql
+//
+// Example Usage:
+//
+//	config := db.Config{
+//	    Host:     "localhost",
+//	    Port:     "5432",
+//	    User:     "streamspace",
+//	    Password: "secretpassword",
+//	    DBName:   "streamspace",
+//	    SSLMode:  "require",
+//	}
+//
+//	database, err := db.NewDatabase(config)
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer database.Close()
+//
+//	// Run migrations
+//	if err := database.Migrate(); err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Use database connection
+//	rows, err := database.DB().Query("SELECT * FROM users")
 package db
 
 import (

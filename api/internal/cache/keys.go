@@ -1,3 +1,50 @@
+// Package cache provides Redis-based caching for StreamSpace API.
+//
+// This file defines standardized cache key naming conventions and patterns.
+//
+// Purpose:
+// - Provide consistent cache key naming across all cache operations
+// - Enable efficient cache invalidation via pattern matching
+// - Organize cache keys by resource type
+// - Support multi-level cache hierarchies
+//
+// Features:
+// - Resource-specific key prefixes (session, user, template, quota)
+// - Hierarchical key structure (prefix:resource:identifier)
+// - Pattern-based invalidation (session:*, user:123:*)
+// - User-scoped keys for isolation
+// - List and collection keys
+//
+// Key Naming Convention:
+//   - Format: {prefix}:{resource}:{identifier}
+//   - Example: session:user1-firefox
+//   - Example: user:username:alice
+//   - Example: quota:user:user123
+//
+// Key Patterns for Invalidation:
+//   - session:* - All sessions
+//   - *:user:123* - All user-specific caches
+//   - template:category:browsers - Templates in category
+//
+// Implementation Details:
+// - Keys use colon (:) as separator for Redis best practices
+// - Prefixes prevent key collisions across resource types
+// - Patterns use wildcards (*) for bulk invalidation
+//
+// Example Usage:
+//
+//	// Generate cache key for session
+//	key := cache.SessionKey("user1-firefox")
+//	// Result: "session:user1-firefox"
+//
+//	// Generate key for user by username
+//	key := cache.UserByUsernameKey("alice")
+//	// Result: "user:username:alice"
+//
+//	// Invalidate all user-related caches
+//	pattern := cache.UserPattern("user123")
+//	err := cache.DeletePattern(ctx, pattern)
+//	// Deletes: user:user123, session:user:user123:list, quota:user:user123, etc.
 package cache
 
 import "fmt"

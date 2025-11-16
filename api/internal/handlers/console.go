@@ -1,3 +1,69 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements console access and file management for sessions.
+//
+// CONSOLE FEATURES:
+// - Interactive terminal access to sessions via WebSocket
+// - File manager for browsing session filesystems
+// - File operations (create, delete, rename, copy, move, upload, download)
+// - Multi-shell support (bash, sh, zsh)
+// - Terminal resize and configuration
+//
+// TERMINAL SESSIONS:
+// - WebSocket-based terminal connections
+// - Configurable rows and columns
+// - Shell type selection (bash, sh, zsh)
+// - Activity tracking and idle timeout
+// - Terminal status monitoring
+//
+// FILE MANAGEMENT:
+// - Directory browsing with file metadata
+// - File/directory creation and deletion
+// - File rename, copy, and move operations
+// - File upload and download
+// - Permissions, ownership, and size information
+// - MIME type detection
+// - Symlink target resolution
+//
+// FILE OPERATIONS:
+// - Create: Create new files or directories
+// - Delete: Remove files or directories
+// - Rename: Rename files or directories
+// - Copy: Duplicate files or directories
+// - Move: Move files between locations
+// - Upload: Upload files to session
+// - Download: Download files from session
+//
+// SECURITY:
+// - Access control via session ownership or sharing
+// - User authentication required
+// - Path validation to prevent directory traversal
+// - Permission checks for file operations
+//
+// API Endpoints:
+// - POST   /api/v1/sessions/:sessionId/console - Create console session
+// - GET    /api/v1/console/:consoleId - Get console session details
+// - DELETE /api/v1/console/:consoleId - Disconnect console session
+// - GET    /api/v1/console/:consoleId/files - List files in directory
+// - POST   /api/v1/console/:consoleId/files - Create file/directory
+// - DELETE /api/v1/console/:consoleId/files - Delete file/directory
+// - PUT    /api/v1/console/:consoleId/files/rename - Rename file/directory
+// - POST   /api/v1/console/:consoleId/files/copy - Copy file/directory
+// - POST   /api/v1/console/:consoleId/files/move - Move file/directory
+// - POST   /api/v1/console/:consoleId/files/upload - Upload files
+// - GET    /api/v1/console/:consoleId/files/download - Download files
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - File operations are isolated per session
+//
+// Dependencies:
+// - Database: console_sessions, sessions, session_shares tables
+// - External Services: Session container filesystem access
+//
+// Example Usage:
+//
+//	// Create console handler (integrated in main handler)
+//	handler.RegisterConsoleRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

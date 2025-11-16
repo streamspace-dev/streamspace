@@ -40,6 +40,68 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * AdminPlugins - System-wide plugin management for administrators
+ *
+ * Administrative interface for managing platform plugins that extend functionality across
+ * the entire system. Administrators can install, configure, enable/disable, and uninstall
+ * plugins that affect all users. Provides real-time WebSocket updates for plugin lifecycle
+ * events and comprehensive statistics on plugin usage.
+ *
+ * Features:
+ * - View all installed plugins system-wide
+ * - Enable/disable plugins globally
+ * - Configure plugin settings with JSON editor
+ * - View plugin details (type, version, installer)
+ * - Uninstall plugins with confirmation
+ * - Real-time plugin event notifications via WebSocket
+ * - Plugin statistics dashboard
+ * - Filter plugins by type and status
+ *
+ * Administrative capabilities:
+ * - System-wide plugin installation management
+ * - Global enable/disable controls
+ * - Plugin configuration editing (JSON)
+ * - Plugin lifecycle monitoring
+ * - Usage statistics and metrics
+ * - Plugin dependency management
+ *
+ * Plugin types:
+ * - extension: Platform extensions
+ * - webhook: Webhook integrations
+ * - api: API extensions
+ * - ui: UI components and themes
+ * - theme: Appearance themes
+ *
+ * Real-time features:
+ * - Live plugin installation notifications
+ * - Enable/disable event alerts
+ * - Update notifications
+ * - Error alerts for plugin failures
+ * - WebSocket connection monitoring
+ *
+ * User workflows:
+ * - Review installed plugins across the platform
+ * - Enable/disable plugins for all users
+ * - Configure global plugin settings
+ * - Monitor plugin performance and errors
+ * - Uninstall problematic plugins
+ *
+ * @page
+ * @route /admin/plugins - System-wide plugin management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Plugin management interface with system-wide controls
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/plugins" element={<AdminPlugins />} />
+ *
+ * @see PluginCatalog for installing new plugins
+ * @see InstalledPlugins for user-level plugin management
+ */
 const pluginTypeColors: Record<string, string> = {
   extension: '#4CAF50',
   webhook: '#FF9800',

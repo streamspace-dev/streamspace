@@ -1,3 +1,135 @@
+// Package auth provides authentication and authorization mechanisms for StreamSpace.
+// This file implements Gin middleware for JWT token validation and role-based access control.
+//
+// MIDDLEWARE COMPONENTS:
+// - JWT authentication middleware (required authentication)
+// - Optional authentication middleware (authentication not required)
+// - Role-based authorization middleware (require specific roles)
+// - Helper functions for extracting user context
+//
+// AUTHENTICATION FLOW:
+//
+// 1. Client Request:
+//    - Client includes JWT token in Authorization header
+//    - Format: "Authorization: Bearer <token>"
+//    - Example: "Authorization: Bearer eyJhbGciOiJIUzI1NiIsInR5cCI6IkpXVCJ9..."
+//
+// 2. Token Extraction:
+//    - Middleware extracts token from Authorization header
+//    - Validates header format (must start with "Bearer ")
+//    - Rejects requests with missing or malformed headers
+//
+// 3. Token Validation:
+//    - Validates JWT signature using secret key
+//    - Checks token expiration (exp claim)
+//    - Verifies token issuer (iss claim)
+//    - Ensures algorithm is HMAC (prevents algorithm substitution)
+//
+// 4. User Validation:
+//    - Extracts user ID from validated token claims
+//    - Queries database to verify user still exists
+//    - Checks if user account is active (not disabled)
+//    - Rejects requests from disabled or deleted users
+//
+// 5. Context Population:
+//    - Stores user information in Gin context
+//    - Available to downstream handlers via c.Get()
+//    - Includes: userID, username, email, role, groups
+//
+// MIDDLEWARE TYPES:
+//
+// 1. Middleware (Required Authentication):
+//    - Rejects requests without valid JWT token
+//    - Returns 401 Unauthorized for invalid/missing tokens
+//    - Returns 403 Forbidden for disabled accounts
+//    - Use for protected API endpoints
+//
+// 2. OptionalAuth (Optional Authentication):
+//    - Accepts requests with or without token
+//    - Validates token if present, ignores if absent
+//    - Useful for endpoints that behave differently for authenticated users
+//    - Example: Public catalog with favorites for logged-in users
+//
+// 3. RequireRole (Role-Based Authorization):
+//    - Requires specific role (admin, operator, user)
+//    - Must be used after Middleware (requires authentication)
+//    - Returns 403 Forbidden if user lacks required role
+//
+// 4. RequireAnyRole (Multi-Role Authorization):
+//    - Accepts any of multiple roles
+//    - Example: RequireAnyRole("admin", "operator") for management endpoints
+//    - Returns 403 if user has none of the allowed roles
+//
+// SECURITY FEATURES:
+//
+// - Token signature validation prevents tampering
+// - Expiration checking limits token lifetime
+// - Active user validation prevents disabled account access
+// - Role checking enforces principle of least privilege
+// - Context isolation prevents request cross-contamination
+//
+// SECURITY CONSIDERATIONS:
+//
+// 1. Token Transmission:
+//    - Tokens must be sent over HTTPS in production
+//    - Never log or expose tokens in error messages
+//    - Clear tokens from memory after use
+//
+// 2. Account Status:
+//    - Always check user.Active before allowing access
+//    - Disabled accounts cannot authenticate even with valid token
+//    - Supports immediate access revocation
+//
+// 3. Token Expiration:
+//    - Tokens expire after configured duration (default: 24 hours)
+//    - Expired tokens rejected with 401 Unauthorized
+//    - Forces periodic re-authentication
+//
+// 4. Role Validation:
+//    - Roles stored in JWT claims (tamper-proof via signature)
+//    - Role hierarchy: admin > operator > user
+//    - Always validate role before privileged operations
+//
+// EXAMPLE USAGE:
+//
+//   // Require authentication for all /api routes
+//   api := router.Group("/api")
+//   api.Use(auth.Middleware(jwtManager, userDB))
+//   {
+//       api.GET("/sessions", listSessions)  // Requires valid token
+//   }
+//
+//   // Admin-only endpoints
+//   admin := api.Group("/admin")
+//   admin.Use(auth.RequireRole("admin"))
+//   {
+//       admin.GET("/users", listAllUsers)  // Requires admin role
+//   }
+//
+//   // Optional authentication (public + user features)
+//   router.GET("/catalog", auth.OptionalAuth(jwtManager, userDB), showCatalog)
+//
+//   // Extract user info in handler
+//   func listSessions(c *gin.Context) {
+//       userID, _ := auth.GetUserID(c)
+//       role, _ := auth.GetUserRole(c)
+//       // ... use user info
+//   }
+//
+// CONTEXT KEYS:
+//
+// The middleware stores the following keys in Gin context:
+// - "userID": string - Unique user identifier
+// - "username": string - Username for display
+// - "userEmail": string - User's email address
+// - "userRole": string - Role (admin, operator, user)
+// - "userGroups": []string - Group memberships
+// - "claims": *Claims - Full JWT claims object
+//
+// THREAD SAFETY:
+//
+// All middleware functions are thread-safe and can handle concurrent requests.
+// Each request gets its own Gin context, preventing data leakage between requests.
 package auth
 
 import (

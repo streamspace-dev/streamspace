@@ -1,3 +1,87 @@
+// Package db provides PostgreSQL database access and management for StreamSpace.
+//
+// This file implements group management and authorization data access.
+//
+// Purpose:
+// - CRUD operations for user groups
+// - Group-based access control and permissions
+// - Group quota and resource limit management
+// - User-to-group membership mapping
+// - Group hierarchy support (parent/child groups)
+//
+// Features:
+// - Group-based resource quotas
+// - Group permissions and role-based access
+// - User membership tracking with roles
+// - Group search and filtering by type/parent
+// - Quota inheritance from groups to users
+// - Member count aggregation
+//
+// Database Schema:
+//   - groups table: Group definitions and metadata
+//     - id (varchar): Primary key (UUID)
+//     - name (varchar): Unique group name
+//     - display_name (varchar): Human-readable name
+//     - description (text): Group purpose description
+//     - type (varchar): Group type (team, department, etc.)
+//     - parent_id (varchar): Optional parent group for hierarchy
+//     - created_at, updated_at: Timestamps
+//
+//   - group_memberships table: User-to-group junction
+//     - id (varchar): Primary key
+//     - user_id (varchar): Foreign key to users
+//     - group_id (varchar): Foreign key to groups
+//     - role (varchar): Member role (owner, admin, member)
+//     - created_at: When user joined
+//
+//   - group_quotas table: Resource limits per group
+//     - group_id: Foreign key to groups
+//     - max_sessions, max_cpu, max_memory, max_storage: Limits
+//     - used_sessions, used_cpu, used_memory, used_storage: Current usage
+//
+// Quota Hierarchy:
+//   1. User-specific quotas (most restrictive wins)
+//   2. Group quotas (applied to all group members)
+//   3. Platform defaults (fallback)
+//
+// Implementation Details:
+// - Groups can have resource quotas that apply to all members
+// - Most restrictive quota wins (user vs group vs platform)
+// - Quota stored as separate table with foreign key constraint
+// - Supports hierarchical groups with parent_id
+// - Member counts calculated via JOIN for efficiency
+//
+// Thread Safety:
+// - All database operations are thread-safe via database/sql pool
+// - Safe for concurrent access from multiple goroutines
+//
+// Dependencies:
+// - github.com/google/uuid for ID generation
+// - models package for data structures
+//
+// Example Usage:
+//
+//	groupDB := db.NewGroupDB(database.DB())
+//
+//	// Create group
+//	group, err := groupDB.CreateGroup(ctx, &models.CreateGroupRequest{
+//	    Name:        "developers",
+//	    DisplayName: "Developers",
+//	    Description: "Development team",
+//	    Type:        "team",
+//	})
+//
+//	// Set group quota
+//	maxSessions := 20
+//	err := groupDB.SetGroupQuota(ctx, groupID, &models.SetQuotaRequest{
+//	    MaxSessions: &maxSessions,
+//	})
+//
+//	// Add user to group
+//	err := groupDB.AddGroupMember(ctx, groupID, &models.AddGroupMemberRequest{
+//	    UserID: userID,
+//	    Role:   "member",
+//	})
 package db
 
 import (

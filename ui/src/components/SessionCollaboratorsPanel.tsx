@@ -43,6 +43,43 @@ interface Collaborator {
   };
 }
 
+/**
+ * SessionCollaboratorsPanel - Display and manage active session collaborators
+ *
+ * Shows all users currently collaborating on a session with their activity status,
+ * permission levels, and join times. Provides real-time updates of collaborator
+ * activity and allows session owners to remove collaborators. Auto-refreshes
+ * every 10 seconds to show current activity.
+ *
+ * Features:
+ * - List of active collaborators with avatars
+ * - Real-time activity indicators (active/idle)
+ * - Permission level badges
+ * - Relative timestamps (last activity, join time)
+ * - Remove collaborator action (owner only)
+ * - Auto-refresh every 10 seconds
+ * - Current user highlighting
+ * - Empty state message
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {string} props.sessionId - ID of session to show collaborators for
+ * @param {boolean} [props.isOwner=false] - Whether current user is session owner
+ * @param {Function} [props.onUpdate] - Callback when collaborators list changes
+ *
+ * @returns {JSX.Element} Rendered collaborators panel
+ *
+ * @example
+ * <SessionCollaboratorsPanel
+ *   sessionId="session-123"
+ *   isOwner={true}
+ *   onUpdate={handleUpdate}
+ * />
+ *
+ * @see api.listCollaborators for loading collaborators
+ * @see api.removeCollaborator for removing access
+ */
 export default function SessionCollaboratorsPanel({
   sessionId,
   isOwner = false,

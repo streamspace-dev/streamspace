@@ -6,6 +6,38 @@ import {
   Skeleton,
 } from '@mui/material';
 
+/**
+ * PluginCardSkeleton - Loading skeleton placeholder for PluginCard
+ *
+ * Displays an animated loading placeholder that matches the structure and
+ * dimensions of the PluginCard component. Used during data fetching to
+ * provide visual feedback and prevent layout shift.
+ *
+ * Features:
+ * - Matches PluginCard layout structure
+ * - Animated skeleton loaders
+ * - Icon, title, rating, description, and tag placeholders
+ * - Action button placeholders
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Rendered skeleton card
+ *
+ * @example
+ * {loading ? (
+ *   <PluginCardSkeleton />
+ * ) : (
+ *   <PluginCard plugin={data} />
+ * )}
+ *
+ * @example
+ * // Multiple skeletons while loading
+ * {loading && Array(6).fill(0).map((_, i) => (
+ *   <PluginCardSkeleton key={i} />
+ * ))}
+ *
+ * @see PluginCard for the actual plugin card component
+ */
 export default function PluginCardSkeleton() {
   return (
     <Card

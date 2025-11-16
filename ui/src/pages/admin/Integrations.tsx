@@ -49,6 +49,76 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * Integrations - Webhook and external integration management for administrators
+ *
+ * Administrative interface for configuring webhooks and external service integrations
+ * to connect StreamSpace with third-party tools and services. Supports webhook creation
+ * for platform events, delivery tracking, and integration with Slack, Teams, Discord,
+ * PagerDuty, and email notifications.
+ *
+ * Features:
+ * - Create and manage webhooks for platform events
+ * - Configure webhook URLs and authentication secrets
+ * - Select events to trigger webhooks (16+ event types)
+ * - Test webhook delivery
+ * - View webhook delivery history and status
+ * - External integration configuration (Slack, Teams, etc.)
+ * - Real-time webhook delivery notifications via WebSocket
+ * - Enable/disable webhooks without deletion
+ *
+ * Administrative capabilities:
+ * - System-wide webhook configuration
+ * - Multi-event webhook subscriptions
+ * - HMAC signature verification setup
+ * - Delivery retry monitoring
+ * - Integration health tracking
+ * - Webhook deletion and management
+ *
+ * Available webhook events:
+ * - session.created, session.started, session.hibernated
+ * - session.terminated, session.failed
+ * - user.created, user.updated, user.deleted
+ * - dlp.violation, recording.started, recording.completed
+ * - workflow.started, workflow.completed
+ * - collaboration.started, compliance.violation
+ * - security.alert, scaling.event
+ *
+ * External integrations:
+ * - Slack: Channel notifications and alerts
+ * - Microsoft Teams: Team notifications
+ * - Discord: Server notifications
+ * - PagerDuty: Incident management
+ * - Email (SMTP): Email notifications
+ *
+ * Real-time features:
+ * - Live webhook delivery status
+ * - Success/failure notifications
+ * - Delivery attempt tracking
+ * - WebSocket connection monitoring
+ *
+ * User workflows:
+ * - Create webhooks for event notifications
+ * - Test webhook endpoints before activation
+ * - Monitor delivery success rates
+ * - Configure external service integrations
+ * - Review webhook delivery history
+ * - Troubleshoot failed deliveries
+ *
+ * @page
+ * @route /admin/integrations - Webhook and external integration management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Integration management interface with webhook controls
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/integrations" element={<Integrations />} />
+ *
+ * @see Compliance for compliance-related notifications
+ */
 interface Webhook {
   id: number;
   name: string;

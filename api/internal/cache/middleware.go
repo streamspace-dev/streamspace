@@ -1,3 +1,55 @@
+// Package cache provides Redis-based caching for StreamSpace API.
+//
+// This file implements HTTP caching middleware for Gin framework.
+//
+// Purpose:
+// - Cache HTTP GET responses to reduce backend load
+// - Automatically invalidate cache on mutations (POST, PUT, DELETE)
+// - Add cache control headers for browser/CDN caching
+// - Provide cache hit/miss transparency
+//
+// Features:
+// - Response caching for GET requests
+// - Cache key generation from request URI (SHA-256 hash)
+// - Automatic cache invalidation after mutations
+// - X-Cache header (HIT/MISS) for debugging
+// - Async cache operations (non-blocking)
+// - Cache-Control headers for browser caching
+//
+// Middleware Types:
+//   - CacheMiddleware: Caches GET responses
+//   - InvalidateCacheMiddleware: Clears cache after mutations
+//   - CacheControl: Adds Cache-Control headers
+//
+// Implementation Details:
+// - Only caches successful responses (2xx status codes)
+// - Response body captured via custom ResponseWriter
+// - Cache operations run asynchronously to avoid blocking requests
+// - Cache keys generated via SHA-256 hash of request URI
+// - Gracefully handles cache unavailability (continues without caching)
+//
+// Thread Safety:
+// - Middleware is thread-safe (uses goroutines for async operations)
+// - Safe for concurrent requests
+//
+// Dependencies:
+// - github.com/gin-gonic/gin for HTTP framework
+//
+// Example Usage:
+//
+//	// Apply response caching middleware
+//	router.Use(cache.CacheMiddleware(cacheClient, 5*time.Minute))
+//
+//	// Apply cache invalidation for mutations
+//	router.POST("/sessions", cache.InvalidateCacheMiddleware(cacheClient, cache.SessionPattern()), handler)
+//
+//	// Add cache control headers
+//	router.Use(cache.CacheControl(1*time.Hour))
+//
+//	// Result:
+//	//   - GET /sessions: Cached for 5 minutes, X-Cache: HIT/MISS header added
+//	//   - POST /sessions: Invalidates all session:* keys
+//	//   - Response includes: Cache-Control: public, max-age=3600
 package cache
 
 import (

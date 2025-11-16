@@ -34,6 +34,52 @@ interface PluginConfigFormProps {
   disabled?: boolean;
 }
 
+/**
+ * PluginConfigForm - Dynamic form generator for plugin configuration
+ *
+ * Generates a configuration form based on a JSON schema definition. Supports
+ * various field types (string, number, boolean, enum) with validation, required
+ * fields, and helper text. Automatically creates appropriate UI components
+ * based on field types.
+ *
+ * Features:
+ * - Dynamic form generation from JSON schema
+ * - Support for string, number, boolean, and enum fields
+ * - Required field indicators
+ * - Field descriptions and helper text
+ * - Validation (pattern, min/max for numbers)
+ * - Real-time value updates via onChange callback
+ * - Disabled state support
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {ConfigSchema} [props.schema] - JSON schema defining form structure
+ * @param {Record<string, any>} props.value - Current form values
+ * @param {Function} props.onChange - Callback when form values change
+ * @param {boolean} [props.disabled=false] - Whether form fields are disabled
+ *
+ * @returns {JSX.Element} Rendered configuration form
+ *
+ * @example
+ * <PluginConfigForm
+ *   schema={pluginManifest.configSchema}
+ *   value={config}
+ *   onChange={setConfig}
+ * />
+ *
+ * @example
+ * // Schema example
+ * const schema = {
+ *   type: 'object',
+ *   properties: {
+ *     apiKey: { type: 'string', title: 'API Key', description: 'Your API key' },
+ *     enabled: { type: 'boolean', title: 'Enable Plugin' },
+ *     mode: { type: 'enum', enum: ['dev', 'prod'] }
+ *   },
+ *   required: ['apiKey']
+ * }
+ */
 export default function PluginConfigForm({
   schema,
   value,

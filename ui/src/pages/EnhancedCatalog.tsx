@@ -28,6 +28,9 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * EnhancedCatalogContent - Internal component for EnhancedCatalog page logic
+ */
 function EnhancedCatalogContent() {
   const navigate = useNavigate();
   const [loading, setLoading] = useState(true);
@@ -355,6 +358,58 @@ function EnhancedCatalogContent() {
   );
 }
 
+/**
+ * EnhancedCatalog - Advanced template catalog with search, filtering, and sorting
+ *
+ * Comprehensive template discovery interface providing:
+ * - Advanced search across template names and descriptions
+ * - Multi-level filtering (category, app type, tags, featured)
+ * - Multiple sort options (popular, rating, recent, installs, views)
+ * - Paginated results with configurable page size
+ * - Template detail modal with full metadata
+ * - Install tracking and analytics
+ * - Featured template highlighting
+ * - Real-time catalog updates via WebSocket
+ *
+ * Features:
+ * - Text search with real-time filtering
+ * - Category and app type dropdown filters
+ * - Featured templates toggle filter
+ * - Active filter chips with individual removal
+ * - "Clear All Filters" quick action
+ * - Pagination with page navigation
+ * - Template cards with ratings, install counts, and preview images
+ * - Detailed template modal with full description and metadata
+ * - One-click install with usage tracking
+ * - WebSocket notifications for catalog changes (new, updated, deleted, featured)
+ *
+ * User workflows:
+ * - Search templates by name or keyword
+ * - Filter by category (e.g., "Browsers", "Development")
+ * - Filter by app type (e.g., "GUI", "CLI")
+ * - Toggle featured templates only
+ * - Sort by popularity, rating, recency, or install count
+ * - View template details before installing
+ * - Install template and navigate to create session
+ * - Clear filters to browse all templates
+ *
+ * @page
+ * @route /enhanced-catalog - Advanced template catalog (default catalog route)
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Enhanced template catalog with search and filters
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/enhanced-catalog" element={<EnhancedCatalog />} />
+ * <Route path="/templates" element={<EnhancedCatalog />} />
+ *
+ * @see Catalog for basic catalog without advanced features
+ * @see Sessions for managing installed templates
+ * @see Repositories for managing template sources
+ */
 export default function EnhancedCatalog() {
   return (
     <WebSocketErrorBoundary>

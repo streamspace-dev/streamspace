@@ -1,3 +1,55 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements user management and user-level resource quota operations.
+//
+// USER MANAGEMENT:
+// - User CRUD operations (list, create, read, update, delete)
+// - User profile management (/me endpoints for current user)
+// - User filtering by role, provider, or active status
+// - Password hash sanitization (never exposed in responses)
+//
+// QUOTA MANAGEMENT:
+// - Per-user resource quotas (sessions, CPU, memory, storage)
+// - Quota retrieval for current user and specific users
+// - Admin quota management (list all, set, delete/reset)
+// - Username-based quota operations for admin convenience
+//
+// USER ASSOCIATIONS:
+// - User sessions (redirects to /sessions?user=id)
+// - User group memberships
+//
+// API Endpoints:
+// - GET    /api/v1/users - List all users with optional filters
+// - POST   /api/v1/users - Create new user account
+// - GET    /api/v1/users/me - Get current authenticated user
+// - GET    /api/v1/users/me/quota - Get current user's quota
+// - GET    /api/v1/users/:id - Get user by ID
+// - PATCH  /api/v1/users/:id - Update user information
+// - DELETE /api/v1/users/:id - Delete user account
+// - GET    /api/v1/users/:id/sessions - Get user's sessions
+// - GET    /api/v1/users/:id/quota - Get user's resource quota
+// - PUT    /api/v1/users/:id/quota - Set user's resource quota
+// - GET    /api/v1/users/:id/groups - Get user's group memberships
+// - GET    /api/v1/admin/quotas - List all user quotas (admin)
+// - GET    /api/v1/admin/quotas/:username - Get quota by username (admin)
+// - PUT    /api/v1/admin/quotas - Set quota by username (admin)
+// - DELETE /api/v1/admin/quotas/:username - Reset quota to defaults (admin)
+//
+// Security:
+// - Password hashes are sanitized before returning user objects
+// - Safe type assertions prevent panics
+// - Authentication required via middleware for protected endpoints
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: users, user_quotas, user_groups tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewUserHandler(userDB, groupDB)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

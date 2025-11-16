@@ -24,7 +24,7 @@ import {
   ViewModule as ViewModuleIcon,
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
-} from '@mui/icons-material';
+} from '@mui/material-icons';
 import Layout from '../components/Layout';
 import RepositoryCard from '../components/RepositoryCard';
 import RepositoryDialog from '../components/RepositoryDialog';
@@ -42,6 +42,53 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * EnhancedRepositories - Advanced template repository management with real-time updates
+ *
+ * Enhanced version of repository management with real-time WebSocket updates, advanced
+ * filtering, multiple view modes, and comprehensive statistics. Provides a rich user
+ * experience for managing template repositories with live sync status monitoring and
+ * automatic refresh capabilities.
+ *
+ * Features:
+ * - Real-time repository sync status via WebSocket
+ * - Statistics dashboard (total, synced, syncing, failed)
+ * - Grid and list view modes
+ * - Advanced filtering by status
+ * - Search across repositories
+ * - Live notification system for sync events
+ * - Auto-refresh every 10 seconds
+ * - WebSocket connection status indicator
+ *
+ * Real-time features:
+ * - Live sync progress updates
+ * - Automatic UI refresh on repository changes
+ * - Connection status monitoring
+ * - Event-driven notifications
+ *
+ * User workflows:
+ * - Monitor repository sync status in real-time
+ * - Quick access to repository statistics
+ * - Filter and search for specific repositories
+ * - Switch between grid and list views
+ * - Receive instant notifications for sync events
+ *
+ * @page
+ * @route /repositories - Enhanced template repository management
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Enhanced repository management interface with real-time updates
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/repositories" element={<EnhancedRepositories />} />
+ *
+ * @see Repositories for basic repository management
+ * @see RepositoryCard for individual repository display
+ * @see RepositoryDialog for add/edit repository dialog
+ */
 function EnhancedRepositoriesContent() {
   const { data: repositories = [], isLoading, refetch } = useRepositories();
   const addRepository = useAddRepository();

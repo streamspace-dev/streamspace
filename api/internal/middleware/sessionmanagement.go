@@ -1,3 +1,62 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file implements enhanced session security with idle timeout and concurrency limits.
+//
+// Purpose:
+// The session management middleware provides security features for user authentication
+// sessions including automatic logout after inactivity and enforcement of concurrent
+// session limits to prevent credential sharing and session hijacking.
+//
+// Implementation Details:
+// - Idle timeout: Automatically invalidates sessions after period of inactivity
+// - Activity tracking: Updates last activity timestamp on every authenticated request
+// - Concurrent sessions: Limits number of simultaneous logins per user account
+// - Memory cleanup: Periodic background cleanup prevents memory leaks
+// - In-memory storage: Fast but not distributed (single-server only)
+//
+// Security Notes:
+// This middleware addresses critical security concerns:
+//
+// 1. Idle Timeout (Prevents Session Hijacking):
+//    - User forgets to log out on public computer
+//    - Without timeout: Session stays active indefinitely (attacker can use it)
+//    - With timeout: Session expires after 30 minutes of inactivity
+//
+// 2. Concurrent Session Limits (Prevents Credential Sharing):
+//    - User shares login credentials with colleagues
+//    - Without limit: Unlimited concurrent sessions (credential abuse)
+//    - With limit: Max 5 concurrent sessions (discourages sharing)
+//
+// 3. Session Cleanup (Prevents Memory Leaks):
+//    - Long-running server accumulates millions of session entries
+//    - Without cleanup: Memory usage grows unbounded (eventual crash)
+//    - With cleanup: Stale sessions removed every 5 minutes
+//
+// Thread Safety:
+// Safe for concurrent use. Uses sync.RWMutex for thread-safe access to session maps.
+//
+// Usage:
+//   // Create session manager with 30-minute idle timeout and max 5 concurrent sessions
+//   sessionMgr := middleware.NewSessionManager(30*time.Minute, 5)
+//
+//   // Apply idle timeout check to all authenticated routes
+//   router.Use(sessionMgr.IdleTimeoutMiddleware())
+//
+//   // Track session activity on every request
+//   router.Use(sessionMgr.SessionActivityMiddleware())
+//
+//   // In login handler, register new session
+//   if err := sessionMgr.RegisterSession(username, sessionID); err != nil {
+//       // Max sessions exceeded
+//       return c.JSON(403, gin.H{"error": "Maximum concurrent sessions reached"})
+//   }
+//
+//   // In logout handler, unregister session
+//   sessionMgr.UnregisterSession(username, sessionID)
+//
+// Configuration:
+//   idleTimeout: 30*time.Minute    // Session expires after 30 min inactivity
+//   maxSessions: 5                  // Max 5 concurrent logins per user
+//   cleanupInterval: 5*time.Minute  // Cleanup runs every 5 minutes
 package middleware
 
 import (

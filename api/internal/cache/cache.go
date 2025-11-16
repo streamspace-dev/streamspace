@@ -1,3 +1,68 @@
+// Package cache provides Redis-based caching for StreamSpace API.
+//
+// This file implements the core Redis cache client with connection pooling.
+//
+// Purpose:
+// - Provide high-performance caching for frequently accessed data
+// - Reduce database load for read-heavy operations
+// - Enable distributed caching across multiple API instances
+// - Support atomic operations and distributed locks
+//
+// Features:
+// - Connection pooling (25 max connections, 5 min idle)
+// - Automatic retry with exponential backoff
+// - Graceful fallback when Redis is unavailable (cache disabled mode)
+// - JSON serialization/deserialization
+// - TTL-based expiration
+// - Pattern-based invalidation
+// - Atomic counters and distributed locks (SetNX)
+// - Statistics and monitoring (pool stats, hit/miss tracking)
+//
+// Cache Strategy:
+//   - Get: Retrieve value, deserialize JSON
+//   - Set: Serialize to JSON, store with TTL
+//   - Delete: Remove single or multiple keys
+//   - DeletePattern: Bulk invalidation via pattern matching
+//   - SetNX: Distributed lock acquisition
+//
+// Implementation Details:
+// - Uses go-redis client with connection pooling
+// - Auto-reconnection on connection failures
+// - 3 retry attempts with 8-512ms exponential backoff
+// - 5-second dial timeout, 3-second read/write timeouts
+// - Values stored as JSON for flexibility
+//
+// Thread Safety:
+// - Redis client is thread-safe
+// - Safe for concurrent access across goroutines
+//
+// Dependencies:
+// - github.com/redis/go-redis/v9 for Redis client
+//
+// Example Usage:
+//
+//	// Initialize cache
+//	cache, err := cache.NewCache(cache.Config{
+//	    Host:     "localhost",
+//	    Port:     "6379",
+//	    Password: "",
+//	    DB:       0,
+//	    Enabled:  true,
+//	})
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//	defer cache.Close()
+//
+//	// Store session in cache
+//	err = cache.Set(ctx, cache.SessionKey("session-123"), session, 5*time.Minute)
+//
+//	// Retrieve from cache
+//	var session Session
+//	err = cache.Get(ctx, cache.SessionKey("session-123"), &session)
+//
+//	// Invalidate user's sessions
+//	err = cache.DeletePattern(ctx, cache.UserPattern("user-123"))
 package cache
 
 import (

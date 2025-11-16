@@ -1,3 +1,66 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements session activity logging and audit trail functionality.
+//
+// SESSION ACTIVITY FEATURES:
+// - Comprehensive session event logging
+// - Activity timeline and audit trail
+// - Event categorization (lifecycle, connection, state, configuration, access, error)
+// - User action tracking with IP addresses and user agents
+// - Activity statistics and analytics
+// - Activity export for compliance
+//
+// EVENT CATEGORIES:
+// - lifecycle: Session creation, startup, termination, deletion
+// - connection: User connections, disconnections, heartbeats
+// - state: State changes (running, hibernated, stopped)
+// - configuration: Resource updates, config changes, tag updates
+// - access: Permission grants, denials, sharing events
+// - error: Error occurrences and exceptions
+//
+// EVENT TYPES:
+// - session.created, session.started, session.stopped, session.hibernated
+// - session.woken, session.terminated, session.deleted
+// - user.connected, user.disconnected, user.heartbeat
+// - state.changed, resources.updated, config.updated, tags.updated
+// - access.granted, access.denied, share.created, share.revoked
+// - error.occurred
+//
+// ACTIVITY LOGGING:
+// - Automatic event logging for all session operations
+// - Manual event logging via API
+// - Metadata capture (user ID, IP address, user agent)
+// - Timestamp tracking with millisecond precision
+//
+// ACTIVITY QUERIES:
+// - List session activity timeline
+// - Filter by event type or category
+// - Date range filtering
+// - Pagination support
+// - Export to CSV/JSON for compliance
+//
+// ACTIVITY STATISTICS:
+// - Event count by type
+// - Activity heatmap data
+// - User activity patterns
+// - Session usage analytics
+//
+// API Endpoints:
+// - POST /api/v1/sessions/:id/activity/log - Log activity event
+// - GET  /api/v1/sessions/:id/activity - Get session activity timeline
+// - GET  /api/v1/sessions/:id/activity/stats - Get activity statistics
+// - GET  /api/v1/sessions/:id/activity/export - Export activity data
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: session_activity_events table
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewSessionActivityHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

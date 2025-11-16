@@ -29,6 +29,44 @@ interface PluginCardProps {
   mode?: 'catalog' | 'installed';
 }
 
+/**
+ * PluginCard - Display card for a plugin in the catalog or installed plugins list
+ *
+ * Presents plugin information in a compact, visually appealing card format with
+ * plugin type badge, icon, rating, description, tags, and action buttons. Supports
+ * both catalog mode (with install button) and installed mode. Includes hover effects
+ * and memoization for performance.
+ *
+ * Features:
+ * - Plugin type badge with color coding and icons
+ * - Star rating display with review count
+ * - Truncated description with ellipsis
+ * - Category and tag chips
+ * - Install count statistics
+ * - Install and view details actions
+ * - Memoized to prevent unnecessary re-renders
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {CatalogPlugin} props.plugin - Plugin data to display
+ * @param {Function} [props.onInstall] - Callback when install button is clicked
+ * @param {Function} [props.onViewDetails] - Callback when info button is clicked
+ * @param {'catalog' | 'installed'} [props.mode='catalog'] - Display mode for the card
+ *
+ * @returns {JSX.Element} Rendered plugin card
+ *
+ * @example
+ * <PluginCard
+ *   plugin={pluginData}
+ *   mode="catalog"
+ *   onInstall={handleInstall}
+ *   onViewDetails={handleViewDetails}
+ * />
+ *
+ * @see RatingStars for rating display component
+ * @see PluginDetailModal for detailed plugin view
+ */
 const pluginTypeIcons: Record<string, JSX.Element> = {
   extension: <ExtensionIcon fontSize="small" />,
   webhook: <WebhookIcon fontSize="small" />,

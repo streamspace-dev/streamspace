@@ -52,6 +52,45 @@ interface Share {
   };
 }
 
+/**
+ * SessionShareDialog - Dialog for sharing sessions with specific users
+ *
+ * Allows session owners to share sessions with other users by granting specific
+ * permission levels (view, collaborate, control). Displays existing shares with
+ * their status and permissions. Supports share expiration, revocation, and
+ * ownership transfer.
+ *
+ * Features:
+ * - Share with specific users from user list
+ * - Permission levels: view, collaborate, control
+ * - Optional expiration dates
+ * - View and manage existing shares
+ * - Share status indicators (pending/accepted/expired)
+ * - Revoke share access
+ * - Transfer session ownership (irreversible)
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the dialog is open
+ * @param {string} props.sessionId - ID of session to share
+ * @param {string} props.sessionName - Display name of session
+ * @param {Function} props.onClose - Callback when dialog is closed
+ *
+ * @returns {JSX.Element} Rendered share dialog
+ *
+ * @example
+ * <SessionShareDialog
+ *   open={isOpen}
+ *   sessionId="session-123"
+ *   sessionName="My Firefox Session"
+ *   onClose={() => setIsOpen(false)}
+ * />
+ *
+ * @see api.createShare for sharing API
+ * @see api.revokeShare for revoke API
+ * @see api.transferOwnership for ownership transfer
+ */
 export default function SessionShareDialog({
   open,
   sessionId,

@@ -1,3 +1,71 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements monitoring, metrics, health checks, and alerting endpoints.
+//
+// MONITORING FEATURES:
+// - Prometheus-compatible metrics export
+// - Custom application metrics (sessions, users, resources)
+// - Health check endpoints (liveness, readiness)
+// - Performance metrics (response times, throughput)
+// - System resource metrics (CPU, memory, goroutines)
+// - Alert management (create, acknowledge, resolve)
+//
+// METRICS EXPORT:
+// - Prometheus format (/monitoring/metrics/prometheus)
+// - Session metrics (total, running, hibernated)
+// - User metrics (total, active)
+// - Resource metrics (CPU, memory, storage usage)
+// - Performance metrics (response time percentiles)
+//
+// HEALTH CHECKS:
+// - Basic health: /monitoring/health (200 if API is responding)
+// - Detailed health: Database, storage, Kubernetes connectivity
+// - Database health: Connection pool status, query latency
+// - Storage health: NFS mount status, disk space
+//
+// SYSTEM METRICS:
+// - Go runtime stats (goroutines, memory, GC)
+// - Build information (version, git commit, build time)
+// - Uptime and request counts
+// - Resource usage trends
+//
+// ALERTING:
+// - Create, read, update, delete alerts
+// - Acknowledge and resolve workflows
+// - Alert severity levels (info, warning, error, critical)
+// - Alert filtering and querying
+//
+// API Endpoints:
+// - GET    /api/v1/monitoring/metrics/prometheus - Prometheus metrics
+// - GET    /api/v1/monitoring/metrics/sessions - Session metrics
+// - GET    /api/v1/monitoring/metrics/resources - Resource metrics
+// - GET    /api/v1/monitoring/metrics/users - User metrics
+// - GET    /api/v1/monitoring/metrics/performance - Performance metrics
+// - GET    /api/v1/monitoring/health - Basic health check
+// - GET    /api/v1/monitoring/health/detailed - Detailed health check
+// - GET    /api/v1/monitoring/health/database - Database health
+// - GET    /api/v1/monitoring/health/storage - Storage health
+// - GET    /api/v1/monitoring/system/info - System information
+// - GET    /api/v1/monitoring/system/stats - System statistics
+// - GET    /api/v1/monitoring/alerts - List alerts
+// - POST   /api/v1/monitoring/alerts - Create alert
+// - GET    /api/v1/monitoring/alerts/:id - Get alert
+// - PUT    /api/v1/monitoring/alerts/:id - Update alert
+// - DELETE /api/v1/monitoring/alerts/:id - Delete alert
+// - POST   /api/v1/monitoring/alerts/:id/acknowledge - Acknowledge alert
+// - POST   /api/v1/monitoring/alerts/:id/resolve - Resolve alert
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Runtime metrics are thread-safe
+//
+// Dependencies:
+// - Database: sessions, users, alerts tables
+// - External Services: Prometheus scraping (optional)
+//
+// Example Usage:
+//
+//	handler := NewMonitoringHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

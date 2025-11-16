@@ -42,6 +42,72 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * Users - User account management for administrators
+ *
+ * Administrative interface for managing user accounts across the platform. Provides
+ * comprehensive user management capabilities including creation, editing, deletion,
+ * and filtering. Administrators can view user details, manage roles and permissions,
+ * and monitor user activity with real-time WebSocket updates.
+ *
+ * Features:
+ * - View all user accounts in table format
+ * - Filter by role, provider, and active status
+ * - Search users by username or email
+ * - Create new user accounts
+ * - Edit user details (navigate to UserDetail)
+ * - Delete user accounts with confirmation
+ * - Real-time user event notifications via WebSocket
+ * - User statistics (total, admin, active)
+ *
+ * Administrative capabilities:
+ * - Create and manage user accounts
+ * - Assign user roles (admin, user)
+ * - Set authentication provider (local, SAML, OIDC)
+ * - Enable/disable user accounts
+ * - Monitor user creation, updates, and deletions
+ * - View user login activity
+ *
+ * User roles:
+ * - admin: Full administrative access
+ * - user: Standard user access
+ *
+ * Authentication providers:
+ * - local: Username/password authentication
+ * - saml: SAML 2.0 SSO
+ * - oidc: OpenID Connect OAuth2
+ *
+ * Real-time features:
+ * - Live user creation notifications
+ * - User update alerts
+ * - User deletion notifications
+ * - Optional login activity tracking
+ * - WebSocket connection monitoring
+ *
+ * User workflows:
+ * - Create new user accounts
+ * - Filter users by criteria
+ * - Search for specific users
+ * - View user details
+ * - Delete inactive accounts
+ * - Monitor user events
+ *
+ * @page
+ * @route /admin/users - User account management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} User management interface with filtering and search
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/users" element={<Users />} />
+ *
+ * @see CreateUser for creating new user accounts
+ * @see UserDetail for viewing and editing user details
+ * @see Quotas for managing user resource quotas
+ */
 export default function Users() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();

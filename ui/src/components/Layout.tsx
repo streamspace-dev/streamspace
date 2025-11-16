@@ -44,6 +44,36 @@ interface LayoutProps {
   children: ReactNode;
 }
 
+/**
+ * Layout - Main application layout with navigation sidebar and app bar
+ *
+ * Provides the consistent layout structure for the entire StreamSpace application,
+ * including a responsive navigation drawer with user and admin menu items, a top
+ * app bar with user profile menu, and the main content area. Handles mobile
+ * responsive behavior with collapsible drawer.
+ *
+ * Features:
+ * - Responsive navigation drawer (permanent on desktop, temporary on mobile)
+ * - User-specific and admin menu items with role-based access
+ * - User profile avatar and logout menu
+ * - Active route highlighting
+ * - Material-UI theming integration
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components to render in main content area
+ *
+ * @returns {JSX.Element} Rendered layout with navigation and content
+ *
+ * @example
+ * <Layout>
+ *   <Dashboard />
+ * </Layout>
+ *
+ * @see useUserStore for user authentication state
+ * @see useNavigate for route navigation
+ */
 export default function Layout({ children }: LayoutProps) {
   const [mobileOpen, setMobileOpen] = useState(false);
   const [anchorEl, setAnchorEl] = useState<null | HTMLElement>(null);

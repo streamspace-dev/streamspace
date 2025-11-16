@@ -1,3 +1,74 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements advanced search, filtering, and saved search functionality.
+//
+// SEARCH FEATURES:
+// - Universal search across templates, sessions, users
+// - Full-text search with relevance scoring
+// - Advanced filtering (category, tags, app type)
+// - Auto-complete suggestions
+// - Saved search queries
+// - Search history tracking
+//
+// SEARCH TYPES:
+// - Universal: Search across all resource types
+// - Templates: Search template catalog
+// - Sessions: Search user sessions
+// - Suggestions: Auto-complete for search input
+// - Advanced: Multi-filter complex queries
+//
+// SEARCH RESULTS:
+// - Type-specific results (template, session, user)
+// - Relevance scoring
+// - Result metadata (category, tags, icons)
+// - Pagination support
+//
+// FILTERING:
+// - Categories: Filter by template/session category
+// - Tags: Filter by tags
+// - App Types: Filter by application type
+// - Multiple filters combined with AND logic
+//
+// SAVED SEARCHES:
+// - Save frequently used search queries
+// - Named searches for quick access
+// - Execute saved searches
+// - Update and delete saved searches
+// - User-specific saved searches
+//
+// SEARCH HISTORY:
+// - Track user search queries
+// - Timestamp tracking
+// - Result count tracking
+// - History limits per user
+//
+// API Endpoints:
+// - GET    /api/v1/search - Universal search
+// - GET    /api/v1/search/templates - Template-specific search
+// - GET    /api/v1/search/sessions - Session search
+// - GET    /api/v1/search/suggest - Auto-complete suggestions
+// - GET    /api/v1/search/advanced - Advanced multi-filter search
+// - GET    /api/v1/search/filters/categories - List all categories
+// - GET    /api/v1/search/filters/tags - List popular tags
+// - GET    /api/v1/search/filters/app-types - List app types
+// - GET    /api/v1/search/saved - List saved searches
+// - POST   /api/v1/search/saved - Create saved search
+// - GET    /api/v1/search/saved/:id - Get saved search
+// - PUT    /api/v1/search/saved/:id - Update saved search
+// - DELETE /api/v1/search/saved/:id - Delete saved search
+// - POST   /api/v1/search/saved/:id/execute - Execute saved search
+// - GET    /api/v1/search/history - Get search history
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: catalog_templates, sessions, users, saved_searches, search_history tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewSearchHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

@@ -1,3 +1,56 @@
+// Package middleware provides HTTP middleware for the StreamSpace API.
+// This file implements structured request logging.
+//
+// Purpose:
+// The structured logger middleware captures detailed information about every HTTP
+// request in a consistent, machine-parseable format. This enables log analysis,
+// alerting, debugging, and observability in production environments.
+//
+// Implementation Details:
+// - Structured format: Key-value pairs instead of unstructured text
+// - Request correlation: Includes request ID for distributed tracing
+// - User tracking: Logs authenticated user information when available
+// - Performance metrics: Captures request duration in milliseconds
+// - Error tracking: Logs Gin errors if any occurred during request processing
+// - Configurable skipping: Can skip health check endpoints to reduce noise
+//
+// Logged Fields:
+// - request_id: Correlation ID for distributed tracing (from RequestID middleware)
+// - method: HTTP method (GET, POST, PUT, DELETE, etc.)
+// - path: Request path (/api/v1/sessions)
+// - query: Query string parameters (if enabled)
+// - status: HTTP status code (200, 404, 500, etc.)
+// - duration: Request processing time (human-readable: "125ms")
+// - duration_ms: Request processing time in milliseconds (for metrics: 125)
+// - client_ip: Client IP address
+// - user_agent: Browser/client user agent string
+// - user_id: Authenticated user ID (if authenticated)
+// - username: Authenticated username (if authenticated)
+// - errors: Concatenated error messages (if any errors occurred)
+//
+// Log Levels:
+// - INFO: Successful requests (2xx status codes)
+// - WARN: Client errors (4xx status codes)
+// - ERROR: Server errors (5xx status codes)
+//
+// Thread Safety:
+// Safe for concurrent use. Each request logs independently.
+//
+// Usage:
+//   // Basic structured logging
+//   router.Use(middleware.StructuredLogger())
+//
+//   // Custom configuration
+//   config := middleware.DefaultStructuredLoggerConfig()
+//   config.SkipHealthCheck = true  // Don't log /health endpoint
+//   config.LogQuery = false         // Don't log query parameters (privacy)
+//   router.Use(middleware.StructuredLoggerWithConfigFunc(config))
+//
+// Configuration:
+//   SkipPaths: []string{}           // Paths to skip (e.g., ["/metrics", "/health"])
+//   SkipHealthCheck: true            // Skip /health and /api/v1/health endpoints
+//   LogQuery: true                   // Log query parameters
+//   LogUserAgent: true               // Log user agent string
 package middleware
 
 import (

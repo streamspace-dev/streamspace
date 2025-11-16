@@ -1,3 +1,70 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements template versioning, testing, and inheritance management.
+//
+// TEMPLATE VERSIONING FEATURES:
+// - Semantic versioning (major.minor.patch)
+// - Version lifecycle (draft, testing, stable, deprecated)
+// - Version testing and validation
+// - Template inheritance (parent-child relationships)
+// - Version comparison and diff
+// - Rollback to previous versions
+//
+// VERSION LIFECYCLE:
+// - draft: Work in progress, not ready for use
+// - testing: Undergoing validation tests
+// - stable: Production-ready, recommended for use
+// - deprecated: Old version, migration recommended
+//
+// VERSION MANAGEMENT:
+// - Create new versions with semantic versioning
+// - Set default version for template
+// - Publish versions for public use
+// - Deprecate outdated versions
+// - Track version metadata (changelog, test results)
+//
+// TEMPLATE TESTING:
+// - Automated template validation
+// - Test types: startup, smoke, functional, performance
+// - Test status tracking: pending, running, passed, failed
+// - Test results with duration and error messages
+// - Test execution history
+//
+// TEMPLATE INHERITANCE:
+// - Parent-child template relationships
+// - Field inheritance and overrides
+// - Inherited field tracking
+// - Override visualization
+// - Template family trees
+//
+// VERSION COMPARISON:
+// - Compare configurations between versions
+// - Highlight differences
+// - Migration guides between versions
+//
+// API Endpoints:
+// - POST /api/v1/templates/:id/versions - Create template version
+// - GET  /api/v1/templates/:id/versions - List template versions
+// - GET  /api/v1/templates/:id/versions/:version - Get version details
+// - PUT  /api/v1/templates/:id/versions/:version - Update version
+// - DELETE /api/v1/templates/:id/versions/:version - Delete version
+// - POST /api/v1/templates/:id/versions/:version/publish - Publish version
+// - POST /api/v1/templates/:id/versions/:version/deprecate - Deprecate version
+// - POST /api/v1/templates/:id/versions/:version/test - Run version tests
+// - GET  /api/v1/templates/:id/versions/:version/tests - Get test results
+// - GET  /api/v1/templates/:id/inheritance - Get template inheritance tree
+// - POST /api/v1/templates/:id/inherit-from - Set parent template
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: template_versions, template_tests, template_inheritance tables
+// - External Services: Test execution infrastructure
+//
+// Example Usage:
+//
+//	// Create version handler (integrated in main handler)
+//	handler.RegisterTemplateVersioningRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

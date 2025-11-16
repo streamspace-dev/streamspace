@@ -35,6 +35,66 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * AdminQuotas - User resource quota management for administrators
+ *
+ * Administrative interface for managing user resource quotas across the platform.
+ * Administrators can set and modify resource limits for individual users to control
+ * session creation, CPU, memory, and storage usage. Provides real-time quota monitoring
+ * with usage visualization and automatic alerts for quota violations.
+ *
+ * Features:
+ * - Create and edit user quotas
+ * - Set limits for sessions, CPU, memory, storage
+ * - Visual usage indicators with progress bars
+ * - Real-time quota usage tracking
+ * - Quota violation warnings
+ * - Delete quota configurations
+ * - Real-time quota event notifications via WebSocket
+ *
+ * Administrative capabilities:
+ * - Define per-user resource limits
+ * - Monitor quota utilization in real-time
+ * - Prevent resource overconsumption
+ * - Receive alerts for quota violations
+ * - Enforce fair resource allocation
+ * - Audit quota changes
+ *
+ * Resource types:
+ * - Sessions: Maximum concurrent sessions (integer)
+ * - CPU: Maximum CPU allocation (e.g., "4000m" = 4 cores)
+ * - Memory: Maximum memory allocation (e.g., "8Gi" = 8 gigabytes)
+ * - Storage: Maximum persistent storage (e.g., "50Gi" = 50 gigabytes)
+ *
+ * Real-time features:
+ * - Live quota usage updates
+ * - Quota exceeded notifications (high priority)
+ * - Quota warning alerts (>90% usage)
+ * - Create/update/delete notifications
+ * - WebSocket connection monitoring
+ *
+ * User workflows:
+ * - Create quotas for new users
+ * - Update quotas based on requirements
+ * - Monitor user resource consumption
+ * - Identify users approaching limits
+ * - Delete quotas to remove restrictions
+ *
+ * @page
+ * @route /admin/quotas - User resource quota management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Quota management interface with usage visualization
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/quotas" element={<AdminQuotas />} />
+ *
+ * @see Users for user account management
+ * @see AdminDashboard for overall resource utilization
+ */
 export default function AdminQuotas() {
   const [quotas, setQuotas] = useState<UserQuota[]>([]);
   const [loading, setLoading] = useState(true);

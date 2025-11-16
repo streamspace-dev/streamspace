@@ -1,3 +1,81 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements custom session template management and presets.
+//
+// SESSION TEMPLATE FEATURES:
+// - User-defined session configuration templates
+// - Template CRUD operations (create, read, update, delete)
+// - Template visibility (private, team, public)
+// - Template cloning and versioning
+// - Template sharing within teams
+// - Create templates from existing sessions
+// - Usage tracking and analytics
+//
+// TEMPLATE VISIBILITY:
+// - private: Only visible to template owner
+// - team: Visible to team members
+// - public: Visible to all users (requires approval)
+//
+// TEMPLATE STRUCTURE:
+// - Based on catalog template (base template reference)
+// - Custom configuration overrides
+// - Resource allocations (CPU, memory)
+// - Environment variables
+// - Tags and categorization
+// - Version tracking
+//
+// TEMPLATE OPERATIONS:
+// - Create: Define new template from scratch or from session
+// - Clone: Duplicate existing template
+// - Use: Launch session from template
+// - Publish/Unpublish: Make template public or private
+// - Share: Share with specific users or teams
+//
+// TEMPLATE SHARING:
+// - Share templates with users or teams
+// - Permission levels (view, use, edit)
+// - Revoke shares
+// - Track who has access
+//
+// TEMPLATE VERSIONING:
+// - Version history tracking
+// - Restore previous versions
+// - Version comparison
+// - Change logs
+//
+// QUICK ACTIONS:
+// - Create template from running session
+// - Set as default template for user
+// - Clone template with modifications
+//
+// API Endpoints:
+// - GET    /api/v1/session-templates - List session templates
+// - POST   /api/v1/session-templates - Create session template
+// - GET    /api/v1/session-templates/:id - Get template details
+// - PUT    /api/v1/session-templates/:id - Update template
+// - DELETE /api/v1/session-templates/:id - Delete template
+// - POST   /api/v1/session-templates/:id/clone - Clone template
+// - POST   /api/v1/session-templates/:id/use - Launch session from template
+// - POST   /api/v1/session-templates/:id/publish - Make template public
+// - POST   /api/v1/session-templates/:id/unpublish - Make template private
+// - GET    /api/v1/session-templates/:id/shares - List template shares
+// - POST   /api/v1/session-templates/:id/share - Share template
+// - DELETE /api/v1/session-templates/:id/shares/:shareId - Revoke share
+// - GET    /api/v1/session-templates/:id/versions - List template versions
+// - POST   /api/v1/session-templates/:id/versions - Create version
+// - POST   /api/v1/session-templates/:id/versions/:version/restore - Restore version
+// - POST   /api/v1/session-templates/from-session/:sessionId - Create from session
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+//
+// Dependencies:
+// - Database: session_templates, template_shares, template_versions tables
+// - External Services: None
+//
+// Example Usage:
+//
+//	handler := NewSessionTemplatesHandler(database)
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

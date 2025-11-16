@@ -1,3 +1,184 @@
+// Package auth provides authentication and authorization mechanisms for StreamSpace.
+// This file implements identity provider configuration templates and certificate
+// management utilities for SAML and OIDC authentication.
+//
+// IDENTITY PROVIDER SUPPORT:
+//
+// This module provides pre-configured templates for popular identity providers,
+// making it easier to integrate StreamSpace with enterprise SSO systems. It supports
+// both SAML 2.0 and OpenID Connect (OIDC) protocols.
+//
+// SUPPORTED SAML PROVIDERS:
+//
+// - Okta: Enterprise SSO platform with comprehensive SAML support
+// - Azure AD / Microsoft Entra ID: Microsoft's cloud identity provider
+// - Google Workspace: Google's enterprise suite with SSO
+// - Auth0: Identity as a Service platform
+// - Keycloak: Open source identity and access management
+// - Authentik: Modern open source identity provider
+// - Generic: Template for any SAML 2.0 compliant provider
+//
+// SUPPORTED OIDC PROVIDERS:
+//
+// - Keycloak: Open source with full OIDC support
+// - Okta: Enterprise OIDC provider
+// - Auth0: OIDC identity service
+// - Google: Google accounts with OIDC
+// - Azure AD: Microsoft's OIDC implementation
+// - GitHub: Developer accounts (limited OIDC)
+// - GitLab: Self-hosted or cloud OIDC
+// - Generic: Any OIDC-compliant provider
+//
+// PROVIDER CONFIGURATION TEMPLATES:
+//
+// Each provider has a pre-configured template that includes:
+// - Default attribute mappings (email, username, groups, etc.)
+// - Metadata URL template (for SAML)
+// - Discovery URL template (for OIDC)
+// - Default scopes (for OIDC)
+// - Claim names for user attributes
+//
+// WHY PROVIDER TEMPLATES?
+//
+// Different identity providers use different attribute names and URL patterns:
+//
+// Example - Email attribute:
+// - Okta: "email"
+// - Azure AD: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+// - Google: "email"
+// - Authentik: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+//
+// Provider templates eliminate manual configuration and reduce integration errors.
+//
+// SAML ATTRIBUTE MAPPING:
+//
+// SAML attributes map user information from IdP to StreamSpace fields:
+//
+// Okta Mapping:
+//   Email:     "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+//   Username:  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+//   FirstName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+//   LastName:  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+//   Groups:    "groups"
+//
+// Azure AD Mapping:
+//   Email:     "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress"
+//   Username:  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name"
+//   FirstName: "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/givenname"
+//   LastName:  "http://schemas.xmlsoap.org/ws/2005/05/identity/claims/surname"
+//   Groups:    "http://schemas.microsoft.com/ws/2008/06/identity/claims/groups"
+//
+// Keycloak Mapping:
+//   Email:     "email"
+//   Username:  "username"
+//   FirstName: "firstName"
+//   LastName:  "lastName"
+//   Groups:    "groups"
+//
+// OIDC CLAIM MAPPING:
+//
+// OIDC providers use simpler claim names than SAML:
+//
+// Standard OIDC Claims:
+//   UsernameClaim: "preferred_username"
+//   EmailClaim:    "email"
+//   GroupsClaim:   "groups"
+//
+// Provider-Specific Variations:
+//   Google:  username = "email" (no preferred_username)
+//   Auth0:   groups = "https://{domain}/claims/groups" (namespaced)
+//   GitHub:  username = "login", groups = "orgs"
+//
+// METADATA URL TEMPLATES:
+//
+// SAML providers expose metadata at predictable URLs. Templates use placeholders
+// that are replaced with actual values during configuration:
+//
+// Okta:
+//   Template: "https://{domain}/app/{app_id}/sso/saml/metadata"
+//   Example:  "https://dev-12345.okta.com/app/abc123/sso/saml/metadata"
+//
+// Azure AD:
+//   Template: "https://login.microsoftonline.com/{tenant_id}/federationmetadata/2007-06/federationmetadata.xml"
+//   Example:  "https://login.microsoftonline.com/00000000-0000-0000-0000-000000000000/federationmetadata/..."
+//
+// Keycloak:
+//   Template: "https://{domain}/auth/realms/{realm}/protocol/saml/descriptor"
+//   Example:  "https://auth.example.com/auth/realms/master/protocol/saml/descriptor"
+//
+// CERTIFICATE MANAGEMENT:
+//
+// SAML requires X.509 certificates for signing and encryption. This module provides
+// utilities for loading certificates and private keys from PEM files:
+//
+// - LoadCertificate: Loads X.509 certificate from PEM file
+// - LoadPrivateKey: Loads RSA private key from PEM file (PKCS1 or PKCS8)
+//
+// SECURITY CONSIDERATIONS:
+//
+// 1. Certificate Storage:
+//    - Store private keys securely (file permissions 0600)
+//    - Never commit private keys to version control
+//    - Use secrets management systems (Vault, AWS Secrets Manager)
+//    - Rotate certificates regularly (annually recommended)
+//
+// 2. Attribute Mapping Validation:
+//    - Verify attribute mappings with IdP administrator
+//    - Test with real user accounts before production
+//    - Log missing attributes for debugging
+//
+// 3. Metadata URLs:
+//    - Always use HTTPS for metadata fetching
+//    - Validate TLS certificates
+//    - Consider caching metadata to reduce dependencies
+//
+// 4. Provider Trust:
+//    - Only configure trusted identity providers
+//    - Verify IdP metadata before accepting
+//    - Monitor IdP configuration changes
+//
+// EXAMPLE USAGE:
+//
+//   // Get Okta SAML configuration template
+//   config := GetProviderConfig(ProviderOkta)
+//   fmt.Printf("Email attribute: %s\n", config.DefaultMapping.Email)
+//   // Output: http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress
+//
+//   // Get Keycloak OIDC configuration template
+//   oidcConfig := GetOIDCProviderConfig(OIDCProviderKeycloak)
+//   fmt.Printf("Discovery URL: %s\n", oidcConfig.DiscoveryURL)
+//   // Output: https://{domain}/auth/realms/{realm}
+//
+//   // Load SAML certificate
+//   cert, err := LoadCertificate("/path/to/cert.pem")
+//   if err != nil {
+//       log.Fatal(err)
+//   }
+//
+//   // Load SAML private key
+//   key, err := LoadPrivateKey("/path/to/key.pem")
+//   if err != nil {
+//       log.Fatal(err)
+//   }
+//
+// AUTHENTICATION MODE CONFIGURATION:
+//
+// StreamSpace supports multiple authentication modes:
+//
+// - AuthModeJWT: Local authentication only (username/password + JWT)
+// - AuthModeSAML: SAML SSO only (enterprise identity provider)
+// - AuthModeOIDC: OIDC authentication only (modern IdPs)
+// - AuthModeHybrid: Both local and SAML (flexible deployment)
+//
+// Mode selection depends on deployment requirements:
+// - Small teams: AuthModeJWT (simpler setup)
+// - Enterprise: AuthModeSAML or AuthModeOIDC (centralized identity)
+// - Mixed: AuthModeHybrid (support both employee SSO and external users)
+//
+// THREAD SAFETY:
+//
+// All functions in this module are thread-safe and can be called concurrently.
+// Provider configuration templates are read-only and immutable.
 package auth
 
 import (

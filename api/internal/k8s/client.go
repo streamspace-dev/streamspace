@@ -1,3 +1,80 @@
+// Package k8s provides Kubernetes client functionality for StreamSpace CRD operations.
+//
+// This file implements the Kubernetes client wrapper for StreamSpace custom resources.
+//
+// Purpose:
+// - Provide typed access to StreamSpace CRDs (Session, Template)
+// - Wrap Kubernetes dynamic client for custom resource operations
+// - Simplify CRUD operations on Sessions and Templates
+// - Watch for changes to sessions and templates
+// - Access core Kubernetes resources (Pods, Services, PVCs, Nodes)
+//
+// Features:
+// - Session management (create, get, list, update, delete, watch)
+// - Template management (create, get, list, delete, watch)
+// - State transitions (running → hibernated → terminated)
+// - Resource filtering (by user, category, labels)
+// - Cluster resource introspection (nodes, pods, services)
+// - Auto-configuration (in-cluster or kubeconfig)
+//
+// Custom Resource Definitions:
+//   - Sessions (stream.streamspace.io/v1alpha1)
+//     - Represents a user's containerized workspace session
+//     - States: running, hibernated, terminated
+//     - Includes resource limits, idle timeout, persistence settings
+//
+//   - Templates (stream.streamspace.io/v1alpha1)
+//     - Defines application templates (Firefox, VS Code, etc.)
+//     - Contains container image, VNC/webapp config, resources
+//     - Categorized for catalog organization
+//
+// Implementation Details:
+// - Uses Kubernetes dynamic client for CRD operations
+// - Auto-detects in-cluster vs local configuration
+// - Parses unstructured data to typed Go structs
+// - Supports namespace isolation (default: "streamspace")
+// - Thread-safe client operations
+//
+// Thread Safety:
+// - Kubernetes clients are thread-safe
+// - Safe for concurrent access across goroutines
+//
+// Dependencies:
+// - k8s.io/client-go for Kubernetes API access
+// - k8s.io/api for core resource types
+//
+// Example Usage:
+//
+//	// Initialize client
+//	client, err := k8s.NewClient()
+//	if err != nil {
+//	    log.Fatal(err)
+//	}
+//
+//	// Create a session
+//	session := &k8s.Session{
+//	    Name:           "user1-firefox",
+//	    Namespace:      "streamspace",
+//	    User:           "user1",
+//	    Template:       "firefox-browser",
+//	    State:          "running",
+//	    PersistentHome: true,
+//	    IdleTimeout:    "30m",
+//	}
+//	created, err := client.CreateSession(ctx, session)
+//
+//	// List sessions for a user
+//	sessions, err := client.ListSessionsByUser(ctx, "streamspace", "user1")
+//
+//	// Update session state (hibernate)
+//	updated, err := client.UpdateSessionState(ctx, "streamspace", "user1-firefox", "hibernated")
+//
+//	// Watch for session changes
+//	watcher, err := client.WatchSessions(ctx, "streamspace")
+//	for event := range watcher.ResultChan() {
+//	    session := event.Object.(*unstructured.Unstructured)
+//	    // Handle session change
+//	}
 package k8s
 
 import (

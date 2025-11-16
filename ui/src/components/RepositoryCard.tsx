@@ -41,6 +41,47 @@ interface RepositoryCardProps {
   isSyncing: boolean;
 }
 
+/**
+ * RepositoryCard - Display card for a Git repository configuration
+ *
+ * Shows repository information including sync status, branch, authentication type,
+ * and template count. Provides actions for syncing, editing, and deleting repositories.
+ * Includes expandable details section and visual sync progress indicator.
+ *
+ * Features:
+ * - Repository status badges (synced/syncing/failed/pending)
+ * - Branch and authentication type indicators
+ * - Template count display
+ * - Last sync timestamp
+ * - Sync progress indicator during sync
+ * - Error message display
+ * - Expandable details section
+ * - Sync, edit, and delete actions
+ * - Three-dot menu for additional actions
+ * - Spinning sync icon animation
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {Repository} props.repository - Repository data to display
+ * @param {Function} props.onSync - Callback to sync repository
+ * @param {Function} props.onEdit - Callback to edit repository
+ * @param {Function} props.onDelete - Callback to delete repository
+ * @param {boolean} props.isSyncing - Whether repository is currently syncing
+ *
+ * @returns {JSX.Element} Rendered repository card
+ *
+ * @example
+ * <RepositoryCard
+ *   repository={repoData}
+ *   onSync={handleSync}
+ *   onEdit={handleEdit}
+ *   onDelete={handleDelete}
+ *   isSyncing={syncingRepoId === repoData.id}
+ * />
+ *
+ * @see RepositoryDialog for repository edit/create dialog
+ */
 export default function RepositoryCard({
   repository,
   onSync,

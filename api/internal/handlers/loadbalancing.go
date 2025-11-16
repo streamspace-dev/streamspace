@@ -1,3 +1,65 @@
+// Package handlers provides HTTP handlers for the StreamSpace API.
+// This file implements load balancing policies and node distribution strategies for sessions.
+//
+// LOAD BALANCING FEATURES:
+// - Multiple load balancing strategies (round robin, least loaded, resource-based, geographic, weighted)
+// - Node health monitoring and status tracking
+// - Resource-based scheduling (CPU, memory thresholds)
+// - Session affinity (sticky sessions)
+// - Node selector and taints support
+// - Geographic distribution preferences
+// - Weighted node distribution
+//
+// LOAD BALANCING STRATEGIES:
+// - round_robin: Distribute sessions evenly across nodes in rotation
+// - least_loaded: Schedule on node with fewest active sessions
+// - resource_based: Schedule based on available CPU/memory resources
+// - geographic: Prefer nodes in specific regions/zones
+// - weighted: Distribute based on configured node weights
+//
+// NODE HEALTH MONITORING:
+// - Periodic health checks with configurable intervals
+// - Failure and pass thresholds before status changes
+// - Node readiness tracking from Kubernetes
+// - Resource utilization monitoring
+// - Health status: healthy, unhealthy, unknown
+//
+// RESOURCE THRESHOLDS:
+// - Maximum CPU percentage before avoiding node
+// - Maximum memory percentage before avoiding node
+// - Maximum concurrent sessions per node
+// - Minimum free CPU cores required
+// - Minimum free memory required
+//
+// SESSION AFFINITY:
+// - Sticky sessions to maintain user experience
+// - Session-to-node mapping persistence
+// - Reconnection to same node
+//
+// API Endpoints:
+// - GET    /api/v1/loadbalancing/policies - List load balancing policies
+// - POST   /api/v1/loadbalancing/policies - Create load balancing policy
+// - GET    /api/v1/loadbalancing/policies/:id - Get policy details
+// - PUT    /api/v1/loadbalancing/policies/:id - Update policy
+// - DELETE /api/v1/loadbalancing/policies/:id - Delete policy
+// - GET    /api/v1/loadbalancing/nodes - List cluster nodes with status
+// - GET    /api/v1/loadbalancing/nodes/:name - Get node details
+// - GET    /api/v1/loadbalancing/nodes/:name/sessions - Get sessions on node
+// - POST   /api/v1/loadbalancing/select-node - Select best node for session
+//
+// Thread Safety:
+// - All database operations are thread-safe via connection pooling
+// - Kubernetes client operations are thread-safe
+//
+// Dependencies:
+// - Database: load_balancing_policies table
+// - Kubernetes: Node metrics, resource status
+// - External Services: Kubernetes metrics server
+//
+// Example Usage:
+//
+//	// Create load balancing handler (integrated in main handler)
+//	handler.RegisterLoadBalancingRoutes(router.Group("/api/v1"))
 package handlers
 
 import (

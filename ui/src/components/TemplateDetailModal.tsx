@@ -35,6 +35,46 @@ interface TemplateDetailModalProps {
   onInstall?: (template: CatalogTemplate) => void;
 }
 
+/**
+ * TemplateDetailModal - Detailed template information modal with tabs
+ *
+ * Displays comprehensive template information in a modal dialog with tabbed
+ * interface for Details and Reviews. Records view count when opened. Shows
+ * template metadata, statistics, and allows users to rate and review templates.
+ *
+ * Features:
+ * - Tabbed interface for Details and Reviews
+ * - Template icon and basic information
+ * - Star rating and review count
+ * - Category, app type, and tags
+ * - Install and view count statistics
+ * - User rating and review submission
+ * - Review history with user avatars
+ * - Install action button
+ * - Automatic view tracking
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the modal is open
+ * @param {CatalogTemplate | null} props.template - Template data to display
+ * @param {Function} props.onClose - Callback when modal is closed
+ * @param {Function} [props.onInstall] - Callback when install button clicked
+ *
+ * @returns {JSX.Element | null} Rendered modal or null if no template
+ *
+ * @example
+ * <TemplateDetailModal
+ *   open={isOpen}
+ *   template={selectedTemplate}
+ *   onClose={() => setIsOpen(false)}
+ *   onInstall={handleInstall}
+ * />
+ *
+ * @see RatingStars for rating display
+ * @see api.recordTemplateView for view tracking
+ * @see api.getTemplateRatings for loading reviews
+ */
 export default function TemplateDetailModal({
   open,
   template,

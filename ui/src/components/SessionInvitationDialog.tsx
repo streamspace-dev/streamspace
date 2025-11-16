@@ -49,6 +49,45 @@ interface Invitation {
   isExhausted?: boolean;
 }
 
+/**
+ * SessionInvitationDialog - Dialog for creating shareable invitation links
+ *
+ * Allows session owners to create invitation links that can be shared with anyone
+ * to grant access to a session. Supports configurable permission levels, usage
+ * limits, and expiration dates. Displays existing invitations with their status
+ * and provides easy copy-to-clipboard functionality.
+ *
+ * Features:
+ * - Create shareable invitation links
+ * - Permission levels: view, collaborate, control
+ * - Configure max uses (or unlimited)
+ * - Optional expiration dates
+ * - Copy invitation URL to clipboard
+ * - View invitation statistics (uses, status)
+ * - Revoke invitation links
+ * - Status indicators (active/expired/exhausted)
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the dialog is open
+ * @param {string} props.sessionId - ID of session to create invitations for
+ * @param {string} props.sessionName - Display name of session
+ * @param {Function} props.onClose - Callback when dialog is closed
+ *
+ * @returns {JSX.Element} Rendered invitation dialog
+ *
+ * @example
+ * <SessionInvitationDialog
+ *   open={isOpen}
+ *   sessionId="session-123"
+ *   sessionName="My Firefox Session"
+ *   onClose={() => setIsOpen(false)}
+ * />
+ *
+ * @see api.createInvitation for creating invitations
+ * @see api.revokeInvitation for revoking invitations
+ */
 export default function SessionInvitationDialog({
   open,
   sessionId,

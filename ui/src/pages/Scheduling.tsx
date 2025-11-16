@@ -50,6 +50,64 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
+/**
+ * Scheduling - Session scheduling and calendar integration page
+ *
+ * Provides comprehensive session scheduling functionality with support for recurring
+ * schedules, calendar integrations, and automated session lifecycle management. Users
+ * can create one-time or recurring session schedules with auto-termination, pre-warming,
+ * and calendar synchronization features.
+ *
+ * Features:
+ * - Create scheduled sessions (one-time, daily, weekly, monthly, cron)
+ * - Configure auto-termination after duration
+ * - Pre-warm sessions before scheduled time
+ * - Enable/disable schedules without deletion
+ * - View next run and last run status
+ * - Google Calendar and Outlook integration
+ * - Export schedules to iCalendar format
+ * - Real-time schedule event notifications via WebSocket
+ * - Timezone support for scheduling
+ *
+ * Schedule types:
+ * - Once: One-time execution
+ * - Daily: Repeat daily at specific time
+ * - Weekly: Repeat on selected days of week
+ * - Monthly: Repeat on specific day of month
+ * - Cron: Advanced cron expression scheduling
+ *
+ * Calendar integration:
+ * - Connect Google Calendar or Outlook
+ * - Auto-sync scheduled sessions to calendar
+ * - Two-way synchronization support
+ *
+ * Real-time features:
+ * - Live schedule execution notifications
+ * - Completion and failure alerts
+ * - WebSocket connection monitoring
+ *
+ * User workflows:
+ * - Create recurring session schedules
+ * - Set up auto-termination for cost control
+ * - Connect calendars for visibility
+ * - Export schedules for external use
+ * - Monitor schedule execution status
+ *
+ * @page
+ * @route /scheduling - Session scheduling and calendar integration
+ * @access user - Available to all authenticated users
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Scheduling interface with calendar integration
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/scheduling" element={<Scheduling />} />
+ *
+ * @see Sessions for manual session management
+ * @see TemplateCatalog for available session templates
+ */
 interface ScheduledSession {
   id: number;
   name: string;

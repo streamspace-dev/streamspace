@@ -34,6 +34,56 @@ interface RepositoryDialogProps {
   isSaving: boolean;
 }
 
+/**
+ * RepositoryDialog - Dialog for adding or editing Git repository configurations
+ *
+ * Provides a form for configuring Git repository connections with authentication.
+ * Supports multiple authentication methods (none, token, SSH, basic auth) and
+ * validates Git URL formats. Includes helpful tooltips and examples.
+ *
+ * Features:
+ * - Add new or edit existing repositories
+ * - Repository name, URL, and branch configuration
+ * - Multiple authentication types (public, token, SSH key, basic)
+ * - Authentication secret management (show/hide toggle)
+ * - Git URL validation (GitHub, GitLab, Bitbucket)
+ * - Helpful tooltips and descriptions
+ * - Collapsible authentication section
+ * - Form validation with error messages
+ * - Password/secret visibility toggle
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {boolean} props.open - Whether the dialog is open
+ * @param {Function} props.onClose - Callback when dialog is closed
+ * @param {Function} props.onSave - Callback with form data when saved
+ * @param {Repository | null} [props.repository] - Repository to edit (null for new)
+ * @param {boolean} props.isSaving - Whether save operation is in progress
+ *
+ * @returns {JSX.Element} Rendered repository dialog
+ *
+ * @example
+ * // Add new repository
+ * <RepositoryDialog
+ *   open={isOpen}
+ *   onClose={() => setIsOpen(false)}
+ *   onSave={handleCreateRepo}
+ *   isSaving={saving}
+ * />
+ *
+ * @example
+ * // Edit existing repository
+ * <RepositoryDialog
+ *   open={isOpen}
+ *   repository={selectedRepo}
+ *   onClose={() => setIsOpen(false)}
+ *   onSave={handleUpdateRepo}
+ *   isSaving={saving}
+ * />
+ *
+ * @see RepositoryCard for repository display
+ */
 export default function RepositoryDialog({
   open,
   onClose,

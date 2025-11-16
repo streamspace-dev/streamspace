@@ -23,8 +23,46 @@ interface Notification {
 }
 
 /**
- * Provider component that manages enterprise WebSocket connection
- * and displays toast notifications for real-time events
+ * EnterpriseWebSocketProvider - Provider for WebSocket connection and notifications
+ *
+ * Manages enterprise WebSocket connection for real-time events and displays
+ * toast notifications for various system events. Handles connection lifecycle,
+ * reconnection attempts, and event routing to appropriate handlers.
+ *
+ * Supported events:
+ * - webhook.delivery: Webhook delivery status updates
+ * - security.alert: Security alerts and warnings
+ * - schedule.event: Scheduled session events
+ * - node.health: Cluster node health updates
+ * - scaling.event: Auto-scaling events
+ * - compliance.violation: Compliance violation detections
+ * - connection: WebSocket connection status
+ *
+ * Features:
+ * - Real-time WebSocket connection management
+ * - Auto-reconnection with exponential backoff
+ * - Toast notifications for events
+ * - Stacked notification display
+ * - Connection status indicator
+ * - Event-specific notification handling
+ * - Optional notification enable/disable
+ *
+ * @component
+ *
+ * @param {Object} props - Component props
+ * @param {ReactNode} props.children - Child components
+ * @param {boolean} [props.enableNotifications=true] - Whether to show notifications
+ *
+ * @returns {JSX.Element} Provider with children and notification UI
+ *
+ * @example
+ * <EnterpriseWebSocketProvider enableNotifications={true}>
+ *   <App />
+ * </EnterpriseWebSocketProvider>
+ *
+ * @see useEnterpriseWebSocket for WebSocket hook
+ * @see useSecurityAlertEvents for security event handling
+ * @see useWebhookDeliveryEvents for webhook event handling
  */
 export default function EnterpriseWebSocketProvider({
   children,

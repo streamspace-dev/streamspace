@@ -47,6 +47,77 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+/**
+ * Scaling - Load balancing and auto-scaling management for administrators
+ *
+ * Administrative interface for configuring load balancing policies, auto-scaling rules,
+ * and monitoring cluster node performance. Provides comprehensive controls for session
+ * distribution, resource-based scaling, and capacity management with real-time event
+ * notifications and metrics.
+ *
+ * Features:
+ * - Load balancing policy configuration
+ * - Auto-scaling policy management
+ * - Real-time node status monitoring
+ * - Manual scaling triggers (scale up/down)
+ * - Scaling event history
+ * - Resource utilization metrics per node
+ * - Session distribution across nodes
+ * - Critical scaling failure alerts
+ *
+ * Administrative capabilities:
+ * - Create and manage load balancing policies
+ * - Configure auto-scaling policies (horizontal/vertical)
+ * - Monitor node health and resource usage
+ * - Manually trigger scaling operations
+ * - View scaling history and audit trail
+ * - Receive alerts for scaling failures
+ *
+ * Load balancing strategies:
+ * - round_robin: Distribute sessions evenly in rotation
+ * - least_loaded: Route to node with fewest sessions
+ * - resource_based: Route based on CPU/memory availability
+ * - geographic: Route based on node location
+ * - weighted: Distribute based on node weights
+ *
+ * Auto-scaling modes:
+ * - horizontal: Add/remove replicas
+ * - vertical: Adjust CPU/memory allocation
+ *
+ * Metric types:
+ * - cpu: Scale based on CPU utilization
+ * - memory: Scale based on memory usage
+ * - custom: Scale based on custom metrics
+ *
+ * Real-time features:
+ * - Live scaling event notifications (up/down)
+ * - Critical alerts for scaling failures
+ * - Node health status updates
+ * - Resource utilization monitoring
+ * - WebSocket connection tracking
+ *
+ * User workflows:
+ * - Create load balancing policies for session distribution
+ * - Configure auto-scaling rules for capacity management
+ * - Monitor node performance in real-time
+ * - Manually scale up/down during high load
+ * - Review scaling history for optimization
+ *
+ * @page
+ * @route /admin/scaling - Load balancing and auto-scaling management
+ * @access admin - Restricted to administrators only
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Scaling management interface with real-time monitoring
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/admin/scaling" element={<Scaling />} />
+ *
+ * @see Nodes for detailed node management
+ * @see AdminDashboard for cluster overview
+ */
 interface LoadBalancingPolicy {
   id: number;
   name: string;

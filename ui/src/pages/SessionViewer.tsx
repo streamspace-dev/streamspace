@@ -28,7 +28,7 @@ import {
   Link as LinkIcon,
   Wifi as ConnectedIcon,
   WifiOff as DisconnectedIcon,
-} from '@mui/icons-material';
+} from '@mui/material-icons';
 import { api } from '../lib/api';
 import { useUserStore } from '../store/userStore';
 import { useSessionsWebSocket } from '../hooks/useWebSocket';
@@ -40,6 +40,71 @@ import SessionShareDialog from '../components/SessionShareDialog';
 import SessionInvitationDialog from '../components/SessionInvitationDialog';
 import SessionCollaboratorsPanel from '../components/SessionCollaboratorsPanel';
 
+/**
+ * SessionViewer - Full-screen VNC session viewer for connecting to running sessions
+ *
+ * Immersive session viewing interface providing:
+ * - Full-screen VNC client embedded in iframe
+ * - Session connection management (connect, disconnect, reconnect)
+ * - Real-time session status monitoring
+ * - Collaboration features (sharing, invitations, active users)
+ * - WebSocket-based session state updates
+ * - Session information panel with metadata
+ * - Fullscreen mode toggle
+ * - Connection health monitoring
+ *
+ * Features:
+ * - Embedded VNC iframe with session URL
+ * - Top toolbar with session controls
+ * - Connection status indicator (connected/disconnected)
+ * - Session state chip (running, hibernated, terminated)
+ * - Share session button (direct sharing dialog)
+ * - Invite users button (invitation link dialog)
+ * - Collaborators panel showing active users
+ * - Session info dialog with details
+ * - Fullscreen toggle button
+ * - Close button to return to sessions list
+ * - Auto-connect on page load
+ * - Reconnect on session wake
+ * - Disconnect on page unload
+ *
+ * User workflows:
+ * - Open running session from Sessions page
+ * - View session in full-screen VNC client
+ * - Monitor connection status in real-time
+ * - Share session with other users
+ * - Create invitation links for external access
+ * - View active collaborators
+ * - Toggle fullscreen for immersive experience
+ * - Close viewer to return to session list
+ *
+ * Real-time features:
+ * - Session state change notifications
+ * - Collaborator join/leave events
+ * - Connection health updates
+ * - Session hibernation/wake events
+ * - WebSocket connection status
+ *
+ * @page
+ * @route /sessions/:sessionId/view - Session viewer (dynamic route with sessionId param)
+ * @access user - Requires session ownership or share permission
+ *
+ * @component
+ *
+ * @returns {JSX.Element} Full-screen session viewer with VNC client
+ *
+ * @example
+ * // Route configuration:
+ * <Route path="/sessions/:sessionId/view" element={<SessionViewer />} />
+ *
+ * // Navigation from Sessions page:
+ * navigate(`/sessions/${session.id}/view`);
+ *
+ * @see Sessions for session management page
+ * @see SessionShareDialog for sharing sessions
+ * @see SessionInvitationDialog for creating invitation links
+ * @see SessionCollaboratorsPanel for viewing active collaborators
+ */
 export default function SessionViewer() {
   const { sessionId } = useParams<{ sessionId: string }>();
   const navigate = useNavigate();
