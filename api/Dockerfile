@@ -5,6 +5,8 @@ FROM golang:1.21-alpine AS builder
 ARG VERSION=dev
 ARG COMMIT=unknown
 ARG BUILD_DATE
+# Docker Buildx automatically provides TARGETARCH
+ARG TARGETARCH
 
 # Install build dependencies
 RUN apk add --no-cache git make ca-certificates
@@ -21,8 +23,8 @@ RUN go mod download
 COPY cmd/ cmd/
 COPY internal/ internal/
 
-# Build the API server with version info
-RUN CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a \
+# Build the API server with version info for the target architecture
+RUN CGO_ENABLED=0 GOOS=linux GOARCH=${TARGETARCH} go build -a \
     -ldflags "-w -s -X main.version=${VERSION} -X main.commit=${COMMIT} -X main.buildDate=${BUILD_DATE}" \
     -o api-server cmd/main.go
 
