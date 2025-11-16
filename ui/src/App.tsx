@@ -6,8 +6,9 @@ import { useUserStore } from './store/userStore';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotificationQueue from './components/NotificationQueue';
 
-// Eagerly load Login page (needed immediately)
+// Eagerly load Login page and SetupWizard (needed immediately)
 import Login from './pages/Login';
+import SetupWizard from './pages/SetupWizard';
 
 // Lazy load all other pages for code splitting
 // User Pages
@@ -131,7 +132,11 @@ function App() {
           <BrowserRouter>
             <Suspense fallback={<PageLoader />}>
               <Routes>
+            {/* Public routes */}
             <Route path="/login" element={<Login />} />
+            <Route path="/setup" element={<SetupWizard />} />
+
+            {/* Protected user routes */}
             <Route
               path="/"
               element={

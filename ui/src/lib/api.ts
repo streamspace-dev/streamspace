@@ -1335,6 +1335,17 @@ class APIClient {
     await this.client.post('/auth/change-password', { oldPassword, newPassword });
   }
 
+  // Setup Wizard (First-Run Admin Onboarding)
+  async getSetupStatus(): Promise<{ setupRequired: boolean; adminExists: boolean; hasPassword: boolean; message?: string }> {
+    const response = await this.client.get('/auth/setup/status');
+    return response.data;
+  }
+
+  async setupAdmin(password: string, passwordConfirm: string, email: string): Promise<{ message: string; username: string; email: string }> {
+    const response = await this.client.post('/auth/setup', { password, passwordConfirm, email });
+    return response.data;
+  }
+
   // ============================================================================
   // User Management
   // ============================================================================
