@@ -43,24 +43,31 @@ import (
 	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
-	"crypto/tls"
 	"database/sql"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
 	"io"
-	"log"
 	"net"
 	"net/http"
-	"net/smtp"
 	"net/url"
-	"os"
 	"strconv"
 	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
+
+// IntegrationsHandler handles webhook and external integration requests.
+type IntegrationsHandler struct {
+	DB *db.Database
+}
+
+// NewIntegrationsHandler creates a new integrations handler.
+func NewIntegrationsHandler(database *db.Database) *IntegrationsHandler {
+	return &IntegrationsHandler{DB: database}
+}
 
 // ============================================================================
 // INPUT VALIDATION
@@ -264,7 +271,7 @@ var AvailableEvents = []string{
 }
 
 // CreateWebhook creates a new webhook
-func (h *Handler) CreateWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) CreateWebhook(c *gin.Context) {
 	var webhook Webhook
 	if err := c.ShouldBindJSON(&webhook); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -306,7 +313,7 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 		webhook.Secret = h.generateWebhookSecret()
 	}
 
-	err := h.DB.QueryRow(`
+	err := h.DB.DB().QueryRow(`
 		INSERT INTO webhooks (
 			name, description, url, secret, events, headers, enabled,
 			retry_policy, filters, metadata, created_by
@@ -330,7 +337,7 @@ func (h *Handler) CreateWebhook(c *gin.Context) {
 }
 
 // ListWebhooks lists all webhooks
-func (h *Handler) ListWebhooks(c *gin.Context) {
+func (h *IntegrationsHandler) ListWebhooks(c *gin.Context) {
 	enabled := c.Query("enabled")
 
 	query := `
@@ -349,7 +356,7 @@ func (h *Handler) ListWebhooks(c *gin.Context) {
 
 	query += " ORDER BY created_at DESC"
 
-	rows, err := h.DB.Query(query, args...)
+	rows, err := h.DB.DB().Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve webhooks"})
 		return
@@ -409,7 +416,7 @@ func (h *Handler) ListWebhooks(c *gin.Context) {
 }
 
 // UpdateWebhook updates an existing webhook
-func (h *Handler) UpdateWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -448,7 +455,7 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 	var result sql.Result
 	if role == "admin" {
 		// Admins can update any webhook
-		result, err = h.DB.Exec(`
+		result, err = h.DB.DB().Exec(`
 			UPDATE webhooks SET
 				name = $1, description = $2, url = $3, events = $4, headers = $5,
 				enabled = $6, retry_policy = $7, filters = $8, metadata = $9,
@@ -459,7 +466,7 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 			toJSONB(webhook.Filters), toJSONB(webhook.Metadata), time.Now(), webhookID)
 	} else {
 		// Non-admins can only update their own webhooks
-		result, err = h.DB.Exec(`
+		result, err = h.DB.DB().Exec(`
 			UPDATE webhooks SET
 				name = $1, description = $2, url = $3, events = $4, headers = $5,
 				enabled = $6, retry_policy = $7, filters = $8, metadata = $9,
@@ -487,7 +494,7 @@ func (h *Handler) UpdateWebhook(c *gin.Context) {
 }
 
 // DeleteWebhook deletes a webhook
-func (h *Handler) DeleteWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) DeleteWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -502,10 +509,10 @@ func (h *Handler) DeleteWebhook(c *gin.Context) {
 	var result sql.Result
 	if role == "admin" {
 		// Admins can delete any webhook
-		result, err = h.DB.Exec("DELETE FROM webhooks WHERE id = $1", webhookID)
+		result, err = h.DB.DB().Exec("DELETE FROM webhooks WHERE id = $1", webhookID)
 	} else {
 		// Non-admins can only delete their own webhooks
-		result, err = h.DB.Exec("DELETE FROM webhooks WHERE id = $1 AND created_by = $2", webhookID, userID)
+		result, err = h.DB.DB().Exec("DELETE FROM webhooks WHERE id = $1 AND created_by = $2", webhookID, userID)
 	}
 
 	if err != nil {
@@ -525,7 +532,7 @@ func (h *Handler) DeleteWebhook(c *gin.Context) {
 }
 
 // TestWebhook sends a test event to a webhook
-func (h *Handler) TestWebhook(c *gin.Context) {
+func (h *IntegrationsHandler) TestWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -542,14 +549,14 @@ func (h *Handler) TestWebhook(c *gin.Context) {
 
 	if role == "admin" {
 		// Admins can test any webhook
-		err = h.DB.QueryRow(`
+		err = h.DB.DB().QueryRow(`
 			SELECT id, name, url, secret, events, headers, enabled, retry_policy
 			FROM webhooks WHERE id = $1
 		`, webhookID).Scan(&webhook.ID, &webhook.Name, &webhook.URL, &webhook.Secret,
 			&events, &headers, &webhook.Enabled, &retryPolicy)
 	} else {
 		// Non-admins can only test their own webhooks
-		err = h.DB.QueryRow(`
+		err = h.DB.DB().QueryRow(`
 			SELECT id, name, url, secret, events, headers, enabled, retry_policy
 			FROM webhooks WHERE id = $1 AND created_by = $2
 		`, webhookID, userID).Scan(&webhook.ID, &webhook.Name, &webhook.URL, &webhook.Secret,
@@ -606,7 +613,7 @@ func (h *Handler) TestWebhook(c *gin.Context) {
 }
 
 // GetWebhookDeliveries retrieves delivery history
-func (h *Handler) GetWebhookDeliveries(c *gin.Context) {
+func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid webhook ID"})
@@ -618,9 +625,9 @@ func (h *Handler) GetWebhookDeliveries(c *gin.Context) {
 
 	// Count total
 	var total int
-	h.DB.QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = $1", webhookID).Scan(&total)
+	h.DB.DB().QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = $1", webhookID).Scan(&total)
 
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, webhook_id, event, payload, status, status_code, response_body,
 		       error_message, attempts, next_retry_at, delivered_at, created_at
 		FROM webhook_deliveries
@@ -664,7 +671,7 @@ func (h *Handler) GetWebhookDeliveries(c *gin.Context) {
 // Integrations
 
 // CreateIntegration creates a new integration
-func (h *Handler) CreateIntegration(c *gin.Context) {
+func (h *IntegrationsHandler) CreateIntegration(c *gin.Context) {
 	var integration Integration
 	if err := c.ShouldBindJSON(&integration); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
@@ -683,7 +690,7 @@ func (h *Handler) CreateIntegration(c *gin.Context) {
 		return
 	}
 
-	err := h.DB.QueryRow(`
+	err := h.DB.DB().QueryRow(`
 		INSERT INTO integrations (
 			type, name, description, config, enabled, events, test_mode, created_by
 		) VALUES ($1, $2, $3, $4, $5, $6, $7, $8)
@@ -701,7 +708,7 @@ func (h *Handler) CreateIntegration(c *gin.Context) {
 }
 
 // ListIntegrations lists all integrations
-func (h *Handler) ListIntegrations(c *gin.Context) {
+func (h *IntegrationsHandler) ListIntegrations(c *gin.Context) {
 	integrationType := c.Query("type")
 	enabled := c.Query("enabled")
 
@@ -727,7 +734,7 @@ func (h *Handler) ListIntegrations(c *gin.Context) {
 
 	query += " ORDER BY created_at DESC"
 
-	rows, err := h.DB.Query(query, args...)
+	rows, err := h.DB.DB().Query(query, args...)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve integrations"})
 		return
@@ -758,7 +765,7 @@ func (h *Handler) ListIntegrations(c *gin.Context) {
 }
 
 // TestIntegration tests an integration
-func (h *Handler) TestIntegration(c *gin.Context) {
+func (h *IntegrationsHandler) TestIntegration(c *gin.Context) {
 	integrationID, err := strconv.ParseInt(c.Param("integrationId"), 10, 64)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "invalid integration ID"})
@@ -775,14 +782,14 @@ func (h *Handler) TestIntegration(c *gin.Context) {
 
 	if role == "admin" {
 		// Admins can test any integration
-		err = h.DB.QueryRow(`
+		err = h.DB.DB().QueryRow(`
 			SELECT id, type, name, config, enabled, events
 			FROM integrations WHERE id = $1
 		`, integrationID).Scan(&integration.ID, &integration.Type, &integration.Name,
 			&config, &integration.Enabled, &events)
 	} else {
 		// Non-admins can only test their own integrations
-		err = h.DB.QueryRow(`
+		err = h.DB.DB().QueryRow(`
 			SELECT id, type, name, config, enabled, events
 			FROM integrations WHERE id = $1 AND created_by = $2
 		`, integrationID, userID).Scan(&integration.ID, &integration.Type, &integration.Name,
@@ -806,10 +813,10 @@ func (h *Handler) TestIntegration(c *gin.Context) {
 	success, message := h.testIntegration(integration)
 
 	// Update last test time
-	h.DB.Exec("UPDATE integrations SET last_test_at = $1 WHERE id = $2", time.Now(), integrationID)
+	h.DB.DB().Exec("UPDATE integrations SET last_test_at = $1 WHERE id = $2", time.Now(), integrationID)
 
 	if success {
-		h.DB.Exec("UPDATE integrations SET last_success_at = $1 WHERE id = $2", time.Now(), integrationID)
+		h.DB.DB().Exec("UPDATE integrations SET last_success_at = $1 WHERE id = $2", time.Now(), integrationID)
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": message})
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": message})
@@ -819,7 +826,7 @@ func (h *Handler) TestIntegration(c *gin.Context) {
 // Helper functions
 
 // validateWebhookURL validates webhook URL to prevent SSRF attacks
-func (h *Handler) validateWebhookURL(urlStr string) error {
+func (h *IntegrationsHandler) validateWebhookURL(urlStr string) error {
 	parsed, err := url.Parse(urlStr)
 	if err != nil {
 		return fmt.Errorf("invalid URL format: %w", err)
@@ -878,12 +885,12 @@ func (h *Handler) validateWebhookURL(urlStr string) error {
 	return nil
 }
 
-func (h *Handler) generateWebhookSecret() string {
+func (h *IntegrationsHandler) generateWebhookSecret() string {
 	// Generate a random 32-byte secret
 	return fmt.Sprintf("whsec_%d", time.Now().UnixNano())
 }
 
-func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int, string, error) {
+func (h *IntegrationsHandler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int, string, error) {
 	// Prepare payload
 	payload, _ := json.Marshal(event)
 
@@ -931,13 +938,13 @@ func (h *Handler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int
 	return success, resp.StatusCode, string(responseBody), nil
 }
 
-func (h *Handler) calculateHMAC(payload []byte, secret string) string {
+func (h *IntegrationsHandler) calculateHMAC(payload []byte, secret string) string {
 	mac := hmac.New(sha256.New, []byte(secret))
 	mac.Write(payload)
 	return hex.EncodeToString(mac.Sum(nil))
 }
 
-func (h *Handler) testIntegration(integration Integration) (bool, string) {
+func (h *IntegrationsHandler) testIntegration(integration Integration) (bool, string) {
 	// NOTE: Slack, Teams, Discord, PagerDuty, and Email integrations are now handled by plugins.
 	// Users should install the respective plugins from the plugin marketplace instead.
 	//
@@ -957,6 +964,6 @@ func (h *Handler) testIntegration(integration Integration) (bool, string) {
 }
 
 // GetAvailableEvents returns list of available webhook events
-func (h *Handler) GetAvailableEvents(c *gin.Context) {
+func (h *IntegrationsHandler) GetAvailableEvents(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"events": AvailableEvents})
 }

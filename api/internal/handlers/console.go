@@ -79,7 +79,18 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
+
+// Handler is the console handler with database access.
+type ConsoleHandler struct {
+	DB *db.Database
+}
+
+// NewConsoleHandler creates a new console handler.
+func NewConsoleHandler(database *db.Database) *ConsoleHandler {
+	return &ConsoleHandler{DB: database}
+}
 
 // ConsoleSession represents an active console session
 type ConsoleSession struct {
@@ -124,7 +135,7 @@ type FileOperation struct {
 }
 
 // CreateConsoleSession creates a new console session for a workspace session
-func (h *Handler) CreateConsoleSession(c *gin.Context) {
+func (h *ConsoleHandler) CreateConsoleSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 
@@ -142,7 +153,7 @@ func (h *Handler) CreateConsoleSession(c *gin.Context) {
 
 	// Verify user has access to this session
 	var sessionOwner string
-	err := h.DB.QueryRow("SELECT user_id FROM sessions WHERE id = $1", sessionID).Scan(&sessionOwner)
+	err := h.DB.DB().QueryRow("SELECT user_id FROM sessions WHERE id = $1", sessionID).Scan(&sessionOwner)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "session not found"})
 		return
@@ -150,7 +161,7 @@ func (h *Handler) CreateConsoleSession(c *gin.Context) {
 	if sessionOwner != userID {
 		// Check if user has shared access
 		var hasAccess bool
-		h.DB.QueryRow(`
+		h.DB.DB().QueryRow(`
 			SELECT EXISTS(
 				SELECT 1 FROM session_shares
 				WHERE session_id = $1 AND shared_with_user_id = $2
@@ -177,7 +188,7 @@ func (h *Handler) CreateConsoleSession(c *gin.Context) {
 	consoleID := fmt.Sprintf("console-%s-%d", sessionID, time.Now().Unix())
 
 	// Create console session
-	err = h.DB.QueryRow(`
+	err = h.DB.DB().QueryRow(`
 		INSERT INTO console_sessions (
 			id, session_id, user_id, type, status, current_path,
 			shell_type, columns, rows
@@ -205,7 +216,7 @@ func (h *Handler) CreateConsoleSession(c *gin.Context) {
 }
 
 // ListConsoleSessions lists all console sessions for a workspace session
-func (h *Handler) ListConsoleSessions(c *gin.Context) {
+func (h *ConsoleHandler) ListConsoleSessions(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 
@@ -215,7 +226,7 @@ func (h *Handler) ListConsoleSessions(c *gin.Context) {
 		return
 	}
 
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, session_id, user_id, type, status, current_path, shell_type,
 		       columns, rows, metadata, connected_at, last_activity_at, disconnected_at
 		FROM console_sessions
@@ -249,13 +260,13 @@ func (h *Handler) ListConsoleSessions(c *gin.Context) {
 }
 
 // DisconnectConsoleSession disconnects an active console session
-func (h *Handler) DisconnectConsoleSession(c *gin.Context) {
+func (h *ConsoleHandler) DisconnectConsoleSession(c *gin.Context) {
 	consoleID := c.Param("consoleId")
 	userID := c.GetString("user_id")
 
 	// Verify ownership
 	var owner string
-	err := h.DB.QueryRow("SELECT user_id FROM console_sessions WHERE id = $1", consoleID).Scan(&owner)
+	err := h.DB.DB().QueryRow("SELECT user_id FROM console_sessions WHERE id = $1", consoleID).Scan(&owner)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "console session not found"})
 		return
@@ -267,7 +278,7 @@ func (h *Handler) DisconnectConsoleSession(c *gin.Context) {
 
 	// Update status
 	now := time.Now()
-	_, err = h.DB.Exec(`
+	_, err = h.DB.DB().Exec(`
 		UPDATE console_sessions
 		SET status = 'disconnected', disconnected_at = $1
 		WHERE id = $2
@@ -284,7 +295,7 @@ func (h *Handler) DisconnectConsoleSession(c *gin.Context) {
 // File Manager Operations
 
 // ListFiles lists files in a directory
-func (h *Handler) ListFiles(c *gin.Context) {
+func (h *ConsoleHandler) ListFiles(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 	path := c.DefaultQuery("path", "/config")
@@ -324,7 +335,7 @@ func (h *Handler) ListFiles(c *gin.Context) {
 			Name:        entry.Name(),
 			Path:        filepath.Join(path, entry.Name()),
 			Size:        info.Size(),
-			IsDirectory: entry.IsDirectory(),
+			IsDirectory: entry.IsDir(),
 			Permissions: info.Mode().String(),
 			ModifiedAt:  info.ModTime(),
 		}
@@ -340,7 +351,7 @@ func (h *Handler) ListFiles(c *gin.Context) {
 }
 
 // GetFileContent retrieves the content of a file
-func (h *Handler) GetFileContent(c *gin.Context) {
+func (h *ConsoleHandler) GetFileContent(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 	path := c.Query("path")
@@ -392,7 +403,7 @@ func (h *Handler) GetFileContent(c *gin.Context) {
 }
 
 // UploadFile uploads a file to the session
-func (h *Handler) UploadFile(c *gin.Context) {
+func (h *ConsoleHandler) UploadFile(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 	targetPath := c.PostForm("path")
@@ -448,7 +459,7 @@ func (h *Handler) UploadFile(c *gin.Context) {
 }
 
 // DownloadFile downloads a file from the session
-func (h *Handler) DownloadFile(c *gin.Context) {
+func (h *ConsoleHandler) DownloadFile(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 	path := c.Query("path")
@@ -494,7 +505,7 @@ func (h *Handler) DownloadFile(c *gin.Context) {
 }
 
 // CreateDirectory creates a new directory
-func (h *Handler) CreateDirectory(c *gin.Context) {
+func (h *ConsoleHandler) CreateDirectory(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 
@@ -540,7 +551,7 @@ func (h *Handler) CreateDirectory(c *gin.Context) {
 }
 
 // DeleteFile deletes a file or directory
-func (h *Handler) DeleteFile(c *gin.Context) {
+func (h *ConsoleHandler) DeleteFile(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 
@@ -595,7 +606,7 @@ func (h *Handler) DeleteFile(c *gin.Context) {
 }
 
 // RenameFile renames a file or directory
-func (h *Handler) RenameFile(c *gin.Context) {
+func (h *ConsoleHandler) RenameFile(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 
@@ -647,14 +658,33 @@ func (h *Handler) RenameFile(c *gin.Context) {
 
 // Helper functions
 
-func (h *Handler) getSessionBasePath(sessionID string) string {
+func (h *ConsoleHandler) canAccessSession(userID, sessionID string) bool {
+	// Check if user owns the session
+	var owner string
+	err := h.DB.DB().QueryRow("SELECT user_id FROM sessions WHERE id = $1", sessionID).Scan(&owner)
+	if err == nil && owner == userID {
+		return true
+	}
+
+	// Check shared access
+	var hasAccess bool
+	err = h.DB.DB().QueryRow(`
+		SELECT EXISTS(
+			SELECT 1 FROM session_shares
+			WHERE session_id = $1 AND shared_with_user_id = $2
+		)
+	`, sessionID, userID).Scan(&hasAccess)
+	return err == nil && hasAccess
+}
+
+func (h *ConsoleHandler) getSessionBasePath(sessionID string) string {
 	// In production, this would return the actual path to the session's persistent volume
 	// For now, return a placeholder
 	return fmt.Sprintf("/var/streamspace/sessions/%s", sessionID)
 }
 
-func (h *Handler) logFileOperation(sessionID, userID, operation, sourcePath, targetPath string, bytesProcessed int64) {
-	h.DB.Exec(`
+func (h *ConsoleHandler) logFileOperation(sessionID, userID, operation, sourcePath, targetPath string, bytesProcessed int64) {
+	h.DB.DB().Exec(`
 		INSERT INTO console_file_operations (
 			session_id, user_id, operation, source_path, target_path, bytes_processed
 		) VALUES ($1, $2, $3, $4, $5, $6)
@@ -662,7 +692,7 @@ func (h *Handler) logFileOperation(sessionID, userID, operation, sourcePath, tar
 }
 
 // GetFileOperationHistory retrieves file operation history
-func (h *Handler) GetFileOperationHistory(c *gin.Context) {
+func (h *ConsoleHandler) GetFileOperationHistory(c *gin.Context) {
 	sessionID := c.Param("sessionId")
 	userID := c.GetString("user_id")
 	page, _ := strconv.Atoi(c.DefaultQuery("page", "1"))
@@ -676,12 +706,12 @@ func (h *Handler) GetFileOperationHistory(c *gin.Context) {
 
 	// Count total
 	var total int
-	h.DB.QueryRow(`
+	h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM console_file_operations WHERE session_id = $1
 	`, sessionID).Scan(&total)
 
 	// Get operations
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, operation, source_path, target_path, bytes_processed, created_at
 		FROM console_file_operations
 		WHERE session_id = $1

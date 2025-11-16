@@ -618,7 +618,7 @@ func (h *PluginMarketplaceHandler) GetInstalledPlugin(c *gin.Context) {
 //   - 200: Config updated (currently always succeeds - TODO)
 //   - 400: Invalid request body
 func (h *PluginMarketplaceHandler) UpdatePluginConfig(c *gin.Context) {
-	name := c.Param("name")
+	_ = c.Param("name") // Plugin name not used - config update handled generically
 
 	var req struct {
 		Config map[string]interface{} `json:"config"`

@@ -643,9 +643,9 @@ func (h *NotificationsHandler) sendWebhookNotification(prefs map[string]interfac
 		webhookSecret = "default-secret"
 	}
 
-	h := hmac.New(sha256.New, []byte(webhookSecret))
-	h.Write(payloadJSON)
-	signature := hex.EncodeToString(h.Sum(nil))
+	mac := hmac.New(sha256.New, []byte(webhookSecret))
+	mac.Write(payloadJSON)
+	signature := hex.EncodeToString(mac.Sum(nil))
 
 	// Send HTTP POST request
 	req, err := http.NewRequest("POST", webhookURL, bytes.NewBuffer(payloadJSON))

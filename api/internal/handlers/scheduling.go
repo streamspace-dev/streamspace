@@ -79,7 +79,18 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
+
+// SchedulingHandler handles session scheduling and calendar integration requests.
+type SchedulingHandler struct {
+	DB *db.Database
+}
+
+// NewSchedulingHandler creates a new scheduling handler.
+func NewSchedulingHandler(database *db.Database) *SchedulingHandler {
+	return &SchedulingHandler{DB: database}
+}
 
 // ============================================================================
 // SESSION SCHEDULING - DATA STRUCTURES
@@ -210,7 +221,7 @@ type ResourceConfig struct {
 // - User can only create schedules for themselves (userID enforced)
 // - Schedule is validated to prevent malicious cron expressions
 // - Timezone must be valid IANA timezone name
-func (h *Handler) CreateScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) CreateScheduledSession(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req ScheduledSession
@@ -264,7 +275,7 @@ func (h *Handler) CreateScheduledSession(c *gin.Context) {
 
 	// Insert scheduled session
 	var id int64
-	err = h.DB.QueryRow(`
+	err = h.DB.DB().QueryRow(`
 		INSERT INTO scheduled_sessions
 		(user_id, template_id, name, description, timezone, schedule, resources,
 		 auto_terminate, terminate_after, pre_warm, pre_warm_minutes, post_cleanup,
@@ -292,7 +303,7 @@ func (h *Handler) CreateScheduledSession(c *gin.Context) {
 }
 
 // ListScheduledSessions lists all scheduled sessions for a user
-func (h *Handler) ListScheduledSessions(c *gin.Context) {
+func (h *SchedulingHandler) ListScheduledSessions(c *gin.Context) {
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
 
@@ -307,7 +318,7 @@ func (h *Handler) ListScheduledSessions(c *gin.Context) {
 		ORDER BY next_run_at ASC
 	`
 
-	rows, err := h.DB.Query(query, userID, role)
+	rows, err := h.DB.DB().Query(query, userID, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
 		return
@@ -353,7 +364,7 @@ func (h *Handler) ListScheduledSessions(c *gin.Context) {
 }
 
 // GetScheduledSession gets details of a scheduled session
-func (h *Handler) GetScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) GetScheduledSession(c *gin.Context) {
 	scheduleID := c.Param("scheduleId")
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
@@ -362,7 +373,7 @@ func (h *Handler) GetScheduledSession(c *gin.Context) {
 	var lastRun, nextRun sql.NullTime
 	var lastSessionID, lastStatus sql.NullString
 
-	err := h.DB.QueryRow(`
+	err := h.DB.DB().QueryRow(`
 		SELECT id, user_id, template_id, name, description, timezone, schedule,
 		       resources, auto_terminate, terminate_after, pre_warm, pre_warm_minutes,
 		       post_cleanup, enabled, next_run_at, last_run_at, last_session_id,
@@ -401,7 +412,7 @@ func (h *Handler) GetScheduledSession(c *gin.Context) {
 }
 
 // UpdateScheduledSession updates a scheduled session
-func (h *Handler) UpdateScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) UpdateScheduledSession(c *gin.Context) {
 	scheduleID := c.Param("scheduleId")
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
@@ -414,7 +425,7 @@ func (h *Handler) UpdateScheduledSession(c *gin.Context) {
 
 	// Check ownership
 	var ownerID string
-	err := h.DB.QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
+	err := h.DB.DB().QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "scheduled session not found"})
 		return
@@ -436,7 +447,7 @@ func (h *Handler) UpdateScheduledSession(c *gin.Context) {
 		}
 	}
 
-	_, err = h.DB.Exec(`
+	_, err = h.DB.DB().Exec(`
 		UPDATE scheduled_sessions
 		SET name = COALESCE(NULLIF($1, ''), name),
 		    description = $2,
@@ -461,14 +472,14 @@ func (h *Handler) UpdateScheduledSession(c *gin.Context) {
 }
 
 // DeleteScheduledSession deletes a scheduled session
-func (h *Handler) DeleteScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) DeleteScheduledSession(c *gin.Context) {
 	scheduleID := c.Param("scheduleId")
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
 
 	// Check ownership
 	var ownerID string
-	err := h.DB.QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
+	err := h.DB.DB().QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "scheduled session not found"})
 		return
@@ -478,7 +489,7 @@ func (h *Handler) DeleteScheduledSession(c *gin.Context) {
 		return
 	}
 
-	_, err = h.DB.Exec(`DELETE FROM scheduled_sessions WHERE id = $1`, scheduleID)
+	_, err = h.DB.DB().Exec(`DELETE FROM scheduled_sessions WHERE id = $1`, scheduleID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete"})
 		return
@@ -488,11 +499,11 @@ func (h *Handler) DeleteScheduledSession(c *gin.Context) {
 }
 
 // EnableScheduledSession enables a schedule
-func (h *Handler) EnableScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) EnableScheduledSession(c *gin.Context) {
 	scheduleID := c.Param("scheduleId")
 	userID := c.GetString("user_id")
 
-	_, err := h.DB.Exec(`
+	_, err := h.DB.DB().Exec(`
 		UPDATE scheduled_sessions SET enabled = true, updated_at = NOW()
 		WHERE id = $1 AND user_id = $2
 	`, scheduleID, userID)
@@ -506,11 +517,11 @@ func (h *Handler) EnableScheduledSession(c *gin.Context) {
 }
 
 // DisableScheduledSession disables a schedule
-func (h *Handler) DisableScheduledSession(c *gin.Context) {
+func (h *SchedulingHandler) DisableScheduledSession(c *gin.Context) {
 	scheduleID := c.Param("scheduleId")
 	userID := c.GetString("user_id")
 
-	_, err := h.DB.Exec(`
+	_, err := h.DB.DB().Exec(`
 		UPDATE scheduled_sessions SET enabled = false, updated_at = NOW()
 		WHERE id = $1 AND user_id = $2
 	`, scheduleID, userID)
@@ -570,7 +581,7 @@ type CalendarEvent struct {
 // ============================================================================
 
 // ConnectCalendar initiates calendar OAuth flow
-func (h *Handler) ConnectCalendar(c *gin.Context) {
+func (h *SchedulingHandler) ConnectCalendar(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req struct {
@@ -602,7 +613,7 @@ func (h *Handler) ConnectCalendar(c *gin.Context) {
 }
 
 // CalendarOAuthCallback handles OAuth callback
-func (h *Handler) CalendarOAuthCallback(c *gin.Context) {
+func (h *SchedulingHandler) CalendarOAuthCallback(c *gin.Context) {
 	provider := c.Query("provider")
 	code := c.Query("code")
 	state := c.Query("state") // Contains userID
@@ -615,6 +626,7 @@ func (h *Handler) CalendarOAuthCallback(c *gin.Context) {
 	// Exchange code for tokens (implementation depends on provider)
 	var accessToken, refreshToken, email string
 	var expiry time.Time
+	var err error
 
 	// Implement OAuth token exchange based on provider
 	switch provider {
@@ -634,7 +646,7 @@ func (h *Handler) CalendarOAuthCallback(c *gin.Context) {
 
 	// Store integration
 	var id int64
-	err := h.DB.QueryRow(`
+	err = h.DB.DB().QueryRow(`
 		INSERT INTO calendar_integrations
 		(user_id, provider, account_email, access_token, refresh_token, token_expiry, enabled, sync_enabled)
 		VALUES ($1, $2, $3, $4, $5, $6, true, true)
@@ -653,10 +665,10 @@ func (h *Handler) CalendarOAuthCallback(c *gin.Context) {
 }
 
 // ListCalendarIntegrations lists user's calendar integrations
-func (h *Handler) ListCalendarIntegrations(c *gin.Context) {
+func (h *SchedulingHandler) ListCalendarIntegrations(c *gin.Context) {
 	userID := c.GetString("user_id")
 
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, provider, account_email, calendar_id, enabled, sync_enabled,
 		       auto_create_events, auto_update_events, last_synced_at, created_at
 		FROM calendar_integrations
@@ -699,11 +711,11 @@ func (h *Handler) ListCalendarIntegrations(c *gin.Context) {
 }
 
 // DisconnectCalendar removes a calendar integration
-func (h *Handler) DisconnectCalendar(c *gin.Context) {
+func (h *SchedulingHandler) DisconnectCalendar(c *gin.Context) {
 	integrationID := c.Param("integrationId")
 	userID := c.GetString("user_id")
 
-	result, err := h.DB.Exec(`
+	result, err := h.DB.DB().Exec(`
 		DELETE FROM calendar_integrations
 		WHERE id = $1 AND user_id = $2
 	`, integrationID, userID)
@@ -723,13 +735,13 @@ func (h *Handler) DisconnectCalendar(c *gin.Context) {
 }
 
 // SyncCalendar manually triggers calendar sync
-func (h *Handler) SyncCalendar(c *gin.Context) {
+func (h *SchedulingHandler) SyncCalendar(c *gin.Context) {
 	integrationID := c.Param("integrationId")
 	userID := c.GetString("user_id")
 
 	// Get integration details
 	var ci CalendarIntegration
-	err := h.DB.QueryRow(`
+	err := h.DB.DB().QueryRow(`
 		SELECT id, provider, access_token, refresh_token, calendar_id
 		FROM calendar_integrations
 		WHERE id = $1 AND user_id = $2
@@ -749,7 +761,7 @@ func (h *Handler) SyncCalendar(c *gin.Context) {
 	}
 
 	// Update last synced timestamp
-	h.DB.Exec(`
+	h.DB.DB().Exec(`
 		UPDATE calendar_integrations
 		SET last_synced_at = NOW()
 		WHERE id = $1
@@ -763,11 +775,11 @@ func (h *Handler) SyncCalendar(c *gin.Context) {
 }
 
 // ExportICalendar exports scheduled sessions as iCal format
-func (h *Handler) ExportICalendar(c *gin.Context) {
+func (h *SchedulingHandler) ExportICalendar(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	// Get all enabled scheduled sessions
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, name, description, schedule, timezone, template_id
 		FROM scheduled_sessions
 		WHERE user_id = $1 AND enabled = true
@@ -863,7 +875,7 @@ func (h *Handler) ExportICalendar(c *gin.Context) {
 //
 // - nil: Schedule is valid
 // - error: Descriptive error message indicating what's wrong
-func (h *Handler) validateSchedule(schedule *ScheduleConfig) error {
+func (h *SchedulingHandler) validateSchedule(schedule *ScheduleConfig) error {
 	switch schedule.Type {
 	case "once":
 		// One-time schedule: requires specific start timestamp
@@ -990,7 +1002,7 @@ func (h *Handler) validateSchedule(schedule *ScheduleConfig) error {
 //	  TimeOfDay: "14:00"
 //	}, "America/New_York")
 //	// Returns: next Monday or Wednesday at 2 PM, whichever comes first
-func (h *Handler) calculateNextRun(schedule *ScheduleConfig, timezone string) (time.Time, error) {
+func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone string) (time.Time, error) {
 	// STEP 1: Load the user's timezone
 	// If timezone is invalid, fall back to UTC to prevent errors
 	// This allows schedules to still work even with misconfigured timezones
@@ -1187,7 +1199,7 @@ func (h *Handler) calculateNextRun(schedule *ScheduleConfig, timezone string) (t
 //	  "America/New_York",
 //	  240)  // 4 hours
 //	// Returns: [existing_schedule_id] because 2-6 PM overlaps with 9 AM-5 PM
-func (h *Handler) checkSchedulingConflicts(userID string, schedule ScheduleConfig, timezone string, terminateAfterMinutes int) ([]int64, error) {
+func (h *SchedulingHandler) checkSchedulingConflicts(userID string, schedule ScheduleConfig, timezone string, terminateAfterMinutes int) ([]int64, error) {
 	// STEP 1: Calculate when the proposed schedule will next run
 	// This gives us the start time for conflict detection
 	proposedStart, err := h.calculateNextRun(&schedule, timezone)
@@ -1212,7 +1224,7 @@ func (h *Handler) checkSchedulingConflicts(userID string, schedule ScheduleConfi
 		WHERE user_id = $1 AND enabled = true
 	`
 
-	rows, err := h.DB.Query(query, userID)
+	rows, err := h.DB.DB().Query(query, userID)
 	if err != nil {
 		return nil, fmt.Errorf("failed to query schedules: %w", err)
 	}
@@ -1253,7 +1265,7 @@ func (h *Handler) checkSchedulingConflicts(userID string, schedule ScheduleConfi
 }
 
 // Get Google Calendar OAuth URL
-func (h *Handler) getGoogleCalendarAuthURL(userID string) string {
+func (h *SchedulingHandler) getGoogleCalendarAuthURL(userID string) string {
 	// OAuth2 configuration for Google Calendar
 	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
 	if clientID == "" {
@@ -1282,7 +1294,7 @@ func (h *Handler) getGoogleCalendarAuthURL(userID string) string {
 }
 
 // Get Outlook Calendar OAuth URL
-func (h *Handler) getOutlookCalendarAuthURL(userID string) string {
+func (h *SchedulingHandler) getOutlookCalendarAuthURL(userID string) string {
 	// OAuth2 configuration for Microsoft Outlook
 	clientID := os.Getenv("MICROSOFT_OAUTH_CLIENT_ID")
 	if clientID == "" {
@@ -1309,7 +1321,7 @@ func (h *Handler) getOutlookCalendarAuthURL(userID string) string {
 }
 
 // exchangeGoogleOAuthToken exchanges authorization code for access/refresh tokens
-func (h *Handler) exchangeGoogleOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
+func (h *SchedulingHandler) exchangeGoogleOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
 	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
 	clientSecret := os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
 	redirectURI := os.Getenv("GOOGLE_OAUTH_REDIRECT_URI")
@@ -1379,7 +1391,7 @@ func (h *Handler) exchangeGoogleOAuthToken(code string) (accessToken, refreshTok
 }
 
 // getGoogleUserEmail fetches the user's email from Google userinfo API
-func (h *Handler) getGoogleUserEmail(accessToken string) (string, error) {
+func (h *SchedulingHandler) getGoogleUserEmail(accessToken string) (string, error) {
 	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
 	if err != nil {
 		return "", err
@@ -1411,7 +1423,7 @@ func (h *Handler) getGoogleUserEmail(accessToken string) (string, error) {
 }
 
 // exchangeOutlookOAuthToken exchanges authorization code for access/refresh tokens
-func (h *Handler) exchangeOutlookOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
+func (h *SchedulingHandler) exchangeOutlookOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
 	clientID := os.Getenv("MICROSOFT_OAUTH_CLIENT_ID")
 	clientSecret := os.Getenv("MICROSOFT_OAUTH_CLIENT_SECRET")
 	redirectURI := os.Getenv("MICROSOFT_OAUTH_REDIRECT_URI")
@@ -1482,7 +1494,7 @@ func (h *Handler) exchangeOutlookOAuthToken(code string) (accessToken, refreshTo
 }
 
 // getMicrosoftUserEmail fetches the user's email from Microsoft Graph API
-func (h *Handler) getMicrosoftUserEmail(accessToken string) (string, error) {
+func (h *SchedulingHandler) getMicrosoftUserEmail(accessToken string) (string, error) {
 	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
 	if err != nil {
 		return "", err
@@ -1518,9 +1530,9 @@ func (h *Handler) getMicrosoftUserEmail(accessToken string) (string, error) {
 }
 
 // syncScheduledSessionsToCalendar syncs user's scheduled sessions to their calendar
-func (h *Handler) syncScheduledSessionsToCalendar(userID string, ci *CalendarIntegration) (int, error) {
+func (h *SchedulingHandler) syncScheduledSessionsToCalendar(userID string, ci *CalendarIntegration) (int, error) {
 	// Fetch enabled scheduled sessions for the user
-	rows, err := h.DB.Query(`
+	rows, err := h.DB.DB().Query(`
 		SELECT id, name, template_id, schedule, timezone, next_run_at, terminate_after
 		FROM scheduled_sessions
 		WHERE user_id = $1 AND enabled = true
@@ -1567,7 +1579,7 @@ func (h *Handler) syncScheduledSessionsToCalendar(userID string, ci *CalendarInt
 		}
 
 		// Store the event ID for future updates/deletion
-		_, err = h.DB.Exec(`
+		_, err = h.DB.DB().Exec(`
 			UPDATE scheduled_sessions
 			SET calendar_event_id = $1
 			WHERE id = $2
@@ -1582,7 +1594,7 @@ func (h *Handler) syncScheduledSessionsToCalendar(userID string, ci *CalendarInt
 }
 
 // createGoogleCalendarEvent creates an event in Google Calendar
-func (h *Handler) createGoogleCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
+func (h *SchedulingHandler) createGoogleCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
 	if ci.AccessToken == "" {
 		return "", fmt.Errorf("no access token available")
 	}
@@ -1669,7 +1681,7 @@ func (h *Handler) createGoogleCalendarEvent(ci *CalendarIntegration, title, desc
 }
 
 // createOutlookCalendarEvent creates an event in Outlook Calendar
-func (h *Handler) createOutlookCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
+func (h *SchedulingHandler) createOutlookCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
 	if ci.AccessToken == "" {
 		return "", fmt.Errorf("no access token available")
 	}

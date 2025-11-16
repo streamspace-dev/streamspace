@@ -152,6 +152,8 @@ type Template struct {
 	WebApp       *WebAppConfig
 	Capabilities []string
 	Tags         []string
+	Featured     bool  // Whether template is featured in catalog
+	UsageCount   int   // Number of times template has been used
 	CreatedAt    time.Time
 }
 
@@ -782,6 +784,14 @@ func parseTemplate(obj *unstructured.Unstructured) (*Template, error) {
 				template.Capabilities = append(template.Capabilities, capStr)
 			}
 		}
+	}
+
+	if featured, ok := spec["featured"].(bool); ok {
+		template.Featured = featured
+	}
+
+	if usageCount, ok := spec["usageCount"].(float64); ok {
+		template.UsageCount = int(usageCount)
 	}
 
 	return template, nil

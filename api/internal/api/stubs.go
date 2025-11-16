@@ -13,6 +13,7 @@ import (
 	"github.com/gorilla/websocket"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -298,7 +299,7 @@ func (h *Handler) CreateResource(c *gin.Context) {
 
 // UpdateResource updates a K8s resource
 func (h *Handler) UpdateResource(c *gin.Context) {
-	resourceType := c.Param("type")     // e.g., "deployment", "service"
+	_ = c.Param("type") // Resource type not used; Kind from request body
 	resourceName := c.Param("name")
 	namespace := c.Query("namespace")
 	if namespace == "" {

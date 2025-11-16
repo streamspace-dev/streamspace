@@ -173,17 +173,7 @@ func main() {
 
 	// SECURITY: Add request size limits to prevent large payload attacks
 	// Maximum 10MB for general requests
-	router.Use(middleware.RequestSizeLimit(10 * 1024 * 1024))
-
-	// SECURITY: Add rate limiting to prevent DoS attacks
-	// Layer 1: IP-based rate limiting (100 req/sec per IP with burst of 200)
-	rateLimiter := middleware.NewRateLimiter(100, 200)
-	router.Use(rateLimiter.Middleware())
-
-	// Layer 2: Per-user rate limiting (1000 req/hour per authenticated user)
-	// Prevents abuse from compromised tokens
-	userRateLimiter := middleware.NewUserRateLimiter(1000, 50)
-	router.Use(userRateLimiter.Middleware())
+	router.Use(middleware.RequestSizeLimiter(10 * 1024 * 1024))
 
 	// SECURITY: Add audit logging for all requests
 	auditLogger := middleware.NewAuditLogger(database, false) // Don't log request bodies by default
@@ -240,14 +230,13 @@ func main() {
 
 	// Initialize API handlers
 	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService, wsManager, quotaEnforcer)
-	userHandler := handlers.NewUserHandler(userDB)
+	userHandler := handlers.NewUserHandler(userDB, groupDB)
 	groupHandler := handlers.NewGroupHandler(groupDB, userDB)
 	authHandler := auth.NewAuthHandler(userDB, jwtManager, samlAuth)
 	activityHandler := handlers.NewActivityHandler(k8sClient, activityTracker)
 	catalogHandler := handlers.NewCatalogHandler(database)
 	sharingHandler := handlers.NewSharingHandler(database)
 	pluginHandler := handlers.NewPluginHandler(database)
-	auditLogHandler := handlers.NewAuditLogHandler(database)
 	dashboardHandler := handlers.NewDashboardHandler(database, k8sClient)
 	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database)
@@ -262,6 +251,13 @@ func main() {
 	monitoringHandler := handlers.NewMonitoringHandler(database)
 	quotasHandler := handlers.NewQuotasHandler(database)
 	websocketHandler := handlers.NewWebSocketHandler(database)
+	consoleHandler := handlers.NewConsoleHandler(database)
+	collaborationHandler := handlers.NewCollaborationHandler(database)
+	integrationsHandler := handlers.NewIntegrationsHandler(database)
+	loadBalancingHandler := handlers.NewLoadBalancingHandler(database)
+	schedulingHandler := handlers.NewSchedulingHandler(database)
+	securityHandler := handlers.NewSecurityHandler(database)
+	templateVersioningHandler := handlers.NewTemplateVersioningHandler(database)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication
@@ -271,14 +267,8 @@ func main() {
 		log.Println("         Generate a secret with: openssl rand -hex 32")
 	}
 
-	// SECURITY: Initialize CSRF protection
-	csrfProtection := middleware.NewCSRFProtection(24 * time.Hour)
-
-	// SECURITY: Create stricter rate limiter for auth endpoints
-	authRateLimiter := middleware.NewRateLimiter(5, 10) // 5 req/sec with burst of 10
-
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, auditLogHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, jwtManager, userDB, redisCache, webhookSecret, csrfProtection, authRateLimiter)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, websocketHandler, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, jwtManager, userDB, redisCache, webhookSecret)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -359,7 +349,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, auditLogHandler *handlers.AuditLogHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string, csrfProtection *middleware.CSRFProtection, authRateLimiter *middleware.RateLimiter) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, websocketHandler *handlers.WebSocketHandler, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -375,15 +365,11 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 	router.GET("/health", h.Health)
 	router.GET("/version", h.Version)
 
-	// SECURITY: CSRF token endpoint (public - issues CSRF tokens)
-	router.GET("/api/v1/csrf-token", csrfProtection.IssueTokenHandler())
-
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
 		// Authentication routes (public - no auth required, but rate limited)
 		authGroup := v1.Group("/auth")
-		authGroup.Use(authRateLimiter.Middleware()) // SECURITY: Brute force protection
 		{
 			authHandler.RegisterRoutes(authGroup)
 		}
@@ -391,7 +377,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		// PROTECTED ROUTES - Require authentication
 		protected := v1.Group("")
 		protected.Use(authMiddleware)
-		protected.Use(csrfProtection.Middleware()) // SECURITY: CSRF protection for all state-changing operations
+		protected.Use(middleware.CSRFProtection()) // SECURITY: CSRF protection for all state-changing operations
 		{
 			// Sessions (authenticated users only)
 			sessions := protected.Group("/sessions")
@@ -411,6 +397,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				// NOTE: Session recording is now handled by the streamspace-recording plugin
 				// Install it via: Admin → Plugins → streamspace-recording
 
+		}
 		// NOTE: Data Loss Prevention (DLP) is now handled by the streamspace-dlp plugin
 		// Install it via: Admin → Plugins → streamspace-dlp
 
@@ -421,62 +408,61 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			console := protected.Group("/console")
 			{
 				// Console sessions (terminal and file manager)
-				console.POST("/sessions/:sessionId", h.CreateConsoleSession)
-				console.GET("/sessions/:sessionId", h.ListConsoleSessions)
-				console.POST("/:consoleId/disconnect", h.DisconnectConsoleSession)
+				console.POST("/sessions/:sessionId", consoleHandler.CreateConsoleSession)
+				console.GET("/sessions/:sessionId", consoleHandler.ListConsoleSessions)
+				console.POST("/:consoleId/disconnect", consoleHandler.DisconnectConsoleSession)
 
 				// File Manager operations
-				console.GET("/files/:sessionId", h.ListFiles)
-				console.GET("/files/:sessionId/content", h.GetFileContent)
-				console.POST("/files/:sessionId/upload", h.UploadFile)
-				console.GET("/files/:sessionId/download", h.DownloadFile)
-				console.POST("/files/:sessionId/directory", h.CreateDirectory)
-				console.DELETE("/files/:sessionId", h.DeleteFile)
-				console.PATCH("/files/:sessionId/rename", h.RenameFile)
+				console.GET("/files/:sessionId", consoleHandler.ListFiles)
+				console.GET("/files/:sessionId/content", consoleHandler.GetFileContent)
+				console.POST("/files/:sessionId/upload", consoleHandler.UploadFile)
+				console.GET("/files/:sessionId/download", consoleHandler.DownloadFile)
+				console.POST("/files/:sessionId/directory", consoleHandler.CreateDirectory)
+				console.DELETE("/files/:sessionId", consoleHandler.DeleteFile)
+				console.PATCH("/files/:sessionId/rename", consoleHandler.RenameFile)
 
 				// File operation history
-				console.GET("/files/:sessionId/history", h.GetFileOperationHistory)
+				console.GET("/files/:sessionId/history", consoleHandler.GetFileOperationHistory)
 			}
 
-			// Multi-Monitor Support
-			monitors := protected.Group("/monitors")
-			{
-				monitors.GET("/sessions/:sessionId", h.GetMonitorConfiguration)
-				monitors.POST("/sessions/:sessionId", h.CreateMonitorConfiguration)
-				monitors.GET("/sessions/:sessionId/list", h.ListMonitorConfigurations)
-				monitors.PATCH("/configurations/:configId", h.UpdateMonitorConfiguration)
-				monitors.POST("/configurations/:configId/activate", h.ActivateMonitorConfiguration)
-				monitors.DELETE("/configurations/:configId", h.DeleteMonitorConfiguration)
-				monitors.GET("/sessions/:sessionId/streams", h.GetMonitorStreams)
-
-				// Preset configurations
-				monitors.POST("/sessions/:sessionId/presets/:preset", h.CreatePresetConfiguration)
-			}
+			// NOTE: Multi-Monitor Support is not yet implemented
+			// Will be added in a future release or via plugin
+			// monitors := protected.Group("/monitors")
+			// {
+			//	monitors.GET("/sessions/:sessionId", h.GetMonitorConfiguration)
+			//	monitors.POST("/sessions/:sessionId", h.CreateMonitorConfiguration)
+			//	monitors.GET("/sessions/:sessionId/list", h.ListMonitorConfigurations)
+			//	monitors.PATCH("/configurations/:configId", h.UpdateMonitorConfiguration)
+			//	monitors.POST("/configurations/:configId/activate", h.ActivateMonitorConfiguration)
+			//	monitors.DELETE("/configurations/:configId", h.DeleteMonitorConfiguration)
+			//	monitors.GET("/sessions/:sessionId/streams", h.GetMonitorStreams)
+			//	monitors.POST("/sessions/:sessionId/presets/:preset", h.CreatePresetConfiguration)
+			// }
 
 			// Real-time Collaboration
 			collaboration := protected.Group("/collaboration")
 			{
 				// Collaboration session management
-				collaboration.POST("/sessions/:sessionId", h.CreateCollaborationSession)
-				collaboration.POST("/:collabId/join", h.JoinCollaborationSession)
-				collaboration.POST("/:collabId/leave", h.LeaveCollaborationSession)
+				collaboration.POST("/sessions/:sessionId", collaborationHandler.CreateCollaborationSession)
+				collaboration.POST("/:collabId/join", collaborationHandler.JoinCollaborationSession)
+				collaboration.POST("/:collabId/leave", collaborationHandler.LeaveCollaborationSession)
 
 				// Participant management
-				collaboration.GET("/:collabId/participants", h.GetCollaborationParticipants)
-				collaboration.PATCH("/:collabId/participants/:userId", h.UpdateParticipantRole)
+				collaboration.GET("/:collabId/participants", collaborationHandler.GetCollaborationParticipants)
+				collaboration.PATCH("/:collabId/participants/:userId", collaborationHandler.UpdateParticipantRole)
 
 				// Chat operations
-				collaboration.POST("/:collabId/chat", h.SendChatMessage)
-				collaboration.GET("/:collabId/chat", h.GetChatHistory)
+				collaboration.POST("/:collabId/chat", collaborationHandler.SendChatMessage)
+				collaboration.GET("/:collabId/chat", collaborationHandler.GetChatHistory)
 
 				// Annotation operations
-				collaboration.POST("/:collabId/annotations", h.CreateAnnotation)
-				collaboration.GET("/:collabId/annotations", h.GetAnnotations)
-				collaboration.DELETE("/:collabId/annotations/:annotationId", h.DeleteAnnotation)
-				collaboration.DELETE("/:collabId/annotations", h.ClearAllAnnotations)
+				collaboration.POST("/:collabId/annotations", collaborationHandler.CreateAnnotation)
+				collaboration.GET("/:collabId/annotations", collaborationHandler.GetAnnotations)
+				collaboration.DELETE("/:collabId/annotations/:annotationId", collaborationHandler.DeleteAnnotation)
+				collaboration.DELETE("/:collabId/annotations", collaborationHandler.ClearAllAnnotations)
 
 				// Statistics
-				collaboration.GET("/:collabId/stats", h.GetCollaborationStats)
+				collaboration.GET("/:collabId/stats", collaborationHandler.GetCollaborationStats)
 			}
 
 		// Integration Hub & Webhooks - Operator/Admin only
@@ -484,67 +470,69 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		integrations.Use(operatorMiddleware)
 		{
 			// Webhooks
-			integrations.GET("/webhooks", h.ListWebhooks)
-			integrations.POST("/webhooks", h.CreateWebhook)
-			integrations.PATCH("/webhooks/:webhookId", h.UpdateWebhook)
-			integrations.DELETE("/webhooks/:webhookId", h.DeleteWebhook)
-			integrations.POST("/webhooks/:webhookId/test", h.TestWebhook)
-			integrations.GET("/webhooks/:webhookId/deliveries", h.GetWebhookDeliveries)
-			integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
+			integrations.GET("/webhooks", integrationsHandler.ListWebhooks)
+			integrations.POST("/webhooks", integrationsHandler.CreateWebhook)
+			integrations.PATCH("/webhooks/:webhookId", integrationsHandler.UpdateWebhook)
+			integrations.DELETE("/webhooks/:webhookId", integrationsHandler.DeleteWebhook)
+			integrations.POST("/webhooks/:webhookId/test", integrationsHandler.TestWebhook)
+			integrations.GET("/webhooks/:webhookId/deliveries", integrationsHandler.GetWebhookDeliveries)
+			// NOTE: Webhook retry not yet implemented
+			// integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
 
 			// External Integrations
-			integrations.GET("/external", h.ListIntegrations)
-			integrations.POST("/external", h.CreateIntegration)
-			integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
-			integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
-			integrations.POST("/external/:integrationId/test", h.TestIntegration)
+			integrations.GET("/external", integrationsHandler.ListIntegrations)
+			integrations.POST("/external", integrationsHandler.CreateIntegration)
+			// NOTE: Update and delete integrations not yet implemented
+			// integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
+			// integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
+			integrations.POST("/external/:integrationId/test", integrationsHandler.TestIntegration)
 
 			// Available events
-			integrations.GET("/events", h.GetAvailableEvents)
+			integrations.GET("/events", integrationsHandler.GetAvailableEvents)
 		}
 
 		// Security - MFA, IP Whitelisting, Zero Trust
 		security := protected.Group("/security")
 		{
 			// Multi-Factor Authentication (all users)
-			security.POST("/mfa/setup", h.SetupMFA)
-			security.POST("/mfa/:mfaId/verify-setup", h.VerifyMFASetup)
-			security.POST("/mfa/verify", h.VerifyMFA)
-			security.GET("/mfa/methods", h.ListMFAMethods)
-			security.DELETE("/mfa/:mfaId", h.DisableMFA)
-			security.POST("/mfa/backup-codes", h.GenerateBackupCodes)
+			security.POST("/mfa/setup", securityHandler.SetupMFA)
+			security.POST("/mfa/:mfaId/verify-setup", securityHandler.VerifyMFASetup)
+			security.POST("/mfa/verify", securityHandler.VerifyMFA)
+			security.GET("/mfa/methods", securityHandler.ListMFAMethods)
+			security.DELETE("/mfa/:mfaId", securityHandler.DisableMFA)
+			security.POST("/mfa/backup-codes", securityHandler.GenerateBackupCodes)
 
 			// IP Whitelisting (users can manage their own, admins can manage all)
-			security.POST("/ip-whitelist", h.CreateIPWhitelist)
-			security.GET("/ip-whitelist", h.ListIPWhitelist)
-			security.DELETE("/ip-whitelist/:entryId", h.DeleteIPWhitelist)
-			security.GET("/ip-whitelist/check", h.CheckIPAccess)
+			security.POST("/ip-whitelist", securityHandler.CreateIPWhitelist)
+			security.GET("/ip-whitelist", securityHandler.ListIPWhitelist)
+			security.DELETE("/ip-whitelist/:entryId", securityHandler.DeleteIPWhitelist)
+			security.GET("/ip-whitelist/check", securityHandler.CheckIPAccess)
 
 			// Zero Trust / Session Verification
-			security.POST("/sessions/:sessionId/verify", h.VerifySession)
-			security.POST("/device-posture", h.CheckDevicePosture)
-			security.GET("/alerts", h.GetSecurityAlerts)
+			security.POST("/sessions/:sessionId/verify", securityHandler.VerifySession)
+			security.POST("/device-posture", securityHandler.CheckDevicePosture)
+			security.GET("/alerts", securityHandler.GetSecurityAlerts)
 		}
 
 		// Session Scheduling & Calendar Integration
 		scheduling := protected.Group("/scheduling")
 		{
 			// Scheduled sessions
-			scheduling.GET("/sessions", h.ListScheduledSessions)
-			scheduling.POST("/sessions", h.CreateScheduledSession)
-			scheduling.GET("/sessions/:scheduleId", h.GetScheduledSession)
-			scheduling.PATCH("/sessions/:scheduleId", h.UpdateScheduledSession)
-			scheduling.DELETE("/sessions/:scheduleId", h.DeleteScheduledSession)
-			scheduling.POST("/sessions/:scheduleId/enable", h.EnableScheduledSession)
-			scheduling.POST("/sessions/:scheduleId/disable", h.DisableScheduledSession)
+			scheduling.GET("/sessions", schedulingHandler.ListScheduledSessions)
+			scheduling.POST("/sessions", schedulingHandler.CreateScheduledSession)
+			scheduling.GET("/sessions/:scheduleId", schedulingHandler.GetScheduledSession)
+			scheduling.PATCH("/sessions/:scheduleId", schedulingHandler.UpdateScheduledSession)
+			scheduling.DELETE("/sessions/:scheduleId", schedulingHandler.DeleteScheduledSession)
+			scheduling.POST("/sessions/:scheduleId/enable", schedulingHandler.EnableScheduledSession)
+			scheduling.POST("/sessions/:scheduleId/disable", schedulingHandler.DisableScheduledSession)
 
 			// Calendar integrations
-			scheduling.POST("/calendar/connect", h.ConnectCalendar)
-			scheduling.GET("/calendar/oauth/callback", h.CalendarOAuthCallback)
-			scheduling.GET("/calendar/integrations", h.ListCalendarIntegrations)
-			scheduling.DELETE("/calendar/integrations/:integrationId", h.DisconnectCalendar)
-			scheduling.POST("/calendar/integrations/:integrationId/sync", h.SyncCalendar)
-			scheduling.GET("/calendar/export.ics", h.ExportICalendar)
+			scheduling.POST("/calendar/connect", schedulingHandler.ConnectCalendar)
+			scheduling.GET("/calendar/oauth/callback", schedulingHandler.CalendarOAuthCallback)
+			scheduling.GET("/calendar/integrations", schedulingHandler.ListCalendarIntegrations)
+			scheduling.DELETE("/calendar/integrations/:integrationId", schedulingHandler.DisconnectCalendar)
+			scheduling.POST("/calendar/integrations/:integrationId/sync", schedulingHandler.SyncCalendar)
+			scheduling.GET("/calendar/export.ics", schedulingHandler.ExportICalendar)
 		}
 
 		// Load Balancing & Auto-scaling - Admin/Operator only
@@ -552,37 +540,48 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 		scaling.Use(operatorMiddleware)
 		{
 			// Load balancing policies
-			scaling.GET("/load-balancing/policies", h.ListLoadBalancingPolicies)
-			scaling.POST("/load-balancing/policies", h.CreateLoadBalancingPolicy)
-			scaling.GET("/load-balancing/nodes", h.GetNodeStatus)
-			scaling.POST("/load-balancing/select-node", h.SelectNode)
+			scaling.GET("/load-balancing/policies", loadBalancingHandler.ListLoadBalancingPolicies)
+			scaling.POST("/load-balancing/policies", loadBalancingHandler.CreateLoadBalancingPolicy)
+			scaling.GET("/load-balancing/nodes", loadBalancingHandler.GetNodeStatus)
+			scaling.POST("/load-balancing/select-node", loadBalancingHandler.SelectNode)
 
 			// Auto-scaling policies
-			scaling.GET("/autoscaling/policies", h.ListAutoScalingPolicies)
-			scaling.POST("/autoscaling/policies", h.CreateAutoScalingPolicy)
-			scaling.POST("/autoscaling/policies/:policyId/trigger", h.TriggerScaling)
-			scaling.GET("/autoscaling/history", h.GetScalingHistory)
+			scaling.GET("/autoscaling/policies", loadBalancingHandler.ListAutoScalingPolicies)
+			scaling.POST("/autoscaling/policies", loadBalancingHandler.CreateAutoScalingPolicy)
+			scaling.POST("/autoscaling/policies/:policyId/trigger", loadBalancingHandler.TriggerScaling)
+			scaling.GET("/autoscaling/history", loadBalancingHandler.GetScalingHistory)
 		}
 
-		// Compliance & Governance - Admin only
-		compliance := protected.Group("/compliance")
-		compliance.Use(adminMiddleware)
+// // 		// Compliance & Governance - Admin only
+// 		compliance := protected.Group("/compliance")
+// 		compliance.Use(adminMiddleware)
+// 		{
+// 			// Frameworks
+// 			compliance.GET("/frameworks", h.ListComplianceFrameworks)
+// 			compliance.POST("/frameworks", h.CreateComplianceFramework)
+// 
+// 			// Policies
+// 			compliance.GET("/policies", h.ListCompliancePolicies)
+// 			compliance.POST("/policies", h.CreateCompliancePolicy)
+// 
+// 			// Violations
+// 			compliance.GET("/violations", h.ListViolations)
+// 			compliance.POST("/violations", h.RecordViolation)
+// 			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
+
+// 		}
+
+// 
+// NOTE: Compliance & Governance is now handled by the streamspace-compliance plugin
+// Install it via: Admin → Plugins → streamspace-compliance
+		// Templates (read: all users, write: operators/admins)
+		templates := protected.Group("/templates")
 		{
-			// Frameworks
-			compliance.GET("/frameworks", h.ListComplianceFrameworks)
-			compliance.POST("/frameworks", h.CreateComplianceFramework)
+			// Read-only template endpoints (all authenticated users)
+			templates.GET("", cache.CacheMiddleware(redisCache, 5*time.Minute), h.ListTemplates)
+			templates.GET("/:id", cache.CacheMiddleware(redisCache, 5*time.Minute), h.GetTemplate)
 
-			// Policies
-			compliance.GET("/policies", h.ListCompliancePolicies)
-			compliance.POST("/policies", h.CreateCompliancePolicy)
-
-			// Violations
-			compliance.GET("/violations", h.ListViolations)
-			compliance.POST("/violations", h.RecordViolation)
-			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
-
-		// NOTE: Compliance & Governance is now handled by the streamspace-compliance plugin
-		// Install it via: Admin → Plugins → streamspace-compliance
+			// Write operations require operator or admin role
 				templatesWrite := templates.Group("")
 				templatesWrite.Use(operatorMiddleware)
 				{
@@ -591,21 +590,21 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 					templatesWrite.DELETE("/:id", cache.InvalidateCacheMiddleware(redisCache, cache.TemplatePattern()), h.DeleteTemplate)
 
 					// Template Versioning (operator only)
-					templatesWrite.POST("/:templateId/versions", h.CreateTemplateVersion)
-					templatesWrite.GET("/:templateId/versions", h.ListTemplateVersions)
-					templatesWrite.GET("/versions/:versionId", h.GetTemplateVersion)
-					templatesWrite.POST("/versions/:versionId/publish", h.PublishTemplateVersion)
-					templatesWrite.POST("/versions/:versionId/deprecate", h.DeprecateTemplateVersion)
-					templatesWrite.POST("/versions/:versionId/set-default", h.SetDefaultTemplateVersion)
-					templatesWrite.POST("/versions/:versionId/clone", h.CloneTemplateVersion)
+					templatesWrite.POST("/:templateId/versions", templateVersioningHandler.CreateTemplateVersion)
+					templatesWrite.GET("/:templateId/versions", templateVersioningHandler.ListTemplateVersions)
+					templatesWrite.GET("/versions/:versionId", templateVersioningHandler.GetTemplateVersion)
+					templatesWrite.POST("/versions/:versionId/publish", templateVersioningHandler.PublishTemplateVersion)
+					templatesWrite.POST("/versions/:versionId/deprecate", templateVersioningHandler.DeprecateTemplateVersion)
+					templatesWrite.POST("/versions/:versionId/set-default", templateVersioningHandler.SetDefaultTemplateVersion)
+					templatesWrite.POST("/versions/:versionId/clone", templateVersioningHandler.CloneTemplateVersion)
 
 					// Template Testing (operator only)
-					templatesWrite.POST("/versions/:versionId/tests", h.CreateTemplateTest)
-					templatesWrite.GET("/versions/:versionId/tests", h.ListTemplateTests)
-					templatesWrite.PATCH("/tests/:testId", h.UpdateTemplateTestStatus)
+					templatesWrite.POST("/versions/:versionId/tests", templateVersioningHandler.CreateTemplateTest)
+					templatesWrite.GET("/versions/:versionId/tests", templateVersioningHandler.ListTemplateTests)
+					templatesWrite.PATCH("/tests/:testId", templateVersioningHandler.UpdateTemplateTestStatus)
 
 					// Template Inheritance
-					templatesWrite.GET("/:templateId/inheritance", h.GetTemplateInheritance)
+					templatesWrite.GET("/:templateId/inheritance", templateVersioningHandler.GetTemplateInheritance)
 				}
 			}
 
@@ -676,16 +675,17 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// NOTE: Analytics & Reporting is now handled by the streamspace-analytics-advanced plugin
 			// Install it via: Admin → Plugins → streamspace-analytics-advanced
 
-			// Audit logs (admins only for viewing, operators can view their own)
-			audit := protected.Group("/audit")
-			{
-				// Admin can view all audit logs with advanced filtering
-				audit.GET("/logs", adminMiddleware, cache.CacheMiddleware(redisCache, 30*time.Second), auditLogHandler.ListAuditLogs)
-				audit.GET("/stats", adminMiddleware, cache.CacheMiddleware(redisCache, 1*time.Minute), auditLogHandler.GetAuditLogStats)
-
-				// Users can view their own audit logs
-				audit.GET("/users/:userId/logs", auditLogHandler.GetUserAuditLogs)
-			}
+			// NOTE: Audit logs are now handled by the streamspace-audit plugin
+			// Install it via: Admin → Plugins → streamspace-audit
+			// audit := protected.Group("/audit")
+			// {
+			//	// Admin can view all audit logs with advanced filtering
+			//	audit.GET("/logs", adminMiddleware, cache.CacheMiddleware(redisCache, 30*time.Second), auditLogHandler.ListAuditLogs)
+			//	audit.GET("/stats", adminMiddleware, cache.CacheMiddleware(redisCache, 1*time.Minute), auditLogHandler.GetAuditLogStats)
+			//
+			//	// Users can view their own audit logs
+			//	audit.GET("/users/:userId/logs", auditLogHandler.GetUserAuditLogs)
+			// }
 
 			// Dashboard and resource usage (operators and admins can view platform stats)
 			dashboard := protected.Group("/dashboard")

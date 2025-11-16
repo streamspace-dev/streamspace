@@ -19,6 +19,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/tracker"
 	"github.com/streamspace/streamspace/api/internal/websocket"
 	"gopkg.in/yaml.v3"
+	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
@@ -158,31 +159,39 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 
 	// Check user quota
-	quotaReq := &quota.SessionRequest{
-		UserID:  req.User,
-		Memory:  memory,
-		CPU:     cpu,
-		Storage: "50Gi", // Default storage quota check
-	}
-
-	quotaResult, err := h.quotaEnforcer.CheckSessionQuota(ctx, quotaReq)
+	// Parse CPU and memory to int64
+	requestedCPU, requestedMemory, err := h.quotaEnforcer.ValidateResourceRequest(cpu, memory)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to check quota",
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid resource request",
 			"message": err.Error(),
 		})
 		return
 	}
 
-	if !quotaResult.Allowed {
+	// Get current usage by listing user's pods
+	podList, err := h.k8sClient.GetPods(ctx, h.namespace)
+	if err != nil {
+		log.Printf("Failed to get pods for quota check: %v", err)
+		// Continue with empty usage if we can't get pods
+		podList = &corev1.PodList{}
+	}
+
+	// Filter pods for this user
+	userPods := make([]corev1.Pod, 0)
+	for _, pod := range podList.Items {
+		if user, ok := pod.Labels["user"]; ok && user == req.User {
+			userPods = append(userPods, pod)
+		}
+	}
+
+	currentUsage := h.quotaEnforcer.CalculateUsage(userPods)
+
+	// Check if user can create session
+	if err := h.quotaEnforcer.CheckSessionCreation(ctx, req.User, requestedCPU, requestedMemory, 0, currentUsage); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "Quota exceeded",
-			"message": quotaResult.Reason,
-			"quota": gin.H{
-				"current":   quotaResult.CurrentUsage,
-				"requested": quotaResult.RequestedUsage,
-				"available": quotaResult.AvailableQuota,
-			},
+			"message": err.Error(),
 		})
 		return
 	}
@@ -224,12 +233,6 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Update quota usage
-	if err := h.quotaEnforcer.UpdateSessionQuota(ctx, req.User, memory, cpu, "50Gi", true); err != nil {
-		log.Printf("Failed to update quota usage: %v", err)
-		// Don't fail the request, but log the error
 	}
 
 	// Cache in database
@@ -280,8 +283,8 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	ctx := context.Background()
 	sessionID := c.Param("id")
 
-	// Get session info before deletion (for quota tracking)
-	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
+	// Verify session exists before deletion
+	_, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 		return
@@ -291,15 +294,6 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	if err := h.k8sClient.DeleteSession(ctx, h.namespace, sessionID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
-	}
-
-	// Update quota usage (decrement)
-	if session.Resources.Memory != "" && session.Resources.CPU != "" {
-		if err := h.quotaEnforcer.UpdateSessionQuota(ctx, session.User,
-			session.Resources.Memory, session.Resources.CPU, "50Gi", false); err != nil {
-			log.Printf("Failed to update quota usage on session deletion: %v", err)
-			// Don't fail the request, quota will be cleaned up later
-		}
 	}
 
 	// Delete from database cache

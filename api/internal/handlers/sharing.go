@@ -75,7 +75,6 @@ package handlers
 import (
 	"context"
 	"database/sql"
-	"fmt"
 	"log"
 	"net/http"
 	"time"
@@ -165,9 +164,9 @@ func (h *SharingHandler) CreateShare(c *gin.Context) {
 	}
 
 	// Check if user exists
-	var exists bool
-	err = h.db.DB().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, req.SharedWithUserId).Scan(&exists)
-	if err != nil || !exists {
+	var userExists bool
+	err = h.db.DB().QueryRowContext(ctx, `SELECT EXISTS(SELECT 1 FROM users WHERE id = $1)`, req.SharedWithUserId).Scan(&userExists)
+	if err != nil || !userExists {
 		c.JSON(http.StatusBadRequest, gin.H{"error": "User not found"})
 		return
 	}
