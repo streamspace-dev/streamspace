@@ -355,24 +355,30 @@ spec:
           name: http
           protocol: TCP
         env:
-        - name: DATABASE_HOST
+        - name: DB_HOST
           value: streamspace-postgres
-        - name: DATABASE_PORT
+        - name: DB_PORT
           value: "5432"
-        - name: DATABASE_NAME
+        - name: DB_NAME
           value: streamspace
-        - name: DATABASE_USER
+        - name: DB_USER
           value: streamspace
-        - name: DATABASE_PASSWORD
+        - name: DB_PASSWORD
           valueFrom:
             secretKeyRef:
               name: streamspace-secrets
               key: postgres-password
+        - name: DB_SSLMODE
+          value: disable
         - name: JWT_SECRET
           valueFrom:
             secretKeyRef:
               name: streamspace-secrets
               key: jwt-secret
+        - name: NAMESPACE
+          valueFrom:
+            fieldRef:
+              fieldPath: metadata.namespace
         resources:
           requests:
             memory: 256Mi
