@@ -386,7 +386,8 @@ func (h *Handler) CreateTemplateTest(c *gin.Context) {
 	}
 
 	// Get template ID and version
-	var templateID, version string
+	var templateID int64
+	var version string
 	err = h.DB.DB().QueryRow(`
 		SELECT template_id, version FROM template_versions WHERE id = $1
 	`, versionID).Scan(&templateID, &version)

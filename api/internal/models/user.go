@@ -494,6 +494,7 @@ type AddGroupMemberRequest struct {
 //	  "maxMemory": "16Gi"
 //	}
 type SetQuotaRequest struct {
+	Username    string  `json:"username,omitempty"` // For admin endpoints only
 	MaxSessions *int    `json:"maxSessions,omitempty"`
 	MaxCPU      *string `json:"maxCpu,omitempty"`
 	MaxMemory   *string `json:"maxMemory,omitempty"`
