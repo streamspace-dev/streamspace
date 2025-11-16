@@ -1,3 +1,68 @@
+// Package handlers provides HTTP request handlers for the StreamSpace API.
+//
+// The plugins.go file implements HTTP handlers for plugin management,
+// including catalog browsing, installation, configuration, and lifecycle management.
+//
+// API Endpoint Structure:
+//
+//	Plugin Catalog (browse/install):
+//	  GET    /api/plugins/catalog           - Browse available plugins
+//	  GET    /api/plugins/catalog/:id       - Get catalog plugin details
+//	  POST   /api/plugins/catalog/:id/rate  - Rate a plugin (1-5 stars)
+//	  POST   /api/plugins/catalog/:id/install - Install plugin from catalog
+//
+//	Installed Plugins (CRUD):
+//	  GET    /api/plugins                   - List installed plugins
+//	  GET    /api/plugins/:id               - Get installed plugin details
+//	  PATCH  /api/plugins/:id               - Update plugin config
+//	  DELETE /api/plugins/:id               - Uninstall plugin
+//	  POST   /api/plugins/:id/enable        - Enable plugin
+//	  POST   /api/plugins/:id/disable       - Disable plugin
+//
+// Database Tables:
+//
+//	catalog_plugins:
+//	  - Plugins available for installation
+//	  - Includes metadata (name, version, description, icon, tags)
+//	  - Tracks install count, ratings, view count
+//
+//	installed_plugins:
+//	  - Plugins currently installed
+//	  - References catalog_plugins via catalog_plugin_id
+//	  - Includes enabled status and configuration
+//
+//	plugin_ratings:
+//	  - User ratings for catalog plugins (1-5 stars + review)
+//	  - One rating per user per plugin (upsert on conflict)
+//
+//	plugin_stats:
+//	  - Plugin usage statistics (views, installs, last accessed)
+//	  - Updated asynchronously (non-blocking)
+//
+// Design Patterns:
+//
+//  1. Async stats updates: View/install counts updated in goroutines
+//  2. Graceful errors: Individual row parsing errors don't fail entire query
+//  3. SQL injection prevention: Parameterized queries with $1, $2, etc.
+//  4. User context: user_id extracted from auth middleware via c.GetString()
+//
+// Example Usage Flow:
+//
+//	1. User browses catalog:
+//	   GET /api/plugins/catalog?category=analytics&sort=popular
+//
+//	2. User views plugin details:
+//	   GET /api/plugins/catalog/42
+//	   (View count incremented async)
+//
+//	3. User installs plugin:
+//	   POST /api/plugins/catalog/42/install
+//	   Body: {"config": {"api_key": "..."}}
+//	   (Plugin added to installed_plugins, install count incremented)
+//
+//	4. User enables/disables plugin:
+//	   POST /api/plugins/123/enable
+//	   (Plugin enabled in database, runtime loads it on next restart/reload)
 package handlers
 
 import (
@@ -12,17 +77,50 @@ import (
 	"github.com/streamspace/streamspace/api/internal/models"
 )
 
-// PluginHandler handles plugin-related HTTP requests
+// PluginHandler handles plugin-related HTTP requests.
+//
+// This handler provides HTTP endpoints for:
+//   - Browsing the plugin catalog (search, filter, sort)
+//   - Installing plugins from the catalog
+//   - Managing installed plugins (enable, disable, configure, uninstall)
+//   - Rating plugins (user reviews)
+//
+// All methods interact with the database to query/modify plugin data.
 type PluginHandler struct {
+	// db is the database connection for plugin queries and updates.
 	db *db.Database
 }
 
-// NewPluginHandler creates a new plugin handler
+// NewPluginHandler creates a new plugin handler.
+//
+// Parameters:
+//   - database: Database connection for plugin operations
+//
+// Returns:
+//   - Configured PluginHandler ready to register routes
+//
+// Example:
+//
+//	handler := NewPluginHandler(db)
+//	handler.RegisterRoutes(router.Group("/api"))
 func NewPluginHandler(database *db.Database) *PluginHandler {
 	return &PluginHandler{db: database}
 }
 
-// RegisterRoutes registers plugin routes
+// RegisterRoutes registers plugin routes to the provided router group.
+//
+// Mounts all plugin endpoints under /plugins prefix:
+//   - Catalog endpoints: /plugins/catalog, /plugins/catalog/:id, etc.
+//   - Installed endpoints: /plugins, /plugins/:id, /plugins/:id/enable, etc.
+//
+// Parameters:
+//   - r: Gin router group to mount routes on (typically /api)
+//
+// Example:
+//
+//	api := router.Group("/api")
+//	handler.RegisterRoutes(api)
+//	// Routes available at: /api/plugins/catalog, /api/plugins, etc.
 func (h *PluginHandler) RegisterRoutes(r *gin.RouterGroup) {
 	plugins := r.Group("/plugins")
 	{
@@ -42,7 +140,54 @@ func (h *PluginHandler) RegisterRoutes(r *gin.RouterGroup) {
 	}
 }
 
-// BrowsePluginCatalog browses available plugins
+// BrowsePluginCatalog browses available plugins from the catalog.
+//
+// Endpoint: GET /api/plugins/catalog
+//
+// Query Parameters:
+//   - category: Filter by category (e.g., "analytics", "notifications")
+//   - type: Filter by plugin type (e.g., "builtin", "community")
+//   - search: Search in display_name, description, tags (case-insensitive)
+//   - sort: Sort order (popular, rating, newest, name) - default: popular
+//
+// Response: JSON with plugins array and total count
+//
+// Example Requests:
+//
+//	GET /api/plugins/catalog?category=analytics&sort=rating
+//	GET /api/plugins/catalog?search=slack&sort=popular
+//	GET /api/plugins/catalog?type=builtin&sort=name
+//
+// Example Response:
+//
+//	{
+//	  "plugins": [
+//	    {
+//	      "id": 1,
+//	      "name": "analytics-tracker",
+//	      "display_name": "Analytics Tracker",
+//	      "description": "Track session usage metrics",
+//	      "category": "analytics",
+//	      "plugin_type": "community",
+//	      "icon_url": "https://...",
+//	      "tags": ["analytics", "metrics"],
+//	      "install_count": 1500,
+//	      "avg_rating": 4.5,
+//	      "rating_count": 42
+//	    }
+//	  ],
+//	  "total": 1
+//	}
+//
+// Sorting Options:
+//   - popular: By install count desc, then rating desc
+//   - rating: By average rating desc, then rating count desc
+//   - newest: By created_at desc
+//   - name: By display_name asc
+//
+// HTTP Status Codes:
+//   - 200: Success (may return empty array if no matches)
+//   - 500: Database error
 func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 	category := c.Query("category")
 	pluginType := c.Query("type")
@@ -146,7 +291,51 @@ func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 	})
 }
 
-// GetCatalogPlugin gets a specific plugin from the catalog
+// GetCatalogPlugin gets a specific plugin from the catalog by ID.
+//
+// Endpoint: GET /api/plugins/catalog/:id
+//
+// Path Parameters:
+//   - id: Catalog plugin ID
+//
+// Response: JSON with complete plugin details including repository info
+//
+// Side Effects:
+//   - Increments view count asynchronously (non-blocking)
+//   - Updates last_viewed_at timestamp
+//
+// Example Request:
+//
+//	GET /api/plugins/catalog/42
+//
+// Example Response:
+//
+//	{
+//	  "id": 42,
+//	  "name": "slack-notifications",
+//	  "version": "1.2.3",
+//	  "display_name": "Slack Notifications",
+//	  "description": "Send session notifications to Slack",
+//	  "category": "notifications",
+//	  "plugin_type": "community",
+//	  "icon_url": "https://...",
+//	  "manifest": {...},
+//	  "tags": ["notifications", "slack"],
+//	  "install_count": 500,
+//	  "avg_rating": 4.8,
+//	  "rating_count": 20,
+//	  "repository": {
+//	    "id": 1,
+//	    "name": "official",
+//	    "url": "https://plugins.streamspace.io",
+//	    "type": "official"
+//	  }
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Success
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) GetCatalogPlugin(c *gin.Context) {
 	id := c.Param("id")
 
@@ -212,7 +401,37 @@ func (h *PluginHandler) GetCatalogPlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, plugin)
 }
 
-// RatePlugin rates a plugin
+// RatePlugin allows a user to rate a catalog plugin.
+//
+// Endpoint: POST /api/plugins/catalog/:id/rate
+//
+// Path Parameters:
+//   - id: Catalog plugin ID to rate
+//
+// Request Body:
+//
+//	{
+//	  "rating": 5,          // Required: 1-5 stars
+//	  "review": "Great!"    // Optional: Text review
+//	}
+//
+// Behavior:
+//   - Upserts rating (inserts new or updates existing for this user)
+//   - Updates plugin's avg_rating and rating_count
+//   - user_id extracted from auth middleware (c.GetString("user_id"))
+//
+// Example Request:
+//
+//	POST /api/plugins/catalog/42/rate
+//	{
+//	  "rating": 5,
+//	  "review": "Excellent plugin, works perfectly!"
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Rating submitted successfully
+//   - 400: Invalid rating (not 1-5) or invalid request body
+//   - 500: Database error
 func (h *PluginHandler) RatePlugin(c *gin.Context) {
 	pluginID := c.Param("id")
 	userID := c.GetString("user_id") // From auth middleware
@@ -253,7 +472,53 @@ func (h *PluginHandler) RatePlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Rating submitted successfully"})
 }
 
-// InstallPlugin installs a plugin from the catalog
+// InstallPlugin installs a plugin from the catalog.
+//
+// Endpoint: POST /api/plugins/catalog/:id/install
+//
+// Path Parameters:
+//   - id: Catalog plugin ID to install
+//
+// Request Body (optional):
+//
+//	{
+//	  "config": {"api_key": "..."}  // Plugin-specific configuration
+//	}
+//
+// Behavior:
+//   1. Fetches plugin details from catalog_plugins
+//   2. Checks if already installed (returns 409 if yes)
+//   3. Inserts into installed_plugins with enabled=true
+//   4. Increments install count asynchronously
+//   5. Updates plugin_stats table
+//
+// Side Effects:
+//   - Plugin install count incremented (async, non-blocking)
+//   - Plugin stats updated with last_installed_at timestamp
+//   - user_id saved as installed_by
+//
+// Example Request:
+//
+//	POST /api/plugins/catalog/42/install
+//	{
+//	  "config": {
+//	    "webhook_url": "https://hooks.slack.com/...",
+//	    "channel": "#general"
+//	  }
+//	}
+//
+// Example Response:
+//
+//	{
+//	  "message": "Plugin installed successfully",
+//	  "pluginId": 123
+//	}
+//
+// HTTP Status Codes:
+//   - 201: Plugin installed successfully
+//   - 404: Catalog plugin not found
+//   - 409: Plugin already installed
+//   - 500: Database error
 func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	catalogPluginID := c.Param("id")
 	userID := c.GetString("user_id")
@@ -338,7 +603,45 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	})
 }
 
-// ListInstalledPlugins lists all installed plugins
+// ListInstalledPlugins lists all installed plugins.
+//
+// Endpoint: GET /api/plugins
+//
+// Query Parameters:
+//   - enabled: Filter by enabled status ("true" for enabled only)
+//
+// Response: JSON with plugins array and total count
+//
+// Example Requests:
+//
+//	GET /api/plugins              // All installed plugins
+//	GET /api/plugins?enabled=true // Only enabled plugins
+//
+// Example Response:
+//
+//	{
+//	  "plugins": [
+//	    {
+//	      "id": 123,
+//	      "catalog_plugin_id": 42,
+//	      "name": "slack-notifications",
+//	      "version": "1.2.3",
+//	      "enabled": true,
+//	      "config": {"webhook_url": "..."},
+//	      "installed_by": "user123",
+//	      "installed_at": "2025-01-15T10:30:00Z",
+//	      "display_name": "Slack Notifications",
+//	      "description": "...",
+//	      "plugin_type": "community",
+//	      "icon_url": "..."
+//	    }
+//	  ],
+//	  "total": 1
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Success (may return empty array if no plugins installed)
+//   - 500: Database error
 func (h *PluginHandler) ListInstalledPlugins(c *gin.Context) {
 	enabledOnly := c.Query("enabled") == "true"
 
@@ -414,7 +717,23 @@ func (h *PluginHandler) ListInstalledPlugins(c *gin.Context) {
 	})
 }
 
-// GetInstalledPlugin gets a specific installed plugin
+// GetInstalledPlugin gets details of a specific installed plugin.
+//
+// Endpoint: GET /api/plugins/:id
+//
+// Path Parameters:
+//   - id: Installed plugin ID (not catalog ID)
+//
+// Response: JSON with complete plugin details
+//
+// Example Request:
+//
+//	GET /api/plugins/123
+//
+// HTTP Status Codes:
+//   - 200: Success
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) GetInstalledPlugin(c *gin.Context) {
 	id := c.Param("id")
 
@@ -476,7 +795,36 @@ func (h *PluginHandler) GetInstalledPlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, plugin)
 }
 
-// UpdateInstalledPlugin updates a plugin's configuration
+// UpdateInstalledPlugin updates a plugin's configuration or enabled status.
+//
+// Endpoint: PATCH /api/plugins/:id
+//
+// Path Parameters:
+//   - id: Installed plugin ID
+//
+// Request Body (all fields optional):
+//
+//	{
+//	  "enabled": true,                // Enable/disable plugin
+//	  "config": {"api_key": "new..."}  // Update configuration
+//	}
+//
+// Behavior:
+//   - Only provided fields are updated
+//   - updated_at timestamp automatically set
+//
+// Example Request:
+//
+//	PATCH /api/plugins/123
+//	{
+//	  "config": {"webhook_url": "https://new-url.com"}
+//	}
+//
+// HTTP Status Codes:
+//   - 200: Plugin updated successfully
+//   - 400: Invalid request body
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) UpdateInstalledPlugin(c *gin.Context) {
 	id := c.Param("id")
 
@@ -520,7 +868,28 @@ func (h *PluginHandler) UpdateInstalledPlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Plugin updated successfully"})
 }
 
-// UninstallPlugin uninstalls a plugin
+// UninstallPlugin removes a plugin from the system.
+//
+// Endpoint: DELETE /api/plugins/:id
+//
+// Path Parameters:
+//   - id: Installed plugin ID
+//
+// Behavior:
+//   - Deletes plugin from installed_plugins table
+//   - Plugin runtime should unload the plugin
+//
+// WARNING: This does not clean up plugin data tables or configuration.
+// Plugin should implement cleanup in OnUnload hook.
+//
+// Example Request:
+//
+//	DELETE /api/plugins/123
+//
+// HTTP Status Codes:
+//   - 200: Plugin uninstalled successfully
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) UninstallPlugin(c *gin.Context) {
 	id := c.Param("id")
 
@@ -539,7 +908,25 @@ func (h *PluginHandler) UninstallPlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Plugin uninstalled successfully"})
 }
 
-// EnablePlugin enables a plugin
+// EnablePlugin enables an installed plugin.
+//
+// Endpoint: POST /api/plugins/:id/enable
+//
+// Path Parameters:
+//   - id: Installed plugin ID
+//
+// Behavior:
+//   - Sets enabled=true in database
+//   - Plugin runtime should load the plugin on next startup/reload
+//
+// Example Request:
+//
+//	POST /api/plugins/123/enable
+//
+// HTTP Status Codes:
+//   - 200: Plugin enabled successfully
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) EnablePlugin(c *gin.Context) {
 	id := c.Param("id")
 
@@ -563,7 +950,25 @@ func (h *PluginHandler) EnablePlugin(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Plugin enabled successfully"})
 }
 
-// DisablePlugin disables a plugin
+// DisablePlugin disables an installed plugin.
+//
+// Endpoint: POST /api/plugins/:id/disable
+//
+// Path Parameters:
+//   - id: Installed plugin ID
+//
+// Behavior:
+//   - Sets enabled=false in database
+//   - Plugin runtime should unload the plugin on next reload
+//
+// Example Request:
+//
+//	POST /api/plugins/123/disable
+//
+// HTTP Status Codes:
+//   - 200: Plugin disabled successfully
+//   - 404: Plugin not found
+//   - 500: Database error
 func (h *PluginHandler) DisablePlugin(c *gin.Context) {
 	id := c.Param("id")
 
