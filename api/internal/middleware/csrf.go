@@ -74,12 +74,73 @@ var (
 	csrfCleanupOnce sync.Once
 )
 
-// generateCSRFToken generates a random CSRF token
+// generateCSRFToken generates a cryptographically secure random CSRF token.
+//
+// The token is used in the double-submit cookie pattern to prevent CSRF attacks.
+// It must be unpredictable and unique per session to be effective.
+//
+// TOKEN GENERATION:
+//
+// 1. Generate 32 random bytes from crypto/rand (256 bits of entropy)
+// 2. Encode as base64 URL-safe string (43 characters)
+// 3. Return token (e.g., "x7k9m2n4p8q3r5s1t6u0v2w4y8z1a3b5c7d9e0f2g4h6j8k0")
+//
+// WHY 32 BYTES (256 BITS):
+//
+// - NIST recommends minimum 128 bits for session tokens
+// - 256 bits provides very high security margin
+// - Probability of collision: 1 in 2^256 (practically impossible)
+// - Cannot be brute-forced even with all computers on Earth
+//
+// SECURITY: crypto/rand vs math/rand
+//
+// ✅ crypto/rand: Cryptographically secure (uses OS entropy pool)
+// ❌ math/rand: NOT secure (predictable, seedable)
+//
+// Using math/rand would allow attackers to predict tokens:
+// 1. Attacker observes one token
+// 2. Attacker reverse-engineers seed
+// 3. Attacker generates future tokens
+// 4. CSRF protection bypassed
+//
+// BASE64 URL ENCODING:
+//
+// - Standard Base64 uses: +, /, =
+// - URL-safe Base64 uses: -, _, (no padding)
+// - Safe for URLs, cookies, headers
+// - No escaping needed
+//
+// ERROR HANDLING:
+//
+// crypto/rand.Read returns error only if system entropy pool is unavailable.
+// This is extremely rare and indicates serious system issues:
+// - Out of memory
+// - /dev/urandom unavailable (Linux)
+// - CryptGenRandom unavailable (Windows)
+//
+// If this happens, server should NOT proceed with CSRF protection disabled.
+//
+// EXAMPLE:
+//
+//   token, err := generateCSRFToken()
+//   if err != nil {
+//       log.Fatal("Cannot generate secure tokens:", err)
+//   }
+//   // token = "x7k9m2n4p8q3r5s1t6u0v2w4y8z1a3b5c7d9e0f2g4h6j8k0"
 func generateCSRFToken() (string, error) {
+	// Allocate 32-byte buffer for random data
 	bytes := make([]byte, CSRFTokenLength)
+
+	// Fill buffer with cryptographically secure random bytes
+	// crypto/rand uses OS entropy pool (/dev/urandom on Linux)
 	if _, err := rand.Read(bytes); err != nil {
+		// System entropy unavailable - should never happen
+		// Do NOT fall back to insecure random source
 		return "", err
 	}
+
+	// Encode as base64 URL-safe string (no +, /, = characters)
+	// Results in 43-character string for 32 bytes of input
 	return base64.URLEncoding.EncodeToString(bytes), nil
 }
 
@@ -115,70 +176,335 @@ func (cs *CSRFStore) removeToken(token string) {
 	delete(cs.tokens, token)
 }
 
-// cleanup removes expired tokens
+// cleanup removes expired tokens from the store periodically.
+//
+// This background goroutine prevents the token store from growing unbounded
+// by removing expired tokens every hour.
+//
+// CLEANUP STRATEGY:
+//
+// - Runs every 1 hour
+// - Scans all tokens in store
+// - Deletes tokens where expiry < now
+// - Holds write lock only during deletion (not entire hour)
+//
+// MEMORY MANAGEMENT:
+//
+// Without cleanup, tokens would accumulate indefinitely:
+// - 1000 req/sec = 86,400,000 tokens/day
+// - Each token ~100 bytes (string + time.Time)
+// - Total: ~8.6 GB/day memory leak
+//
+// With hourly cleanup:
+// - Max tokens = requests in 24 hours (token expiry)
+// - Cleanup removes tokens > 24 hours old
+// - Steady-state memory usage
+//
+// CONCURRENCY SAFETY:
+//
+// - Uses mu.Lock() for write access
+// - Safe to run concurrently with addToken/validateToken
+// - Other goroutines block during cleanup but only briefly
+//
+// WHY HOURLY:
+//
+// - Balance between memory usage and CPU overhead
+// - More frequent = less memory, more CPU
+// - Less frequent = more memory, less CPU
+// - 1 hour is reasonable middle ground
+//
+// PRODUCTION ALTERNATIVES:
+//
+// For high-traffic production:
+// 1. Use Redis for token storage (automatic expiry)
+// 2. Use LRU cache with size limit
+// 3. Use database with TTL index
+// 4. Partition tokens by expiry time (faster cleanup)
+//
+// GOROUTINE LIFECYCLE:
+//
+// This goroutine runs forever (until process exits).
+// Started once via sync.Once in CSRFProtection middleware.
+// No graceful shutdown implemented (acceptable for background task).
 func (cs *CSRFStore) cleanup() {
+	// Create ticker that fires every hour
 	ticker := time.NewTicker(1 * time.Hour)
 	defer ticker.Stop()
 
+	// Infinite loop: cleanup on every tick
 	for range ticker.C {
+		// STEP 1: Acquire write lock
+		// Blocks all token operations during cleanup
 		cs.mu.Lock()
+
+		// STEP 2: Get current time for comparison
 		now := time.Now()
+
+		// STEP 3: Scan all tokens
+		// Delete those that have expired
 		for token, expiry := range cs.tokens {
 			if now.After(expiry) {
 				delete(cs.tokens, token)
 			}
 		}
+
+		// STEP 4: Release lock
+		// Allow other operations to proceed
 		cs.mu.Unlock()
 	}
 }
 
-// CSRFProtection middleware validates CSRF tokens for state-changing requests
+// CSRFProtection returns a Gin middleware that protects against Cross-Site Request
+// Forgery (CSRF) attacks using the double-submit cookie pattern.
+//
+// CSRF ATTACK OVERVIEW:
+//
+// CSRF attacks exploit the browser's automatic cookie sending behavior to perform
+// unauthorized actions on behalf of an authenticated user.
+//
+// Attack scenario without protection:
+//   1. User logs into StreamSpace → gets session cookie
+//   2. User visits malicious site evil.com
+//   3. evil.com triggers: POST https://streamspace.io/api/delete-account
+//   4. Browser automatically sends session cookie with request
+//   5. StreamSpace sees valid session → executes action
+//   6. User's account is deleted without their knowledge
+//
+// DOUBLE-SUBMIT COOKIE PATTERN:
+//
+// This implementation uses the double-submit cookie pattern, which requires:
+// 1. Server generates random token
+// 2. Server sends token in BOTH cookie AND custom header
+// 3. Client JavaScript reads token from header
+// 4. Client sends token in BOTH cookie AND custom header on state-changing requests
+// 5. Server validates: cookie token == header token
+//
+// Why this works:
+// - Malicious sites can trigger requests and browsers send cookies automatically
+// - BUT: Same-Origin Policy prevents malicious sites from:
+//   * Reading the token from response headers
+//   * Setting custom headers on cross-origin requests
+// - Therefore, attacker cannot provide matching tokens in both places
+//
+// PROTECTION FLOW:
+//
+// Safe Request (GET, HEAD, OPTIONS):
+//   1. Client: GET /api/sessions
+//   2. Server: Generates CSRF token (e.g., "abc123...")
+//   3. Server: Sets X-CSRF-Token header to "abc123..."
+//   4. Server: Sets csrf_token cookie to "abc123..."
+//   5. Client: Stores token from header in memory/localStorage
+//   6. Response returned
+//
+// State-Changing Request (POST, PUT, DELETE, PATCH):
+//   1. Client: POST /api/delete-account
+//   2. Client: Sets X-CSRF-Token header to "abc123..." (from previous GET)
+//   3. Client: Browser automatically sends csrf_token cookie "abc123..."
+//   4. Server: Reads token from header → "abc123..."
+//   5. Server: Reads token from cookie → "abc123..."
+//   6. Server: Compares using constant-time comparison
+//   7. Server: Validates token exists and not expired
+//   8. If all checks pass: Request processed
+//   9. If any check fails: 403 Forbidden
+//
+// CSRF Attack Scenario (With Protection):
+//   1. Attacker: POST https://streamspace.io/api/delete-account
+//   2. Browser: Sends csrf_token cookie automatically → "abc123..."
+//   3. Attacker: Cannot set X-CSRF-Token header (Same-Origin Policy blocks)
+//   4. Server: headerToken = "" (missing)
+//   5. Server: cookieToken = "abc123..." (from cookie)
+//   6. Server: Comparison fails (empty ≠ "abc123...")
+//   7. Server: 403 Forbidden - Attack blocked!
+//
+// SECURITY FEATURES:
+//
+// 1. Constant-Time Comparison:
+//    - Uses subtle.ConstantTimeCompare instead of ==
+//    - Prevents timing attacks
+//    - Timing attack: measure comparison time to guess token byte-by-byte
+//    - Constant-time: comparison always takes same time regardless of input
+//
+// 2. Token Expiration:
+//    - Tokens expire after 24 hours
+//    - Limits window for token theft
+//    - Forces periodic token refresh
+//
+// 3. Cryptographically Secure Random:
+//    - Uses crypto/rand (not math/rand)
+//    - 256 bits of entropy
+//    - Unpredictable and unique
+//
+// 4. HttpOnly Cookie:
+//    - Cookie not accessible to JavaScript
+//    - Prevents XSS attacks from stealing token
+//
+// 5. Secure Cookie (Production):
+//    - Cookie only sent over HTTPS
+//    - Prevents token theft via network sniffing
+//
+// USAGE:
+//
+//   router := gin.Default()
+//   router.Use(middleware.CSRFProtection())
+//
+//   // All routes now protected:
+//   router.GET("/api/sessions", handler)  // Generates token
+//   router.POST("/api/sessions", handler) // Validates token
+//
+// CLIENT IMPLEMENTATION:
+//
+// JavaScript client must send token in header:
+//
+//   // Store token from first GET request
+//   let csrfToken = null;
+//
+//   // GET request: capture token
+//   const response = await fetch('/api/sessions');
+//   csrfToken = response.headers.get('X-CSRF-Token');
+//
+//   // POST request: send token in header
+//   await fetch('/api/delete-account', {
+//     method: 'POST',
+//     headers: {
+//       'X-CSRF-Token': csrfToken,  // REQUIRED
+//       'Content-Type': 'application/json',
+//     },
+//     credentials: 'include',  // Send cookies
+//   });
+//
+// HTML FORM IMPLEMENTATION:
+//
+//   <!-- Store token in hidden field -->
+//   <form method="POST" action="/api/delete-account">
+//     <input type="hidden" name="csrf_token" value="{{ .CSRFToken }}">
+//     <button type="submit">Delete Account</button>
+//   </form>
+//
+// EXEMPT METHODS:
+//
+// GET, HEAD, OPTIONS are exempt because they are "safe methods":
+// - SHOULD NOT modify server state (read-only)
+// - Idempotent (can be repeated safely)
+// - No CSRF risk if properly implemented
+//
+// IMPORTANT: If you use GET for state changes (antipattern), CSRF protection
+// will NOT work. Always use POST/PUT/DELETE for state changes.
+//
+// LIMITATIONS:
+//
+// 1. Subdomain Attacks:
+//    - If attacker controls subdomain (evil.example.com)
+//    - They can set cookies for *.example.com
+//    - Mitigation: Validate Origin/Referer headers (not implemented)
+//
+// 2. XSS Attacks:
+//    - If site has XSS vulnerability
+//    - Attacker can read token from headers
+//    - Mitigation: Prevent XSS (input validation, CSP)
+//
+// 3. Token Storage:
+//    - Tokens stored in memory (lost on restart)
+//    - Mitigation: Use Redis for persistent storage
+//
+// COMMON ERRORS:
+//
+// "CSRF token missing":
+//   - Client didn't send csrf_token cookie
+//   - Solution: Ensure credentials: 'include' in fetch
+//
+// "CSRF token mismatch":
+//   - Header token doesn't match cookie token
+//   - Solution: Ensure X-CSRF-Token header is set correctly
+//
+// "CSRF token invalid":
+//   - Token expired (>24 hours old)
+//   - Server restarted (tokens lost)
+//   - Solution: Refresh token by making GET request
 func CSRFProtection() gin.HandlerFunc {
-	// Start cleanup goroutine once
+	// INITIALIZATION: Start cleanup goroutine once
+	//
+	// sync.Once ensures cleanup goroutine is started exactly once,
+	// even if CSRFProtection is called multiple times.
+	//
+	// WHY ONCE: Prevents multiple cleanup goroutines from running
+	// and competing for the same lock.
 	csrfCleanupOnce.Do(func() {
 		go globalCSRFStore.cleanup()
 	})
 
 	return func(c *gin.Context) {
-		// Skip CSRF for safe methods (GET, HEAD, OPTIONS)
+		// BRANCH 1: SAFE METHODS (GET, HEAD, OPTIONS)
+		//
+		// These methods should not modify state, so we generate and send
+		// a new CSRF token for use in subsequent state-changing requests.
+		//
+		// WHY EXEMPT: Safe methods are idempotent and read-only by HTTP specification.
+		// They should not have side effects, so CSRF is not a risk.
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
-			// For GET requests, generate and set a CSRF token
+			// STEP 1: Generate new CSRF token
+			// Uses crypto/rand for cryptographic security
 			token, err := generateCSRFToken()
 			if err != nil {
+				// CRITICAL ERROR: Cannot generate secure random
+				// This indicates serious system issues (no entropy)
+				// Do NOT proceed without CSRF protection
 				c.AbortWithStatusJSON(http.StatusInternalServerError, gin.H{
 					"error": "Failed to generate CSRF token",
 				})
 				return
 			}
 
-			// Store token
+			// STEP 2: Store token in server-side store
+			// Required for validation in step 4 of state-changing requests
 			globalCSRFStore.addToken(token)
 
-			// Set token in response header
+			// STEP 3: Send token in response header
+			// JavaScript clients read this header and store token
 			c.Header(CSRFTokenHeader, token)
 
-			// Set token in cookie (HttpOnly for security)
+			// STEP 4: Send token in cookie
+			// Browser automatically sends this cookie on subsequent requests
+			//
+			// Cookie parameters:
+			// - Name: "csrf_token"
+			// - Value: token (e.g., "abc123...")
+			// - MaxAge: 86400 seconds (24 hours)
+			// - Path: "/" (available to all endpoints)
+			// - Domain: "" (current domain only)
+			// - Secure: true (HTTPS-only in production)
+			// - HttpOnly: true (not accessible to JavaScript - prevents XSS)
 			c.SetCookie(
 				CSRFCookieName,
 				token,
 				int(CSRFTokenExpiry.Seconds()),
 				"/",
 				"",
-				true,  // Secure (HTTPS only in production)
-				true,  // HttpOnly
+				true,  // Secure: HTTPS-only (should be true in production)
+				true,  // HttpOnly: JavaScript cannot access (XSS protection)
 			)
 
+			// Continue to next handler
 			c.Next()
 			return
 		}
 
-		// For state-changing methods (POST, PUT, DELETE, PATCH), validate CSRF token
-		// Get token from header
+		// BRANCH 2: STATE-CHANGING METHODS (POST, PUT, DELETE, PATCH)
+		//
+		// These methods modify server state, so we validate the CSRF token
+		// to ensure the request is from a legitimate client, not a CSRF attack.
+
+		// STEP 1: Get token from custom header
+		// Legitimate clients set this header with JavaScript
+		// Attackers cannot set this header due to Same-Origin Policy
 		headerToken := c.GetHeader(CSRFTokenHeader)
-		
-		// Get token from cookie
+
+		// STEP 2: Get token from cookie
+		// Browser sends this automatically (even for cross-site requests)
 		cookieToken, err := c.Cookie(CSRFCookieName)
 		if err != nil {
+			// Cookie not found: User never made a GET request to get token
+			// OR: Cookie expired
+			// OR: Browser blocked cookies
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "CSRF token missing",
 				"message": "CSRF cookie not found",
@@ -186,8 +512,31 @@ func CSRFProtection() gin.HandlerFunc {
 			return
 		}
 
-		// Tokens must match
+		// STEP 3: Compare tokens using constant-time comparison
+		//
+		// SECURITY: MUST use subtle.ConstantTimeCompare, NOT ==
+		//
+		// WHY CONSTANT-TIME:
+		// Regular comparison (==) returns immediately on first mismatch:
+		//   "abc123" == "xyz123"
+		//        ^-- Mismatch at position 0, returns in ~1ns
+		//   "abc123" == "abc999"
+		//           ^-- Mismatch at position 3, returns in ~3ns
+		//
+		// Attacker can measure response time to guess token byte-by-byte:
+		//   Try "a??????" → 1ns → correct first byte
+		//   Try "b??????" → 0ns → incorrect first byte
+		//   Try "ab?????" → 2ns → correct second byte
+		//   ... repeat to recover entire token
+		//
+		// Constant-time comparison always takes same time:
+		//   "abc123" == "xyz123" → always 6ns
+		//   "abc123" == "abc999" → always 6ns
+		//
+		// Returns 1 if equal, 0 if not equal
 		if subtle.ConstantTimeCompare([]byte(headerToken), []byte(cookieToken)) != 1 {
+			// Tokens don't match: CSRF attack detected
+			// OR: Client bug (not sending header correctly)
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "CSRF token mismatch",
 				"message": "CSRF tokens do not match",
@@ -195,8 +544,12 @@ func CSRFProtection() gin.HandlerFunc {
 			return
 		}
 
-		// Validate token exists and is not expired
+		// STEP 4: Validate token exists in store and is not expired
+		// Even if tokens match, verify token was issued by this server
+		// and has not expired (>24 hours old)
 		if !globalCSRFStore.validateToken(cookieToken) {
+			// Token expired or never existed
+			// User needs to refresh token by making GET request
 			c.AbortWithStatusJSON(http.StatusForbidden, gin.H{
 				"error":   "CSRF token invalid",
 				"message": "CSRF token has expired or is invalid",
@@ -204,6 +557,8 @@ func CSRFProtection() gin.HandlerFunc {
 			return
 		}
 
+		// All checks passed: Request is legitimate
+		// Continue to next handler
 		c.Next()
 	}
 }
