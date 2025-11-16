@@ -1,0 +1,107 @@
+{
+  "name": "streamspace-slack",
+  "version": "1.0.0",
+  "displayName": "Slack Integration",
+  "description": "Send session and user event notifications to Slack channels",
+  "author": "StreamSpace Team",
+  "license": "MIT",
+  "homepage": "https://github.com/JoshuaAFerguson/streamspace-plugins/tree/main/streamspace-slack",
+  "repository": "https://github.com/JoshuaAFerguson/streamspace-plugins",
+  "icon": "slack-icon.png",
+  "type": "webhook",
+  "category": "Integrations",
+  "tags": ["notifications", "slack", "integration", "messaging"],
+
+  "requirements": {
+    "streamspaceVersion": ">=1.0.0"
+  },
+
+  "entrypoints": {
+    "main": "slack_plugin.go"
+  },
+
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "webhookUrl": {
+        "type": "string",
+        "title": "Slack Webhook URL",
+        "description": "Your Slack incoming webhook URL (https://hooks.slack.com/services/...)",
+        "pattern": "^https://hooks\\.slack\\.com/.*$"
+      },
+      "channel": {
+        "type": "string",
+        "title": "Default Channel",
+        "description": "Default Slack channel for notifications (e.g., #general)",
+        "default": "#general"
+      },
+      "username": {
+        "type": "string",
+        "title": "Bot Username",
+        "description": "Username for Slack messages",
+        "default": "StreamSpace"
+      },
+      "iconEmoji": {
+        "type": "string",
+        "title": "Icon Emoji",
+        "description": "Emoji icon for Slack messages",
+        "default": ":computer:"
+      },
+      "notifyOnSessionCreated": {
+        "type": "boolean",
+        "title": "Notify on Session Created",
+        "description": "Send notification when a session is created",
+        "default": true
+      },
+      "notifyOnSessionHibernated": {
+        "type": "boolean",
+        "title": "Notify on Session Hibernated",
+        "description": "Send notification when a session is hibernated",
+        "default": false
+      },
+      "notifyOnUserCreated": {
+        "type": "boolean",
+        "title": "Notify on User Created",
+        "description": "Send notification when a user is created",
+        "default": true
+      },
+      "notifyOnQuotaExceeded": {
+        "type": "boolean",
+        "title": "Notify on Quota Exceeded",
+        "description": "Send notification when a user exceeds their quota",
+        "default": true
+      },
+      "includeDetails": {
+        "type": "boolean",
+        "title": "Include Details",
+        "description": "Include detailed information in notifications",
+        "default": true
+      },
+      "rateLimit": {
+        "type": "number",
+        "title": "Rate Limit (messages/hour)",
+        "description": "Maximum messages per hour to prevent spam",
+        "minimum": 1,
+        "maximum": 100,
+        "default": 20
+      }
+    },
+    "required": ["webhookUrl"]
+  },
+
+  "defaultConfig": {
+    "channel": "#general",
+    "username": "StreamSpace",
+    "iconEmoji": ":computer:",
+    "notifyOnSessionCreated": true,
+    "notifyOnSessionHibernated": false,
+    "notifyOnUserCreated": true,
+    "notifyOnQuotaExceeded": true,
+    "includeDetails": true,
+    "rateLimit": 20
+  },
+
+  "permissions": [
+    "network"
+  ]
+}
