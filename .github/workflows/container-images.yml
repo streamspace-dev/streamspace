@@ -99,15 +99,24 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Raw digest: ${{ steps.build.outputs.digest }}"
-          # Remove newlines/CRs and take first comma-separated token
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          # Get the first tag from the metadata action
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Image tag: $IMAGE_TAG"
+
+          # Use imagetools to get the manifest digest (works reliably for multi-platform builds)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Extracted digest: $DIGEST"
+
+          # Validate digest format
           if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "ERROR: unexpected digest format: $DIGEST"
+            echo "Full imagetools output:"
+            docker buildx imagetools inspect "$IMAGE_TAG"
             exit 1
           fi
+
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
-          echo "Image reference: $IMAGE_REF"
+          echo "Image reference for signing: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
       - name: Generate SBOM for Controller
@@ -124,7 +133,9 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Using digest for SBOM attestation: $DIGEST"
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-controller.spdx.json \
@@ -207,15 +218,24 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Raw digest: ${{ steps.build.outputs.digest }}"
-          # Remove newlines/CRs and take first comma-separated token
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          # Get the first tag from the metadata action
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Image tag: $IMAGE_TAG"
+
+          # Use imagetools to get the manifest digest (works reliably for multi-platform builds)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Extracted digest: $DIGEST"
+
+          # Validate digest format
           if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "ERROR: unexpected digest format: $DIGEST"
+            echo "Full imagetools output:"
+            docker buildx imagetools inspect "$IMAGE_TAG"
             exit 1
           fi
+
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${DIGEST}"
-          echo "Image reference: $IMAGE_REF"
+          echo "Image reference for signing: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
       - name: Generate SBOM for API
@@ -232,7 +252,9 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Using digest for SBOM attestation: $DIGEST"
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-api@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-api.spdx.json \
@@ -315,15 +337,24 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          echo "Raw digest: ${{ steps.build.outputs.digest }}"
-          # Remove newlines/CRs and take first comma-separated token
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          # Get the first tag from the metadata action
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          echo "Image tag: $IMAGE_TAG"
+
+          # Use imagetools to get the manifest digest (works reliably for multi-platform builds)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Extracted digest: $DIGEST"
+
+          # Validate digest format
           if [[ ! "$DIGEST" =~ ^sha256:[0-9a-f]{64}$ ]]; then
             echo "ERROR: unexpected digest format: $DIGEST"
+            echo "Full imagetools output:"
+            docker buildx imagetools inspect "$IMAGE_TAG"
             exit 1
           fi
+
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${DIGEST}"
-          echo "Image reference: $IMAGE_REF"
+          echo "Image reference for signing: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
       - name: Generate SBOM for UI
@@ -340,7 +371,9 @@ jobs:
         env:
           COSIGN_EXPERIMENTAL: "true"
         run: |
-          DIGEST=$(echo "${{ steps.build.outputs.digest }}" | tr -d '\r\n' | sed 's/,.*//')
+          IMAGE_TAG=$(echo "${{ steps.meta.outputs.tags }}" | head -n1)
+          DIGEST=$(docker buildx imagetools inspect "$IMAGE_TAG" --format '{{.Manifest.Digest}}')
+          echo "Using digest for SBOM attestation: $DIGEST"
           IMAGE_REF="${{ env.IMAGE_PREFIX }}-ui@${DIGEST}"
           cosign attest --yes --type spdxjson \
             --predicate sbom-ui.spdx.json \
