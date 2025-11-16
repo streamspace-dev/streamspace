@@ -1,0 +1,32 @@
+{
+  "name": "streamspace-multi-monitor",
+  "version": "1.0.0",
+  "displayName": "Multi-Monitor Support",
+  "description": "Advanced multi-monitor configuration for sessions with independent display streams and custom layouts",
+  "author": "StreamSpace Team",
+  "license": "MIT",
+  "type": "system",
+  "category": "Advanced Features",
+  "tags": ["multi-monitor", "displays", "vnc", "advanced"],
+  "requirements": {"streamspaceVersion": ">=1.0.0"},
+  "entrypoints": {"main": "multi_monitor_plugin.go"},
+  "configSchema": {
+    "type": "object",
+    "properties": {
+      "maxMonitorsPerSession": {"type": "number", "default": 8, "minimum": 1, "maximum": 16},
+      "defaultLayout": {"type": "string", "enum": ["horizontal", "vertical", "grid", "custom"], "default": "horizontal"},
+      "allowCustomLayouts": {"type": "boolean", "default": true}
+    }
+  },
+  "defaultConfig": {"maxMonitorsPerSession": 8, "defaultLayout": "horizontal", "allowCustomLayouts": true},
+  "permissions": ["database", "api"],
+  "apiEndpoints": [
+    {"method": "POST", "path": "/sessions/:sessionId/monitors", "description": "Create monitor configuration"},
+    {"method": "GET", "path": "/sessions/:sessionId/monitors", "description": "List monitor configurations"},
+    {"method": "GET", "path": "/sessions/:sessionId/monitors/active", "description": "Get active configuration"},
+    {"method": "PATCH", "path": "/sessions/:sessionId/monitors/:configId", "description": "Update configuration"},
+    {"method": "DELETE", "path": "/sessions/:sessionId/monitors/:configId", "description": "Delete configuration"},
+    {"method": "POST", "path": "/sessions/:sessionId/monitors/:configId/activate", "description": "Activate configuration"},
+    {"method": "GET", "path": "/sessions/:sessionId/monitors/:configId/streams", "description": "Get monitor streams"}
+  ]
+}
