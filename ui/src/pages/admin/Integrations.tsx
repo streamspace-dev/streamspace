@@ -234,18 +234,24 @@ function IntegrationsContent() {
   const loadWebhooks = async () => {
     try {
       const response = await api.listWebhooks();
-      setWebhooks(response.webhooks);
+      // Ensure webhooks is always an array to prevent undefined errors
+      setWebhooks(Array.isArray(response?.webhooks) ? response.webhooks : []);
     } catch (error) {
       console.error('Failed to load webhooks:', error);
+      // Set empty array on error to prevent undefined
+      setWebhooks([]);
     }
   };
 
   const loadIntegrations = async () => {
     try {
       const response = await api.listIntegrations();
-      setIntegrations(response.integrations);
+      // Ensure integrations is always an array to prevent undefined errors
+      setIntegrations(Array.isArray(response?.integrations) ? response.integrations : []);
     } catch (error) {
       console.error('Failed to load integrations:', error);
+      // Set empty array on error to prevent undefined
+      setIntegrations([]);
     }
   };
 
