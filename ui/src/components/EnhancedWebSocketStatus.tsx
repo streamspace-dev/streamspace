@@ -9,7 +9,7 @@
  *
  * @component
  */
-import { useState, useEffect, memo } from 'react';
+import { useState, useEffect, useMemo, memo } from 'react';
 import {
   Box,
   Chip,
@@ -119,12 +119,14 @@ function EnhancedWebSocketStatus({
     return 'default' as const;
   };
 
-  const getStatusIcon = () => {
+  // Memoize the status icon to prevent CircularProgress from restarting on every render
+  // Only recreate when connection status actually changes, not when latency updates
+  const statusIcon = useMemo(() => {
     if (isConnected) return <ConnectedIcon />;
     if (reconnectAttempts >= maxReconnectAttempts) return <ErrorIcon />;
     if (reconnectAttempts > 0) return <CircularProgress size={16} />;
     return <DisconnectedIcon />;
-  };
+  }, [isConnected, reconnectAttempts, maxReconnectAttempts]);
 
   const quality = getConnectionQuality(latency);
   const open = Boolean(anchorEl);
@@ -132,7 +134,7 @@ function EnhancedWebSocketStatus({
   return (
     <>
       <Chip
-        icon={getStatusIcon()}
+        icon={statusIcon}
         label={getStatusLabel()}
         size={size}
         color={getStatusColor()}
@@ -166,7 +168,7 @@ function EnhancedWebSocketStatus({
 
             {/* Connection State */}
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 2 }}>
-              {getStatusIcon()}
+              {statusIcon}
               <Box sx={{ flex: 1 }}>
                 <Typography variant="body2" sx={{ fontWeight: 500 }}>
                   {isConnected ? 'Connected' : reconnectAttempts > 0 ? 'Reconnecting' : 'Disconnected'}
