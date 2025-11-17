@@ -19,10 +19,44 @@ interface UseWebSocketReturn {
 }
 
 /**
- * Custom hook for WebSocket connections with automatic reconnection
+ * Custom hook for WebSocket connections with automatic reconnection.
+ *
+ * Features:
+ * - Automatic reconnection with custom backoff strategy (30s, 15s, 15s, then 60s)
+ * - Stable callbacks using refs to prevent reconnection loops
+ * - Connection state management
+ * - Manual connection control (send, close)
+ *
+ * Reconnection Strategy:
+ * - 1st retry: 30 seconds (allows transient issues to resolve)
+ * - 2nd retry: 15 seconds (quicker retry if still failing)
+ * - 3rd retry: 15 seconds
+ * - 4th+ retries: 60 seconds each (prevents hammering the server)
  *
  * @param options - WebSocket configuration options
+ * @param options.url - WebSocket URL to connect to (empty string disables connection)
+ * @param options.onMessage - Callback when message received (data is pre-parsed JSON)
+ * @param options.onError - Optional callback when error occurs
+ * @param options.onOpen - Optional callback when connection opens
+ * @param options.onClose - Optional callback when connection closes
+ * @param options.reconnectInterval - Ignored (kept for backwards compatibility)
+ * @param options.maxReconnectAttempts - Maximum reconnection attempts (default: 10)
+ *
  * @returns WebSocket connection state and controls
+ * @returns isConnected - Boolean indicating if WebSocket is currently connected
+ * @returns reconnectAttempts - Number of reconnection attempts made
+ * @returns sendMessage - Function to send JSON message (auto-stringified)
+ * @returns close - Function to close connection and prevent reconnection
+ *
+ * @example
+ * ```tsx
+ * const { isConnected, sendMessage } = useWebSocket({
+ *   url: 'wss://example.com/ws',
+ *   onMessage: (data) => console.log('Received:', data),
+ *   onError: (error) => console.error('WebSocket error:', error),
+ *   maxReconnectAttempts: 5,
+ * });
+ * ```
  */
 export function useWebSocket({
   url,
@@ -176,9 +210,28 @@ export function useWebSocket({
 }
 
 /**
- * Hook for subscribing to session updates via WebSocket
- * Only connects when a valid authentication token is available
- * Uses Zustand store for reactive token updates
+ * Hook for subscribing to real-time session updates via WebSocket.
+ *
+ * Automatically connects to the sessions WebSocket endpoint when a valid
+ * authentication token is available. Disconnects when token is removed.
+ *
+ * Features:
+ * - Reactive to authentication state (auto-connects/disconnects with token changes)
+ * - Receives real-time session creation, updates, and deletion events
+ * - Uses Zustand store for seamless token reactivity
+ * - Automatically parses and filters 'sessions_update' events
+ *
+ * @param onUpdate - Callback function called when sessions are updated
+ * @param onUpdate.sessions - Array of updated session objects
+ *
+ * @returns WebSocket connection state from useWebSocket hook
+ *
+ * @example
+ * ```tsx
+ * const { isConnected } = useSessionsWebSocket((sessions) => {
+ *   setMySessions(sessions);
+ * });
+ * ```
  */
 export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
   // Get token directly from Zustand store - automatically reactive
@@ -219,9 +272,28 @@ export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
 }
 
 /**
- * Hook for subscribing to cluster metrics via WebSocket
- * Only connects when a valid authentication token is available
- * Uses Zustand store for reactive token updates
+ * Hook for subscribing to real-time cluster metrics via WebSocket.
+ *
+ * Provides live updates of cluster resource usage, node health, and session counts.
+ * Only connects when authenticated (requires admin or operator role on backend).
+ *
+ * Features:
+ * - Reactive to authentication state
+ * - Receives real-time cluster metrics updates (CPU, memory, nodes, sessions)
+ * - Automatically parses and filters 'metrics_update' events
+ * - Admin/operator only (regular users will get 403 Forbidden)
+ *
+ * @param onUpdate - Callback function called when cluster metrics are updated
+ * @param onUpdate.metrics - Object containing cluster metrics (nodes, resources, sessions, users)
+ *
+ * @returns WebSocket connection state from useWebSocket hook
+ *
+ * @example
+ * ```tsx
+ * const { isConnected } = useMetricsWebSocket((metrics) => {
+ *   setClusterMetrics(metrics);
+ * });
+ * ```
  */
 export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
   // Get token directly from Zustand store - automatically reactive
@@ -262,9 +334,34 @@ export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
 }
 
 /**
- * Hook for subscribing to pod logs via WebSocket
- * Only connects when a valid authentication token is available
- * Uses Zustand store for reactive token updates
+ * Hook for streaming pod logs in real-time via WebSocket.
+ *
+ * Tails pod logs and streams each new log line as it's written. Useful for
+ * debugging session pods or monitoring system components.
+ *
+ * Features:
+ * - Real-time log streaming (follows logs as they're written)
+ * - Reactive to authentication state
+ * - Admin/operator only (regular users will get 403 Forbidden)
+ * - Automatically reconnects if connection drops
+ *
+ * @param namespace - Kubernetes namespace containing the pod
+ * @param podName - Name of the pod to stream logs from
+ * @param onLog - Callback function called for each log line
+ * @param onLog.log - Single log line as a string
+ *
+ * @returns WebSocket connection state from useWebSocket hook
+ *
+ * @example
+ * ```tsx
+ * const { isConnected } = useLogsWebSocket(
+ *   'streamspace',
+ *   'session-user1-firefox-abc123',
+ *   (log) => {
+ *     appendLog(log);
+ *   }
+ * );
+ * ```
  */
 export function useLogsWebSocket(namespace: string, podName: string, onLog: (log: string) => void) {
   // Get token directly from Zustand store - automatically reactive

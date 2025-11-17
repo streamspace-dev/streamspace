@@ -1,3 +1,36 @@
+/**
+ * Nodes Admin Page
+ *
+ * Provides comprehensive Kubernetes node management for StreamSpace administrators.
+ *
+ * Features:
+ * - View all cluster nodes with health status (Ready, NotReady)
+ * - Monitor node resources (CPU, memory, pods) and utilization
+ * - Add/remove node labels for session pod scheduling
+ * - Add/remove node taints for workload isolation
+ * - Cordon nodes to prevent new pod scheduling
+ * - Uncordon nodes to resume scheduling
+ * - Drain nodes to evict pods for maintenance
+ * - Real-time updates via WebSocket (node health events)
+ * - Cluster-wide statistics (total capacity, allocatable resources)
+ *
+ * Node Operations:
+ * - Label Management: Click "Manage Labels" to add labels like `gpu=true`
+ * - Taint Management: Click "Manage Taints" to add taints (NoSchedule, PreferNoSchedule, NoExecute)
+ * - Cordon: Mark node as unschedulable (existing pods continue running)
+ * - Drain: Evict all pods gracefully with configurable grace period
+ *
+ * Typical Workflow (Node Maintenance):
+ * 1. Cordon node to prevent new sessions from scheduling
+ * 2. Drain node to move existing sessions to other nodes
+ * 3. Perform maintenance (OS updates, hardware changes, etc.)
+ * 4. Uncordon node to resume normal scheduling
+ *
+ * Real-time Updates:
+ * Subscribes to `node.health` WebSocket events for live node status changes.
+ *
+ * @component
+ */
 import { useState, useEffect, useRef } from 'react';
 import {
   Box,

@@ -1,3 +1,43 @@
+// Package api provides HTTP handlers and WebSocket endpoints for the StreamSpace API.
+// This file contains stub implementations, backwards compatibility handlers,
+// Kubernetes resource management, and compliance endpoint stubs.
+//
+// STUB ENDPOINTS OVERVIEW:
+//
+// This file serves multiple purposes:
+// 1. Backwards compatibility for routes migrated to specialized handlers
+// 2. Kubernetes resource CRUD operations (generic resource management)
+// 3. Stub endpoints for optional plugins (compliance, etc.)
+// 4. WebSocket upgrader configuration with origin validation
+//
+// KUBERNETES RESOURCE MANAGEMENT:
+//
+// Generic endpoints for managing any Kubernetes resource:
+// - CreateResource: Create any K8s resource (Deployment, Service, ConfigMap, etc.)
+// - UpdateResource: Update existing K8s resources
+// - DeleteResource: Delete K8s resources by type and name
+// - ListNodes, ListPods, ListServices, etc.: List cluster resources
+// - GetPodLogs: Stream or retrieve pod logs
+//
+// BACKWARDS COMPATIBILITY:
+//
+// Some endpoints like ListNodes() are stubs that redirect to specialized handlers:
+// - Node management is now in handlers/nodes.go (NodeHandler)
+// - User management is in handlers/users.go (UserHandler)
+// - These stubs remain for API backwards compatibility during migration
+//
+// COMPLIANCE STUBS:
+//
+// The compliance endpoints return stub data when streamspace-compliance plugin
+// is not installed. When the plugin is installed, it registers real handlers
+// that override these stubs.
+//
+// WEBSOCKET CONFIGURATION:
+//
+// The WebSocket upgrader checks allowed origins from ALLOWED_ORIGINS environment
+// variable to prevent CSRF attacks. Set to "*" to allow all origins (development only).
+//
+// Example ALLOWED_ORIGINS: "http://localhost:3000,https://streamspace.example.com"
 package api
 
 import (
@@ -26,7 +66,19 @@ var (
 	}
 )
 
-// WebSocket upgrader
+// upgrader configures the WebSocket upgrader with security checks.
+// It validates the Origin header to prevent CSRF attacks on WebSocket connections.
+//
+// Origin Validation:
+// - Reads ALLOWED_ORIGINS environment variable (comma-separated list)
+// - Default: "http://localhost:3000,http://localhost:5173" (development)
+// - Production: Set to your actual domains (e.g., "https://streamspace.example.com")
+// - "*" allows all origins (DANGEROUS - development only, never in production)
+//
+// Security Note:
+// WebSocket connections cannot send custom headers from browsers, so we use
+// query parameter authentication (?token=...) combined with Origin validation
+// to prevent unauthorized cross-origin WebSocket connections.
 var upgrader = websocket.Upgrader{
 	ReadBufferSize:  1024,
 	WriteBufferSize: 1024,
@@ -602,7 +654,24 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 // are fully implemented in api/internal/handlers/users.go by UserHandler.
 // Those should be used instead of stub implementations.
 
-// GetMetrics returns cluster metrics including nodes, sessions, resources, and users
+// GetMetrics returns comprehensive cluster metrics for the admin dashboard.
+//
+// This endpoint aggregates data from multiple sources:
+// - Kubernetes: Node count, resource capacity, allocatable resources, pod counts
+// - Database: Session counts by state, user counts, active users (24hr)
+// - Calculations: Resource utilization percentages
+//
+// Returned Metrics:
+// - cluster.nodes: Total, ready, and not-ready node counts
+// - cluster.sessions: Total, running, hibernated, and terminated session counts
+// - cluster.resources: CPU, memory, and pod capacity/usage/percentages
+// - cluster.users: Total user count and active users (logged in last 24 hours)
+//
+// Resource Estimates:
+// Used CPU/memory are estimates based on running session count (1 core, 2GB per session).
+// For accurate resource usage, deploy metrics-server and query real pod metrics.
+//
+// GET /api/v1/metrics
 func (h *Handler) GetMetrics(c *gin.Context) {
 	ctx := c.Request.Context()
 

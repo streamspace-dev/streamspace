@@ -1,3 +1,46 @@
+/**
+ * Compliance Admin Page
+ *
+ * Provides comprehensive compliance management for StreamSpace administrators.
+ *
+ * Features:
+ * - View compliance dashboard with framework and violation metrics
+ * - Manage compliance frameworks (SOC2, HIPAA, GDPR, PCI-DSS, etc.)
+ * - Create and manage compliance policies
+ * - Track and resolve policy violations
+ * - Real-time compliance violation alerts via WebSocket
+ * - Violation severity filtering (critical, high, medium, low)
+ * - Framework-specific policy templates
+ *
+ * Compliance Frameworks:
+ * Supports industry-standard compliance frameworks:
+ * - SOC 2: Service Organization Control 2
+ * - HIPAA: Health Insurance Portability and Accountability Act
+ * - GDPR: General Data Protection Regulation
+ * - PCI-DSS: Payment Card Industry Data Security Standard
+ * - ISO 27001: Information Security Management
+ * - NIST: National Institute of Standards and Technology
+ *
+ * Policy Types:
+ * - Data Retention: Automatically delete data after specified period
+ * - Access Control: Enforce MFA, SSO, role-based access
+ * - Audit Logging: Comprehensive activity logging
+ * - Encryption: Data encryption at rest and in transit
+ * - Session Timeout: Auto-logout after inactivity
+ * - Network Isolation: IP whitelisting, VPN requirements
+ *
+ * Violation Management:
+ * - View all open and resolved violations
+ * - Filter by severity, framework, and policy
+ * - Manually resolve violations with notes
+ * - Auto-generated violation reports
+ *
+ * Plugin Integration:
+ * This page shows stub data when the streamspace-compliance plugin is not installed.
+ * Install the plugin from Admin → Plugins to enable full compliance features.
+ *
+ * @component
+ */
 import { useState, useEffect } from 'react';
 import {
   Box,

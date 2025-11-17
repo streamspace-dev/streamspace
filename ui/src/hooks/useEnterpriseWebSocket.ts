@@ -29,8 +29,61 @@ interface UseEnterpriseWebSocketReturn {
 }
 
 /**
- * Custom hook for managing enterprise WebSocket connections
- * Provides automatic reconnection, message handling, and connection status
+ * Custom hook for managing enterprise WebSocket connections.
+ *
+ * Provides a high-level WebSocket interface with automatic reconnection,
+ * message handling, and connection status. Designed for enterprise features
+ * like webhooks, security alerts, node health monitoring, and compliance.
+ *
+ * Features:
+ * - Automatic reconnection with custom backoff (30s, 15s, 15s, then 60s)
+ * - Authentication via query parameter (reactive to token changes)
+ * - Page visibility handling (reconnects when page becomes visible)
+ * - Typed message handling with WebSocketMessage interface
+ * - Manual connection control (connect, disconnect)
+ *
+ * Message Format:
+ * All messages follow the WebSocketMessage interface:
+ * ```ts
+ * {
+ *   type: string;        // Event type (e.g., 'webhook.delivery', 'security.alert')
+ *   timestamp: string;   // ISO 8601 timestamp
+ *   data: object;        // Event-specific data payload
+ * }
+ * ```
+ *
+ * Reconnection Strategy:
+ * - 1st retry: 30 seconds after disconnect
+ * - 2nd retry: 15 seconds
+ * - 3rd retry: 15 seconds
+ * - 4th+ retries: 60 seconds each (up to maxReconnectAttempts)
+ *
+ * @param options - WebSocket configuration options
+ * @param options.onMessage - Optional callback when message received
+ * @param options.onError - Optional callback when error occurs
+ * @param options.onClose - Optional callback when connection closes
+ * @param options.onOpen - Optional callback when connection opens
+ * @param options.autoReconnect - Enable automatic reconnection (default: true)
+ * @param options.reconnectInterval - Ignored (kept for backwards compatibility)
+ * @param options.maxReconnectAttempts - Maximum reconnection attempts (default: 10)
+ *
+ * @returns WebSocket connection state and controls
+ * @returns isConnected - Boolean indicating if WebSocket is currently connected
+ * @returns lastMessage - Most recent WebSocketMessage received (or null)
+ * @returns sendMessage - Function to send JSON message (auto-stringified)
+ * @returns connect - Function to manually initiate connection
+ * @returns disconnect - Function to close connection and prevent reconnection
+ * @returns reconnectAttempts - Number of reconnection attempts made
+ *
+ * @example
+ * ```tsx
+ * const { isConnected, lastMessage } = useEnterpriseWebSocket({
+ *   onMessage: (message) => {
+ *     console.log('Received:', message.type, message.data);
+ *   },
+ *   onError: (error) => console.error('WebSocket error:', error),
+ * });
+ * ```
  */
 export function useEnterpriseWebSocket(
   options: UseEnterpriseWebSocketOptions = {}
@@ -278,7 +331,25 @@ export function useEnterpriseWebSocket(
   };
 }
 
-// Hook for listening to specific event types
+/**
+ * Hook for listening to specific WebSocket event types.
+ *
+ * Filters WebSocket messages by event type and calls the handler only when
+ * messages of the specified type are received. Uses useEnterpriseWebSocket
+ * internally for connection management.
+ *
+ * @param eventType - Event type to listen for (e.g., 'webhook.delivery')
+ * @param handler - Callback function called when matching event received
+ * @param handler.data - Event data payload from message.data
+ * @param enabled - Whether event handling is enabled (default: true)
+ *
+ * @example
+ * ```tsx
+ * useWebSocketEvent('security.alert', (data) => {
+ *   showNotification(`Security Alert: ${data.message}`);
+ * });
+ * ```
+ */
 export function useWebSocketEvent(
   eventType: string,
   handler: (data: any) => void,
@@ -302,55 +373,90 @@ export function useWebSocketEvent(
   }, [lastMessage, eventType, enabled]);
 }
 
-// Predefined hooks for enterprise events
+// ============================================================================
+// Predefined Event Hooks
+// ============================================================================
+//
+// These hooks provide convenient type-specific event listeners for common
+// enterprise WebSocket events. Each hook uses useWebSocketEvent internally
+// to filter messages by event type.
+//
+// Event Types:
+// - webhook.delivery: Webhook delivery status updates
+// - security.alert: Security alerts and violations
+// - schedule.event: Session schedule events (start, stop, missed)
+// - node.health: Kubernetes node health changes
+// - scaling.event: Auto-scaling events (scale up/down)
+// - compliance.violation: Compliance policy violations
+// - user.event: User creation, updates, deletions
+// - group.event: Group membership changes
+// - quota.event: Quota threshold warnings
+// - plugin.event: Plugin install, update, uninstall events
+// - template.event: Template catalog updates
+// - repository.event: Repository sync status changes
+// - integration.event: Third-party integration events
+
+/** Hook for webhook delivery status updates */
 export function useWebhookDeliveryEvents(handler: (data: any) => void) {
   useWebSocketEvent('webhook.delivery', handler);
 }
 
+/** Hook for security alerts and violations */
 export function useSecurityAlertEvents(handler: (data: any) => void) {
   useWebSocketEvent('security.alert', handler);
 }
 
+/** Hook for session schedule events */
 export function useScheduleEvents(handler: (data: any) => void) {
   useWebSocketEvent('schedule.event', handler);
 }
 
+/** Hook for node health changes */
 export function useNodeHealthEvents(handler: (data: any) => void) {
   useWebSocketEvent('node.health', handler);
 }
 
+/** Hook for auto-scaling events */
 export function useScalingEvents(handler: (data: any) => void) {
   useWebSocketEvent('scaling.event', handler);
 }
 
+/** Hook for compliance policy violations */
 export function useComplianceViolationEvents(handler: (data: any) => void) {
   useWebSocketEvent('compliance.violation', handler);
 }
 
+/** Hook for user lifecycle events */
 export function useUserEvents(handler: (data: any) => void) {
   useWebSocketEvent('user.event', handler);
 }
 
+/** Hook for group membership changes */
 export function useGroupEvents(handler: (data: any) => void) {
   useWebSocketEvent('group.event', handler);
 }
 
+/** Hook for quota threshold warnings */
 export function useQuotaEvents(handler: (data: any) => void) {
   useWebSocketEvent('quota.event', handler);
 }
 
+/** Hook for plugin lifecycle events */
 export function usePluginEvents(handler: (data: any) => void) {
   useWebSocketEvent('plugin.event', handler);
 }
 
+/** Hook for template catalog updates */
 export function useTemplateEvents(handler: (data: any) => void) {
   useWebSocketEvent('template.event', handler);
 }
 
+/** Hook for repository sync status changes */
 export function useRepositoryEvents(handler: (data: any) => void) {
   useWebSocketEvent('repository.event', handler);
 }
 
+/** Hook for third-party integration events */
 export function useIntegrationEvents(handler: (data: any) => void) {
   useWebSocketEvent('integration.event', handler);
 }
