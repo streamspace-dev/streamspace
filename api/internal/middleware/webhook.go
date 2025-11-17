@@ -64,6 +64,7 @@
 package middleware
 
 import (
+	"bytes"
 	"crypto/hmac"
 	"crypto/sha256"
 	"encoding/hex"
@@ -110,9 +111,7 @@ func (w *WebhookAuth) Middleware() gin.HandlerFunc {
 		}
 
 		// Restore body for downstream handlers
-		c.Request.Body = io.NopCloser(io.Reader(io.MultiReader(
-			io.Reader(nil),
-		)))
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(body))
 
 		// Compute HMAC
 		mac := hmac.New(sha256.New, w.secret)
