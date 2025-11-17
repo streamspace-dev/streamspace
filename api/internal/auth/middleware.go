@@ -143,9 +143,17 @@ import (
 // Middleware creates an authentication middleware
 func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
+		// Check if this is a WebSocket upgrade request
+		isWebSocket := c.GetHeader("Upgrade") == "websocket" && c.GetHeader("Connection") == "Upgrade"
+
 		// Extract token from Authorization header
 		authHeader := c.GetHeader("Authorization")
 		if authHeader == "" {
+			// For WebSocket, abort without writing response (let upgrader handle it)
+			if isWebSocket {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Authorization header required",
 			})
@@ -156,6 +164,10 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		// Check Bearer prefix
 		parts := strings.SplitN(authHeader, " ", 2)
 		if len(parts) != 2 || parts[0] != "Bearer" {
+			if isWebSocket {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "Invalid authorization header format. Use: Bearer <token>",
 			})
@@ -168,6 +180,10 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		// Validate token
 		claims, err := jwtManager.ValidateToken(tokenString)
 		if err != nil {
+			if isWebSocket {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error":   "Invalid or expired token",
 				"message": err.Error(),
@@ -179,6 +195,10 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		// Verify user still exists and is active
 		user, err := userDB.GetUser(c.Request.Context(), claims.UserID)
 		if err != nil {
+			if isWebSocket {
+				c.AbortWithStatus(http.StatusUnauthorized)
+				return
+			}
 			c.JSON(http.StatusUnauthorized, gin.H{
 				"error": "User not found",
 			})
@@ -187,6 +207,10 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		}
 
 		if !user.Active {
+			if isWebSocket {
+				c.AbortWithStatus(http.StatusForbidden)
+				return
+			}
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "User account is disabled",
 			})

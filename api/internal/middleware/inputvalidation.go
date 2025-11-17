@@ -50,7 +50,10 @@
 package middleware
 
 import (
+	"bytes"
+	"encoding/json"
 	"fmt"
+	"io"
 	"net/http"
 	"regexp"
 	"strings"
@@ -114,8 +117,19 @@ func (v *InputValidator) SanitizeJSONMiddleware() gin.HandlerFunc {
 			return
 		}
 
+		// Read and preserve the request body
+		bodyBytes, err := io.ReadAll(c.Request.Body)
+		if err != nil {
+			c.Next()
+			return
+		}
+
+		// Restore the body for handlers to read
+		c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
+
+		// Try to parse as JSON map
 		var data map[string]interface{}
-		if err := c.ShouldBindJSON(&data); err != nil {
+		if err := json.Unmarshal(bodyBytes, &data); err != nil {
 			// If it's not a map, let it pass to the handler which will validate properly
 			c.Next()
 			return

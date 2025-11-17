@@ -132,15 +132,13 @@ func NewAuthHandler(userDB *db.UserDB, jwtManager *JWTManager, samlAuth *SAMLAut
 
 // RegisterRoutes registers authentication routes
 func (h *AuthHandler) RegisterRoutes(router *gin.RouterGroup) {
-	auth := router.Group("/auth")
-	{
-		auth.POST("/login", h.Login)
-		auth.POST("/refresh", h.RefreshToken)
-		auth.POST("/logout", h.Logout)
-		auth.GET("/saml/login", h.SAMLLogin)
-		auth.POST("/saml/acs", h.SAMLCallback)
-		auth.GET("/saml/metadata", h.SAMLMetadata)
-	}
+	// Note: router is already /api/v1/auth from main.go
+	router.POST("/login", h.Login)
+	router.POST("/refresh", h.RefreshToken)
+	router.POST("/logout", h.Logout)
+	router.GET("/saml/login", h.SAMLLogin)
+	router.POST("/saml/acs", h.SAMLCallback)
+	router.GET("/saml/metadata", h.SAMLMetadata)
 }
 
 // LoginRequest represents a login request
