@@ -176,10 +176,13 @@ export default function AdminQuotas() {
 
     try {
       const quotasData = await api.listAllUserQuotas();
-      setQuotas(quotasData);
+      // Ensure quotasData is always an array to prevent undefined errors
+      setQuotas(Array.isArray(quotasData) ? quotasData : []);
     } catch (err: any) {
       console.error('Failed to load quotas:', err);
       setError(err.response?.data?.message || 'Failed to load user quotas');
+      // Set empty array on error to prevent undefined
+      setQuotas([]);
     } finally {
       setLoading(false);
     }
@@ -329,18 +332,18 @@ export default function AdminQuotas() {
                 </TableRow>
               ) : (
                 quotas.map((quota) => {
-                  const sessionPercent = calculatePercentage(quota.usedSessions, quota.maxSessions);
+                  const sessionPercent = calculatePercentage(quota?.usedSessions ?? 0, quota?.maxSessions ?? 0);
                   const cpuPercent = calculatePercentage(
-                    parseResourceString(quota.usedCpu),
-                    parseResourceString(quota.maxCpu)
+                    parseResourceString(quota?.usedCpu || '0'),
+                    parseResourceString(quota?.maxCpu || '0')
                   );
                   const memoryPercent = calculatePercentage(
-                    parseResourceString(quota.usedMemory),
-                    parseResourceString(quota.maxMemory)
+                    parseResourceString(quota?.usedMemory || '0'),
+                    parseResourceString(quota?.maxMemory || '0')
                   );
                   const storagePercent = calculatePercentage(
-                    parseResourceString(quota.usedStorage),
-                    parseResourceString(quota.maxStorage)
+                    parseResourceString(quota?.usedStorage || '0'),
+                    parseResourceString(quota?.maxStorage || '0')
                   );
 
                   return (
@@ -354,7 +357,7 @@ export default function AdminQuotas() {
                         <Box>
                           <Box sx={{ display: 'flex', alignItems: 'center', gap: 1, mb: 0.5 }}>
                             <Typography variant="body2">
-                              {quota.usedSessions} / {quota.maxSessions}
+                              {quota?.usedSessions ?? 0} / {quota?.maxSessions ?? 0}
                             </Typography>
                             {sessionPercent > 90 && (
                               <Tooltip title="Near quota limit">
@@ -379,7 +382,7 @@ export default function AdminQuotas() {
                       <TableCell>
                         <Box>
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {quota.usedCpu} / {quota.maxCpu}
+                            {quota?.usedCpu || '0'} / {quota?.maxCpu || '0'}
                           </Typography>
                           <LinearProgress
                             variant="determinate"
@@ -398,7 +401,7 @@ export default function AdminQuotas() {
                       <TableCell>
                         <Box>
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {quota.usedMemory} / {quota.maxMemory}
+                            {quota?.usedMemory || '0'} / {quota?.maxMemory || '0'}
                           </Typography>
                           <LinearProgress
                             variant="determinate"
@@ -417,7 +420,7 @@ export default function AdminQuotas() {
                       <TableCell>
                         <Box>
                           <Typography variant="body2" sx={{ mb: 0.5 }}>
-                            {quota.usedStorage} / {quota.maxStorage}
+                            {quota?.usedStorage || '0'} / {quota?.maxStorage || '0'}
                           </Typography>
                           <LinearProgress
                             variant="determinate"

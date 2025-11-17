@@ -193,10 +193,13 @@ export default function AdminPlugins() {
     setLoading(true);
     try {
       const data = await api.listInstalledPlugins();
-      setPlugins(data);
+      // Ensure plugins is always an array to prevent undefined errors
+      setPlugins(Array.isArray(data) ? data : []);
     } catch (error) {
       console.error('Failed to load plugins:', error);
       toast.error('Failed to load plugins');
+      // Set empty array on error to prevent undefined
+      setPlugins([]);
     } finally {
       setLoading(false);
     }
@@ -260,15 +263,15 @@ export default function AdminPlugins() {
   };
 
   const stats = {
-    total: plugins.length,
-    enabled: plugins.filter(p => p.enabled).length,
-    disabled: plugins.filter(p => !p.enabled).length,
+    total: plugins?.length ?? 0,
+    enabled: plugins?.filter(p => p.enabled).length ?? 0,
+    disabled: plugins?.filter(p => !p.enabled).length ?? 0,
     byType: {
-      extension: plugins.filter(p => p.pluginType === 'extension').length,
-      webhook: plugins.filter(p => p.pluginType === 'webhook').length,
-      api: plugins.filter(p => p.pluginType === 'api').length,
-      ui: plugins.filter(p => p.pluginType === 'ui').length,
-      theme: plugins.filter(p => p.pluginType === 'theme').length,
+      extension: plugins?.filter(p => p.pluginType === 'extension').length ?? 0,
+      webhook: plugins?.filter(p => p.pluginType === 'webhook').length ?? 0,
+      api: plugins?.filter(p => p.pluginType === 'api').length ?? 0,
+      ui: plugins?.filter(p => p.pluginType === 'ui').length ?? 0,
+      theme: plugins?.filter(p => p.pluginType === 'theme').length ?? 0,
     },
   };
 

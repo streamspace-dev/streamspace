@@ -168,6 +168,9 @@ export default function AdminDashboard() {
     if (metricsData?.cluster) {
       setMetrics(metricsData.cluster);
       prevMetricsRef.current = metricsData.cluster;
+    } else if (metricsData && !metricsData.cluster) {
+      // API returned data but wrong structure - log for debugging
+      console.warn('Metrics API returned unexpected structure:', metricsData);
     }
   }, [metricsData]);
 
@@ -302,7 +305,7 @@ export default function AdminDashboard() {
           </Box>
 
         {error && (
-          <Alert severity="error" sx={{ mb: 3 }} onClose={() => setError('')}>
+          <Alert severity="error" sx={{ mb: 3 }}>
             {error}
           </Alert>
         )}

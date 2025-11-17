@@ -18,15 +18,22 @@
 // - Auto-configuration (in-cluster or kubeconfig)
 //
 // Custom Resource Definitions:
+//
 //   - Sessions (stream.streamspace.io/v1alpha1)
-//     - Represents a user's containerized workspace session
-//     - States: running, hibernated, terminated
-//     - Includes resource limits, idle timeout, persistence settings
+//
+//   - Represents a user's containerized workspace session
+//
+//   - States: running, hibernated, terminated
+//
+//   - Includes resource limits, idle timeout, persistence settings
 //
 //   - Templates (stream.streamspace.io/v1alpha1)
-//     - Defines application templates (Firefox, VS Code, etc.)
-//     - Contains container image, VNC/webapp config, resources
-//     - Categorized for catalog organization
+//
+//   - Defines application templates (Firefox, VS Code, etc.)
+//
+//   - Contains container image, VNC/webapp config, resources
+//
+//   - Categorized for catalog organization
 //
 // Implementation Details:
 // - Uses Kubernetes dynamic client for CRD operations
@@ -106,12 +113,12 @@ type Session struct {
 		Memory string
 		CPU    string
 	}
-	PersistentHome      bool
-	IdleTimeout         string
-	MaxSessionDuration  string
-	Tags                []string
-	Status              SessionStatus
-	CreatedAt           time.Time
+	PersistentHome     bool
+	IdleTimeout        string
+	MaxSessionDuration string
+	Tags               []string
+	Status             SessionStatus
+	CreatedAt          time.Time
 }
 
 // SessionStatus represents the status of a Session
@@ -129,14 +136,14 @@ type SessionStatus struct {
 
 // Template represents a StreamSpace Template CRD
 type Template struct {
-	Name        string
-	Namespace   string
-	DisplayName string
-	Description string
-	Category    string
-	Icon        string
-	BaseImage   string
-	AppType     string // desktop, webapp
+	Name             string
+	Namespace        string
+	DisplayName      string
+	Description      string
+	Category         string
+	Icon             string
+	BaseImage        string
+	AppType          string // desktop, webapp
 	DefaultResources struct {
 		Memory string
 		CPU    string
@@ -152,8 +159,8 @@ type Template struct {
 	WebApp       *WebAppConfig
 	Capabilities []string
 	Tags         []string
-	Featured     bool  // Whether template is featured in catalog
-	UsageCount   int   // Number of times template has been used
+	Featured     bool // Whether template is featured in catalog
+	UsageCount   int  // Number of times template has been used
 	CreatedAt    time.Time
 }
 
@@ -849,4 +856,112 @@ func (c *Client) GetNamespaces(ctx context.Context) (*corev1.NamespaceList, erro
 	}
 
 	return namespaces, nil
+}
+
+// ============================================================================
+// Node Management Operations
+// ============================================================================
+
+// GetNode returns a specific node by name
+func (c *Client) GetNode(ctx context.Context, name string) (*corev1.Node, error) {
+	node, err := c.clientset.CoreV1().Nodes().Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get node %s: %w", name, err)
+	}
+
+	return node, nil
+}
+
+// PatchNode applies a patch to a node
+func (c *Client) PatchNode(ctx context.Context, name string, patchData []byte) error {
+	_, err := c.clientset.CoreV1().Nodes().Patch(
+		ctx,
+		name,
+		types.StrategicMergePatchType,
+		patchData,
+		metav1.PatchOptions{},
+	)
+	if err != nil {
+		return fmt.Errorf("failed to patch node %s: %w", name, err)
+	}
+
+	return nil
+}
+
+// UpdateNodeTaints updates the taints on a node
+func (c *Client) UpdateNodeTaints(ctx context.Context, name string, taints []corev1.Taint) error {
+	node, err := c.GetNode(ctx, name)
+	if err != nil {
+		return err
+	}
+
+	node.Spec.Taints = taints
+
+	_, err = c.clientset.CoreV1().Nodes().Update(ctx, node, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update node taints: %w", err)
+	}
+
+	return nil
+}
+
+// CordonNode marks a node as unschedulable
+func (c *Client) CordonNode(ctx context.Context, name string) error {
+	patchData := []byte(`{"spec":{"unschedulable":true}}`)
+	return c.PatchNode(ctx, name, patchData)
+}
+
+// UncordonNode marks a node as schedulable
+func (c *Client) UncordonNode(ctx context.Context, name string) error {
+	patchData := []byte(`{"spec":{"unschedulable":false}}`)
+	return c.PatchNode(ctx, name, patchData)
+}
+
+// DrainNode evicts all pods from a node
+func (c *Client) DrainNode(ctx context.Context, name string, gracePeriodSeconds *int64) error {
+	// First cordon the node
+	if err := c.CordonNode(ctx, name); err != nil {
+		return fmt.Errorf("failed to cordon node: %w", err)
+	}
+
+	// Get all pods on the node
+	pods, err := c.clientset.CoreV1().Pods("").List(ctx, metav1.ListOptions{
+		FieldSelector: fmt.Sprintf("spec.nodeName=%s", name),
+	})
+	if err != nil {
+		return fmt.Errorf("failed to list pods on node: %w", err)
+	}
+
+	// Evict each pod
+	for _, pod := range pods.Items {
+		// Skip daemonset pods and system pods
+		if pod.OwnerReferences != nil {
+			for _, owner := range pod.OwnerReferences {
+				if owner.Kind == "DaemonSet" {
+					continue
+				}
+			}
+		}
+
+		// Skip static pods
+		if pod.Annotations != nil {
+			if _, ok := pod.Annotations["kubernetes.io/config.mirror"]; ok {
+				continue
+			}
+		}
+
+		// Create eviction object
+		eviction := &metav1.DeleteOptions{
+			GracePeriodSeconds: gracePeriodSeconds,
+		}
+
+		// Evict the pod
+		err := c.clientset.CoreV1().Pods(pod.Namespace).Delete(ctx, pod.Name, *eviction)
+		if err != nil {
+			// Log error but continue with other pods
+			fmt.Printf("Warning: failed to evict pod %s/%s: %v\n", pod.Namespace, pod.Name, err)
+		}
+	}
+
+	return nil
 }

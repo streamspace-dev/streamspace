@@ -3,6 +3,7 @@ package api
 import (
 	"bufio"
 	"context"
+	"fmt"
 	"io"
 	"log"
 	"net/http"
@@ -64,7 +65,7 @@ var upgrader = websocket.Upgrader{
 // Health returns health status
 func (h *Handler) Health(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
-		"status": "healthy",
+		"status":  "healthy",
 		"service": "streamspace-api",
 	})
 }
@@ -73,8 +74,8 @@ func (h *Handler) Health(c *gin.Context) {
 func (h *Handler) Version(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"version": "v0.1.0",
-		"api": "v1",
-		"phase": "2.2",
+		"api":     "v1",
+		"phase":   "2.2",
 	})
 }
 
@@ -373,7 +374,7 @@ func (h *Handler) UpdateResource(c *gin.Context) {
 
 // DeleteResource deletes a K8s resource
 func (h *Handler) DeleteResource(c *gin.Context) {
-	resourceType := c.Param("type")     // e.g., "deployment", "service"
+	resourceType := c.Param("type") // e.g., "deployment", "service"
 	resourceName := c.Param("name")
 	apiVersion := c.Query("apiVersion") // e.g., "apps/v1"
 	kind := c.Query("kind")             // e.g., "Deployment"
@@ -529,7 +530,7 @@ func (h *Handler) GetConfig(c *gin.Context) {
 			"namespace":     h.namespace,
 			"ingressDomain": os.Getenv("INGRESS_DOMAIN"),
 			"hibernation": gin.H{
-				"enabled":           true,
+				"enabled":            true,
 				"defaultIdleTimeout": "30m",
 			},
 			"resources": gin.H{
@@ -601,10 +602,152 @@ func (h *Handler) UpdateConfig(c *gin.Context) {
 // are fully implemented in api/internal/handlers/users.go by UserHandler.
 // Those should be used instead of stub implementations.
 
-// GetMetrics returns metrics
+// GetMetrics returns cluster metrics including nodes, sessions, resources, and users
 func (h *Handler) GetMetrics(c *gin.Context) {
-	stats := h.connTracker.GetStats()
-	c.JSON(http.StatusOK, stats)
+	ctx := c.Request.Context()
+
+	// Get cluster nodes
+	nodes, err := h.k8sClient.GetNodes(ctx)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get cluster nodes"})
+		return
+	}
+
+	// Count ready nodes
+	readyNodes := 0
+	totalCPU := int64(0)
+	totalMemory := int64(0)
+	usedPods := 0
+	totalPods := 0
+
+	for _, node := range nodes {
+		// Check if node is ready
+		for _, condition := range node.Status.Conditions {
+			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
+				readyNodes++
+				break
+			}
+		}
+
+		// Sum up allocatable resources
+		if cpu, ok := node.Status.Allocatable[corev1.ResourceCPU]; ok {
+			totalCPU += cpu.MilliValue()
+		}
+		if memory, ok := node.Status.Allocatable[corev1.ResourceMemory]; ok {
+			totalMemory += memory.Value()
+		}
+		if pods, ok := node.Status.Allocatable[corev1.ResourcePods]; ok {
+			totalPods += int(pods.Value())
+		}
+	}
+
+	// Get all pods to calculate resource usage
+	pods, err := h.k8sClient.GetPods(ctx, h.namespace)
+	if err == nil {
+		usedPods = len(pods)
+	}
+
+	// Get session counts from database
+	var sessionCounts struct {
+		Total      int
+		Running    int
+		Hibernated int
+		Terminated int
+	}
+
+	err = h.db.DB().QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE state = 'running') as running,
+			COUNT(*) FILTER (WHERE state = 'hibernated') as hibernated,
+			COUNT(*) FILTER (WHERE state = 'terminated') as terminated
+		FROM sessions
+	`).Scan(&sessionCounts.Total, &sessionCounts.Running, &sessionCounts.Hibernated, &sessionCounts.Terminated)
+
+	if err != nil {
+		log.Printf("Failed to get session counts: %v", err)
+		// Use zeros if query fails
+		sessionCounts = struct {
+			Total, Running, Hibernated, Terminated int
+		}{0, 0, 0, 0}
+	}
+
+	// Get user counts from database
+	var userCounts struct {
+		Total  int
+		Active int
+	}
+
+	err = h.db.DB().QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) as total,
+			COUNT(*) FILTER (WHERE last_login > NOW() - INTERVAL '24 hours') as active
+		FROM users
+	`).Scan(&userCounts.Total, &userCounts.Active)
+
+	if err != nil {
+		log.Printf("Failed to get user counts: %v", err)
+		// Use zeros if query fails
+		userCounts = struct{ Total, Active int }{0, 0}
+	}
+
+	// Calculate resource usage (simplified - in production you'd query metrics-server)
+	// For now, estimate based on running sessions
+	usedCPU := int64(sessionCounts.Running * 1000)                      // 1000m per session estimate
+	usedMemory := int64(sessionCounts.Running * 2 * 1024 * 1024 * 1024) // 2GiB per session estimate
+
+	cpuPercent := float64(0)
+	if totalCPU > 0 {
+		cpuPercent = float64(usedCPU) / float64(totalCPU) * 100
+	}
+
+	memoryPercent := float64(0)
+	if totalMemory > 0 {
+		memoryPercent = float64(usedMemory) / float64(totalMemory) * 100
+	}
+
+	podsPercent := float64(0)
+	if totalPods > 0 {
+		podsPercent = float64(usedPods) / float64(totalPods) * 100
+	}
+
+	// Return cluster metrics in the format expected by AdminDashboard
+	c.JSON(http.StatusOK, gin.H{
+		"cluster": gin.H{
+			"nodes": gin.H{
+				"total":    len(nodes),
+				"ready":    readyNodes,
+				"notReady": len(nodes) - readyNodes,
+			},
+			"sessions": gin.H{
+				"total":      sessionCounts.Total,
+				"running":    sessionCounts.Running,
+				"hibernated": sessionCounts.Hibernated,
+				"terminated": sessionCounts.Terminated,
+			},
+			"resources": gin.H{
+				"cpu": gin.H{
+					"total":   fmt.Sprintf("%dm", totalCPU),
+					"used":    fmt.Sprintf("%dm", usedCPU),
+					"percent": cpuPercent,
+				},
+				"memory": gin.H{
+					"total":   fmt.Sprintf("%d", totalMemory),
+					"used":    fmt.Sprintf("%d", usedMemory),
+					"percent": memoryPercent,
+				},
+				"pods": gin.H{
+					"total":   totalPods,
+					"used":    usedPods,
+					"percent": podsPercent,
+				},
+			},
+			"users": gin.H{
+				"total":  userCounts.Total,
+				"active": userCounts.Active,
+			},
+		},
+	})
 }
 
 // ============================================================================

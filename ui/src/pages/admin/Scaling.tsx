@@ -245,36 +245,48 @@ export default function Scaling() {
   const loadLBPolicies = async () => {
     try {
       const response = await api.listLoadBalancingPolicies();
-      setLbPolicies(response.policies);
+      // Ensure policies is always an array to prevent undefined errors
+      setLbPolicies(Array.isArray(response?.policies) ? response.policies : []);
     } catch (error) {
       console.error('Failed to load load balancing policies:', error);
+      // Set empty array on error to prevent undefined
+      setLbPolicies([]);
     }
   };
 
   const loadNodes = async () => {
     try {
       const response = await api.getNodeStatus();
-      setNodes(response.nodes);
+      // Ensure nodes is always an array to prevent undefined errors
+      setNodes(Array.isArray(response?.nodes) ? response.nodes : []);
     } catch (error) {
       console.error('Failed to load nodes:', error);
+      // Set empty array on error to prevent undefined
+      setNodes([]);
     }
   };
 
   const loadASPolicies = async () => {
     try {
       const response = await api.listAutoScalingPolicies();
-      setAsPolicies(response.policies);
+      // Ensure policies is always an array to prevent undefined errors
+      setAsPolicies(Array.isArray(response?.policies) ? response.policies : []);
     } catch (error) {
       console.error('Failed to load auto-scaling policies:', error);
+      // Set empty array on error to prevent undefined
+      setAsPolicies([]);
     }
   };
 
   const loadScalingHistory = async () => {
     try {
       const response = await api.getScalingHistory();
-      setScalingHistory(response.events);
+      // Ensure events is always an array to prevent undefined errors
+      setScalingHistory(Array.isArray(response?.events) ? response.events : []);
     } catch (error) {
       console.error('Failed to load scaling history:', error);
+      // Set empty array on error to prevent undefined
+      setScalingHistory([]);
     }
   };
 

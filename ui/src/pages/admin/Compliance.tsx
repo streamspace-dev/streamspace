@@ -218,7 +218,7 @@ function ComplianceContent() {
 
     // Refresh violations and metrics
     loadViolations();
-    loadMetrics();
+    loadDashboard();
   });
 
   const [frameworkDialog, setFrameworkDialog] = useState(false);
@@ -251,27 +251,36 @@ function ComplianceContent() {
   const loadFrameworks = async () => {
     try {
       const response = await api.listComplianceFrameworks();
-      setFrameworks(response.frameworks);
+      // Ensure frameworks is always an array to prevent undefined errors
+      setFrameworks(Array.isArray(response?.frameworks) ? response.frameworks : []);
     } catch (error) {
       console.error('Failed to load frameworks:', error);
+      // Set empty array on error to prevent undefined
+      setFrameworks([]);
     }
   };
 
   const loadPolicies = async () => {
     try {
       const response = await api.listCompliancePolicies();
-      setPolicies(response.policies);
+      // Ensure policies is always an array to prevent undefined errors
+      setPolicies(Array.isArray(response?.policies) ? response.policies : []);
     } catch (error) {
       console.error('Failed to load policies:', error);
+      // Set empty array on error to prevent undefined
+      setPolicies([]);
     }
   };
 
   const loadViolations = async () => {
     try {
       const response = await api.listComplianceViolations();
-      setViolations(response.violations);
+      // Ensure violations is always an array to prevent undefined errors
+      setViolations(Array.isArray(response?.violations) ? response.violations : []);
     } catch (error) {
       console.error('Failed to load violations:', error);
+      // Set empty array on error to prevent undefined
+      setViolations([]);
     }
   };
 
@@ -279,13 +288,30 @@ function ComplianceContent() {
     try {
       const dashboard = await api.getComplianceDashboard();
       setMetrics({
-        total_policies: dashboard.total_policies,
-        active_policies: dashboard.active_policies,
-        total_open_violations: dashboard.total_open_violations,
-        violations_by_severity: dashboard.violations_by_severity,
+        total_policies: dashboard?.total_policies ?? 0,
+        active_policies: dashboard?.active_policies ?? 0,
+        total_open_violations: dashboard?.total_open_violations ?? 0,
+        violations_by_severity: dashboard?.violations_by_severity ?? {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+        },
       });
     } catch (error) {
       console.error('Failed to load dashboard:', error);
+      // Set default metrics on error to prevent undefined
+      setMetrics({
+        total_policies: 0,
+        active_policies: 0,
+        total_open_violations: 0,
+        violations_by_severity: {
+          critical: 0,
+          high: 0,
+          medium: 0,
+          low: 0,
+        },
+      });
     }
   };
 

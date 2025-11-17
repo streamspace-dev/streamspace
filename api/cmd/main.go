@@ -254,6 +254,7 @@ func main() {
 	batchHandler := handlers.NewBatchHandler(database)
 	monitoringHandler := handlers.NewMonitoringHandler(database)
 	quotasHandler := handlers.NewQuotasHandler(database)
+	nodeHandler := handlers.NewNodeHandler(database, k8sClient)
 	// NOTE: WebSocket routes now use wsManager directly (see ws.GET routes below)
 	consoleHandler := handlers.NewConsoleHandler(database)
 	collaborationHandler := handlers.NewCollaborationHandler(database)
@@ -273,7 +274,7 @@ func main() {
 	}
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, jwtManager, userDB, redisCache, webhookSecret)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, nodeHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, jwtManager, userDB, redisCache, webhookSecret)
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -354,7 +355,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, nodeHandler *handlers.NodeHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -782,6 +783,22 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 
 			// Resource quotas and limits enforcement - using dedicated handler (operators/admins only)
 			quotasHandler.RegisterRoutes(protected.Group("", operatorMiddleware))
+
+			// Node Management (admin only)
+			admin := protected.Group("/admin")
+			admin.Use(adminMiddleware)
+			{
+				admin.GET("/nodes", nodeHandler.ListNodes)
+				admin.GET("/nodes/stats", nodeHandler.GetClusterStats)
+				admin.GET("/nodes/:name", nodeHandler.GetNode)
+				admin.PUT("/nodes/:name/labels", nodeHandler.AddNodeLabel)
+				admin.DELETE("/nodes/:name/labels/:key", nodeHandler.RemoveNodeLabel)
+				admin.POST("/nodes/:name/taints", nodeHandler.AddNodeTaint)
+				admin.DELETE("/nodes/:name/taints/:key", nodeHandler.RemoveNodeTaint)
+				admin.POST("/nodes/:name/cordon", nodeHandler.CordonNode)
+				admin.POST("/nodes/:name/uncordon", nodeHandler.UncordonNode)
+				admin.POST("/nodes/:name/drain", nodeHandler.DrainNode)
+			}
 
 			// NOTE: Billing is now handled by the streamspace-billing plugin
 			// Install it via: Admin → Plugins → streamspace-billing

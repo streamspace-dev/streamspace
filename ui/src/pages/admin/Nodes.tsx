@@ -174,15 +174,19 @@ export default function AdminNodes() {
 
     try {
       const [nodesData, statsData] = await Promise.all([
-        api.listNodes(),
-        api.getClusterStats(),
+        api.listNodes().catch(() => []), // Return empty array if API not implemented
+        api.getClusterStats().catch(() => null), // Return null if API not implemented
       ]);
 
-      setNodes(nodesData);
-      setStats(statsData);
+      // Ensure nodesData is always an array to prevent undefined errors
+      setNodes(Array.isArray(nodesData) ? nodesData : []);
+      setStats(statsData || null);
     } catch (err: any) {
       console.error('Failed to load nodes:', err);
       setError(err.response?.data?.message || 'Failed to load node information');
+      // Set empty array on error to prevent undefined
+      setNodes([]);
+      setStats(null);
     } finally {
       setLoading(false);
     }
