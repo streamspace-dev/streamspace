@@ -111,8 +111,8 @@ function EnhancedCatalogContent() {
 
   useEffect(() => {
     // Extract unique categories and app types from templates
-    const uniqueCategories = Array.from(new Set(templates.map(t => t.category).filter(Boolean)));
-    const uniqueAppTypes = Array.from(new Set(templates.map(t => t.appType).filter(Boolean)));
+    const uniqueCategories = Array.from(new Set(templates?.map(t => t?.category).filter(Boolean) || []));
+    const uniqueAppTypes = Array.from(new Set(templates?.map(t => t?.appType).filter(Boolean) || []));
     setCategories(uniqueCategories);
     setAppTypes(uniqueAppTypes);
   }, [templates]);
@@ -121,10 +121,14 @@ function EnhancedCatalogContent() {
     setLoading(true);
     try {
       const data = await api.listCatalogTemplates(filters);
-      setTemplates(data.templates);
-      setTotalPages(data.totalPages);
+      // Ensure templates is always an array to prevent undefined errors
+      setTemplates(Array.isArray(data?.templates) ? data.templates : []);
+      setTotalPages(data?.totalPages || 1);
     } catch (error) {
       console.error('Failed to load templates:', error);
+      // Set empty array on error to prevent undefined
+      setTemplates([]);
+      setTotalPages(1);
     } finally {
       setLoading(false);
     }
