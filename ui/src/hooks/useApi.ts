@@ -275,3 +275,15 @@ export function useSecurityAlerts() {
     // Polling disabled - use WebSocket for real-time updates via useSecurityAlertEvents
   });
 }
+
+// ============================================================================
+// Plugin Hooks
+// ============================================================================
+
+export function useInstalledPlugins() {
+  return useQuery({
+    queryKey: ['installed-plugins'],
+    queryFn: () => api.listInstalledPlugins(),
+    // Polling disabled - use WebSocket for real-time updates via usePluginEvents
+  });
+}

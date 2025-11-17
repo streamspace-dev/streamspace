@@ -42,6 +42,8 @@ import { api, type InstalledPlugin } from '../lib/api';
 import { toast } from '../lib/toast';
 import { useNavigate } from 'react-router-dom';
 import { usePluginEvents } from '../hooks/useEnterpriseWebSocket';
+import { useInstalledPlugins } from '../hooks/useApi';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
@@ -125,8 +127,6 @@ const pluginTypeColors: Record<string, string> = {
 
 function InstalledPluginsContent() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [plugins, setPlugins] = useState<InstalledPlugin[]>([]);
   const [filter, setFilter] = useState<'all' | 'enabled' | 'disabled'>('all');
   const [searchQuery, setSearchQuery] = useState('');
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
@@ -134,6 +134,10 @@ function InstalledPluginsContent() {
   const [configJson, setConfigJson] = useState('');
   const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
   const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
+
+  // Fetch plugins via React Query
+  const { data: plugins = [], isLoading: loading } = useInstalledPlugins();
+  const queryClient = useQueryClient();
 
   // WebSocket connection state
   const [wsConnected, setWsConnected] = useState(false);
@@ -155,7 +159,7 @@ function InstalledPluginsContent() {
         priority: 'medium',
         title: 'Plugin Installed',
       });
-      loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } else if (data.event_type === 'plugin.enabled') {
       addNotification({
         message: `Plugin enabled: ${data.plugin_name || 'Unknown'}`,
@@ -163,7 +167,7 @@ function InstalledPluginsContent() {
         priority: 'low',
         title: 'Plugin Enabled',
       });
-      loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } else if (data.event_type === 'plugin.disabled') {
       addNotification({
         message: `Plugin disabled: ${data.plugin_name || 'Unknown'}`,
@@ -171,7 +175,7 @@ function InstalledPluginsContent() {
         priority: 'low',
         title: 'Plugin Disabled',
       });
-      loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } else if (data.event_type === 'plugin.uninstalled') {
       addNotification({
         message: `Plugin uninstalled: ${data.plugin_name || 'Unknown'}`,
@@ -179,7 +183,7 @@ function InstalledPluginsContent() {
         priority: 'medium',
         title: 'Plugin Uninstalled',
       });
-      loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } else if (data.event_type === 'plugin.error') {
       addNotification({
         message: `Plugin error: ${data.plugin_name || 'Unknown'} - ${data.error || 'Unknown error'}`,
@@ -195,26 +199,9 @@ function InstalledPluginsContent() {
         priority: 'medium',
         title: 'Plugin Updated',
       });
-      loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     }
   });
-
-  useEffect(() => {
-    loadPlugins();
-  }, []);
-
-  const loadPlugins = async () => {
-    setLoading(true);
-    try {
-      const data = await api.listInstalledPlugins();
-      setPlugins(data);
-    } catch (error) {
-      console.error('Failed to load installed plugins:', error);
-      toast.error('Failed to load installed plugins');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const handleTogglePlugin = async (plugin: InstalledPlugin) => {
     try {
@@ -225,7 +212,7 @@ function InstalledPluginsContent() {
         await api.enablePlugin(plugin.id);
         toast.success(`${plugin.displayName || plugin.name} enabled`);
       }
-      await loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } catch (error) {
       console.error('Failed to toggle plugin:', error);
       toast.error('Failed to toggle plugin');
@@ -257,7 +244,7 @@ function InstalledPluginsContent() {
       await api.updatePluginConfig(selectedPlugin.id, config);
       toast.success('Configuration updated');
       setConfigDialogOpen(false);
-      await loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } catch (error) {
       console.error('Failed to update configuration:', error);
       toast.error(configMode === 'json' ? 'Invalid JSON or failed to update configuration' : 'Failed to update configuration');
@@ -287,7 +274,7 @@ function InstalledPluginsContent() {
     try {
       await api.uninstallPlugin(plugin.id);
       toast.success(`${plugin.displayName || plugin.name} uninstalled`);
-      await loadPlugins();
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
     } catch (error) {
       console.error('Failed to uninstall plugin:', error);
       toast.error('Failed to uninstall plugin');
