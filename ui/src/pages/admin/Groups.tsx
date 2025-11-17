@@ -41,6 +41,7 @@ import { useGroupEvents } from '../../hooks/useEnterpriseWebSocket';
 import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
+import Layout from '../../components/Layout';
 
 export default function Groups() {
   const navigate = useNavigate();
@@ -161,7 +162,8 @@ export default function Groups() {
 
   return (
     <WebSocketErrorBoundary>
-      <Container maxWidth="xl" sx={{ py: 4 }}>
+      <Layout>
+        <Container maxWidth="xl" sx={{ py: 4 }}>
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
             <GroupsIcon sx={{ fontSize: 40 }} />
@@ -340,7 +342,8 @@ export default function Groups() {
           </Button>
         </DialogActions>
       </Dialog>
-    </Container>
+        </Container>
+      </Layout>
     </WebSocketErrorBoundary>
   );
 }

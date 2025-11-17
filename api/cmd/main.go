@@ -569,28 +569,28 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			scaling.GET("/autoscaling/history", loadBalancingHandler.GetScalingHistory)
 		}
 
-// // 		// Compliance & Governance - Admin only
-// 		compliance := protected.Group("/compliance")
-// 		compliance.Use(adminMiddleware)
-// 		{
-// 			// Frameworks
-// 			compliance.GET("/frameworks", h.ListComplianceFrameworks)
-// 			compliance.POST("/frameworks", h.CreateComplianceFramework)
-// 
-// 			// Policies
-// 			compliance.GET("/policies", h.ListCompliancePolicies)
-// 			compliance.POST("/policies", h.CreateCompliancePolicy)
-// 
-// 			// Violations
-// 			compliance.GET("/violations", h.ListViolations)
-// 			compliance.POST("/violations", h.RecordViolation)
-// 			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
+		// Compliance & Governance - Admin only
+		// NOTE: These are STUB endpoints that return empty data when the compliance plugin
+		// is not installed. Install streamspace-compliance plugin for full functionality.
+		compliance := protected.Group("/compliance")
+		compliance.Use(adminMiddleware)
+		{
+			// Dashboard
+			compliance.GET("/dashboard", h.GetComplianceDashboard)
 
-// 		}
+			// Frameworks
+			compliance.GET("/frameworks", h.ListComplianceFrameworks)
+			compliance.POST("/frameworks", h.CreateComplianceFramework)
 
-// 
-// NOTE: Compliance & Governance is now handled by the streamspace-compliance plugin
-// Install it via: Admin → Plugins → streamspace-compliance
+			// Policies
+			compliance.GET("/policies", h.ListCompliancePolicies)
+			compliance.POST("/policies", h.CreateCompliancePolicy)
+
+			// Violations
+			compliance.GET("/violations", h.ListViolations)
+			compliance.POST("/violations", h.RecordViolation)
+			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
+		}
 		// Templates (read: all users, write: operators/admins)
 		templates := protected.Group("/templates")
 		{
