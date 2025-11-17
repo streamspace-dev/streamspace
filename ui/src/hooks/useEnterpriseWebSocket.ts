@@ -1,4 +1,5 @@
-import { useEffect, useRef, useCallback, useState } from 'react';
+import { useEffect, useRef, useCallback, useState, useMemo } from 'react';
+import { useUserStore } from '../store/userStore';
 
 export interface WebSocketMessage {
   type: string;
@@ -84,19 +85,28 @@ export function useEnterpriseWebSocket(
     onCloseRef.current = onClose;
   }, [onClose]);
 
-  const getWebSocketUrl = useCallback(() => {
-    const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
-    const host = window.location.host;
-    const token = localStorage.getItem('token');
+  // Get token directly from Zustand store - automatically reactive
+  const token = useUserStore((state) => state?.token);
 
-    // Include token as query parameter for WebSocket authentication
-    // Browsers cannot send custom headers in WebSocket connections
-    if (token) {
+  // Memoize WebSocket URL, recalculate when token changes
+  const wsUrl = useMemo(() => {
+    try {
+      const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+      const host = window.location.host;
+
+      // Don't connect without a token
+      if (!token) {
+        return '';
+      }
+
+      // Include token as query parameter for WebSocket authentication
+      // Browsers cannot send custom headers in WebSocket connections
       return `${protocol}//${host}/api/v1/ws/enterprise?token=${encodeURIComponent(token)}`;
+    } catch (error) {
+      console.error('[useEnterpriseWebSocket] Error building URL:', error);
+      return '';
     }
-
-    return `${protocol}//${host}/api/v1/ws/enterprise`;
-  }, []);
+  }, [token]); // Recalculate when token changes
 
   const connect = useCallback(() => {
     // Don't create multiple connections
@@ -104,8 +114,13 @@ export function useEnterpriseWebSocket(
       return;
     }
 
+    // Don't connect if no token available
+    if (!wsUrl) {
+      console.log('[WebSocket] No authentication token, skipping connection');
+      return;
+    }
+
     try {
-      const wsUrl = getWebSocketUrl();
       // console.log(`[WebSocket] Connecting to ${wsUrl}`);
 
       wsRef.current = new WebSocket(wsUrl);
@@ -179,11 +194,7 @@ export function useEnterpriseWebSocket(
       console.error('[WebSocket] Failed to create WebSocket connection:', error);
       setIsConnected(false);
     }
-  }, [
-    getWebSocketUrl,
-    autoReconnect,
-    maxReconnectAttempts,
-  ]); // Removed reconnectInterval since we use getReconnectDelay
+  }, [wsUrl, autoReconnect, maxReconnectAttempts]); // Removed reconnectInterval since we use getReconnectDelay
 
   const disconnect = useCallback(() => {
     // console.log('[WebSocket] Disconnecting...');
@@ -212,8 +223,12 @@ export function useEnterpriseWebSocket(
     }
   }, []);
 
-  // Auto-connect on mount
+  // Auto-connect on mount (only if URL is not empty)
   useEffect(() => {
+    if (!wsUrl) {
+      return; // Don't connect without a valid URL
+    }
+
     connect();
 
     // Cleanup on unmount
@@ -228,7 +243,7 @@ export function useEnterpriseWebSocket(
         wsRef.current.close();
       }
     };
-  }, []); // Empty dependency array - only run on mount/unmount
+  }, [wsUrl, connect]); // React to URL changes so we connect when token becomes available
 
   // Handle page visibility changes (reconnect when page becomes visible)
   // Store isConnected in ref to avoid effect recreation

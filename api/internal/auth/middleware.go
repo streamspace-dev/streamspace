@@ -156,7 +156,10 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if this is a WebSocket upgrade request
 		// WebSocket requests need special error handling (status code only, no JSON body)
-		isWebSocket := c.GetHeader("Upgrade") == "websocket" && c.GetHeader("Connection") == "Upgrade"
+		// Note: Connection header may contain multiple values like "keep-alive, Upgrade"
+		upgrade := strings.ToLower(c.GetHeader("Upgrade"))
+		connection := strings.ToLower(c.GetHeader("Connection"))
+		isWebSocket := upgrade == "websocket" && strings.Contains(connection, "upgrade")
 
 		var tokenString string
 

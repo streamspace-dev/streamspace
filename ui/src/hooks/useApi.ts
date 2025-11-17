@@ -9,7 +9,7 @@ export function useSessions(user?: string) {
   return useQuery({
     queryKey: ['sessions', user],
     queryFn: () => api.listSessions(user),
-    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
   });
 }
 
@@ -18,7 +18,7 @@ export function useSession(id: string) {
     queryKey: ['session', id],
     queryFn: () => api.getSession(id),
     enabled: !!id,
-    refetchInterval: 3000,
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
   });
 }
 
@@ -199,7 +199,7 @@ export function useHealth() {
   return useQuery({
     queryKey: ['health'],
     queryFn: () => api.getHealth(),
-    refetchInterval: 30000, // Every 30 seconds
+    // Polling disabled to reduce unnecessary API calls - health checks are passive
   });
 }
 
@@ -207,6 +207,104 @@ export function useMetrics() {
   return useQuery({
     queryKey: ['metrics'],
     queryFn: () => api.getMetrics(),
-    refetchInterval: 10000, // Every 10 seconds
+    // Polling disabled - use WebSocket for real-time updates via useMetricsWebSocket
+  });
+}
+
+// ============================================================================
+// Quota Hooks
+// ============================================================================
+
+export function useCurrentUserQuota() {
+  return useQuery({
+    queryKey: ['current-user-quota'],
+    queryFn: () => api.getCurrentUserQuota(),
+    // Polling disabled - quota data is relatively static, refresh on user actions only
+  });
+}
+
+// ============================================================================
+// Scheduling Hooks
+// ============================================================================
+
+export function useScheduledSessions() {
+  return useQuery({
+    queryKey: ['scheduled-sessions'],
+    queryFn: () => api.listScheduledSessions(),
+    select: (data) => data.schedules,
+    // Polling disabled - use WebSocket for real-time updates via useScheduleEvents
+  });
+}
+
+export function useCalendarIntegrations() {
+  return useQuery({
+    queryKey: ['calendar-integrations'],
+    queryFn: () => api.listCalendarIntegrations(),
+    select: (data) => data.integrations,
+    // Polling disabled - calendar integrations are relatively static
+  });
+}
+
+// ============================================================================
+// Security Settings Hooks
+// ============================================================================
+
+export function useMFAMethods() {
+  return useQuery({
+    queryKey: ['mfa-methods'],
+    queryFn: () => api.listMFAMethods(),
+    select: (data) => data.methods,
+    // Polling disabled - MFA methods are relatively static
+  });
+}
+
+export function useIPWhitelist() {
+  return useQuery({
+    queryKey: ['ip-whitelist'],
+    queryFn: () => api.listIPWhitelist(),
+    select: (data) => data.entries,
+    // Polling disabled - IP whitelist is static configuration
+  });
+}
+
+export function useSecurityAlerts() {
+  return useQuery({
+    queryKey: ['security-alerts'],
+    queryFn: () => api.getSecurityAlerts(),
+    select: (data) => data.alerts,
+    // Polling disabled - use WebSocket for real-time updates via useSecurityAlertEvents
+  });
+}
+
+// ============================================================================
+// Plugin Hooks
+// ============================================================================
+
+export function useInstalledPlugins() {
+  return useQuery({
+    queryKey: ['installed-plugins'],
+    queryFn: () => api.listInstalledPlugins(),
+    // Polling disabled - use WebSocket for real-time updates via usePluginEvents
+  });
+}
+
+export function useBrowsePlugins(filters?: CatalogFilters) {
+  return useQuery({
+    queryKey: ['browse-plugins', filters],
+    queryFn: () => api.browsePlugins(filters),
+    // Polling disabled - catalog data is relatively static
+  });
+}
+
+// ============================================================================
+// Shared Sessions Hooks
+// ============================================================================
+
+export function useSharedSessions(userId?: string) {
+  return useQuery({
+    queryKey: ['shared-sessions', userId],
+    queryFn: () => api.listSharedSessions(userId!),
+    enabled: !!userId,
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
   });
 }

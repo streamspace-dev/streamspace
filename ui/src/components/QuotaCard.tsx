@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { memo } from 'react';
 import {
   Card,
   CardContent,
@@ -16,7 +16,8 @@ import {
   Workspaces as SessionsIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import { api, type UserQuota } from '../lib/api';
+import { type UserQuota } from '../lib/api';
+import { useCurrentUserQuota } from '../hooks/useApi';
 
 interface QuotaMetric {
   label: string;
@@ -50,30 +51,11 @@ interface QuotaMetric {
  * @example
  * <QuotaCard />
  *
- * @see api.getCurrentUserQuota for quota data fetching
+ * @see useCurrentUserQuota for React Query-based quota data fetching
  * @see QuotaAlert for alert-style quota warnings
  */
-export default function QuotaCard() {
-  const [quota, setQuota] = useState<UserQuota | null>(null);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState<string | null>(null);
-
-  useEffect(() => {
-    loadQuota();
-  }, []);
-
-  const loadQuota = async () => {
-    try {
-      setLoading(true);
-      setError(null);
-      const data = await api.getCurrentUserQuota();
-      setQuota(data);
-    } catch (err) {
-      setError(err instanceof Error ? err.message : 'Failed to load quota');
-    } finally {
-      setLoading(false);
-    }
-  };
+function QuotaCard() {
+  const { data: quota, isLoading: loading, error } = useCurrentUserQuota();
 
   const parseMemory = (mem: string): number => {
     if (!mem || mem === '0') return 0;
@@ -138,14 +120,16 @@ export default function QuotaCard() {
     );
   }
 
-  if (error || !quota) {
+  if (error || (!loading && !quota)) {
     return (
       <Card>
         <CardContent>
           <Typography variant="h6" gutterBottom>
             Resource Quota
           </Typography>
-          <Alert severity="error">{error || 'Unable to load quota information'}</Alert>
+          <Alert severity="error">
+            {error instanceof Error ? error.message : 'Unable to load quota information'}
+          </Alert>
         </CardContent>
       </Card>
     );
@@ -154,35 +138,35 @@ export default function QuotaCard() {
   const metrics: QuotaMetric[] = [
     {
       label: 'Sessions',
-      used: quota.usedSessions,
-      max: quota.maxSessions,
+      used: quota?.usedSessions ?? 0,
+      max: quota?.maxSessions ?? 0,
       unit: '',
       icon: <SessionsIcon />,
-      color: getColor(getPercentage(quota.usedSessions, quota.maxSessions)),
+      color: getColor(getPercentage(quota?.usedSessions ?? 0, quota?.maxSessions ?? 0)),
     },
     {
       label: 'CPU',
-      used: parseCPU(quota.usedCpu),
-      max: parseCPU(quota.maxCpu),
+      used: parseCPU(quota?.usedCpu || '0'),
+      max: parseCPU(quota?.maxCpu || '0'),
       unit: ' cores',
       icon: <CPUIcon />,
-      color: getColor(getPercentage(parseCPU(quota.usedCpu), parseCPU(quota.maxCpu))),
+      color: getColor(getPercentage(parseCPU(quota?.usedCpu || '0'), parseCPU(quota?.maxCpu || '0'))),
     },
     {
       label: 'Memory',
-      used: parseMemory(quota.usedMemory),
-      max: parseMemory(quota.maxMemory),
+      used: parseMemory(quota?.usedMemory || '0'),
+      max: parseMemory(quota?.maxMemory || '0'),
       unit: ' GiB',
       icon: <MemoryIcon />,
-      color: getColor(getPercentage(parseMemory(quota.usedMemory), parseMemory(quota.maxMemory))),
+      color: getColor(getPercentage(parseMemory(quota?.usedMemory || '0'), parseMemory(quota?.maxMemory || '0'))),
     },
     {
       label: 'Storage',
-      used: parseStorage(quota.usedStorage),
-      max: parseStorage(quota.maxStorage),
+      used: parseStorage(quota?.usedStorage || '0'),
+      max: parseStorage(quota?.maxStorage || '0'),
       unit: ' GiB',
       icon: <StorageIcon />,
-      color: getColor(getPercentage(parseStorage(quota.usedStorage), parseStorage(quota.maxStorage))),
+      color: getColor(getPercentage(parseStorage(quota?.usedStorage || '0'), parseStorage(quota?.maxStorage || '0'))),
     },
   ];
 
@@ -216,8 +200,8 @@ export default function QuotaCard() {
                   {metric.label}
                 </Typography>
                 <Typography variant="body2" fontWeight={600}>
-                  {metric.used.toFixed(metric.label === 'Sessions' ? 0 : 1)}
-                  {metric.unit} / {metric.max.toFixed(metric.label === 'Sessions' ? 0 : 1)}
+                  {(metric.used ?? 0).toFixed(metric.label === 'Sessions' ? 0 : 1)}
+                  {metric.unit} / {(metric.max ?? 0).toFixed(metric.label === 'Sessions' ? 0 : 1)}
                   {metric.unit}
                 </Typography>
               </Box>
@@ -245,3 +229,6 @@ export default function QuotaCard() {
     </Card>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders when parent component updates
+export default memo(QuotaCard);

@@ -1,6 +1,7 @@
-import { useEffect, useState } from 'react';
+import { memo } from 'react';
 import { Alert, AlertTitle, Box, LinearProgress, Typography } from '@mui/material';
-import { api, type UserQuota } from '../lib/api';
+import { type UserQuota } from '../lib/api';
+import { useCurrentUserQuota } from '../hooks/useApi';
 
 interface QuotaAlertProps {
   onQuotaLoad?: (quota: UserQuota) => void;
@@ -38,31 +39,16 @@ interface QuotaAlertProps {
  *   <Dashboard />
  * </Box>
  *
- * @see api.getCurrentUserQuota for quota data fetching
+ * @see useCurrentUserQuota for React Query-based quota data fetching
  * @see QuotaCard for detailed quota display
  */
-export default function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
-  const [quota, setQuota] = useState<UserQuota | null>(null);
-  const [loading, setLoading] = useState(true);
+function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
+  const { data: quota, isLoading: loading } = useCurrentUserQuota();
 
-  useEffect(() => {
-    loadQuota();
-  }, []);
-
-  const loadQuota = async () => {
-    try {
-      setLoading(true);
-      const data = await api.getCurrentUserQuota();
-      setQuota(data);
-      if (onQuotaLoad) {
-        onQuotaLoad(data);
-      }
-    } catch (err) {
-      // Silently fail - quota alerts are optional
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Call onQuotaLoad callback when quota data is available
+  if (quota && onQuotaLoad) {
+    onQuotaLoad(quota);
+  }
 
   const parseMemory = (mem: string): number => {
     if (!mem || mem === '0') return 0;
@@ -157,3 +143,6 @@ export default function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
     </Alert>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders when parent component updates
+export default memo(QuotaAlert);

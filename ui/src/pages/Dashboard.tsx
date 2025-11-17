@@ -136,7 +136,7 @@ export default function Dashboard() {
       value: metrics?.activeConnections || 0,
       icon: <TimelineIcon sx={{ fontSize: 40 }} />,
       color: '#ff9800',
-      loading: !metricsWs.isConnected,
+      loading: !metricsWs?.isConnected,
     },
   ];
 

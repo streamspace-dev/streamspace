@@ -28,8 +28,8 @@ import {
   Warning as WarningIcon,
 } from '@mui/icons-material';
 import Layout from '../../components/Layout';
-import { api } from '../../lib/api';
 import { useMetricsWebSocket } from '../../hooks/useWebSocket';
+import { useMetrics, useSessions } from '../../hooks/useApi';
 import { useEnhancedWebSocket } from '../../hooks/useWebSocketEnhancements';
 import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
@@ -145,15 +145,31 @@ interface RecentSession {
 
 export default function AdminDashboard() {
   const [metrics, setMetrics] = useState<ClusterMetrics | null>(null);
-  const [recentSessions, setRecentSessions] = useState<RecentSession[]>([]);
-  const [loading, setLoading] = useState(true);
-  const [error, setError] = useState('');
+
+  // Fetch initial data via React Query
+  const { data: metricsData, isLoading: metricsLoading, error: metricsError } = useMetrics();
+  const { data: sessionsData = [], isLoading: sessionsLoading } = useSessions();
+
+  // Combine loading states
+  const loading = metricsLoading || sessionsLoading;
+  const error = metricsError ? (metricsError instanceof Error ? metricsError.message : 'Failed to load dashboard data') : '';
+
+  // Recent sessions (top 10)
+  const recentSessions = sessionsData.slice(0, 10);
 
   // Track previous metrics for critical change notifications
   const prevMetricsRef = useRef<ClusterMetrics | null>(null);
 
   // Enhanced notification system
   const { addNotification } = useNotificationQueue();
+
+  // Set initial metrics from React Query data
+  useEffect(() => {
+    if (metricsData?.cluster) {
+      setMetrics(metricsData.cluster);
+      prevMetricsRef.current = metricsData.cluster;
+    }
+  }, [metricsData]);
 
   // Real-time metrics updates with critical change notifications
   const baseMetricsWs = useMetricsWebSocket((updatedMetrics) => {
@@ -213,30 +229,6 @@ export default function AdminDashboard() {
 
   // Enhanced WebSocket with connection quality and manual reconnect
   const metricsWs = useEnhancedWebSocket(baseMetricsWs);
-
-  useEffect(() => {
-    loadDashboardData();
-  }, []);
-
-  const loadDashboardData = async () => {
-    setLoading(true);
-    setError('');
-
-    try {
-      const [metricsData, sessionsData] = await Promise.all([
-        api.getMetrics(),
-        api.listSessions(),
-      ]);
-
-      setMetrics(metricsData.cluster);
-      setRecentSessions(sessionsData.slice(0, 10));
-    } catch (err: any) {
-      console.error('Failed to load dashboard data:', err);
-      setError(err.response?.data?.message || 'Failed to load dashboard data');
-    } finally {
-      setLoading(false);
-    }
-  };
 
   const formatBytes = (bytes: string): string => {
     const num = parseInt(bytes);

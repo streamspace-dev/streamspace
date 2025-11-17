@@ -46,6 +46,8 @@ import Layout from '../components/Layout';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
 import { useScheduleEvents } from '../hooks/useEnterpriseWebSocket';
+import { useScheduledSessions, useCalendarIntegrations } from '../hooks/useApi';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
@@ -136,13 +138,16 @@ interface CalendarIntegration {
 
 function SchedulingContent() {
   const [currentTab, setCurrentTab] = useState(0);
-  const [schedules, setSchedules] = useState<ScheduledSession[]>([]);
-  const [calendarIntegrations, setCalendarIntegrations] = useState<CalendarIntegration[]>([]);
   const [scheduleDialog, setScheduleDialog] = useState(false);
   const [connectCalendarDialog, setConnectCalendarDialog] = useState(false);
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Fetch data via React Query
+  const { data: schedules = [], refetch: refetchSchedules } = useScheduledSessions();
+  const { data: calendarIntegrations = [] } = useCalendarIntegrations();
+  const queryClient = useQueryClient();
 
   // Enhanced notification system
   const { addNotification } = useNotificationQueue();
@@ -185,8 +190,8 @@ function SchedulingContent() {
       });
     }
 
-    // Refresh schedules
-    loadSchedules();
+    // Refresh schedules via React Query
+    queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
   });
 
   const [scheduleForm, setScheduleForm] = useState({
@@ -204,29 +209,6 @@ function SchedulingContent() {
     pre_warm_minutes: 5,
   });
 
-  // Load initial data
-  useEffect(() => {
-    loadSchedules();
-    loadCalendarIntegrations();
-  }, []);
-
-  const loadSchedules = async () => {
-    try {
-      const response = await api.listScheduledSessions();
-      setSchedules(response.schedules);
-    } catch (error) {
-      console.error('Failed to load schedules:', error);
-    }
-  };
-
-  const loadCalendarIntegrations = async () => {
-    try {
-      const response = await api.listCalendarIntegrations();
-      setCalendarIntegrations(response.integrations);
-    } catch (error) {
-      console.error('Failed to load calendar integrations:', error);
-    }
-  };
 
   const handleCreateSchedule = async () => {
     setLoading(true);
@@ -251,7 +233,7 @@ function SchedulingContent() {
       await api.createScheduledSession(requestData);
       toast.success('Scheduled session created successfully');
       setScheduleDialog(false);
-      loadSchedules();
+      queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
     } catch (error) {
       toast.error('Failed to create scheduled session');
     } finally {
@@ -269,7 +251,7 @@ function SchedulingContent() {
         await api.enableScheduledSession(id);
         toast.success('Schedule enabled');
       }
-      loadSchedules();
+      queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
     } catch (error) {
       toast.error('Failed to toggle schedule');
     } finally {
@@ -284,7 +266,7 @@ function SchedulingContent() {
     try {
       await api.deleteScheduledSession(id);
       toast.success('Schedule deleted');
-      loadSchedules();
+      queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
     } catch (error) {
       toast.error('Failed to delete schedule');
     } finally {
@@ -316,7 +298,7 @@ function SchedulingContent() {
     try {
       await api.disconnectCalendar(id);
       toast.success('Calendar disconnected');
-      loadCalendarIntegrations();
+      queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
     } catch (error) {
       toast.error('Failed to disconnect calendar');
     } finally {
@@ -329,7 +311,7 @@ function SchedulingContent() {
     try {
       await api.syncCalendar(id);
       toast.success('Calendar synced successfully');
-      loadCalendarIntegrations();
+      queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
     } catch (error) {
       toast.error('Failed to sync calendar');
     } finally {

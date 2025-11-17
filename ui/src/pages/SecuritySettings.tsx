@@ -88,6 +88,8 @@ import { QRCodeSVG } from 'qrcode.react';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
 import { useSecurityAlertEvents } from '../hooks/useEnterpriseWebSocket';
+import { useMFAMethods, useIPWhitelist, useSecurityAlerts } from '../hooks/useApi';
+import { useQueryClient } from '@tanstack/react-query';
 import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
@@ -125,12 +127,15 @@ interface SecurityAlert {
 
 function SecuritySettingsContent() {
   const [currentTab, setCurrentTab] = useState(0);
-  const [mfaMethods, setMfaMethods] = useState<MFAMethod[]>([]);
-  const [ipWhitelist, setIpWhitelist] = useState<IPWhitelistEntry[]>([]);
-  const [securityAlerts, setSecurityAlerts] = useState<SecurityAlert[]>([]);
   const [loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
+
+  // Fetch data via React Query
+  const { data: mfaMethods = [] } = useMFAMethods();
+  const { data: ipWhitelist = [] } = useIPWhitelist();
+  const { data: securityAlerts = [] } = useSecurityAlerts();
+  const queryClient = useQueryClient();
 
   // Enhanced notification system
   const { addNotification } = useNotificationQueue();
@@ -155,8 +160,8 @@ function SecuritySettingsContent() {
       });
     }
 
-    // Refresh security alerts
-    loadSecurityAlerts();
+    // Refresh security alerts via React Query
+    queryClient.invalidateQueries({ queryKey: ['security-alerts'] });
   });
 
   // MFA Setup Dialog
@@ -176,39 +181,6 @@ function SecuritySettingsContent() {
     description: '',
   });
 
-  // Load initial data
-  useEffect(() => {
-    loadMFAMethods();
-    loadIPWhitelist();
-    loadSecurityAlerts();
-  }, []);
-
-  const loadMFAMethods = async () => {
-    try {
-      const response = await api.listMFAMethods();
-      setMfaMethods(response.methods);
-    } catch (error) {
-      console.error('Failed to load MFA methods:', error);
-    }
-  };
-
-  const loadIPWhitelist = async () => {
-    try {
-      const response = await api.listIPWhitelist();
-      setIpWhitelist(response.entries);
-    } catch (error) {
-      console.error('Failed to load IP whitelist:', error);
-    }
-  };
-
-  const loadSecurityAlerts = async () => {
-    try {
-      const response = await api.getSecurityAlerts();
-      setSecurityAlerts(response.alerts);
-    } catch (error) {
-      console.error('Failed to load security alerts:', error);
-    }
-  };
 
   const handleStartMFASetup = async (type: 'totp' | 'sms' | 'email') => {
     setMfaType(type);
@@ -254,7 +226,7 @@ function SecuritySettingsContent() {
     setMfaDialog(false);
     setVerificationCode('');
     setCurrentMfaId(null);
-    loadMFAMethods();
+    queryClient.invalidateQueries({ queryKey: ['mfa-methods'] });
     toast.success('MFA setup completed');
   };
 
@@ -265,7 +237,7 @@ function SecuritySettingsContent() {
     try {
       await api.disableMFA(id);
       toast.success('MFA method disabled');
-      loadMFAMethods();
+      queryClient.invalidateQueries({ queryKey: ['mfa-methods'] });
     } catch (error) {
       toast.error('Failed to disable MFA method');
     } finally {
@@ -280,7 +252,7 @@ function SecuritySettingsContent() {
       toast.success('IP address added to whitelist');
       setIpDialog(false);
       setIpForm({ ip_address: '', description: '' });
-      loadIPWhitelist();
+      queryClient.invalidateQueries({ queryKey: ['ip-whitelist'] });
     } catch (error) {
       toast.error('Failed to add IP address');
     } finally {
@@ -295,7 +267,7 @@ function SecuritySettingsContent() {
     try {
       await api.deleteIPWhitelist(id);
       toast.success('IP address removed');
-      loadIPWhitelist();
+      queryClient.invalidateQueries({ queryKey: ['ip-whitelist'] });
     } catch (error) {
       toast.error('Failed to remove IP address');
     } finally {
