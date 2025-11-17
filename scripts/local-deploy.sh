@@ -269,6 +269,24 @@ show_status() {
     helm status "${RELEASE_NAME}" -n "${NAMESPACE}"
 }
 
+# Start port forwards
+start_port_forwards() {
+    if [ "${AUTO_PORT_FORWARD:-true}" = "true" ]; then
+        echo ""
+        log "Starting port forwards automatically..."
+
+        if [ -f "${PROJECT_ROOT}/scripts/local-port-forward.sh" ]; then
+            "${PROJECT_ROOT}/scripts/local-port-forward.sh"
+            return 0
+        else
+            log_warning "Port forward script not found, skipping"
+            show_access_info
+        fi
+    else
+        show_access_info
+    fi
+}
+
 # Show access instructions
 show_access_info() {
     echo ""
@@ -277,14 +295,13 @@ show_access_info() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     echo ""
 
-    log_info "Port-forward UI (in a separate terminal):"
-    echo "  kubectl port-forward -n ${NAMESPACE} svc/${RELEASE_NAME}-ui 3000:80"
-    echo "  Then access: http://localhost:3000"
+    log_info "Start automatic port forwards:"
+    echo "  ./scripts/local-port-forward.sh"
     echo ""
 
-    log_info "Port-forward API (in a separate terminal):"
+    log_info "Or manually port-forward (in separate terminals):"
+    echo "  kubectl port-forward -n ${NAMESPACE} svc/${RELEASE_NAME}-ui 3000:80"
     echo "  kubectl port-forward -n ${NAMESPACE} svc/${RELEASE_NAME}-api 8000:8000"
-    echo "  Then access: http://localhost:8000"
     echo ""
 
     log_info "View logs:"
@@ -294,7 +311,8 @@ show_access_info() {
     echo ""
 
     log_info "When finished testing:"
-    echo "  ./scripts/local-teardown.sh"
+    echo "  ./scripts/local-stop-port-forward.sh  # Stop port forwards"
+    echo "  ./scripts/local-teardown.sh           # Full teardown"
     echo ""
 }
 
@@ -316,7 +334,7 @@ main() {
     deploy_helm
     wait_for_pods
     show_status
-    show_access_info
+    start_port_forwards
 
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     log_success "Deployment complete!"
