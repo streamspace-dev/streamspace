@@ -279,5 +279,6 @@ func (r *HibernationReconciler) SetupWithManager(mgr ctrl.Manager) error {
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&streamv1alpha1.Session{}).
+		Named("hibernation").
 		Complete(r)
 }
