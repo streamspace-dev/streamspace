@@ -114,38 +114,43 @@ export default function SharedSessions() {
   // Real-time session updates via WebSocket with notifications
   // Wrap callback in useCallback to prevent reconnection loop
   const handleSessionsUpdate = useCallback((updatedSessions: any[]) => {
-    if (!currentUser?.id || sessions.length === 0) return;
+    if (!currentUser?.id) return;
 
-    // Update shared sessions with real-time data and show notifications for changes
-    const updatedSharedSessions = sessions.map((sharedSession) => {
-      const updated = updatedSessions.find((s: any) => s.id === sharedSession.id);
-      if (updated) {
-        // Check if state changed
-        const prevState = prevStatesRef.current.get(sharedSession.id);
-        if (updated.state !== prevState && prevState !== undefined) {
-          // Show notification for state changes
-          addNotification({
-            message: `${sharedSession.templateName} (${sharedSession.ownerUsername}): ${prevState} → ${updated.state}`,
-            severity: updated.state === 'running' ? 'success' : updated.state === 'hibernated' ? 'warning' : 'error',
-            priority: updated.state === 'terminated' ? 'high' : 'medium',
-            title: 'Shared Session Updated',
-          });
+    // Update shared sessions using the callback form of setState to avoid dependency on sessions state
+    setSessions((currentSessions) => {
+      if (currentSessions.length === 0) return currentSessions;
+
+      // Update shared sessions with real-time data and show notifications for changes
+      const updatedSharedSessions = currentSessions.map((sharedSession) => {
+        const updated = updatedSessions.find((s: any) => s.id === sharedSession.id);
+        if (updated) {
+          // Check if state changed
+          const prevState = prevStatesRef.current.get(sharedSession.id);
+          if (updated.state !== prevState && prevState !== undefined) {
+            // Show notification for state changes
+            addNotification({
+              message: `${sharedSession.templateName} (${sharedSession.ownerUsername}): ${prevState} → ${updated.state}`,
+              severity: updated.state === 'running' ? 'success' : updated.state === 'hibernated' ? 'warning' : 'error',
+              priority: updated.state === 'terminated' ? 'high' : 'medium',
+              title: 'Shared Session Updated',
+            });
+          }
+
+          // Update state tracking
+          prevStatesRef.current.set(sharedSession.id, updated.state);
+
+          return {
+            ...sharedSession,
+            state: updated.state,
+            url: updated.status?.url || sharedSession.url,
+          };
         }
+        return sharedSession;
+      });
 
-        // Update state tracking
-        prevStatesRef.current.set(sharedSession.id, updated.state);
-
-        return {
-          ...sharedSession,
-          state: updated.state,
-          url: updated.status?.url || sharedSession.url,
-        };
-      }
-      return sharedSession;
+      return updatedSharedSessions;
     });
-
-    setSessions(updatedSharedSessions);
-  }, [currentUser?.id, sessions, addNotification]);
+  }, [currentUser?.id, addNotification]);
 
   const baseWebSocket = useSessionsWebSocket(handleSessionsUpdate);
 

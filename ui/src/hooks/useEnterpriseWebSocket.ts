@@ -265,11 +265,18 @@ export function useWebSocketEvent(
     autoReconnect: true,
   });
 
+  // Store handler in ref to avoid re-running effect when handler changes
+  const handlerRef = useRef(handler);
+
+  useEffect(() => {
+    handlerRef.current = handler;
+  }, [handler]);
+
   useEffect(() => {
     if (enabled && lastMessage && lastMessage.type === eventType) {
-      handler(lastMessage.data);
+      handlerRef.current(lastMessage.data);
     }
-  }, [lastMessage, eventType, handler, enabled]);
+  }, [lastMessage, eventType, enabled]);
 }
 
 // Predefined hooks for enterprise events
