@@ -122,13 +122,20 @@ type NodeSystemInfo struct {
 }
 
 // ClusterStats represents aggregate cluster statistics
+// ClusterStatsResources represents resource totals in a JSON-friendly format
+type ClusterStatsResources struct {
+	CPU    string `json:"cpu"`
+	Memory string `json:"memory"`
+	Pods   int    `json:"pods"`
+}
+
 type ClusterStats struct {
-	TotalNodes       int                 `json:"totalNodes"`
-	ReadyNodes       int                 `json:"readyNodes"`
-	NotReadyNodes    int                 `json:"notReadyNodes"`
-	TotalCapacity    corev1.ResourceList `json:"totalCapacity"`
-	TotalAllocatable corev1.ResourceList `json:"totalAllocatable"`
-	TotalUsage       *ClusterUsage       `json:"totalUsage,omitempty"`
+	TotalNodes       int                    `json:"totalNodes"`
+	ReadyNodes       int                    `json:"readyNodes"`
+	NotReadyNodes    int                    `json:"notReadyNodes"`
+	TotalCapacity    *ClusterStatsResources `json:"totalCapacity"`
+	TotalAllocatable *ClusterStatsResources `json:"totalAllocatable"`
+	TotalUsage       *ClusterUsage          `json:"totalUsage,omitempty"`
 }
 
 // ClusterUsage represents aggregate cluster usage
@@ -485,30 +492,25 @@ func (h *NodeHandler) nodeToNodeInfo(node *corev1.Node) NodeInfo {
 
 // Helper function to calculate cluster statistics
 func (h *NodeHandler) calculateClusterStats(nodeList *corev1.NodeList) ClusterStats {
-	stats := ClusterStats{
-		TotalNodes:    len(nodeList.Items),
-		ReadyNodes:    0,
-		NotReadyNodes: 0,
-		TotalCapacity: corev1.ResourceList{
-			corev1.ResourceCPU:    newQuantity(0),
-			corev1.ResourceMemory: newQuantity(0),
-			corev1.ResourcePods:   newQuantity(0),
-		},
-		TotalAllocatable: corev1.ResourceList{
-			corev1.ResourceCPU:    newQuantity(0),
-			corev1.ResourceMemory: newQuantity(0),
-			corev1.ResourcePods:   newQuantity(0),
-		},
-	}
+	// Initialize temporary resource totals
+	totalCapacityCPU := newQuantity(0)
+	totalCapacityMemory := newQuantity(0)
+	totalCapacityPods := newQuantity(0)
+	totalAllocatableCPU := newQuantity(0)
+	totalAllocatableMemory := newQuantity(0)
+	totalAllocatablePods := newQuantity(0)
+
+	readyNodes := 0
+	notReadyNodes := 0
 
 	for _, node := range nodeList.Items {
 		// Count ready vs not ready nodes
 		for _, condition := range node.Status.Conditions {
 			if condition.Type == corev1.NodeReady {
 				if condition.Status == corev1.ConditionTrue {
-					stats.ReadyNodes++
+					readyNodes++
 				} else {
-					stats.NotReadyNodes++
+					notReadyNodes++
 				}
 				break
 			}
@@ -516,40 +518,72 @@ func (h *NodeHandler) calculateClusterStats(nodeList *corev1.NodeList) ClusterSt
 
 		// Aggregate capacity
 		if cpu, ok := node.Status.Capacity[corev1.ResourceCPU]; ok {
-			totalCPU := stats.TotalCapacity[corev1.ResourceCPU]
-			totalCPU.Add(cpu)
-			stats.TotalCapacity[corev1.ResourceCPU] = totalCPU
+			totalCapacityCPU.Add(cpu)
 		}
 		if mem, ok := node.Status.Capacity[corev1.ResourceMemory]; ok {
-			totalMem := stats.TotalCapacity[corev1.ResourceMemory]
-			totalMem.Add(mem)
-			stats.TotalCapacity[corev1.ResourceMemory] = totalMem
+			totalCapacityMemory.Add(mem)
 		}
 		if pods, ok := node.Status.Capacity[corev1.ResourcePods]; ok {
-			totalPods := stats.TotalCapacity[corev1.ResourcePods]
-			totalPods.Add(pods)
-			stats.TotalCapacity[corev1.ResourcePods] = totalPods
+			totalCapacityPods.Add(pods)
 		}
 
 		// Aggregate allocatable
 		if cpu, ok := node.Status.Allocatable[corev1.ResourceCPU]; ok {
-			allocCPU := stats.TotalAllocatable[corev1.ResourceCPU]
-			allocCPU.Add(cpu)
-			stats.TotalAllocatable[corev1.ResourceCPU] = allocCPU
+			totalAllocatableCPU.Add(cpu)
 		}
 		if mem, ok := node.Status.Allocatable[corev1.ResourceMemory]; ok {
-			allocMem := stats.TotalAllocatable[corev1.ResourceMemory]
-			allocMem.Add(mem)
-			stats.TotalAllocatable[corev1.ResourceMemory] = allocMem
+			totalAllocatableMemory.Add(mem)
 		}
 		if pods, ok := node.Status.Allocatable[corev1.ResourcePods]; ok {
-			allocPods := stats.TotalAllocatable[corev1.ResourcePods]
-			allocPods.Add(pods)
-			stats.TotalAllocatable[corev1.ResourcePods] = allocPods
+			totalAllocatablePods.Add(pods)
 		}
 	}
 
+	// Build the response with properly formatted resources
+	stats := ClusterStats{
+		TotalNodes:    len(nodeList.Items),
+		ReadyNodes:    readyNodes,
+		NotReadyNodes: notReadyNodes,
+		TotalCapacity: &ClusterStatsResources{
+			CPU:    formatCPU(totalCapacityCPU.MilliValue()),
+			Memory: formatMemory(totalCapacityMemory.Value()),
+			Pods:   int(totalCapacityPods.Value()),
+		},
+		TotalAllocatable: &ClusterStatsResources{
+			CPU:    formatCPU(totalAllocatableCPU.MilliValue()),
+			Memory: formatMemory(totalAllocatableMemory.Value()),
+			Pods:   int(totalAllocatablePods.Value()),
+		},
+	}
+
 	return stats
+}
+
+// formatCPU converts milliCPU to a readable string (e.g., "4" for 4 cores)
+func formatCPU(milliCPU int64) string {
+	cores := float64(milliCPU) / 1000.0
+	return fmt.Sprintf("%.1f", cores)
+}
+
+// formatMemory converts bytes to a readable string (e.g., "8Gi", "16Gi")
+func formatMemory(bytes int64) string {
+	const (
+		KB = 1024
+		MB = 1024 * KB
+		GB = 1024 * MB
+		TB = 1024 * GB
+	)
+
+	if bytes >= TB {
+		return fmt.Sprintf("%.1fTi", float64(bytes)/float64(TB))
+	} else if bytes >= GB {
+		return fmt.Sprintf("%.1fGi", float64(bytes)/float64(GB))
+	} else if bytes >= MB {
+		return fmt.Sprintf("%.1fMi", float64(bytes)/float64(MB))
+	} else if bytes >= KB {
+		return fmt.Sprintf("%.1fKi", float64(bytes)/float64(KB))
+	}
+	return fmt.Sprintf("%d", bytes)
 }
 
 // Helper function to create a new Quantity
