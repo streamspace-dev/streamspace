@@ -9,7 +9,7 @@ export function useSessions(user?: string) {
   return useQuery({
     queryKey: ['sessions', user],
     queryFn: () => api.listSessions(user),
-    refetchInterval: 5000, // Refetch every 5 seconds for real-time updates
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
   });
 }
 
@@ -18,7 +18,7 @@ export function useSession(id: string) {
     queryKey: ['session', id],
     queryFn: () => api.getSession(id),
     enabled: !!id,
-    refetchInterval: 3000,
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
   });
 }
 
@@ -199,7 +199,7 @@ export function useHealth() {
   return useQuery({
     queryKey: ['health'],
     queryFn: () => api.getHealth(),
-    refetchInterval: 30000, // Every 30 seconds
+    // Polling disabled to reduce unnecessary API calls - health checks are passive
   });
 }
 
@@ -207,6 +207,6 @@ export function useMetrics() {
   return useQuery({
     queryKey: ['metrics'],
     queryFn: () => api.getMetrics(),
-    refetchInterval: 10000, // Every 10 seconds
+    // Polling disabled - use WebSocket for real-time updates via useMetricsWebSocket
   });
 }
