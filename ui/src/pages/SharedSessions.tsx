@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -112,7 +112,8 @@ export default function SharedSessions() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time session updates via WebSocket with notifications
-  const baseWebSocket = useSessionsWebSocket((updatedSessions) => {
+  // Wrap callback in useCallback to prevent reconnection loop
+  const handleSessionsUpdate = useCallback((updatedSessions: any[]) => {
     if (!currentUser?.id || sessions.length === 0) return;
 
     // Update shared sessions with real-time data and show notifications for changes
@@ -144,7 +145,9 @@ export default function SharedSessions() {
     });
 
     setSessions(updatedSharedSessions);
-  });
+  }, [currentUser?.id, sessions, addNotification]);
+
+  const baseWebSocket = useSessionsWebSocket(handleSessionsUpdate);
 
   // Enhanced WebSocket with connection quality and manual reconnect
   const enhanced = useEnhancedWebSocket(baseWebSocket);

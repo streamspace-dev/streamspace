@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect, useRef, useCallback } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import {
   Box,
@@ -132,7 +132,8 @@ export default function SessionViewer() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time session updates via WebSocket with notifications
-  const baseWebSocket = useSessionsWebSocket((updatedSessions) => {
+  // Wrap callback in useCallback to prevent reconnection loop
+  const handleSessionUpdate = useCallback((updatedSessions: any[]) => {
     if (!sessionId) return;
 
     // Find this session in the update
@@ -157,7 +158,9 @@ export default function SessionViewer() {
       prevStateRef.current = updatedSession.state;
       setSession(updatedSession);
     }
-  });
+  }, [sessionId, session, addNotification]);
+
+  const baseWebSocket = useSessionsWebSocket(handleSessionUpdate);
 
   // Enhanced WebSocket with connection quality and manual reconnect
   const enhanced = useEnhancedWebSocket(baseWebSocket);

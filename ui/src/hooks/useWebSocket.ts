@@ -40,6 +40,29 @@ export function useWebSocket({
   const shouldReconnectRef = useRef(true);
   const reconnectAttemptsRef = useRef(0);
 
+  // Store callbacks in refs to avoid reconnection when they change
+  const onMessageRef = useRef(onMessage);
+  const onErrorRef = useRef(onError);
+  const onOpenRef = useRef(onOpen);
+  const onCloseRef = useRef(onClose);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onOpenRef.current = onOpen;
+  }, [onOpen]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
+
   const connect = useCallback(() => {
     try {
       const ws = new WebSocket(url);
@@ -49,13 +72,13 @@ export function useWebSocket({
         setIsConnected(true);
         setReconnectAttempts(0);
         reconnectAttemptsRef.current = 0;
-        onOpen?.();
+        onOpenRef.current?.();
       };
 
       ws.onmessage = (event) => {
         try {
           const data = JSON.parse(event.data);
-          onMessage(data);
+          onMessageRef.current(data);
         } catch (error) {
           console.error('Failed to parse WebSocket message:', error);
         }
@@ -63,13 +86,13 @@ export function useWebSocket({
 
       ws.onerror = (error) => {
         console.error('WebSocket error:', error);
-        onError?.(error);
+        onErrorRef.current?.(error);
       };
 
       ws.onclose = () => {
         // console.log(`WebSocket closed: ${url}`);
         setIsConnected(false);
-        onClose?.();
+        onCloseRef.current?.();
 
         // Attempt reconnection with exponential backoff
         const currentAttempts = reconnectAttemptsRef.current;
@@ -91,7 +114,7 @@ export function useWebSocket({
     } catch (error) {
       console.error('Failed to create WebSocket connection:', error);
     }
-  }, [url, onMessage, onError, onOpen, onClose, reconnectInterval, maxReconnectAttempts]);
+  }, [url, reconnectInterval, maxReconnectAttempts]);
 
   const sendMessage = useCallback((message: any) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
@@ -122,7 +145,8 @@ export function useWebSocket({
     return () => {
       close();
     };
-  }, [connect, close]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only run on mount/unmount, not when connect/close change
 
   return {
     isConnected,

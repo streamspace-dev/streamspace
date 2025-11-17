@@ -51,6 +51,30 @@ export function useEnterpriseWebSocket(
   const wsRef = useRef<WebSocket | null>(null);
   const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
   const shouldReconnectRef = useRef(true);
+  const reconnectAttemptsRef = useRef(0);
+
+  // Store callbacks in refs to avoid reconnection when they change
+  const onMessageRef = useRef(onMessage);
+  const onErrorRef = useRef(onError);
+  const onOpenRef = useRef(onOpen);
+  const onCloseRef = useRef(onClose);
+
+  // Update refs when callbacks change
+  useEffect(() => {
+    onMessageRef.current = onMessage;
+  }, [onMessage]);
+
+  useEffect(() => {
+    onErrorRef.current = onError;
+  }, [onError]);
+
+  useEffect(() => {
+    onOpenRef.current = onOpen;
+  }, [onOpen]);
+
+  useEffect(() => {
+    onCloseRef.current = onClose;
+  }, [onClose]);
 
   const getWebSocketUrl = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
@@ -82,10 +106,11 @@ export function useEnterpriseWebSocket(
         // console.log('[WebSocket] Connected to enterprise WebSocket');
         setIsConnected(true);
         setReconnectAttempts(0);
+        reconnectAttemptsRef.current = 0;
         shouldReconnectRef.current = true;
 
-        if (onOpen) {
-          onOpen();
+        if (onOpenRef.current) {
+          onOpenRef.current();
         }
       };
 
@@ -96,8 +121,8 @@ export function useEnterpriseWebSocket(
 
           setLastMessage(message);
 
-          if (onMessage) {
-            onMessage(message);
+          if (onMessageRef.current) {
+            onMessageRef.current(message);
           }
         } catch (error) {
           console.error('[WebSocket] Failed to parse message:', error);
@@ -108,8 +133,8 @@ export function useEnterpriseWebSocket(
         console.error('[WebSocket] Error:', error);
         setIsConnected(false);
 
-        if (onError) {
-          onError(error);
+        if (onErrorRef.current) {
+          onErrorRef.current(error);
         }
       };
 
@@ -117,25 +142,27 @@ export function useEnterpriseWebSocket(
         // console.log('[WebSocket] Connection closed');
         setIsConnected(false);
 
-        if (onClose) {
-          onClose();
+        if (onCloseRef.current) {
+          onCloseRef.current();
         }
 
         // Attempt reconnection if enabled and within retry limit
+        const currentAttempts = reconnectAttemptsRef.current;
         if (
           shouldReconnectRef.current &&
           autoReconnect &&
-          reconnectAttempts < maxReconnectAttempts
+          currentAttempts < maxReconnectAttempts
         ) {
           // console.log(
-          //   `[WebSocket] Attempting reconnection in ${reconnectInterval}ms (attempt ${reconnectAttempts + 1}/${maxReconnectAttempts})`
+          //   `[WebSocket] Attempting reconnection in ${reconnectInterval}ms (attempt ${currentAttempts + 1}/${maxReconnectAttempts})`
           // );
 
           reconnectTimeoutRef.current = setTimeout(() => {
+            reconnectAttemptsRef.current += 1;
             setReconnectAttempts((prev) => prev + 1);
             connect();
           }, reconnectInterval);
-        } else if (reconnectAttempts >= maxReconnectAttempts) {
+        } else if (currentAttempts >= maxReconnectAttempts) {
           console.error('[WebSocket] Max reconnection attempts reached');
         }
       };
@@ -145,14 +172,9 @@ export function useEnterpriseWebSocket(
     }
   }, [
     getWebSocketUrl,
-    onOpen,
-    onMessage,
-    onError,
-    onClose,
     autoReconnect,
     reconnectInterval,
     maxReconnectAttempts,
-    reconnectAttempts,
   ]);
 
   const disconnect = useCallback(() => {
@@ -201,9 +223,15 @@ export function useEnterpriseWebSocket(
   }, []); // Empty dependency array - only run on mount/unmount
 
   // Handle page visibility changes (reconnect when page becomes visible)
+  // Store isConnected in ref to avoid effect recreation
+  const isConnectedRef = useRef(isConnected);
+  useEffect(() => {
+    isConnectedRef.current = isConnected;
+  }, [isConnected]);
+
   useEffect(() => {
     const handleVisibilityChange = () => {
-      if (document.visibilityState === 'visible' && !isConnected) {
+      if (document.visibilityState === 'visible' && !isConnectedRef.current) {
         // console.log('[WebSocket] Page visible, attempting reconnection');
         connect();
       }
@@ -214,7 +242,8 @@ export function useEnterpriseWebSocket(
     return () => {
       document.removeEventListener('visibilitychange', handleVisibilityChange);
     };
-  }, [isConnected, connect]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []); // Only set up listener once on mount
 
   return {
     isConnected,

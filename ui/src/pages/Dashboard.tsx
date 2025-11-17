@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState, useRef, useCallback } from 'react';
 import { Grid, Paper, Typography, Box, Card, CardContent, Chip } from '@mui/material';
 import {
   Computer as ComputerIcon,
@@ -72,7 +72,8 @@ export default function Dashboard() {
   const { data: repositories = [], isLoading: reposLoading } = useRepositories();
 
   // Real-time sessions updates via WebSocket with notifications
-  const baseSessionsWs = useSessionsWebSocket((updatedSessions) => {
+  // Wrap callback in useCallback to prevent reconnection loop
+  const handleSessionsUpdate = useCallback((updatedSessions: Session[]) => {
     // Filter to only show current user's sessions
     const userSessions = username
       ? updatedSessions.filter((s: Session) => s.user === username)
@@ -93,15 +94,20 @@ export default function Dashboard() {
     });
 
     setSessions(userSessions);
-  });
+  }, [username, addNotification]);
+
+  const baseSessionsWs = useSessionsWebSocket(handleSessionsUpdate);
 
   // Enhanced WebSocket with connection quality and manual reconnect
   const sessionsWs = useEnhancedWebSocket(baseSessionsWs);
 
   // Real-time metrics updates via WebSocket
-  const metricsWs = useMetricsWebSocket((updatedMetrics) => {
+  // Wrap callback in useCallback to prevent reconnection loop
+  const handleMetricsUpdate = useCallback((updatedMetrics: any) => {
     setMetrics(updatedMetrics);
-  });
+  }, []);
+
+  const metricsWs = useMetricsWebSocket(handleMetricsUpdate);
 
   const stats = [
     {
