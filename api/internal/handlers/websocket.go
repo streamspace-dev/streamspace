@@ -324,25 +324,31 @@ func checkWebSocketOrigin(r *http.Request) bool {
 		return true
 	}
 
-	// Get allowed origins from environment variable
-	// Format: ALLOWED_ORIGINS=https://app.streamspace.io,https://streamspace.io
-	allowedOriginsEnv := os.Getenv("ALLOWED_ORIGINS")
+	// Get allowed origins from environment variable (same as CORS middleware)
+	// Format: CORS_ALLOWED_ORIGINS=https://app.streamspace.io,https://streamspace.io
+	allowedOriginsEnv := os.Getenv("CORS_ALLOWED_ORIGINS")
+
+	var allowedOrigins []string
 	if allowedOriginsEnv != "" {
-		allowedOrigins := strings.Split(allowedOriginsEnv, ",")
-		for _, allowed := range allowedOrigins {
-			if strings.TrimSpace(allowed) == origin {
-				return true
-			}
+		// Parse comma-separated list of origins
+		for _, allowedOrigin := range strings.Split(allowedOriginsEnv, ",") {
+			allowedOrigins = append(allowedOrigins, strings.TrimSpace(allowedOrigin))
 		}
 	}
 
-	// Check if origin matches the request host (same-origin)
-	requestHost := r.Host
-	if strings.HasPrefix(origin, "http://"+requestHost) || strings.HasPrefix(origin, "https://"+requestHost) {
-		return true
+	// If no origins specified, use localhost only for development (same as CORS middleware)
+	if len(allowedOrigins) == 0 {
+		allowedOrigins = []string{"http://localhost:3000", "http://localhost:8000"}
 	}
 
-	// Allow localhost and 127.0.0.1 for development
+	// Check if origin is in allowed list
+	for _, allowed := range allowedOrigins {
+		if origin == allowed {
+			return true
+		}
+	}
+
+	// Also allow any localhost or 127.0.0.1 origin for development
 	if strings.Contains(origin, "localhost") || strings.Contains(origin, "127.0.0.1") {
 		return true
 	}
