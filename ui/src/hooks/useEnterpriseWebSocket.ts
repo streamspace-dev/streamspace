@@ -55,6 +55,14 @@ export function useEnterpriseWebSocket(
   const getWebSocketUrl = useCallback(() => {
     const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
     const host = window.location.host;
+    const token = localStorage.getItem('token');
+
+    // Include token as query parameter for WebSocket authentication
+    // Browsers cannot send custom headers in WebSocket connections
+    if (token) {
+      return `${protocol}//${host}/api/v1/ws/enterprise?token=${encodeURIComponent(token)}`;
+    }
+
     return `${protocol}//${host}/api/v1/ws/enterprise`;
   }, []);
 
@@ -65,12 +73,6 @@ export function useEnterpriseWebSocket(
     }
 
     try {
-      const token = localStorage.getItem('token');
-      if (!token) {
-        console.error('No authentication token found');
-        return;
-      }
-
       const wsUrl = getWebSocketUrl();
       // console.log(`[WebSocket] Connecting to ${wsUrl}`);
 

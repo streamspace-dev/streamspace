@@ -158,36 +158,45 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		// WebSocket requests need special error handling (status code only, no JSON body)
 		isWebSocket := c.GetHeader("Upgrade") == "websocket" && c.GetHeader("Connection") == "Upgrade"
 
-		// Extract token from Authorization header
-		authHeader := c.GetHeader("Authorization")
-		if authHeader == "" {
-			// For WebSocket, abort without writing response (let upgrader handle it)
-			if isWebSocket {
-				c.AbortWithStatus(http.StatusUnauthorized)
-				return
-			}
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Authorization header required",
-			})
-			c.Abort()
-			return
+		var tokenString string
+
+		// For WebSocket connections, try query parameter first (browsers can't send custom headers)
+		if isWebSocket {
+			tokenString = c.Query("token")
 		}
 
-		// Check Bearer prefix
-		parts := strings.SplitN(authHeader, " ", 2)
-		if len(parts) != 2 || parts[0] != "Bearer" {
-			if isWebSocket {
-				c.AbortWithStatus(http.StatusUnauthorized)
+		// If no token from query parameter, try Authorization header
+		if tokenString == "" {
+			authHeader := c.GetHeader("Authorization")
+			if authHeader == "" {
+				// For WebSocket, abort without writing response (let upgrader handle it)
+				if isWebSocket {
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": "Authorization header required",
+				})
+				c.Abort()
 				return
 			}
-			c.JSON(http.StatusUnauthorized, gin.H{
-				"error": "Invalid authorization header format. Use: Bearer <token>",
-			})
-			c.Abort()
-			return
-		}
 
-		tokenString := parts[1]
+			// Check Bearer prefix
+			parts := strings.SplitN(authHeader, " ", 2)
+			if len(parts) != 2 || parts[0] != "Bearer" {
+				if isWebSocket {
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": "Invalid authorization header format. Use: Bearer <token>",
+				})
+				c.Abort()
+				return
+			}
+
+			tokenString = parts[1]
+		}
 
 		// Validate token
 		claims, err := jwtManager.ValidateToken(tokenString)

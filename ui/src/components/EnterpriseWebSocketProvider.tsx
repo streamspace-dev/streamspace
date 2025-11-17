@@ -69,6 +69,7 @@ export default function EnterpriseWebSocketProvider({
   enableNotifications = true,
 }: EnterpriseWebSocketProviderProps) {
   const [notifications, setNotifications] = useState<Notification[]>([]);
+  const [reconnectDismissed, setReconnectDismissed] = useState(false); // Track if reconnect banner was dismissed
 
   const addNotification = useCallback((message: string, severity: Notification['severity']) => {
     const id = `${Date.now()}-${Math.random()}`;
@@ -213,12 +214,21 @@ export default function EnterpriseWebSocketProvider({
       ))}
 
       {/* Connection status indicator (optional) */}
-      {!isConnected && reconnectAttempts > 0 && (
+      {!isConnected && reconnectAttempts > 0 && !reconnectDismissed && (
         <Snackbar
           open={true}
-          anchorOrigin={{ vertical: 'top', horizontal: 'center' }}
+          anchorOrigin={{ vertical: 'bottom', horizontal: 'left' }}
+          onClose={() => setReconnectDismissed(true)}
         >
-          <Alert severity="warning" variant="filled">
+          <Alert
+            severity="info"
+            variant="outlined"
+            onClose={() => setReconnectDismissed(true)}
+            sx={{
+              backgroundColor: 'background.paper',
+              boxShadow: 1,
+            }}
+          >
             Reconnecting... (Attempt {reconnectAttempts}/10)
           </Alert>
         </Snackbar>
