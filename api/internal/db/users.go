@@ -199,6 +199,8 @@ func (u *UserDB) GetUser(ctx context.Context, userID string) (*models.User, erro
 // GetUserByUsername retrieves a user by username
 func (u *UserDB) GetUserByUsername(ctx context.Context, username string) (*models.User, error) {
 	user := &models.User{}
+	// SECURITY FIX: Select password_hash only - this method is used for authentication
+	// Note: password_hash is needed here for VerifyPassword() to work
 	query := `
 		SELECT id, username, email, full_name, role, provider, password_hash, active, created_at, updated_at, last_login
 		FROM users
@@ -223,15 +225,17 @@ func (u *UserDB) GetUserByUsername(ctx context.Context, username string) (*model
 // GetUserByEmail retrieves a user by email address
 func (u *UserDB) GetUserByEmail(ctx context.Context, email string) (*models.User, error) {
 	user := &models.User{}
+	// SECURITY FIX: Don't expose password_hash unless absolutely necessary
+	// This method may be used for user lookups where password is not needed
 	query := `
-		SELECT id, username, email, full_name, role, provider, password_hash, active, created_at, updated_at, last_login
+		SELECT id, username, email, full_name, role, provider, active, created_at, updated_at, last_login
 		FROM users
 		WHERE email = $1
 	`
 
 	err := u.db.QueryRowContext(ctx, query, email).Scan(
 		&user.ID, &user.Username, &user.Email, &user.FullName,
-		&user.Role, &user.Provider, &user.PasswordHash, &user.Active,
+		&user.Role, &user.Provider, &user.Active,
 		&user.CreatedAt, &user.UpdatedAt, &user.LastLogin,
 	)
 	if err != nil {
@@ -293,15 +297,21 @@ func (u *UserDB) ListUsers(ctx context.Context, role, provider string, activeOnl
 	users := []*models.User{}
 	for rows.Next() {
 		user := &models.User{}
+		// BUG FIX: Return error instead of continuing - fail fast on database errors
 		err := rows.Scan(
 			&user.ID, &user.Username, &user.Email, &user.FullName,
 			&user.Role, &user.Provider, &user.Active,
 			&user.CreatedAt, &user.UpdatedAt, &user.LastLogin,
 		)
 		if err != nil {
-			continue
+			return nil, fmt.Errorf("failed to scan user row: %w", err)
 		}
 		users = append(users, user)
+	}
+
+	// BUG FIX: Check rows.Err() to catch any errors that occurred during iteration
+	if err := rows.Err(); err != nil {
+		return nil, fmt.Errorf("error iterating user rows: %w", err)
 	}
 
 	return users, nil
@@ -356,21 +366,37 @@ func (u *UserDB) UpdateUser(ctx context.Context, userID string, req *models.Upda
 
 // DeleteUser deletes a user
 func (u *UserDB) DeleteUser(ctx context.Context, userID string) error {
-	// Delete quota first
-	_, err := u.db.ExecContext(ctx, "DELETE FROM user_quotas WHERE user_id = $1", userID)
+	// BUG FIX: Use transaction to ensure atomicity - all deletes succeed or all fail
+	tx, err := u.db.BeginTx(ctx, nil)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to begin transaction: %w", err)
+	}
+	defer tx.Rollback() // Rollback if we don't commit
+
+	// Delete quota first
+	_, err = tx.ExecContext(ctx, "DELETE FROM user_quotas WHERE user_id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user quotas: %w", err)
 	}
 
 	// Delete group memberships
-	_, err = u.db.ExecContext(ctx, "DELETE FROM group_memberships WHERE user_id = $1", userID)
+	_, err = tx.ExecContext(ctx, "DELETE FROM group_memberships WHERE user_id = $1", userID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to delete group memberships: %w", err)
 	}
 
 	// Delete user
-	_, err = u.db.ExecContext(ctx, "DELETE FROM users WHERE id = $1", userID)
-	return err
+	_, err = tx.ExecContext(ctx, "DELETE FROM users WHERE id = $1", userID)
+	if err != nil {
+		return fmt.Errorf("failed to delete user: %w", err)
+	}
+
+	// Commit transaction
+	if err := tx.Commit(); err != nil {
+		return fmt.Errorf("failed to commit transaction: %w", err)
+	}
+
+	return nil
 }
 
 // UpdateLastLogin updates the user's last login timestamp

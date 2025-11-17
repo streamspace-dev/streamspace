@@ -137,7 +137,8 @@ export default function SessionViewer() {
     if (!sessionId) return;
 
     // Find this session in the update
-    const updatedSession = updatedSessions.find((s: any) => s.id === sessionId);
+    // BUG FIX: Session objects use 'name' property, not 'id'
+    const updatedSession = updatedSessions.find((s: any) => s.name === sessionId);
     if (updatedSession && session) {
       // Check if state changed
       if (updatedSession.state !== prevStateRef.current && prevStateRef.current !== null) {
@@ -416,6 +417,7 @@ export default function SessionViewer() {
       </AppBar>
 
       <Box sx={{ flex: 1, position: 'relative', bgcolor: '#000' }}>
+        {/* BUG FIX: Add sandbox attribute to prevent malicious session content from accessing parent page */}
         <iframe
           ref={iframeRef}
           src={session.status.url}
@@ -427,6 +429,7 @@ export default function SessionViewer() {
           }}
           title={`Session: ${session.name}`}
           allow="clipboard-read; clipboard-write"
+          sandbox="allow-scripts allow-same-origin allow-forms allow-popups allow-modals"
         />
       </Box>
 

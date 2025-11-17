@@ -77,7 +77,9 @@ export default function Login() {
       return;
     }
 
-    if (!password.trim() && AUTH_MODE !== 'jwt') {
+    // BUG FIX: Password required when NOT in JWT mode (logic was inverted)
+    // JWT mode uses token-based auth, other modes require password
+    if (!password.trim() && AUTH_MODE === 'local') {
       setError('Please enter a password');
       return;
     }

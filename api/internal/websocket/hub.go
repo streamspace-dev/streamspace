@@ -171,17 +171,30 @@ func (h *Hub) Run() {
 			h.mu.Unlock()
 
 		case message := <-h.broadcast:
+			// BUG FIX: Collect clients to close first, then modify map with write lock
+			// Using RLock while iterating, but need write lock to modify map
 			h.mu.RLock()
+			clientsToClose := make([]*Client, 0)
 			for client := range h.clients {
 				select {
 				case client.send <- message:
+					// Successfully sent
 				default:
-					// Client's send buffer is full, close it
-					close(client.send)
-					delete(h.clients, client)
+					// Client's send buffer is full, mark for closing
+					clientsToClose = append(clientsToClose, client)
 				}
 			}
 			h.mu.RUnlock()
+
+			// Now close and remove blocked clients with write lock
+			if len(clientsToClose) > 0 {
+				h.mu.Lock()
+				for _, client := range clientsToClose {
+					close(client.send)
+					delete(h.clients, client)
+				}
+				h.mu.Unlock()
+			}
 		}
 	}
 }

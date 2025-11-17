@@ -141,6 +141,7 @@ import (
 
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/client-go/util/retry"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -186,64 +187,198 @@ type HibernationReconciler struct {
 	DefaultIdleTime time.Duration  // Default idle timeout if not specified
 }
 
-// Reconcile checks sessions for idle timeout and triggers hibernation
+// Reconcile checks sessions for idle timeout and triggers auto-hibernation.
+//
+// This function implements the core auto-hibernation logic that saves
+// compute resources by detecting and hibernating idle sessions.
+//
+// RECONCILIATION LOGIC:
+//
+// 1. Fetch the Session resource
+// 2. Skip if session is not in "running" state
+// 3. Skip if session has no idle timeout configured
+// 4. Parse idle timeout duration
+// 5. Calculate idle duration since last activity
+// 6. If idle too long: Trigger hibernation (with conflict retry)
+// 7. If still active: Schedule next check
+// 8. If no activity timestamp: Initialize it
+//
+// IDLE DETECTION:
+//
+// Session idle duration = CurrentTime - LastActivity
+//
+// LastActivity is updated by:
+//   - API backend on HTTP requests
+//   - WebSocket proxy on VNC connections
+//   - Activity tracker on keyboard/mouse events
+//
+// If idle duration exceeds configured timeout:
+//   - Session.Spec.State = "hibernated"
+//   - SessionReconciler scales Deployment to 0
+//
+// REQUEUE STRATEGY:
+//
+// Smart requeuing minimizes reconciliation overhead:
+//   - Active session: Requeue at (IdleTimeout - IdleDuration)
+//   - Just hibernated: No requeue (state change triggers SessionReconciler)
+//   - No timestamp: Requeue after CheckInterval
+//
+// Example timeline (30 minute timeout):
+//   0:00 - User active, LastActivity = 0:00
+//   0:05 - Check: idle 5min < 30min → requeue in 25min
+//   0:30 - Check: idle 30min = 30min → HIBERNATE
+//
+// OPTIMISTIC CONCURRENCY CONTROL:
+//
+// BUG FIX: Now uses retry.RetryOnConflict to handle race conditions.
+// Previously, updating the session without a fresh fetch caused conflict errors.
+//
+// Race condition scenario:
+//   1. HibernationReconciler fetches session (resourceVersion=123)
+//   2. User updates session via API (resourceVersion=124)
+//   3. HibernationReconciler tries to update (resourceVersion=123)
+//   4. Kubernetes rejects update (conflict error)
+//
+// Solution:
+//   - Fetch fresh copy before update
+//   - Retry up to 3 times on conflict
+//   - Latest changes always win
+//
+// COST SAVINGS CALCULATION:
+//
+// Metrics are recorded for cost analysis:
+//   - session_hibernations_total{reason="idle"}: Count of auto-hibernations
+//   - session_idle_duration_seconds: How long sessions were idle
+//
+// These metrics help:
+//   - Measure cost savings from auto-hibernation
+//   - Tune idle timeout values
+//   - Identify users with long idle periods
+//
+// EDGE CASES:
+//
+// 1. Session without LastActivity:
+//    - Initialize to current time
+//    - Prevents immediate hibernation of new sessions
+//
+// 2. Invalid IdleTimeout format:
+//    - Log error and use DefaultIdleTime
+//    - Continues monitoring instead of failing
+//
+// 3. Clock skew (LastActivity in future):
+//    - idleDuration would be negative
+//    - Won't hibernate (negative < timeout)
+//    - Self-correcting as time progresses
+//
+// 4. Session deleted during reconciliation:
+//    - Get() returns NotFound error
+//    - Ignored gracefully (client.IgnoreNotFound)
+//
+// SECURITY CONSIDERATIONS:
+//
+// LastActivity timestamp trusts the API backend:
+//   - API must authenticate users before updating LastActivity
+//   - Malicious updates could prevent hibernation
+//   - TODO: Add timestamp validation (max age check)
+//
+// FUTURE ENHANCEMENTS:
+//
+// TODO: Add hibernation scheduling:
+//   - Hibernate all sessions at specific times (e.g., 2 AM)
+//   - Support cron-style schedules
+//   - Override idle timeout during business hours
+//
+// TODO: Add wake-on-access:
+//   - Automatically wake sessions on incoming requests
+//   - Seamless user experience (transparent hibernation)
+//
+// TODO: Add hibernation notifications:
+//   - Warn users before hibernation (e.g., 5 min warning)
+//   - Send email/webhook on hibernation
 func (r *HibernationReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ctrl.Result, error) {
 	log := log.FromContext(ctx)
 
-	// Fetch the Session
+	// Fetch the Session resource from the cluster
 	var session streamv1alpha1.Session
 	if err := r.Get(ctx, req.NamespacedName, &session); err != nil {
+		// Ignore NotFound errors - session was deleted, nothing to hibernate
+		// Return other errors for retry
 		return ctrl.Result{}, client.IgnoreNotFound(err)
 	}
 
-	// Skip if session is not running
+	// Skip sessions that are not running
+	// Hibernated/terminated sessions don't need idle checking
 	if session.Spec.State != "running" {
 		return ctrl.Result{}, nil
 	}
 
-	// Skip if no idle timeout configured
+	// Skip sessions without idle timeout configured
+	// Empty string means auto-hibernation is disabled
 	if session.Spec.IdleTimeout == "" {
-		// Requeue after check interval to keep monitoring
+		// Still requeue to keep monitoring in case timeout is added later
 		return ctrl.Result{RequeueAfter: r.CheckInterval}, nil
 	}
 
-	// Parse idle timeout
+	// Parse idle timeout duration from string format (e.g., "30m", "1h")
 	idleTimeout, err := time.ParseDuration(session.Spec.IdleTimeout)
 	if err != nil {
+		// Invalid format - log error but continue with default
+		// This prevents broken configurations from disabling hibernation
 		log.Error(err, "Failed to parse idle timeout", "timeout", session.Spec.IdleTimeout)
-		// Use default
-		idleTimeout = r.DefaultIdleTime
+		idleTimeout = r.DefaultIdleTime // Fallback to default (30 minutes)
 	}
 
-	// Check if session has been idle too long
+	// Check if LastActivity timestamp exists and is set
 	if session.Status.LastActivity != nil {
+		// Calculate how long the session has been idle
 		idleDuration := time.Since(session.Status.LastActivity.Time)
 
+		// Check if idle duration exceeds configured timeout
 		if idleDuration > idleTimeout {
+			// Session has been idle too long - trigger hibernation
 			log.Info("Session idle timeout reached, triggering hibernation",
 				"session", session.Name,
 				"idleDuration", idleDuration,
 				"idleTimeout", idleTimeout,
 			)
 
-			// Update session state to hibernated
-			session.Spec.State = "hibernated"
-			if err := r.Update(ctx, &session); err != nil {
+			// BUG FIX: Use retry.RetryOnConflict to handle race conditions
+			// Previously updated session without fresh fetch, causing conflict errors
+			// Multiple reconciliations or user updates could cause version conflicts
+			err := retry.RetryOnConflict(retry.DefaultRetry, func() error {
+				// Fetch fresh copy of session to get latest resourceVersion
+				// This ensures we're updating the most recent version
+				freshSession := &streamv1alpha1.Session{}
+				if err := r.Get(ctx, client.ObjectKeyFromObject(&session), freshSession); err != nil {
+					return err
+				}
+
+				// Update state to hibernated
+				// This triggers SessionReconciler to scale Deployment to 0
+				freshSession.Spec.State = "hibernated"
+				return r.Update(ctx, freshSession)
+			})
+
+			if err != nil {
 				log.Error(err, "Failed to update session state to hibernated")
 				return ctrl.Result{}, err
 			}
 
-			// Record hibernation metrics
+			// Record hibernation metrics for cost analysis
+			// Label "idle" distinguishes auto-hibernation from manual
 			metrics.RecordHibernation(session.Namespace, "idle")
 			metrics.ObserveIdleDuration(session.Namespace, idleDuration.Seconds())
 
 			log.Info("Session hibernated due to idle timeout", "session", session.Name)
+			// No requeue needed - state change triggers SessionReconciler
 			return ctrl.Result{}, nil
 		}
 
-		// Calculate next check time
+		// Session is still active (idle < timeout)
+		// Calculate when to check again (when timeout will be reached)
 		nextCheck := idleTimeout - idleDuration
 		if nextCheck < r.CheckInterval {
+			// Don't check more frequently than CheckInterval
 			nextCheck = r.CheckInterval
 		}
 
@@ -253,10 +388,13 @@ func (r *HibernationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 			"nextCheck", nextCheck,
 		)
 
+		// Requeue at calculated time to check if idle timeout is reached
 		return ctrl.Result{RequeueAfter: nextCheck}, nil
 	}
 
-	// No last activity timestamp yet, initialize it
+	// No last activity timestamp exists yet
+	// This happens for newly created sessions
+	// Initialize to current time to start tracking idle duration
 	now := metav1.Now()
 	session.Status.LastActivity = &now
 	if err := r.Status().Update(ctx, &session); err != nil {
@@ -264,21 +402,84 @@ func (r *HibernationReconciler) Reconcile(ctx context.Context, req ctrl.Request)
 		return ctrl.Result{}, err
 	}
 
+	// Requeue after check interval to start monitoring
 	return ctrl.Result{RequeueAfter: r.CheckInterval}, nil
 }
 
-// SetupWithManager sets up the controller with the Manager
+// SetupWithManager registers the HibernationReconciler with the controller manager.
+//
+// This function configures:
+//   - Primary resource to watch (Session)
+//   - Controller name ("hibernation")
+//   - Default configuration values
+//
+// WATCH CONFIGURATION:
+//
+// For(&streamv1alpha1.Session{}):
+//   - Reconcile when Session is created, updated, or deleted
+//   - Filters sessions by state (only "running" sessions checked)
+//
+// Named("hibernation"):
+//   - Gives controller a unique name for logging and metrics
+//   - Prevents conflicts with SessionReconciler (also watches Sessions)
+//
+// MULTIPLE CONTROLLERS ON SAME RESOURCE:
+//
+// Both SessionReconciler and HibernationReconciler watch Sessions:
+//   - SessionReconciler: Manages Kubernetes resources (Deployment, Service, etc.)
+//   - HibernationReconciler: Manages idle timeout and auto-hibernation
+//
+// This works because:
+//   - Different controller names ("session" vs "hibernation")
+//   - Different reconciliation logic
+//   - Both are idempotent
+//
+// DEFAULT CONFIGURATION:
+//
+// CheckInterval (default: 1 minute):
+//   - How often to check sessions for idle timeout
+//   - Lower values: More responsive, higher overhead
+//   - Higher values: Less overhead, slower detection
+//
+// DefaultIdleTime (default: 30 minutes):
+//   - Fallback when Session.Spec.IdleTimeout is invalid
+//   - Applied when parse error occurs
+//   - Prevents broken configs from disabling hibernation
+//
+// CONFIGURATION OVERRIDE:
+//
+// Defaults can be overridden when creating the reconciler:
+//
+//   reconciler := &HibernationReconciler{
+//       Client: mgr.GetClient(),
+//       Scheme: mgr.GetScheme(),
+//       CheckInterval: 5 * time.Minute,  // Custom check interval
+//       DefaultIdleTime: 1 * time.Hour,   // Custom default timeout
+//   }
+//
+// FUTURE ENHANCEMENTS:
+//
+// TODO: Add event filtering predicates:
+//   - Only reconcile running sessions (skip hibernated/terminated)
+//   - Reduce unnecessary reconciliation loops
+//   - Improve performance at scale
+//
+// TODO: Add leader election configuration:
+//   - Ensure only one replica processes hibernation
+//   - Prevent duplicate hibernation events
+//   - Support HA controller deployments
 func (r *HibernationReconciler) SetupWithManager(mgr ctrl.Manager) error {
-	// Set defaults if not configured
+	// Set default values if not configured
+	// This ensures the controller works even if values aren't explicitly set
 	if r.CheckInterval == 0 {
-		r.CheckInterval = 1 * time.Minute
+		r.CheckInterval = 1 * time.Minute // Check every minute by default
 	}
 	if r.DefaultIdleTime == 0 {
-		r.DefaultIdleTime = 30 * time.Minute
+		r.DefaultIdleTime = 30 * time.Minute // 30 minute default idle timeout
 	}
 
 	return ctrl.NewControllerManagedBy(mgr).
 		For(&streamv1alpha1.Session{}).
-		Named("hibernation").
+		Named("hibernation"). // Unique name to distinguish from SessionReconciler
 		Complete(r)
 }

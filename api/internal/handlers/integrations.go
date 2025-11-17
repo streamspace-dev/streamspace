@@ -42,8 +42,10 @@ package handlers
 import (
 	"bytes"
 	"crypto/hmac"
+	"crypto/rand"
 	"crypto/sha256"
 	"database/sql"
+	"encoding/base64"
 	"encoding/hex"
 	"encoding/json"
 	"fmt"
@@ -886,8 +888,14 @@ func (h *IntegrationsHandler) validateWebhookURL(urlStr string) error {
 }
 
 func (h *IntegrationsHandler) generateWebhookSecret() string {
-	// Generate a random 32-byte secret
-	return fmt.Sprintf("whsec_%d", time.Now().UnixNano())
+	// SECURITY FIX: Use crypto/rand for secure random generation
+	// Previous implementation used timestamp which is predictable
+	b := make([]byte, 32)
+	if _, err := rand.Read(b); err != nil {
+		// Should never happen, but fail safely if it does
+		panic("failed to generate secure random secret: " + err.Error())
+	}
+	return "whsec_" + base64.URLEncoding.EncodeToString(b)
 }
 
 func (h *IntegrationsHandler) deliverWebhook(webhook Webhook, event WebhookEvent) (bool, int, string, error) {

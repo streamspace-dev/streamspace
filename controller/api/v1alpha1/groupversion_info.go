@@ -1,6 +1,6 @@
 // Package v1alpha1 contains API Schema definitions for the stream v1alpha1 API group
 // +kubebuilder:object:generate=true
-// +groupName=stream.streamspace.io
+// +groupName=stream.space
 package v1alpha1
 
 import (
@@ -10,7 +10,8 @@ import (
 
 var (
 	// GroupVersion is group version used to register these objects
-	GroupVersion = schema.GroupVersion{Group: "stream.streamspace.io", Version: "v1alpha1"}
+	// IMPORTANT: Must match the API group in CRD manifests (stream.space)
+	GroupVersion = schema.GroupVersion{Group: "stream.space", Version: "v1alpha1"}
 
 	// SchemeBuilder is used to add go types to the GroupVersionKind scheme
 	SchemeBuilder = &scheme.Builder{GroupVersion: GroupVersion}

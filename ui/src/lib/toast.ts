@@ -85,21 +85,35 @@ class ToastManager {
       cursor: pointer;
     `;
 
-    toast.innerHTML = `
-      <span style="font-size: 18px; font-weight: bold;">${icon}</span>
-      <span style="flex: 1;">${message}</span>
-      <button style="
-        background: none;
-        border: none;
-        color: inherit;
-        font-size: 16px;
-        cursor: pointer;
-        padding: 0;
-        margin-left: 8px;
-        opacity: 0.7;
-        transition: opacity 0.2s;
-      " onmouseover="this.style.opacity='1'" onmouseout="this.style.opacity='0.7'">✕</button>
+    // Create elements safely using DOM API to prevent XSS attacks
+    // SECURITY: Using textContent instead of innerHTML to prevent XSS injection
+    const iconSpan = document.createElement('span');
+    iconSpan.textContent = icon;
+    iconSpan.style.cssText = 'font-size: 18px; font-weight: bold;';
+
+    const messageSpan = document.createElement('span');
+    messageSpan.textContent = message;  // Safe - no HTML parsing
+    messageSpan.style.cssText = 'flex: 1;';
+
+    const closeButton = document.createElement('button');
+    closeButton.textContent = '✕';
+    closeButton.style.cssText = `
+      background: none;
+      border: none;
+      color: inherit;
+      font-size: 16px;
+      cursor: pointer;
+      padding: 0;
+      margin-left: 8px;
+      opacity: 0.7;
+      transition: opacity 0.2s;
     `;
+    closeButton.onmouseover = () => closeButton.style.opacity = '1';
+    closeButton.onmouseout = () => closeButton.style.opacity = '0.7';
+
+    toast.appendChild(iconSpan);
+    toast.appendChild(messageSpan);
+    toast.appendChild(closeButton);
 
     // Add animation styles if not present
     if (!document.getElementById('toast-animations')) {

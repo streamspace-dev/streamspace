@@ -638,9 +638,12 @@ func (h *NotificationsHandler) sendWebhookNotification(prefs map[string]interfac
 	payloadJSON, _ := json.Marshal(payload)
 
 	// Create signature (HMAC-SHA256)
+	// SECURITY: WEBHOOK_SECRET must be set for production use
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
 	if webhookSecret == "" {
-		webhookSecret = "default-secret"
+		// CRITICAL: Never use default secrets in production
+		log.Println("ERROR: WEBHOOK_SECRET not set - webhook signatures are insecure!")
+		return fmt.Errorf("WEBHOOK_SECRET environment variable must be set for security")
 	}
 
 	mac := hmac.New(sha256.New, []byte(webhookSecret))

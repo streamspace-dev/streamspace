@@ -183,10 +183,10 @@ func NewDatabase(config Config) (*Database, error) {
 
 	// Configure connection pool for optimal performance
 	// These settings balance performance with resource usage
-	db.SetMaxOpenConns(25)                // Maximum number of open connections to the database
-	db.SetMaxIdleConns(5)                 // Maximum number of connections in the idle connection pool
-	db.SetConnMaxLifetime(5 * 60 * 1000)  // Maximum amount of time a connection may be reused (5 minutes)
-	db.SetConnMaxIdleTime(1 * 60 * 1000)  // Maximum amount of time a connection may be idle (1 minute)
+	db.SetMaxOpenConns(25)                     // Maximum number of open connections to the database
+	db.SetMaxIdleConns(5)                      // Maximum number of connections in the idle connection pool
+	db.SetConnMaxLifetime(5 * time.Minute)     // Maximum amount of time a connection may be reused (5 minutes)
+	db.SetConnMaxIdleTime(1 * time.Minute)     // Maximum amount of time a connection may be idle (1 minute)
 
 	// Test connection
 	if err := db.Ping(); err != nil {

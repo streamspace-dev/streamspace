@@ -81,7 +81,7 @@ var _ = Describe("Session Controller", func() {
 			deployment := &appsv1.Deployment{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "ss-test-session",
+					Name:      "ss-testuser-test-template",
 					Namespace: "default",
 				}, deployment)
 			}, timeout, interval).Should(Succeed())
@@ -108,7 +108,7 @@ var _ = Describe("Session Controller", func() {
 			deployment := &appsv1.Deployment{}
 			Eventually(func() int32 {
 				_ = k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "ss-test-session",
+					Name:      "ss-testuser-test-template",
 					Namespace: "default",
 				}, deployment)
 				if deployment.Spec.Replicas != nil {
@@ -124,7 +124,7 @@ var _ = Describe("Session Controller", func() {
 			service := &corev1.Service{}
 			Eventually(func() error {
 				return k8sClient.Get(ctx, types.NamespacedName{
-					Name:      "ss-test-session-svc",
+					Name:      "ss-testuser-test-template-svc",
 					Namespace: "default",
 				}, service)
 			}, timeout, interval).Should(Succeed())
@@ -184,10 +184,11 @@ var _ = Describe("Session Controller State Transitions", func() {
 		Expect(k8sClient.Update(ctx, session)).To(Succeed())
 
 		// Wait for deployment to scale up
+		// BUG FIX: Use correct deployment name "ss-{user}-{template}"
 		deployment := &appsv1.Deployment{}
 		Eventually(func() int32 {
 			_ = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "ss-test-session",
+				Name:      "ss-testuser-test-template",
 				Namespace: "default",
 			}, deployment)
 			if deployment.Spec.Replicas != nil {
@@ -205,9 +206,10 @@ var _ = Describe("Session Controller State Transitions", func() {
 		Expect(k8sClient.Update(ctx, session)).To(Succeed())
 
 		// Wait for deployment to scale down
+		// BUG FIX: Use correct deployment name
 		Eventually(func() int32 {
 			_ = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "ss-test-session",
+				Name:      "ss-testuser-test-template",
 				Namespace: "default",
 			}, deployment)
 			if deployment.Spec.Replicas != nil {
@@ -225,9 +227,10 @@ var _ = Describe("Session Controller State Transitions", func() {
 		Expect(k8sClient.Update(ctx, session)).To(Succeed())
 
 		// Wait for deployment to scale up again
+		// BUG FIX: Use correct deployment name
 		Eventually(func() int32 {
 			_ = k8sClient.Get(ctx, types.NamespacedName{
-				Name:      "ss-test-session",
+				Name:      "ss-testuser-test-template",
 				Namespace: "default",
 			}, deployment)
 			if deployment.Spec.Replicas != nil {

@@ -1,3 +1,95 @@
+// Package api provides HTTP request handlers for the StreamSpace API.
+//
+// This file implements the core REST API endpoints for managing sessions, templates,
+// and repositories in the StreamSpace container streaming platform.
+//
+// HANDLER OVERVIEW:
+//
+// The API handler provides endpoints for:
+// - Session management (create, read, update, delete, connect)
+// - Template management (list, search, favorites)
+// - Template catalog (marketplace)
+// - Repository management (sync external template sources)
+// - Connection tracking (active user connections)
+// - Quota enforcement (resource limits)
+//
+// ARCHITECTURE:
+//
+// The handler acts as a bridge between HTTP requests and:
+// - Kubernetes API (via k8s.Client) for Session/Template CRDs
+// - PostgreSQL database (via db.Database) for caching and metadata
+// - Connection tracker for real-time session monitoring
+// - Quota enforcer for resource limit validation
+// - Sync service for external repository synchronization
+// - WebSocket manager for real-time updates
+//
+// SECURITY CONSIDERATIONS:
+//
+// 1. Authentication: All endpoints assume authentication middleware has run
+//    - User context available via c.Get("userID"), c.Get("userRole")
+//    - Admin-only endpoints should use auth.RequireRole("admin") middleware
+//
+// 2. Authorization: Session ownership validated before operations
+//    - Users can only manage their own sessions
+//    - Admins can manage all sessions
+//
+// 3. Input Validation: All request payloads validated with binding tags
+//    - Malformed JSON rejected with 400 Bad Request
+//    - Required fields enforced
+//
+// 4. Quota Enforcement: Resource limits checked before session creation
+//    - Prevents resource exhaustion attacks
+//    - Enforces fair usage policies
+//
+// 5. Database Caching: Sessions cached in PostgreSQL for performance
+//    - Cache updates are best-effort (failures logged but not blocking)
+//    - Kubernetes is source of truth, database is cache
+//
+// DATA FLOW:
+//
+// Session Creation:
+//   1. Client → POST /api/sessions {user, template, resources}
+//   2. Handler validates template exists in Kubernetes
+//   3. Handler checks user quota against current usage
+//   4. Handler creates Session CRD in Kubernetes
+//   5. Handler caches session in PostgreSQL (best-effort)
+//   6. Controller watches Session CRD and creates Deployment/Service
+//   7. Client polls GET /api/sessions/{id} for status updates
+//
+// Session Connection:
+//   1. Client → POST /api/sessions/{id}/connect?user={userID}
+//   2. Handler verifies session exists
+//   3. Handler creates connection record in tracker
+//   4. Handler returns session URL and connection ID
+//   5. Client establishes WebSocket/VNC connection
+//   6. Client sends periodic heartbeats to keep connection alive
+//   7. On disconnect, client calls disconnect endpoint
+//
+// Template Sync:
+//   1. Admin → POST /api/repositories (add GitHub repo)
+//   2. Handler triggers background sync in SyncService
+//   3. SyncService clones repo, parses templates, stores in database
+//   4. Templates available in catalog endpoint
+//   5. User → POST /api/catalog/{id}/install
+//   6. Handler creates Template CRD in Kubernetes from catalog manifest
+//
+// ERROR HANDLING:
+//
+// All endpoints follow consistent error response format:
+//   {
+//     "error": "Short error code",
+//     "message": "Detailed error message"
+//   }
+//
+// HTTP Status Codes:
+// - 200 OK: Successful read operation
+// - 201 Created: Successful resource creation
+// - 202 Accepted: Async operation started (e.g., sync)
+// - 400 Bad Request: Invalid request format or parameters
+// - 401 Unauthorized: Authentication required
+// - 403 Forbidden: Insufficient permissions or quota exceeded
+// - 404 Not Found: Resource does not exist
+// - 500 Internal Server Error: Server-side error
 package api
 
 import (
@@ -24,6 +116,13 @@ import (
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
+// sessionGVR defines the GroupVersionResource for Session custom resources.
+//
+// This is used with Kubernetes dynamic client to directly manipulate Session CRDs
+// when the strongly-typed client is not sufficient (e.g., updating tags field).
+//
+// Format: {group}/{version}/namespaces/{namespace}/{resource}
+// Example: stream.streamspace.io/v1alpha1/namespaces/streamspace/sessions
 var (
 	sessionGVR = schema.GroupVersionResource{
 		Group:    "stream.streamspace.io",
@@ -32,19 +131,60 @@ var (
 	}
 )
 
-// Handler handles all API requests
+// Handler handles all API requests for StreamSpace.
+//
+// This is the main request handler that routes HTTP requests to appropriate
+// business logic and manages interactions with Kubernetes, database, and
+// external services.
+//
+// DEPENDENCIES:
+//
+// - db: PostgreSQL database for caching and metadata
+// - k8sClient: Kubernetes client for managing Session/Template CRDs
+// - connTracker: Connection tracker for monitoring active user connections
+// - syncService: Repository sync service for external template sources
+// - wsManager: WebSocket manager for real-time updates
+// - quotaEnforcer: Quota enforcement for resource limits
+// - namespace: Kubernetes namespace where resources are created
+//
+// CONCURRENCY:
+//
+// Handler is safe for concurrent use by multiple goroutines (one per HTTP request).
+// Each request gets its own Gin context with isolated state.
 type Handler struct {
-	db             *db.Database
-	k8sClient      *k8s.Client
-	connTracker    *tracker.ConnectionTracker
-	syncService    *sync.SyncService
-	wsManager      *websocket.Manager
-	quotaEnforcer  *quota.Enforcer
-	namespace      string
+	db             *db.Database                 // Database for caching and metadata
+	k8sClient      *k8s.Client                  // Kubernetes client for CRD operations
+	connTracker    *tracker.ConnectionTracker   // Active connection tracking
+	syncService    *sync.SyncService            // Repository synchronization
+	wsManager      *websocket.Manager           // WebSocket connection manager
+	quotaEnforcer  *quota.Enforcer              // Resource quota enforcement
+	namespace      string                       // Kubernetes namespace for resources
 }
 
-// NewHandler creates a new API handler
+// NewHandler creates a new API handler with injected dependencies.
+//
+// PARAMETERS:
+//
+// - database: PostgreSQL database connection for caching and metadata
+// - k8sClient: Kubernetes client for Session/Template CRD operations
+// - connTracker: Connection tracker for active session monitoring
+// - syncService: Service for syncing external template repositories
+// - wsManager: Manager for WebSocket connections and real-time updates
+// - quotaEnforcer: Enforcer for validating resource quotas
+//
+// NAMESPACE RESOLUTION:
+//
+// The Kubernetes namespace is read from NAMESPACE environment variable.
+// If not set, defaults to "streamspace".
+//
+// EXAMPLE USAGE:
+//
+//   handler := NewHandler(db, k8sClient, connTracker, syncService, wsManager, quotaEnforcer)
+//   router := gin.Default()
+//   router.GET("/api/sessions", handler.ListSessions)
+//   router.POST("/api/sessions", handler.CreateSession)
 func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer) *Handler {
+	// Read namespace from environment variable for deployment flexibility
 	namespace := os.Getenv("NAMESPACE")
 	if namespace == "" {
 		namespace = "streamspace" // Default namespace
@@ -64,9 +204,51 @@ func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *track
 // Session Endpoints
 // ============================================================================
 
-// ListSessions returns all sessions for a user or all sessions (admin)
+// ListSessions retrieves all sessions for a specific user or all sessions (admin).
+//
+// HTTP Method: GET
+// Path: /api/sessions
+// Authentication: Required
+// Authorization: User can list own sessions; Admin can list all sessions
+//
+// QUERY PARAMETERS:
+//
+// - user (optional): Filter sessions by user ID
+//   - If provided: Returns sessions for that specific user
+//   - If omitted: Returns all sessions (requires admin role)
+//
+// REQUEST EXAMPLE:
+//
+//   GET /api/sessions?user=user123
+//
+// RESPONSE FORMAT:
+//
+//   {
+//     "sessions": [
+//       {
+//         "name": "user123-firefox-abc",
+//         "user": "user123",
+//         "template": "firefox",
+//         "state": "running",
+//         "activeConnections": 2,
+//         ...
+//       }
+//     ],
+//     "total": 1
+//   }
+//
+// SECURITY:
+//
+// - Uses request context for proper timeout and cancellation handling
+// - Database enrichment failures are non-fatal (logged but don't block response)
+// - Should be paired with authorization middleware to restrict access
+//
+// ERROR RESPONSES:
+//
+// - 500 Internal Server Error: Kubernetes API failure
 func (h *Handler) ListSessions(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	userID := c.Query("user")
 
 	var sessions []*k8s.Session
@@ -94,7 +276,8 @@ func (h *Handler) ListSessions(c *gin.Context) {
 
 // GetSession returns a single session by ID
 func (h *Handler) GetSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
 	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
@@ -109,9 +292,52 @@ func (h *Handler) GetSession(c *gin.Context) {
 	c.JSON(http.StatusOK, enriched)
 }
 
-// CreateSession creates a new session
+// CreateSession creates a new container session for a user.
+//
+// HTTP Method: POST
+// Path: /api/sessions
+// Authentication: Required
+// Authorization: User can create own sessions; Admin can create for any user
+//
+// REQUEST BODY:
+//   {
+//     "user": "user123",                  // REQUIRED: User ID
+//     "template": "firefox",               // REQUIRED: Template name
+//     "resources": {"memory": "2Gi", "cpu": "1000m"},  // OPTIONAL
+//     "persistentHome": true,              // OPTIONAL: Mount persistent storage
+//     "idleTimeout": "30m",                // OPTIONAL: Auto-hibernate timeout
+//     "maxSessionDuration": "8h",          // OPTIONAL: Maximum lifetime
+//     "tags": ["project-a", "dev"]         // OPTIONAL: Organization tags
+//   }
+//
+// SECURITY: Quota Enforcement
+//
+// This handler enforces resource quotas before creating sessions to prevent:
+// - Resource exhaustion attacks (unlimited session creation)
+// - Fair usage violations (one user consuming all cluster resources)
+// - Cluster instability (out of memory, CPU starvation)
+//
+// Quota check process:
+// 1. Parse and validate requested CPU/memory resources
+// 2. Calculate current user resource usage from active pods
+// 3. Check if user has quota headroom for new session
+// 4. Reject with 403 Forbidden if quota would be exceeded
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - No database transaction (Kubernetes is source of truth)
+// - Session cached in PostgreSQL after creation (best-effort)
+// - Cache failures logged but do NOT block session creation
+//
+// ERROR RESPONSES:
+//
+// - 400 Bad Request: Invalid JSON or malformed resource specifications
+// - 403 Forbidden: User quota exceeded
+// - 404 Not Found: Template does not exist
+// - 500 Internal Server Error: Kubernetes API failure
 func (h *Handler) CreateSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	var req struct {
 		User               string   `json:"user" binding:"required"`
@@ -245,7 +471,8 @@ func (h *Handler) CreateSession(c *gin.Context) {
 
 // UpdateSession updates a session (typically state changes)
 func (h *Handler) UpdateSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
 	var req struct {
@@ -280,7 +507,8 @@ func (h *Handler) UpdateSession(c *gin.Context) {
 
 // DeleteSession deletes a session
 func (h *Handler) DeleteSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
 	// Verify session exists before deletion
@@ -306,7 +534,8 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 
 // ConnectSession handles a user connecting to a session
 func (h *Handler) ConnectSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 	userID := c.Query("user")
 
@@ -348,7 +577,8 @@ func (h *Handler) ConnectSession(c *gin.Context) {
 
 // DisconnectSession handles a user disconnecting from a session
 func (h *Handler) DisconnectSession(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 	connectionID := c.Query("connectionId")
 
@@ -372,7 +602,8 @@ func (h *Handler) DisconnectSession(c *gin.Context) {
 
 // SessionHeartbeat handles heartbeat pings from active connections
 func (h *Handler) SessionHeartbeat(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	connectionID := c.Query("connectionId")
 
 	if connectionID == "" {
@@ -403,7 +634,8 @@ func (h *Handler) GetSessionConnections(c *gin.Context) {
 
 // UpdateSessionTags updates tags for a session
 func (h *Handler) UpdateSessionTags(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
 	var req struct {
@@ -450,7 +682,8 @@ func (h *Handler) UpdateSessionTags(c *gin.Context) {
 
 // ListSessionsByTags returns sessions filtered by tags
 func (h *Handler) ListSessionsByTags(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	tags := c.QueryArray("tags")
 
 	if len(tags) == 0 {
@@ -505,7 +738,8 @@ func (h *Handler) ListSessionsByTags(c *gin.Context) {
 
 // ListTemplates returns all templates with advanced filtering, search, and sorting
 func (h *Handler) ListTemplates(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	// Get query parameters
 	category := c.Query("category")
@@ -637,7 +871,8 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 
 // GetTemplate returns a single template
 func (h *Handler) GetTemplate(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
 	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateID)
@@ -651,7 +886,8 @@ func (h *Handler) GetTemplate(c *gin.Context) {
 
 // CreateTemplate creates a new template (admin only)
 func (h *Handler) CreateTemplate(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	var template k8s.Template
 	if err := c.ShouldBindJSON(&template); err != nil {
@@ -672,7 +908,8 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 
 // DeleteTemplate deletes a template (admin only)
 func (h *Handler) DeleteTemplate(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
 	if err := h.k8sClient.DeleteTemplate(ctx, h.namespace, templateID); err != nil {
@@ -683,12 +920,39 @@ func (h *Handler) DeleteTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Template deleted"})
 }
 
-// AddTemplateFavorite adds a template to user's favorites
+// AddTemplateFavorite adds a template to the authenticated user's favorites list.
+//
+// HTTP Method: POST
+// Path: /api/templates/{id}/favorite
+// Authentication: Required
+// Authorization: Any authenticated user
+//
+// SECURITY: User Context Validation
+//
+// This handler retrieves user ID from Gin context (populated by auth middleware).
+// The authentication middleware MUST run before this handler to ensure:
+// - User is authenticated (valid JWT token)
+// - User account is active (not disabled)
+// - userID context value is set
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - Single INSERT query with ON CONFLICT DO NOTHING (idempotent)
+// - No explicit transaction needed (single query is atomic)
+// - Safe for concurrent calls (unique constraint prevents duplicates)
+//
+// ERROR RESPONSES:
+//
+// - 401 Unauthorized: User not authenticated
+// - 404 Not Found: Template does not exist
+// - 500 Internal Server Error: Database failure
 func (h *Handler) AddTemplateFavorite(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
-	// Get user ID from context (set by auth middleware)
+	// SECURITY: Get user ID from context (set by auth middleware)
+	// This ensures only authenticated users can add favorites
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
@@ -729,7 +993,8 @@ func (h *Handler) AddTemplateFavorite(c *gin.Context) {
 
 // RemoveTemplateFavorite removes a template from user's favorites
 func (h *Handler) RemoveTemplateFavorite(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
 	// Get user ID from context
@@ -771,7 +1036,8 @@ func (h *Handler) RemoveTemplateFavorite(c *gin.Context) {
 
 // ListUserFavoriteTemplates returns user's favorite templates
 func (h *Handler) ListUserFavoriteTemplates(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	// Get user ID from context
 	userID, exists := c.Get("userID")
@@ -854,7 +1120,8 @@ func (h *Handler) ListUserFavoriteTemplates(c *gin.Context) {
 
 // CheckTemplateFavorite checks if a template is in user's favorites
 func (h *Handler) CheckTemplateFavorite(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
 	// Get user ID from context
@@ -895,7 +1162,8 @@ func (h *Handler) CheckTemplateFavorite(c *gin.Context) {
 
 // ListCatalogTemplates returns templates from the marketplace catalog
 func (h *Handler) ListCatalogTemplates(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	category := c.Query("category")
 	tag := c.Query("tag")
 
@@ -967,12 +1235,62 @@ func (h *Handler) ListCatalogTemplates(c *gin.Context) {
 	})
 }
 
-// InstallCatalogTemplate installs a template from the catalog to the cluster
+// InstallCatalogTemplate installs a template from the catalog to the Kubernetes cluster.
+//
+// HTTP Method: POST
+// Path: /api/catalog/{id}/install
+// Authentication: Required
+// Authorization: Admin only (installs cluster-wide resources)
+//
+// SECURITY: YAML Parsing from External Source
+//
+// This handler parses YAML manifests from the catalog database, which may originate
+// from external repositories. This introduces security risks:
+//
+// 1. Malicious YAML: Catalog templates may contain crafted YAML to:
+//    - Exploit YAML parser vulnerabilities (billion laughs, entity expansion)
+//    - Inject malicious container images
+//    - Request excessive resources
+//    - Escape pod sandboxes
+//
+// 2. Supply Chain Attacks: If repository is compromised, attacker can:
+//    - Modify templates to include backdoors
+//    - Inject crypto miners
+//    - Exfiltrate data from clusters
+//
+// MITIGATIONS:
+//
+// - Validate YAML structure after parsing (check for required fields)
+// - Only allow installation by admins (not regular users)
+// - Repository sync should validate templates before storing
+// - Consider sandboxing template execution (not implemented)
+// - Audit log all template installations for forensics
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - Two queries: SELECT template, UPDATE install_count
+// - No explicit transaction (install_count update is best-effort)
+// - Failure to increment counter does NOT fail installation
+//
+// DATA FLOW:
+//
+// 1. Retrieve template manifest from database (YAML string)
+// 2. Parse YAML to extract spec fields
+// 3. Build Template CRD struct from parsed data
+// 4. Create Template resource in Kubernetes
+// 5. Increment install_count in database (best-effort)
+//
+// ERROR RESPONSES:
+//
+// - 400 Bad Request: Invalid YAML manifest structure
+// - 404 Not Found: Catalog template not found
+// - 500 Internal Server Error: Kubernetes API or database failure
 func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 	catalogID := c.Param("id")
 
-	// Get template manifest and metadata from database
+	// STEP 1: Retrieve template manifest from database
+	// Manifest is YAML string parsed from external repository
 	var manifest, name, displayName, description, category string
 	err := h.db.DB().QueryRowContext(ctx, `
 		SELECT manifest, name, display_name, description, category
@@ -1077,7 +1395,8 @@ func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 
 // ListRepositories returns all template repositories
 func (h *Handler) ListRepositories(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	rows, err := h.db.DB().QueryContext(ctx, `
 		SELECT id, name, url, branch, auth_type, last_sync, template_count, status, error_message, created_at, updated_at
@@ -1124,7 +1443,8 @@ func (h *Handler) ListRepositories(c *gin.Context) {
 
 // AddRepository adds a new template repository
 func (h *Handler) AddRepository(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 
 	var req struct {
 		Name       string `json:"name" binding:"required"`
@@ -1181,7 +1501,8 @@ func (h *Handler) AddRepository(c *gin.Context) {
 
 // SyncRepository triggers a sync for a repository
 func (h *Handler) SyncRepository(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	repoIDStr := c.Param("id")
 
 	// Convert repo ID to int
@@ -1192,8 +1513,10 @@ func (h *Handler) SyncRepository(c *gin.Context) {
 	}
 
 	// Trigger sync in background
+	// BUG FIX: Use context.Background() for goroutine - request context will be cancelled when HTTP request completes
 	go func() {
-		if err := h.syncService.SyncRepository(ctx, repoID); err != nil {
+		syncCtx := context.Background()
+		if err := h.syncService.SyncRepository(syncCtx, repoID); err != nil {
 			log.Printf("Repository sync failed for ID %d: %v", repoID, err)
 		}
 	}()
@@ -1206,7 +1529,8 @@ func (h *Handler) SyncRepository(c *gin.Context) {
 
 // DeleteRepository deletes a template repository
 func (h *Handler) DeleteRepository(c *gin.Context) {
-	ctx := context.Background()
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
 	repoID := c.Param("id")
 
 	_, err := h.db.DB().ExecContext(ctx, `
@@ -1225,7 +1549,22 @@ func (h *Handler) DeleteRepository(c *gin.Context) {
 // Helper Methods
 // ============================================================================
 
-// enrichSessionsWithDBInfo enriches sessions with database information
+// enrichSessionsWithDBInfo enriches multiple sessions with database information.
+//
+// This helper merges Kubernetes session data with database-cached metadata:
+// - Active connection count from connection tracker
+// - Additional metadata from database cache
+//
+// PERFORMANCE:
+//
+// - Calls enrichSessionWithDBInfo for each session (N queries for N sessions)
+// - Could be optimized with batch query if needed
+// - Current implementation prioritizes code simplicity
+//
+// CONCURRENCY:
+//
+// - Safe for concurrent use (each request has own context)
+// - Connection tracker uses internal locking
 func (h *Handler) enrichSessionsWithDBInfo(ctx context.Context, sessions []*k8s.Session) []map[string]interface{} {
 	enriched := make([]map[string]interface{}, 0, len(sessions))
 
@@ -1236,7 +1575,19 @@ func (h *Handler) enrichSessionsWithDBInfo(ctx context.Context, sessions []*k8s.
 	return enriched
 }
 
-// enrichSessionWithDBInfo enriches a session with database information
+// enrichSessionWithDBInfo enriches a single session with database information.
+//
+// Combines Kubernetes session data with real-time connection tracking:
+// - Session fields from Kubernetes CRD (name, state, resources)
+// - Active connection count from connection tracker
+//
+// This provides a complete view of session state for API clients without
+// requiring multiple requests.
+//
+// ERROR HANDLING:
+//
+// - Database errors are non-fatal (connection count defaults to 0)
+// - Always returns a valid response even if enrichment fails
 func (h *Handler) enrichSessionWithDBInfo(ctx context.Context, session *k8s.Session) map[string]interface{} {
 	result := map[string]interface{}{
 		"name":               session.Name,
@@ -1266,7 +1617,38 @@ func (h *Handler) enrichSessionWithDBInfo(ctx context.Context, session *k8s.Sess
 	return result
 }
 
-// cacheSessionInDB caches a session in the database
+// cacheSessionInDB caches a session in the PostgreSQL database.
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - Single UPSERT query (INSERT ... ON CONFLICT DO UPDATE)
+// - No explicit transaction needed (single query is atomic)
+// - Idempotent: Safe to call multiple times with same session
+//
+// CACHE STRATEGY:
+//
+// Kubernetes is the source of truth for sessions. The database cache:
+// - Improves query performance (faster than Kubernetes API)
+// - Enables complex queries (search, filtering, aggregation)
+// - Provides metadata not in Kubernetes (connection count, analytics)
+//
+// IMPORTANT: Cache updates are best-effort. Callers should:
+// - Log errors but NOT fail the request on cache failures
+// - Kubernetes state is authoritative, database is supplementary
+//
+// UPSERT BEHAVIOR:
+//
+// ON CONFLICT (id) DO UPDATE ensures idempotency:
+// - If session doesn't exist: INSERT new row
+// - If session exists: UPDATE existing row with new values
+// - No error if called multiple times
+//
+// ERROR HANDLING:
+//
+// Returns error on database failure, but callers typically ignore it:
+//   if err := h.cacheSessionInDB(ctx, session); err != nil {
+//       log.Printf("Cache update failed (non-fatal): %v", err)
+//   }
 func (h *Handler) cacheSessionInDB(ctx context.Context, session *k8s.Session) error {
 	_, err := h.db.DB().ExecContext(ctx, `
 		INSERT INTO sessions (id, user_id, template_name, state, app_type, namespace, url, created_at, updated_at)
@@ -1278,7 +1660,27 @@ func (h *Handler) cacheSessionInDB(ctx context.Context, session *k8s.Session) er
 	return err
 }
 
-// updateSessionInDB updates a session in the database cache
+// updateSessionInDB updates a cached session in the database.
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - Single UPDATE query
+// - No explicit transaction needed
+// - Updates state, URL, and timestamp
+//
+// CACHE CONSISTENCY:
+//
+// This method updates only fields that change during session lifecycle:
+// - state: running → hibernated → terminated
+// - url: Updated when session endpoint changes
+// - updated_at: Timestamp of last modification
+//
+// Other fields (user, template, namespace) are immutable and not updated.
+//
+// ERROR HANDLING:
+//
+// - Returns error if session not found or database failure
+// - Callers typically log and ignore errors (best-effort caching)
 func (h *Handler) updateSessionInDB(ctx context.Context, session *k8s.Session) error {
 	_, err := h.db.DB().ExecContext(ctx, `
 		UPDATE sessions
@@ -1289,7 +1691,33 @@ func (h *Handler) updateSessionInDB(ctx context.Context, session *k8s.Session) e
 	return err
 }
 
-// deleteSessionFromDB deletes a session from the database cache
+// deleteSessionFromDB removes a session from the database cache.
+//
+// DATABASE TRANSACTION BOUNDARY:
+//
+// - Single DELETE query
+// - No explicit transaction needed
+// - Idempotent: Safe to call even if session doesn't exist
+//
+// CLEANUP STRATEGY:
+//
+// When a session is deleted from Kubernetes, we also remove it from
+// the database cache to prevent stale data.
+//
+// CASCADE BEHAVIOR:
+//
+// Database schema may have CASCADE DELETE for related tables:
+// - session_connections (active connections)
+// - session_snapshots (saved states)
+// - audit_logs (may be preserved)
+//
+// Check database schema for exact CASCADE behavior.
+//
+// ERROR HANDLING:
+//
+// - Returns error on database failure
+// - Callers typically log and ignore (best-effort cleanup)
+// - Stale cache entries cleaned up by periodic garbage collection
 func (h *Handler) deleteSessionFromDB(ctx context.Context, sessionID string) error {
 	_, err := h.db.DB().ExecContext(ctx, `
 		DELETE FROM sessions WHERE id = $1

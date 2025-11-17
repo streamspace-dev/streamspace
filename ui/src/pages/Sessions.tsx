@@ -1,4 +1,4 @@
-import { useState, useMemo, useRef } from 'react';
+import { useState, useMemo, useRef, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -197,15 +197,37 @@ export default function Sessions() {
     setTagManagerOpen(true);
   };
 
+  // BUG FIX: Add isMounted ref to prevent setState after unmount
+  const isMountedRef = useRef(true);
+
+  // Set up mount tracking with cleanup
+  useEffect(() => {
+    isMountedRef.current = true;
+    return () => {
+      isMountedRef.current = false;
+    };
+  }, []);
+
+  // BUG FIX: Add error handling and mount check to prevent memory leaks
   const handleSaveTags = async (tags: string[]) => {
     if (!selectedSession) return;
 
-    await api.updateSessionTags(selectedSession.name, tags);
+    try {
+      await api.updateSessionTags(selectedSession.name, tags);
 
-    // Update local state
-    setSessions(sessions.map(s =>
-      s.name === selectedSession.name ? { ...s, tags } : s
-    ));
+      // Only update state if component is still mounted
+      if (isMountedRef.current) {
+        // Update local state
+        setSessions(sessions.map(s =>
+          s.name === selectedSession.name ? { ...s, tags } : s
+        ));
+      }
+    } catch (error: any) {
+      console.error('Failed to update session tags:', error);
+      // Error notification is already handled by API interceptor
+      // Re-throw to allow TagManager to handle UI state
+      throw error;
+    }
   };
 
   const handleOpenShareDialog = (session: Session) => {

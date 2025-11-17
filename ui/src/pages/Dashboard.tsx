@@ -68,15 +68,20 @@ export default function Dashboard() {
   // Enhanced notification system
   const { addNotification } = useNotificationQueue();
 
+  // Store username in ref to avoid useCallback dependencies
+  const usernameRef = useRef(username);
+  usernameRef.current = username;
+
   const { data: templates = [], isLoading: templatesLoading } = useTemplates();
   const { data: repositories = [], isLoading: reposLoading } = useRepositories();
 
   // Real-time sessions updates via WebSocket with notifications
-  // Wrap callback in useCallback to prevent reconnection loop
+  // BUG FIX: Remove username from dependencies to prevent reconnection loop
+  // Use ref instead to access current username without recreating callback
   const handleSessionsUpdate = useCallback((updatedSessions: Session[]) => {
     // Filter to only show current user's sessions
-    const userSessions = username
-      ? updatedSessions.filter((s: Session) => s.user === username)
+    const userSessions = usernameRef.current
+      ? updatedSessions.filter((s: Session) => s.user === usernameRef.current)
       : updatedSessions;
 
     // Check for state changes and show notifications
@@ -94,7 +99,7 @@ export default function Dashboard() {
     });
 
     setSessions(userSessions);
-  }, [username, addNotification]);
+  }, [addNotification]);
 
   const baseSessionsWs = useSessionsWebSocket(handleSessionsUpdate);
 

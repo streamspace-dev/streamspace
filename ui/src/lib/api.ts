@@ -819,10 +819,19 @@ class APIClient {
     // Request interceptor for adding auth tokens
     this.client.interceptors.request.use(
       (config) => {
-        // Get JWT token from localStorage
-        const token = localStorage.getItem('streamspace_token');
-        if (token) {
-          config.headers.Authorization = `Bearer ${token}`;
+        // BUG FIX: Use Zustand persisted store as single source of truth for token
+        // Read from 'streamspace-auth' localStorage key (set by Zustand persist middleware)
+        const authState = localStorage.getItem('streamspace-auth');
+        if (authState) {
+          try {
+            const parsed = JSON.parse(authState);
+            const token = parsed?.state?.token;
+            if (token) {
+              config.headers.Authorization = `Bearer ${token}`;
+            }
+          } catch (e) {
+            console.error('Failed to parse auth state:', e);
+          }
         }
         return config;
       },
@@ -848,8 +857,8 @@ class APIClient {
             // Unauthorized - clear auth and redirect to login
             if (!window.location.pathname.includes('/login')) {
               toast.error('Session expired. Please log in again.');
-              localStorage.removeItem('streamspace_token');
-              localStorage.removeItem('streamspace_user');
+              // BUG FIX: Clear Zustand persisted store (single source of truth)
+              localStorage.removeItem('streamspace-auth');
               window.location.href = '/login';
             }
             break;
@@ -1322,8 +1331,8 @@ class APIClient {
 
   async logout(): Promise<void> {
     await this.client.post('/auth/logout');
-    localStorage.removeItem('streamspace_token');
-    localStorage.removeItem('streamspace_user');
+    // BUG FIX: Clear Zustand persisted store (single source of truth)
+    localStorage.removeItem('streamspace-auth');
   }
 
   async samlLogin(): Promise<{ redirectUrl: string }> {
