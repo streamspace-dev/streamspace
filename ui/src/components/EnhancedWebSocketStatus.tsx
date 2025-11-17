@@ -51,9 +51,13 @@ export default function EnhancedWebSocketStatus({
   const [anchorEl, setAnchorEl] = useState<HTMLElement | null>(null);
   const [countdown, setCountdown] = useState<number | null>(null);
 
-  // Calculate reconnection delay (exponential backoff: 2^attempt seconds, max 30s)
+  // Calculate reconnection delay - matches the pattern in WebSocket hooks
+  // 30s, 15s, 15s, then 60s for all subsequent attempts
   const getReconnectDelay = (attempt: number) => {
-    return Math.min(Math.pow(2, attempt), 30);
+    if (attempt === 0) return 30; // 30 seconds for first retry
+    if (attempt === 1) return 15; // 15 seconds for second retry
+    if (attempt === 2) return 15; // 15 seconds for third retry
+    return 60; // 60 seconds for all subsequent retries
   };
 
   // Countdown timer for reconnection

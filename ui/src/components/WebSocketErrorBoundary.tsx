@@ -34,14 +34,18 @@ interface State {
   dismissed: boolean; // Track if user has dismissed the error
 }
 
+const WS_ERROR_DISMISSED_KEY = 'streamspace_ws_error_dismissed';
+
 export default class WebSocketErrorBoundary extends Component<Props, State> {
   constructor(props: Props) {
     super(props);
+    // Check if error was previously dismissed (persists across page navigation)
+    const wasDismissed = localStorage.getItem(WS_ERROR_DISMISSED_KEY) === 'true';
     this.state = {
       hasError: false,
       error: null,
       errorInfo: null,
-      dismissed: false,
+      dismissed: wasDismissed,
     };
   }
 
@@ -67,6 +71,8 @@ export default class WebSocketErrorBoundary extends Component<Props, State> {
   }
 
   handleReset = () => {
+    // Store dismissed state in localStorage so it persists across page navigation
+    localStorage.setItem(WS_ERROR_DISMISSED_KEY, 'true');
     this.setState({
       hasError: false,
       error: null,
