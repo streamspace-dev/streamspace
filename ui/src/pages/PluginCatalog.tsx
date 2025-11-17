@@ -26,6 +26,8 @@ import PluginDetailModal from '../components/PluginDetailModal';
 import { api, type CatalogPlugin, type PluginFilters } from '../lib/api';
 import { toast } from '../lib/toast';
 import { useNavigate } from 'react-router-dom';
+import { useBrowsePlugins } from '../hooks/useApi';
+import { useQueryClient } from '@tanstack/react-query';
 
 /**
  * PluginCatalog - Marketplace catalog for discovering and installing plugins
@@ -80,8 +82,7 @@ import { useNavigate } from 'react-router-dom';
  */
 export default function PluginCatalog() {
   const navigate = useNavigate();
-  const [loading, setLoading] = useState(true);
-  const [plugins, setPlugins] = useState<CatalogPlugin[]>([]);
+  const queryClient = useQueryClient();
   const [selectedPlugin, setSelectedPlugin] = useState<CatalogPlugin | null>(null);
   const [detailModalOpen, setDetailModalOpen] = useState(false);
   const [filters, setFilters] = useState<PluginFilters>({
@@ -93,35 +94,16 @@ export default function PluginCatalog() {
     page: 1,
     limit: 12,
   });
-  const [total, setTotal] = useState(0);
-  const [totalPages, setTotalPages] = useState(1);
-  const [categories, setCategories] = useState<string[]>([]);
-  const [pluginTypes, setPluginTypes] = useState<string[]>(['extension', 'webhook', 'api', 'ui', 'theme']);
+  const [pluginTypes] = useState<string[]>(['extension', 'webhook', 'api', 'ui', 'theme']);
 
-  useEffect(() => {
-    loadPlugins();
-  }, [filters]);
+  // Fetch plugins via React Query
+  const { data, isLoading: loading } = useBrowsePlugins(filters);
+  const plugins = data?.plugins || [];
+  const total = data?.total || 0;
+  const totalPages = Math.ceil(total / (filters.limit || 12));
 
-  useEffect(() => {
-    // Extract unique categories from plugins
-    const uniqueCategories = Array.from(new Set(plugins.map(p => p.category).filter(Boolean)));
-    setCategories(uniqueCategories);
-  }, [plugins]);
-
-  const loadPlugins = async () => {
-    setLoading(true);
-    try {
-      const data = await api.browsePlugins(filters);
-      setPlugins(data.plugins);
-      setTotal(data.total);
-      setTotalPages(Math.ceil(data.total / (filters.limit || 12)));
-    } catch (error) {
-      console.error('Failed to load plugins:', error);
-      toast.error('Failed to load plugins');
-    } finally {
-      setLoading(false);
-    }
-  };
+  // Extract unique categories from plugins
+  const categories = Array.from(new Set(plugins.map(p => p.category).filter(Boolean)));
 
   const handleSearch = (value: string) => {
     setFilters({ ...filters, search: value, page: 1 });
@@ -154,8 +136,9 @@ export default function PluginCatalog() {
       const result = await api.installPlugin(plugin.id);
       toast.success(`${plugin.displayName} installed successfully!`);
 
-      // Reload plugins to update install counts
-      await loadPlugins();
+      // Invalidate queries to refresh plugin lists
+      queryClient.invalidateQueries({ queryKey: ['browse-plugins'] });
+      queryClient.invalidateQueries({ queryKey: ['installed-plugins'] });
 
       setDetailModalOpen(false);
     } catch (error) {
@@ -192,7 +175,7 @@ export default function PluginCatalog() {
           </Box>
           <Button
             startIcon={<RefreshIcon />}
-            onClick={loadPlugins}
+            onClick={() => queryClient.invalidateQueries({ queryKey: ['browse-plugins'] })}
             disabled={loading}
           >
             Refresh

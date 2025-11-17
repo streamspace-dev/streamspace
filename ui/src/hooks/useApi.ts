@@ -287,3 +287,24 @@ export function useInstalledPlugins() {
     // Polling disabled - use WebSocket for real-time updates via usePluginEvents
   });
 }
+
+export function useBrowsePlugins(filters?: CatalogFilters) {
+  return useQuery({
+    queryKey: ['browse-plugins', filters],
+    queryFn: () => api.browsePlugins(filters),
+    // Polling disabled - catalog data is relatively static
+  });
+}
+
+// ============================================================================
+// Shared Sessions Hooks
+// ============================================================================
+
+export function useSharedSessions(userId?: string) {
+  return useQuery({
+    queryKey: ['shared-sessions', userId],
+    queryFn: () => api.listSharedSessions(userId!),
+    enabled: !!userId,
+    // Polling disabled - use WebSocket for real-time updates via useSessionsWebSocket
+  });
+}
