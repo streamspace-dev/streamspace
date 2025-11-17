@@ -140,10 +140,22 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
-// Middleware creates an authentication middleware
+// Middleware creates an authentication middleware that validates JWT tokens
+// and ensures user accounts are active.
+//
+// WEBSOCKET HANDLING:
+// WebSocket upgrade requests receive special treatment to maintain protocol compatibility:
+// - Detected by checking Upgrade=websocket and Connection=Upgrade headers
+// - On auth failure: Returns status code only (no JSON body) via AbortWithStatus
+// - Rationale: WebSocket upgrader expects clean HTTP responses without body content
+// - Standard requests: Returns JSON error messages as usual
+//
+// This dual-response approach was added to fix WebSocket connection issues where
+// JSON error responses would interfere with the WebSocket handshake protocol.
 func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 	return func(c *gin.Context) {
 		// Check if this is a WebSocket upgrade request
+		// WebSocket requests need special error handling (status code only, no JSON body)
 		isWebSocket := c.GetHeader("Upgrade") == "websocket" && c.GetHeader("Connection") == "Upgrade"
 
 		// Extract token from Authorization header

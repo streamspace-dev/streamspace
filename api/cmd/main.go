@@ -808,6 +808,30 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 	}
 }
 
+// corsMiddleware configures Cross-Origin Resource Sharing (CORS) for the API.
+// This middleware enables the web UI to communicate with the API backend when they
+// are served from different origins (domains/ports).
+//
+// SECURITY FEATURES:
+// - Origin validation: Only explicitly allowed origins can access the API
+// - Credential support: Allows cookies and authorization headers in CORS requests
+// - WebSocket support: Includes headers required for WebSocket upgrade handshake
+//
+// WEBSOCKET HEADERS:
+// The following headers are essential for WebSocket connections to work:
+// - Upgrade: Indicates protocol upgrade from HTTP to WebSocket
+// - Connection: Specifies the connection should be upgraded
+// - Sec-WebSocket-Key: Client-generated key for handshake
+// - Sec-WebSocket-Version: WebSocket protocol version
+// - Sec-WebSocket-Extensions: Optional WebSocket extensions
+// - Sec-WebSocket-Protocol: Sub-protocol negotiation
+//
+// CONFIGURATION:
+// Set CORS_ALLOWED_ORIGINS environment variable with comma-separated list of origins:
+// Example: CORS_ALLOWED_ORIGINS="https://app.streamspace.io,https://admin.streamspace.io"
+//
+// DEVELOPMENT:
+// If not configured, defaults to localhost:3000,8000 for local development
 func corsMiddleware() gin.HandlerFunc {
 	// SECURITY: Get allowed origins from environment
 	allowedOriginsEnv := getEnv("CORS_ALLOWED_ORIGINS", "")
@@ -843,6 +867,9 @@ func corsMiddleware() gin.HandlerFunc {
 			c.Writer.Header().Set("Access-Control-Allow-Credentials", "true")
 		}
 
+		// Allow standard HTTP headers plus WebSocket upgrade headers
+		// WebSocket headers (Upgrade, Connection, Sec-WebSocket-*) are required for
+		// real-time features like session updates and VNC connections
 		c.Writer.Header().Set("Access-Control-Allow-Headers", "Content-Type, Content-Length, Accept-Encoding, X-CSRF-Token, Authorization, accept, origin, Cache-Control, X-Requested-With, Upgrade, Connection, Sec-WebSocket-Key, Sec-WebSocket-Version, Sec-WebSocket-Extensions, Sec-WebSocket-Protocol")
 		c.Writer.Header().Set("Access-Control-Allow-Methods", "POST, OPTIONS, GET, PUT, PATCH, DELETE")
 
