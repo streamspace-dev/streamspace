@@ -132,8 +132,10 @@ export function useWebSocket({
  * Hook for subscribing to session updates via WebSocket
  */
 export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + '/api/v1/ws/sessions';
+  // Use window.location to connect through Vite proxy in dev, or directly in production
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const token = localStorage.getItem('token');
+  const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/sessions${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
   return useWebSocket({
     url: wsUrl,
@@ -151,8 +153,10 @@ export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
  * Hook for subscribing to cluster metrics via WebSocket
  */
 export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + '/api/v1/ws/cluster';
+  // Use window.location to connect through Vite proxy in dev, or directly in production
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const token = localStorage.getItem('token');
+  const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/cluster${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
   return useWebSocket({
     url: wsUrl,
@@ -170,8 +174,10 @@ export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
  * Hook for subscribing to pod logs via WebSocket
  */
 export function useLogsWebSocket(namespace: string, podName: string, onLog: (log: string) => void) {
-  const apiUrl = import.meta.env.VITE_API_URL || 'http://localhost:8000';
-  const wsUrl = apiUrl.replace(/^http/, 'ws') + `/api/v1/ws/logs/${namespace}/${podName}`;
+  // Use window.location to connect through Vite proxy in dev, or directly in production
+  const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+  const token = localStorage.getItem('token');
+  const wsUrl = `${protocol}//${window.location.host}/api/v1/ws/logs/${namespace}/${podName}${token ? `?token=${encodeURIComponent(token)}` : ''}`;
 
   return useWebSocket({
     url: wsUrl,
