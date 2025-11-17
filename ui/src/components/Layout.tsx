@@ -29,6 +29,7 @@ import {
   AdminPanelSettings as AdminIcon,
   Storage as StorageIcon,
   People as PeopleIcon,
+  Groups as GroupsIcon,
   Schedule as ScheduleIcon,
   Security as SecurityIcon,
   Hub as IntegrationIcon,
@@ -114,6 +115,8 @@ function Layout({ children }: LayoutProps) {
 
   const adminMenuItems = [
     { text: 'Admin Dashboard', icon: <AdminIcon />, path: '/admin/dashboard' },
+    { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
+    { text: 'Groups', icon: <GroupsIcon />, path: '/admin/groups' },
     { text: 'Cluster Nodes', icon: <StorageIcon />, path: '/admin/nodes' },
     { text: 'User Quotas', icon: <PeopleIcon />, path: '/admin/quotas' },
     { text: 'Plugin Management', icon: <ExtensionIcon />, path: '/admin/plugins' },
