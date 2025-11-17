@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import {
   Card,
   CardContent,
@@ -53,7 +53,7 @@ interface QuotaMetric {
  * @see api.getCurrentUserQuota for quota data fetching
  * @see QuotaAlert for alert-style quota warnings
  */
-export default function QuotaCard() {
+function QuotaCard() {
   const [quota, setQuota] = useState<UserQuota | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
@@ -245,3 +245,6 @@ export default function QuotaCard() {
     </Card>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders when parent component updates
+export default memo(QuotaCard);

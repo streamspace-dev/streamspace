@@ -1,4 +1,4 @@
-import { useEffect, useState } from 'react';
+import { useEffect, useState, memo } from 'react';
 import { Alert, AlertTitle, Box, LinearProgress, Typography } from '@mui/material';
 import { api, type UserQuota } from '../lib/api';
 
@@ -41,7 +41,7 @@ interface QuotaAlertProps {
  * @see api.getCurrentUserQuota for quota data fetching
  * @see QuotaCard for detailed quota display
  */
-export default function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
+function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
   const [quota, setQuota] = useState<UserQuota | null>(null);
   const [loading, setLoading] = useState(true);
 
@@ -157,3 +157,6 @@ export default function QuotaAlert({ onQuotaLoad }: QuotaAlertProps) {
     </Alert>
   );
 }
+
+// Export memoized version to prevent unnecessary re-renders when parent component updates
+export default memo(QuotaAlert);
