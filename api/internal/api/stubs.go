@@ -620,7 +620,7 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 	usedPods := 0
 	totalPods := 0
 
-	for _, node := range nodes {
+	for _, node := range nodes.Items {
 		// Check if node is ready
 		for _, condition := range node.Status.Conditions {
 			if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
@@ -644,7 +644,7 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 	// Get all pods to calculate resource usage
 	pods, err := h.k8sClient.GetPods(ctx, h.namespace)
 	if err == nil {
-		usedPods = len(pods)
+		usedPods = len(pods.Items)
 	}
 
 	// Get session counts from database
@@ -715,9 +715,9 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"cluster": gin.H{
 			"nodes": gin.H{
-				"total":    len(nodes),
+				"total":    len(nodes.Items),
 				"ready":    readyNodes,
-				"notReady": len(nodes) - readyNodes,
+				"notReady": len(nodes.Items) - readyNodes,
 			},
 			"sessions": gin.H{
 				"total":      sessionCounts.Total,

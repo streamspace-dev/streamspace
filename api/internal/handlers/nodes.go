@@ -70,8 +70,7 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
-	"k8s.io/apimachinery/pkg/types"
+	"k8s.io/apimachinery/pkg/api/resource"
 )
 
 // NodeHandler handles node management operations
@@ -491,14 +490,14 @@ func (h *NodeHandler) calculateClusterStats(nodeList *corev1.NodeList) ClusterSt
 		ReadyNodes:    0,
 		NotReadyNodes: 0,
 		TotalCapacity: corev1.ResourceList{
-			corev1.ResourceCPU:    *newQuantity(0),
-			corev1.ResourceMemory: *newQuantity(0),
-			corev1.ResourcePods:   *newQuantity(0),
+			corev1.ResourceCPU:    newQuantity(0),
+			corev1.ResourceMemory: newQuantity(0),
+			corev1.ResourcePods:   newQuantity(0),
 		},
 		TotalAllocatable: corev1.ResourceList{
-			corev1.ResourceCPU:    *newQuantity(0),
-			corev1.ResourceMemory: *newQuantity(0),
-			corev1.ResourcePods:   *newQuantity(0),
+			corev1.ResourceCPU:    newQuantity(0),
+			corev1.ResourceMemory: newQuantity(0),
+			corev1.ResourcePods:   newQuantity(0),
 		},
 	}
 
@@ -517,24 +516,36 @@ func (h *NodeHandler) calculateClusterStats(nodeList *corev1.NodeList) ClusterSt
 
 		// Aggregate capacity
 		if cpu, ok := node.Status.Capacity[corev1.ResourceCPU]; ok {
-			stats.TotalCapacity[corev1.ResourceCPU].Add(cpu)
+			totalCPU := stats.TotalCapacity[corev1.ResourceCPU]
+			totalCPU.Add(cpu)
+			stats.TotalCapacity[corev1.ResourceCPU] = totalCPU
 		}
 		if mem, ok := node.Status.Capacity[corev1.ResourceMemory]; ok {
-			stats.TotalCapacity[corev1.ResourceMemory].Add(mem)
+			totalMem := stats.TotalCapacity[corev1.ResourceMemory]
+			totalMem.Add(mem)
+			stats.TotalCapacity[corev1.ResourceMemory] = totalMem
 		}
 		if pods, ok := node.Status.Capacity[corev1.ResourcePods]; ok {
-			stats.TotalCapacity[corev1.ResourcePods].Add(pods)
+			totalPods := stats.TotalCapacity[corev1.ResourcePods]
+			totalPods.Add(pods)
+			stats.TotalCapacity[corev1.ResourcePods] = totalPods
 		}
 
 		// Aggregate allocatable
 		if cpu, ok := node.Status.Allocatable[corev1.ResourceCPU]; ok {
-			stats.TotalAllocatable[corev1.ResourceCPU].Add(cpu)
+			allocCPU := stats.TotalAllocatable[corev1.ResourceCPU]
+			allocCPU.Add(cpu)
+			stats.TotalAllocatable[corev1.ResourceCPU] = allocCPU
 		}
 		if mem, ok := node.Status.Allocatable[corev1.ResourceMemory]; ok {
-			stats.TotalAllocatable[corev1.ResourceMemory].Add(mem)
+			allocMem := stats.TotalAllocatable[corev1.ResourceMemory]
+			allocMem.Add(mem)
+			stats.TotalAllocatable[corev1.ResourceMemory] = allocMem
 		}
 		if pods, ok := node.Status.Allocatable[corev1.ResourcePods]; ok {
-			stats.TotalAllocatable[corev1.ResourcePods].Add(pods)
+			allocPods := stats.TotalAllocatable[corev1.ResourcePods]
+			allocPods.Add(pods)
+			stats.TotalAllocatable[corev1.ResourcePods] = allocPods
 		}
 	}
 
@@ -542,6 +553,6 @@ func (h *NodeHandler) calculateClusterStats(nodeList *corev1.NodeList) ClusterSt
 }
 
 // Helper function to create a new Quantity
-func newQuantity(value int64) *corev1.Quantity {
-	return &corev1.Quantity{}
+func newQuantity(value int64) resource.Quantity {
+	return *resource.NewQuantity(value, resource.DecimalSI)
 }
