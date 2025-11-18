@@ -386,6 +386,8 @@ func (a *ApplicationDB) HasGroupAccess(ctx context.Context, appID, groupID strin
 
 // GetUserAccessibleApplications retrieves applications accessible to a user (via their groups, as creator, or public)
 func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userID string) ([]*models.InstalledApplication, error) {
+	// Simplified query: return all enabled applications where user has group access,
+	// is the creator, or the app has no group restrictions (public to all)
 	query := `
 		SELECT DISTINCT
 			ia.id, ia.catalog_template_id, ia.name, ia.display_name, ia.folder_path,
@@ -394,12 +396,14 @@ func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userI
 			ct.description, ct.category, ct.app_type, ct.icon_url
 		FROM installed_applications ia
 		JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
-		LEFT JOIN application_group_access aga ON ia.id = aga.application_id
-		LEFT JOIN group_memberships gm ON aga.group_id = gm.group_id AND gm.user_id = $1
 		WHERE ia.enabled = true
 		AND (
-			gm.user_id IS NOT NULL
-			OR ia.created_by = $1
+			ia.created_by = $1
+			OR EXISTS (
+				SELECT 1 FROM application_group_access aga
+				JOIN group_memberships gm ON aga.group_id = gm.group_id
+				WHERE aga.application_id = ia.id AND gm.user_id = $1
+			)
 			OR NOT EXISTS (
 				SELECT 1 FROM application_group_access aga2
 				WHERE aga2.application_id = ia.id
