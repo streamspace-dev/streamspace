@@ -32,6 +32,7 @@ package sync
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -400,6 +401,12 @@ func (s *SyncService) updateCatalog(ctx context.Context, repoID int, templates [
 		// Convert manifest to JSON string for storage
 		manifestJSON := template.Manifest
 
+		// Convert tags slice to JSON for database storage
+		tagsJSON, err := json.Marshal(template.Tags)
+		if err != nil {
+			return fmt.Errorf("failed to marshal tags for template %s: %w", template.Name, err)
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO catalog_templates (
 				repository_id, name, display_name, description, category,
@@ -407,7 +414,7 @@ func (s *SyncService) updateCatalog(ctx context.Context, repoID int, templates [
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
 		`, repoID, template.Name, template.DisplayName, template.Description,
 			template.Category, template.AppType, template.Icon, manifestJSON,
-			template.Tags, time.Now(), time.Now())
+			string(tagsJSON), time.Now(), time.Now())
 
 		if err != nil {
 			return fmt.Errorf("failed to insert template %s: %w", template.Name, err)
@@ -442,6 +449,12 @@ func (s *SyncService) updatePluginCatalog(ctx context.Context, repoID int, plugi
 
 	// Insert new plugins
 	for _, plugin := range plugins {
+		// Convert tags slice to JSON for database storage
+		tagsJSON, err := json.Marshal(plugin.Tags)
+		if err != nil {
+			return fmt.Errorf("failed to marshal tags for plugin %s: %w", plugin.Name, err)
+		}
+
 		_, err = tx.ExecContext(ctx, `
 			INSERT INTO catalog_plugins (
 				repository_id, name, version, display_name, description, category,
@@ -449,7 +462,7 @@ func (s *SyncService) updatePluginCatalog(ctx context.Context, repoID int, plugi
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12)
 		`, repoID, plugin.Name, plugin.Version, plugin.DisplayName, plugin.Description,
 			plugin.Category, plugin.PluginType, plugin.Icon, plugin.Manifest,
-			plugin.Tags, time.Now(), time.Now())
+			string(tagsJSON), time.Now(), time.Now())
 
 		if err != nil {
 			return fmt.Errorf("failed to insert plugin %s: %w", plugin.Name, err)
