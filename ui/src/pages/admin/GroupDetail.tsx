@@ -206,7 +206,7 @@ export default function GroupDetail() {
 
   // Filter out users who are already members
   const availableUsers = allUsers.filter(
-    (user) => !membersData?.members.some((m) => m.user.id === user.id)
+    (user) => !membersData?.members?.some((m) => m.user.id === user.id)
   );
 
   if (isLoading || !group) {
@@ -484,7 +484,7 @@ export default function GroupDetail() {
               </Box>
               <Divider sx={{ mb: 2 }} />
 
-              {membersData && membersData.members.length > 0 ? (
+              {membersData?.members && membersData.members.length > 0 ? (
                 <TableContainer component={Paper} variant="outlined">
                   <Table size="small">
                     <TableHead>
