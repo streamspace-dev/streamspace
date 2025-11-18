@@ -93,30 +93,44 @@ roleRef:
   apiGroup: rbac.authorization.k8s.io
 
 ---
-# Minimal ClusterRole for CRD access only (read CRD definitions)
+# ClusterRole for controller to watch Sessions and Templates cluster-wide
+# Required because controller-runtime watches resources at cluster scope by default
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRole
 metadata:
-  name: streamspace-controller-crd-reader
+  name: streamspace-controller
 rules:
   # Read CRD definitions (needed for controller to understand resource schemas)
   - apiGroups: [apiextensions.k8s.io]
     resources: [customresourcedefinitions]
     verbs: [get, list, watch]
 
+  # Manage Sessions and Templates (cluster-wide for controller watches)
+  - apiGroups: [stream.space]
+    resources: [sessions, templates]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [stream.space]
+    resources: [sessions/status, templates/status]
+    verbs: [get, update, patch]
+
+  # Leader election requires coordination.k8s.io access
+  - apiGroups: [coordination.k8s.io]
+    resources: [leases]
+    verbs: [get, list, watch, create, update, patch, delete]
+
 ---
-# ClusterRoleBinding for CRD reading only
+# ClusterRoleBinding for controller cluster-wide permissions
 apiVersion: rbac.authorization.k8s.io/v1
 kind: ClusterRoleBinding
 metadata:
-  name: streamspace-controller-crd-reader
+  name: streamspace-controller
 subjects:
   - kind: ServiceAccount
     name: streamspace-controller
     namespace: streamspace
 roleRef:
   kind: ClusterRole
-  name: streamspace-controller-crd-reader
+  name: streamspace-controller
   apiGroup: rbac.authorization.k8s.io
 
 ---
