@@ -676,6 +676,7 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	// Initialize default values
+	var err error
 	totalNodes := 0
 	readyNodes := 0
 	totalCPU := int64(0)
@@ -685,7 +686,7 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 
 	// Get cluster nodes (handle nil k8sClient gracefully)
 	if h.k8sClient != nil {
-		nodes, err := h.k8sClient.GetNodes(ctx)
+		nodes, err = h.k8sClient.GetNodes(ctx)
 		if err != nil {
 			log.Printf("Failed to get cluster nodes: %v", err)
 			// Continue with default values instead of failing
@@ -715,7 +716,7 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 			}
 
 			// Get all pods to calculate resource usage
-			pods, err := h.k8sClient.GetPods(ctx, h.namespace)
+			pods, err = h.k8sClient.GetPods(ctx, h.namespace)
 			if err == nil {
 				usedPods = len(pods.Items)
 			}
