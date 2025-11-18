@@ -41,7 +41,7 @@ import {
   Error as ErrorIcon,
   Pending as PendingIcon,
 } from '@mui/icons-material';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { useWebhookDeliveryEvents } from '../../hooks/useEnterpriseWebSocket';
@@ -331,7 +331,7 @@ function IntegrationsContent() {
   };
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -561,7 +561,7 @@ function IntegrationsContent() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

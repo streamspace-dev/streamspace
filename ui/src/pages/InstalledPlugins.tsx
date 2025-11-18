@@ -35,7 +35,7 @@ import {
   ExtensionOff as NoPluginsIcon,
   ShoppingCart as ShopIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import PluginCardSkeleton from '../components/PluginCardSkeleton';
 import PluginConfigForm from '../components/PluginConfigForm';
 import { api, type InstalledPlugin } from '../lib/api';
@@ -305,7 +305,7 @@ function InstalledPluginsContent() {
   }, [plugins, filter, searchQuery]);
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
           <Box>
@@ -595,7 +595,7 @@ function InstalledPluginsContent() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

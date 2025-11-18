@@ -83,7 +83,7 @@ import {
   Wifi as ConnectedIcon,
   WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import { QRCodeSVG } from 'qrcode.react';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
@@ -304,7 +304,7 @@ function SecuritySettingsContent() {
   };
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -626,7 +626,7 @@ function SecuritySettingsContent() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

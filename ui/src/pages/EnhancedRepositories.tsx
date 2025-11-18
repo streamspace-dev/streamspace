@@ -25,7 +25,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Error as ErrorIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import RepositoryCard from '../components/RepositoryCard';
 import RepositoryDialog from '../components/RepositoryDialog';
 import {
@@ -273,16 +273,16 @@ function EnhancedRepositoriesContent() {
 
   if (isLoading) {
     return (
-      <Layout>
+      <AdminPortalLayout>
         <Box sx={{ display: 'flex', justifyContent: 'center', py: 8 }}>
           <CircularProgress />
         </Box>
-      </Layout>
+      </AdminPortalLayout>
     );
   }
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         {/* Header */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
@@ -478,7 +478,7 @@ function EnhancedRepositoriesContent() {
           }
         `}</style>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

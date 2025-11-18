@@ -27,7 +27,7 @@ import {
   CheckCircle as CheckCircleIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 import { useMetricsWebSocket } from '../../hooks/useWebSocket';
 import { useMetrics, useSessions } from '../../hooks/useApi';
 import { useEnhancedWebSocket } from '../../hooks/useWebSocketEnhancements';
@@ -263,25 +263,25 @@ export default function AdminDashboard() {
 
   if (loading) {
     return (
-      <Layout>
+      <AdminPortalLayout>
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
           <CircularProgress />
         </Box>
-      </Layout>
+      </AdminPortalLayout>
     );
   }
 
   if (!metrics) {
     return (
-      <Layout>
+      <AdminPortalLayout>
         <Alert severity="error">Failed to load metrics</Alert>
-      </Layout>
+      </AdminPortalLayout>
     );
   }
 
   return (
     <WebSocketErrorBoundary>
-      <Layout>
+      <AdminPortalLayout>
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -597,7 +597,7 @@ export default function AdminDashboard() {
           </TableContainer>
         </Paper>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
     </WebSocketErrorBoundary>
   );
 }

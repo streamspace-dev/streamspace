@@ -12,17 +12,20 @@ import SetupWizard from './pages/SetupWizard';
 
 // Lazy load all other pages for code splitting
 // User Pages
-const Dashboard = lazy(() => import('./pages/Dashboard'));
+const OktaStyleDashboard = lazy(() => import('./pages/OktaStyleDashboard'));
 const Sessions = lazy(() => import('./pages/Sessions'));
 const SharedSessions = lazy(() => import('./pages/SharedSessions'));
 const InvitationAccept = lazy(() => import('./pages/InvitationAccept'));
-const EnhancedCatalog = lazy(() => import('./pages/EnhancedCatalog'));
-const EnhancedRepositories = lazy(() => import('./pages/EnhancedRepositories'));
 const SessionViewer = lazy(() => import('./pages/SessionViewer'));
-const PluginCatalog = lazy(() => import('./pages/PluginCatalog'));
-const InstalledPlugins = lazy(() => import('./pages/InstalledPlugins'));
+const UserSettings = lazy(() => import('./pages/UserSettings'));
+
+// Admin Content Management Pages (moved from user pages)
+const EnhancedCatalog = lazy(() => import('./pages/EnhancedCatalog'));
 const Scheduling = lazy(() => import('./pages/Scheduling'));
 const SecuritySettings = lazy(() => import('./pages/SecuritySettings'));
+const EnhancedRepositories = lazy(() => import('./pages/EnhancedRepositories'));
+const PluginCatalog = lazy(() => import('./pages/PluginCatalog'));
+const InstalledPlugins = lazy(() => import('./pages/InstalledPlugins'));
 
 // Admin Pages (loaded only for admin users)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -141,7 +144,7 @@ function App() {
               path="/"
               element={
                 <ProtectedRoute>
-                  <Dashboard />
+                  <OktaStyleDashboard />
                 </ProtectedRoute>
               }
             />
@@ -178,50 +181,10 @@ function App() {
               }
             />
             <Route
-              path="/catalog"
+              path="/settings"
               element={
                 <ProtectedRoute>
-                  <EnhancedCatalog />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/repositories"
-              element={
-                <ProtectedRoute>
-                  <EnhancedRepositories />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/plugins/catalog"
-              element={
-                <ProtectedRoute>
-                  <PluginCatalog />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/plugins/installed"
-              element={
-                <ProtectedRoute>
-                  <InstalledPlugins />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/scheduling"
-              element={
-                <ProtectedRoute>
-                  <Scheduling />
-                </ProtectedRoute>
-              }
-            />
-            <Route
-              path="/security"
-              element={
-                <ProtectedRoute>
-                  <SecuritySettings />
+                  <UserSettings />
                 </ProtectedRoute>
               }
             />
@@ -334,6 +297,56 @@ function App() {
               element={
                 <AdminRoute>
                   <Compliance />
+                </AdminRoute>
+              }
+            />
+
+            {/* Admin Content Management Routes */}
+            <Route
+              path="/admin/templates"
+              element={
+                <AdminRoute>
+                  <EnhancedCatalog />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/repositories"
+              element={
+                <AdminRoute>
+                  <EnhancedRepositories />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/plugin-catalog"
+              element={
+                <AdminRoute>
+                  <PluginCatalog />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/installed-plugins"
+              element={
+                <AdminRoute>
+                  <InstalledPlugins />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/scheduling"
+              element={
+                <AdminRoute>
+                  <Scheduling />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/security"
+              element={
+                <AdminRoute>
+                  <SecuritySettings />
                 </AdminRoute>
               }
             />

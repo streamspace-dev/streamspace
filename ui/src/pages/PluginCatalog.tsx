@@ -19,7 +19,7 @@ import {
   ExtensionOff as NoPluginsIcon,
   AddCircleOutline as AddIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import PluginCard from '../components/PluginCard';
 import PluginCardSkeleton from '../components/PluginCardSkeleton';
 import PluginDetailModal from '../components/PluginDetailModal';
@@ -162,7 +162,7 @@ export default function PluginCatalog() {
   const hasActiveFilters = filters.search || filters.category || filters.pluginType;
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
           <Box>
@@ -356,6 +356,6 @@ export default function PluginCatalog() {
           onInstall={handleInstall}
         />
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }

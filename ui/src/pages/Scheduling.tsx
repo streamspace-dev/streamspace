@@ -42,7 +42,7 @@ import {
   Wifi as ConnectedIcon,
   WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
 import { useScheduleEvents } from '../hooks/useEnterpriseWebSocket';
@@ -362,7 +362,7 @@ function SchedulingContent() {
   };
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -742,7 +742,7 @@ function SchedulingContent() {
         </Dialog>
 
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

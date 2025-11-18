@@ -28,7 +28,7 @@ import {
   Refresh as RefreshIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 import { api, UserQuota, SetQuotaRequest } from '../../lib/api';
 import { useQuotaEvents } from '../../hooks/useEnterpriseWebSocket';
 import { useNotificationQueue } from '../../components/NotificationQueue';
@@ -267,17 +267,17 @@ export default function AdminQuotas() {
 
   if (loading) {
     return (
-      <Layout>
+      <AdminPortalLayout>
         <Box display="flex" justifyContent="center" alignItems="center" minHeight="60vh">
           <CircularProgress />
         </Box>
-      </Layout>
+      </AdminPortalLayout>
     );
   }
 
   return (
     <WebSocketErrorBoundary>
-      <Layout>
+      <AdminPortalLayout>
         <Box>
           <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
             <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -526,7 +526,7 @@ export default function AdminQuotas() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
     </WebSocketErrorBoundary>
   );
 }
