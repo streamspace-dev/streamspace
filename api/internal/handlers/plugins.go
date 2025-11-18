@@ -357,7 +357,7 @@ func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 			cp.created_at, cp.updated_at,
 			r.id as repo_id, r.name as repo_name, r.url as repo_url, r.type as repo_type
 		FROM catalog_plugins cp
-		JOIN catalog_repositories r ON cp.repository_id = r.id
+		JOIN repositories r ON cp.repository_id = r.id
 		WHERE 1=1
 	`
 
@@ -502,7 +502,7 @@ func (h *PluginHandler) GetCatalogPlugin(c *gin.Context) {
 			cp.created_at, cp.updated_at,
 			r.id as repo_id, r.name as repo_name, r.url as repo_url, r.type as repo_type
 		FROM catalog_plugins cp
-		JOIN catalog_repositories r ON cp.repository_id = r.id
+		JOIN repositories r ON cp.repository_id = r.id
 		WHERE cp.id = $1
 	`
 
