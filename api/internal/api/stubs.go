@@ -677,6 +677,8 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 
 	// Initialize default values
 	var err error
+	var nodes *corev1.NodeList
+	var pods *corev1.PodList
 	totalNodes := 0
 	readyNodes := 0
 	totalCPU := int64(0)
