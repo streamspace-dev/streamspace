@@ -167,6 +167,24 @@ func (h *UserHandler) CreateUser(c *gin.Context) {
 		return
 	}
 
+	// Validate password for local auth users
+	if req.Provider == "" || req.Provider == "local" {
+		if req.Password == "" {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "Invalid request",
+				Message: "Password is required for local authentication",
+			})
+			return
+		}
+		if len(req.Password) < 8 {
+			c.JSON(http.StatusBadRequest, ErrorResponse{
+				Error:   "Invalid request",
+				Message: "Password must be at least 8 characters",
+			})
+			return
+		}
+	}
+
 	user, err := h.userDB.CreateUser(c.Request.Context(), &req)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
