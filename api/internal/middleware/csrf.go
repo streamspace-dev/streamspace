@@ -441,6 +441,16 @@ func CSRFProtection() gin.HandlerFunc {
 		// WHY EXEMPT: Safe methods are idempotent and read-only by HTTP specification.
 		// They should not have side effects, so CSRF is not a risk.
 		if c.Request.Method == "GET" || c.Request.Method == "HEAD" || c.Request.Method == "OPTIONS" {
+			// Check if client already has a valid token
+			// Reuse existing token to prevent token churn that causes mismatches
+			existingToken, err := c.Cookie(CSRFCookieName)
+			if err == nil && existingToken != "" && globalCSRFStore.validateToken(existingToken) {
+				// Existing token is still valid, send it back in header
+				c.Header(CSRFTokenHeader, existingToken)
+				c.Next()
+				return
+			}
+
 			// STEP 1: Generate new CSRF token
 			// Uses crypto/rand for cryptographic security
 			token, err := generateCSRFToken()
