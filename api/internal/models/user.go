@@ -414,9 +414,9 @@ type CreateUserRequest struct {
 	Username string `json:"username" binding:"required"`
 	Email    string `json:"email" binding:"required,email"`
 	FullName string `json:"fullName" binding:"required"`
-	Password string `json:"password" binding:"required,min=8"` // Only for local auth
-	Role     string `json:"role"`                              // user, admin, operator
-	Provider string `json:"provider"`                          // local, saml, oidc
+	Password string `json:"password"` // Required for local auth, validated in handler
+	Role     string `json:"role"`     // user, admin, operator
+	Provider string `json:"provider"` // local, saml, oidc
 }
 
 // UpdateUserRequest represents a request to update an existing user.

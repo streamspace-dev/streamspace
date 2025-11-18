@@ -1400,7 +1400,7 @@ func (h *Handler) ListRepositories(c *gin.Context) {
 	ctx := c.Request.Context()
 
 	rows, err := h.db.DB().QueryContext(ctx, `
-		SELECT id, name, url, branch, COALESCE(type, 'template'), auth_type, last_sync, template_count, status, error_message, created_at, updated_at
+		SELECT id, COALESCE(name, ''), url, COALESCE(branch, 'main'), COALESCE(type, 'template'), COALESCE(auth_type, 'none'), last_sync, COALESCE(template_count, 0), COALESCE(status, 'pending'), error_message, created_at, updated_at
 		FROM repositories
 		ORDER BY name ASC
 	`)

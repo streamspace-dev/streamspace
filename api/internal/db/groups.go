@@ -193,7 +193,7 @@ func (g *GroupDB) GetGroupByName(ctx context.Context, name string) (*models.Grou
 func (g *GroupDB) ListGroups(ctx context.Context, groupType string, parentID *string) ([]*models.Group, error) {
 	query := `
 		SELECT g.id, g.name, COALESCE(g.display_name, '') as display_name,
-		       COALESCE(g.description, '') as description, g.type, g.parent_id,
+		       COALESCE(g.description, '') as description, COALESCE(g.type, 'team'), g.parent_id,
 		       g.created_at, g.updated_at, COUNT(gm.user_id) as member_count
 		FROM groups g
 		LEFT JOIN group_memberships gm ON g.id = gm.group_id

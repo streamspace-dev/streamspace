@@ -269,7 +269,7 @@ func (u *UserDB) GetUserByEmail(ctx context.Context, email string) (*models.User
 // ListUsers retrieves all users with optional filtering
 func (u *UserDB) ListUsers(ctx context.Context, role, provider string, activeOnly bool) ([]*models.User, error) {
 	query := `
-		SELECT id, username, email, full_name, role, provider, active, created_at, updated_at, last_login
+		SELECT id, username, email, COALESCE(full_name, ''), COALESCE(role, 'user'), COALESCE(provider, 'local'), COALESCE(active, true), created_at, updated_at, last_login
 		FROM users
 		WHERE 1=1
 	`
