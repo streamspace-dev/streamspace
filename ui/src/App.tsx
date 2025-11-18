@@ -26,7 +26,7 @@ import SetupWizard from './pages/SetupWizard';
 
 // Lazy load all other pages for code splitting
 // User Pages
-const OktaStyleDashboard = lazy(() => import('./pages/OktaStyleDashboard'));
+const Dashboard = lazy(() => import('./pages/Dashboard'));
 const Sessions = lazy(() => import('./pages/Sessions'));
 const SharedSessions = lazy(() => import('./pages/SharedSessions'));
 const InvitationAccept = lazy(() => import('./pages/InvitationAccept'));
@@ -186,7 +186,7 @@ function App() {
               path="/"
               element={
                 <ProtectedRoute>
-                  <OktaStyleDashboard />
+                  <Dashboard />
                 </ProtectedRoute>
               }
             />
