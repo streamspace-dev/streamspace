@@ -378,6 +378,12 @@ func (d *Database) Migrate() error {
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
 		)`,
 
+		// Insert default repositories (plugins and templates)
+		`INSERT INTO repositories (name, url, branch, auth_type, status) VALUES
+			('Official Plugins', 'https://github.com/JoshuaAFerguson/streamspace-plugins', 'main', 'none', 'active'),
+			('Official Templates', 'https://github.com/JoshuaAFerguson/streamspace-templates', 'main', 'none', 'active')
+		ON CONFLICT (name) DO NOTHING`,
+
 		// Catalog templates (cache of templates from repos)
 		`CREATE TABLE IF NOT EXISTS catalog_templates (
 			id SERIAL PRIMARY KEY,
