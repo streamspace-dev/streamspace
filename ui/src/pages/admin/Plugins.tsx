@@ -32,7 +32,7 @@ import {
   Extension as ExtensionIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 import { api, type InstalledPlugin } from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { usePluginEvents } from '../../hooks/useEnterpriseWebSocket';
@@ -277,7 +277,7 @@ export default function AdminPlugins() {
 
   return (
     <WebSocketErrorBoundary>
-      <Layout>
+      <AdminPortalLayout>
         <Box>
           <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
             <Box>
@@ -560,7 +560,7 @@ export default function AdminPlugins() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
     </WebSocketErrorBoundary>
   );
 }

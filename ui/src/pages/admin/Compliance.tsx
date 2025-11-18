@@ -89,7 +89,7 @@ import {
   Wifi as ConnectedIcon,
   WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 import api from '../../lib/api';
 import { toast } from '../../lib/toast';
 import { useComplianceViolationEvents } from '../../hooks/useEnterpriseWebSocket';
@@ -455,7 +455,7 @@ function ComplianceContent() {
   };
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -863,7 +863,7 @@ function ComplianceContent() {
           </DialogActions>
         </Dialog>
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

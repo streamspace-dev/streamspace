@@ -102,28 +102,26 @@ function Layout({ children }: LayoutProps) {
   };
 
   const menuItems = [
-    { text: 'Dashboard', icon: <DashboardIcon />, path: '/' },
+    { text: 'My Applications', icon: <AppsIcon />, path: '/' },
     { text: 'My Sessions', icon: <ComputerIcon />, path: '/sessions' },
     { text: 'Shared with Me', icon: <ShareIcon />, path: '/shared-sessions' },
-    { text: 'Template Catalog', icon: <AppsIcon />, path: '/catalog' },
-    { text: 'Plugin Catalog', icon: <ExtensionIcon />, path: '/plugins/catalog' },
-    { text: 'My Plugins', icon: <ExtensionIcon />, path: '/plugins/installed' },
-    { text: 'Repositories', icon: <FolderIcon />, path: '/repositories' },
     { text: 'Scheduling', icon: <ScheduleIcon />, path: '/scheduling' },
     { text: 'Security', icon: <SecurityIcon />, path: '/security' },
   ];
 
-  const adminMenuItems = [
-    { text: 'Admin Dashboard', icon: <AdminIcon />, path: '/admin/dashboard' },
-    { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
-    { text: 'Groups', icon: <GroupsIcon />, path: '/admin/groups' },
-    { text: 'Cluster Nodes', icon: <StorageIcon />, path: '/admin/nodes' },
-    { text: 'User Quotas', icon: <PeopleIcon />, path: '/admin/quotas' },
-    { text: 'Plugin Management', icon: <ExtensionIcon />, path: '/admin/plugins' },
-    { text: 'Integrations', icon: <IntegrationIcon />, path: '/admin/integrations' },
-    { text: 'Scaling', icon: <ScalingIcon />, path: '/admin/scaling' },
-    { text: 'Compliance', icon: <ComplianceIcon />, path: '/admin/compliance' },
-  ];
+  const handleOpenAdminPortal = () => {
+    // Open admin portal in new window
+    const width = 1400;
+    const height = 900;
+    const left = (window.screen.width - width) / 2;
+    const top = (window.screen.height - height) / 2;
+
+    window.open(
+      '/admin/dashboard',
+      'StreamSpace Admin Portal',
+      `width=${width},height=${height},left=${left},top=${top},toolbar=no,menubar=no,location=no`
+    );
+  };
 
   const drawer = (
     <div>
@@ -146,27 +144,6 @@ function Layout({ children }: LayoutProps) {
           </ListItem>
         ))}
       </List>
-      {role === 'admin' && (
-        <>
-          <Divider />
-          <Typography variant="caption" sx={{ px: 2, py: 1, color: 'text.secondary' }}>
-            ADMIN
-          </Typography>
-          <List>
-            {adminMenuItems.map((item) => (
-              <ListItem key={item.text} disablePadding>
-                <ListItemButton
-                  selected={location.pathname === item.path}
-                  onClick={() => navigate(item.path)}
-                >
-                  <ListItemIcon>{item.icon}</ListItemIcon>
-                  <ListItemText primary={item.text} />
-                </ListItemButton>
-              </ListItem>
-            ))}
-          </List>
-        </>
-      )}
       <Divider />
       <List>
         <ListItem disablePadding>
@@ -203,6 +180,25 @@ function Layout({ children }: LayoutProps) {
           <Typography variant="h6" noWrap component="div" sx={{ flexGrow: 1 }}>
             {menuItems.find((item) => item.path === location.pathname)?.text || 'StreamSpace'}
           </Typography>
+
+          {/* Admin Portal Button (only visible to admins) */}
+          {role === 'admin' && (
+            <IconButton
+              onClick={handleOpenAdminPortal}
+              sx={{
+                mr: 2,
+                bgcolor: 'rgba(255, 255, 255, 0.1)',
+                '&:hover': {
+                  bgcolor: 'rgba(255, 255, 255, 0.2)',
+                },
+              }}
+              title="Open Admin Portal"
+            >
+              <AdminIcon />
+            </IconButton>
+          )}
+
+          {/* User Avatar Menu */}
           <IconButton onClick={handleMenuOpen} sx={{ p: 0 }}>
             <Avatar sx={{ bgcolor: 'secondary.main' }}>
               {username?.charAt(0).toUpperCase() || 'U'}

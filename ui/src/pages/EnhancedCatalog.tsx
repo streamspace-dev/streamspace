@@ -18,7 +18,7 @@ import {
   Star as FeaturedIcon,
   Refresh as RefreshIcon,
 } from '@mui/icons-material';
-import Layout from '../components/Layout';
+import AdminPortalLayout from '../components/AdminPortalLayout';
 import TemplateCard from '../components/TemplateCard';
 import TemplateDetailModal from '../components/TemplateDetailModal';
 import { api, type CatalogTemplate, type CatalogFilters } from '../lib/api';
@@ -192,7 +192,7 @@ function EnhancedCatalogContent() {
   const hasActiveFilters = filters.search || filters.category || filters.appType || filters.featured;
 
   return (
-    <Layout>
+    <AdminPortalLayout>
       <Box>
         <Box display="flex" justifyContent="space-between" alignItems="center" mb={3}>
           <Typography variant="h4" sx={{ fontWeight: 700 }}>
@@ -358,7 +358,7 @@ function EnhancedCatalogContent() {
           onInstall={handleInstall}
         />
       </Box>
-    </Layout>
+    </AdminPortalLayout>
   );
 }
 

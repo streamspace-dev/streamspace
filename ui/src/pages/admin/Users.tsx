@@ -41,7 +41,7 @@ import { useUserEvents } from '../../hooks/useEnterpriseWebSocket';
 import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
-import Layout from '../../components/Layout';
+import AdminPortalLayout from '../../components/AdminPortalLayout';
 
 /**
  * Users - User account management for administrators
@@ -239,7 +239,7 @@ export default function Users() {
 
   return (
     <WebSocketErrorBoundary>
-      <Layout>
+      <AdminPortalLayout>
         <Container maxWidth="xl" sx={{ py: 4 }}>
         <Box sx={{ mb: 4, display: 'flex', alignItems: 'center', justifyContent: 'space-between' }}>
           <Box sx={{ display: 'flex', alignItems: 'center', gap: 2 }}>
@@ -451,7 +451,7 @@ export default function Users() {
         </DialogActions>
       </Dialog>
         </Container>
-      </Layout>
+      </AdminPortalLayout>
     </WebSocketErrorBoundary>
   );
 }
