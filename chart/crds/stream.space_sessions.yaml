@@ -1,0 +1,131 @@
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: sessions.stream.space
+spec:
+  group: stream.space
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          properties:
+            spec:
+              type: object
+              required: [user, template, state]
+              properties:
+                user:
+                  type: string
+                  description: Username who owns this session
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                template:
+                  type: string
+                  description: Template name to use for this session
+                  minLength: 1
+                  maxLength: 253
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                state:
+                  type: string
+                  enum: [running, hibernated, terminated]
+                  description: Desired state of the session
+                resources:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                      description: Memory limit (e.g., 2Gi, 4Gi)
+                      pattern: '^[0-9]+(Mi|Gi|Ti)$'
+                      minLength: 2
+                      maxLength: 10
+                    cpu:
+                      type: string
+                      description: CPU limit (e.g., 1000m, 2000m)
+                      pattern: '^[0-9]+(m)?$'
+                      minLength: 1
+                      maxLength: 10
+                persistentHome:
+                  type: boolean
+                  default: true
+                  description: Mount persistent home directory
+                idleTimeout:
+                  type: string
+                  default: "30m"
+                  description: Idle timeout before hibernation (e.g., 30m, 1h)
+                  pattern: '^[0-9]+(s|m|h)$'
+                  minLength: 2
+                  maxLength: 10
+                maxSessionDuration:
+                  type: string
+                  default: "8h"
+                  description: Maximum session duration before forced termination
+                  pattern: '^[0-9]+(s|m|h)$'
+                  minLength: 2
+                  maxLength: 10
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  enum: [Pending, Running, Hibernated, Failed, Terminated]
+                podName:
+                  type: string
+                url:
+                  type: string
+                lastActivity:
+                  type: string
+                  format: date-time
+                resourceUsage:
+                  type: object
+                  properties:
+                    memory:
+                      type: string
+                    cpu:
+                      type: string
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    properties:
+                      type:
+                        type: string
+                      status:
+                        type: string
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                      message:
+                        type: string
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: User
+          type: string
+          jsonPath: .spec.user
+        - name: Template
+          type: string
+          jsonPath: .spec.template
+        - name: State
+          type: string
+          jsonPath: .spec.state
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: URL
+          type: string
+          jsonPath: .status.url
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: sessions
+    singular: session
+    kind: Session
+    shortNames:
+      - ss
