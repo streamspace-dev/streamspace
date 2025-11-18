@@ -3,6 +3,7 @@
 // This controller manages the lifecycle of StreamSpace custom resources:
 //   - Session: User workspace sessions with auto-hibernation
 //   - Template: Application template definitions
+//   - ApplicationInstall: Application installations from catalog
 //
 // The controller uses Kubebuilder framework and implements reconciliation loops
 // to ensure the actual cluster state matches the desired state defined in CRDs.
@@ -12,12 +13,14 @@
 //   - Auto-hibernation based on idle timeouts
 //   - User persistent volume provisioning
 //   - Template validation and management
+//   - Application installation and Template creation
 //   - Prometheus metrics export for monitoring
 //
 // Architecture:
 //   - SessionReconciler: Main reconciler for Session resources
 //   - TemplateReconciler: Reconciler for Template resources
 //   - HibernationReconciler: Handles automatic session hibernation
+//   - ApplicationInstallReconciler: Creates Templates from ApplicationInstall CRDs
 //
 // Deployment:
 //   The controller is designed to run as a Kubernetes Deployment with:
@@ -166,6 +169,20 @@ func main() {
 		Scheme: mgr.GetScheme(),
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Hibernation")
+		os.Exit(1)
+	}
+
+	// Register ApplicationInstallReconciler
+	// Handles application installation from the catalog:
+	//   - Watches ApplicationInstall CRDs created by the API
+	//   - Parses the manifest field to create Template CRDs
+	//   - Sets owner references for cascading deletion
+	//   - Updates status with creation progress (Pending → Creating → Ready/Failed)
+	if err = (&controllers.ApplicationInstallReconciler{
+		Client: mgr.GetClient(),
+		Scheme: mgr.GetScheme(),
+	}).SetupWithManager(mgr); err != nil {
+		setupLog.Error(err, "unable to create controller", "controller", "ApplicationInstall")
 		os.Exit(1)
 	}
 

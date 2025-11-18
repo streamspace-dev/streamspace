@@ -179,6 +179,27 @@ type WebAppConfig struct {
 	Path    string
 }
 
+// ApplicationInstall represents a request to install an application
+// The controller watches these and creates the corresponding Template CRD
+type ApplicationInstall struct {
+	Name              string
+	Namespace         string
+	CatalogTemplateID int
+	TemplateName      string
+	DisplayName       string
+	Description       string
+	Category          string
+	Icon              string
+	Manifest          string // YAML manifest for the Template
+	InstalledBy       string
+	// Status fields
+	Phase                string // Pending, Creating, Ready, Failed
+	StatusMessage        string
+	LastTransitionTime   *time.Time
+	CreatedTemplateName  string
+	CreatedTemplateNS    string
+}
+
 // Client wraps Kubernetes clients for StreamSpace CRD operations
 type Client struct {
 	clientset     *kubernetes.Clientset
@@ -198,6 +219,12 @@ var (
 		Group:    "stream.space",
 		Version:  "v1alpha1",
 		Resource: "templates",
+	}
+
+	applicationInstallGVR = schema.GroupVersionResource{
+		Group:    "stream.space",
+		Version:  "v1alpha1",
+		Resource: "applicationinstalls",
 	}
 )
 
@@ -803,6 +830,170 @@ func parseTemplate(obj *unstructured.Unstructured) (*Template, error) {
 	}
 
 	return template, nil
+}
+
+// ============================================================================
+// ApplicationInstall Operations
+// ============================================================================
+
+// CreateApplicationInstall creates a new ApplicationInstall resource
+// The controller will watch this and create the corresponding Template CRD
+func (c *Client) CreateApplicationInstall(ctx context.Context, appInstall *ApplicationInstall) (*ApplicationInstall, error) {
+	obj := &unstructured.Unstructured{
+		Object: map[string]interface{}{
+			"apiVersion": "stream.space/v1alpha1",
+			"kind":       "ApplicationInstall",
+			"metadata": map[string]interface{}{
+				"name":      appInstall.Name,
+				"namespace": appInstall.Namespace,
+			},
+			"spec": map[string]interface{}{
+				"catalogTemplateID": appInstall.CatalogTemplateID,
+				"templateName":      appInstall.TemplateName,
+				"displayName":       appInstall.DisplayName,
+				"description":       appInstall.Description,
+				"category":          appInstall.Category,
+				"icon":              appInstall.Icon,
+				"manifest":          appInstall.Manifest,
+				"installedBy":       appInstall.InstalledBy,
+			},
+		},
+	}
+
+	created, err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(appInstall.Namespace).Create(ctx, obj, metav1.CreateOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to create ApplicationInstall: %w", err)
+	}
+
+	return parseApplicationInstall(created)
+}
+
+// GetApplicationInstall retrieves an ApplicationInstall by name
+func (c *Client) GetApplicationInstall(ctx context.Context, namespace, name string) (*ApplicationInstall, error) {
+	obj, err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get ApplicationInstall: %w", err)
+	}
+
+	return parseApplicationInstall(obj)
+}
+
+// ListApplicationInstalls lists all ApplicationInstalls in a namespace
+func (c *Client) ListApplicationInstalls(ctx context.Context, namespace string) ([]*ApplicationInstall, error) {
+	list, err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).List(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to list ApplicationInstalls: %w", err)
+	}
+
+	appInstalls := make([]*ApplicationInstall, 0, len(list.Items))
+	for _, item := range list.Items {
+		appInstall, err := parseApplicationInstall(&item)
+		if err != nil {
+			continue
+		}
+		appInstalls = append(appInstalls, appInstall)
+	}
+
+	return appInstalls, nil
+}
+
+// UpdateApplicationInstallStatus updates the status of an ApplicationInstall
+func (c *Client) UpdateApplicationInstallStatus(ctx context.Context, namespace, name string, phase, message string) error {
+	obj, err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).Get(ctx, name, metav1.GetOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to get ApplicationInstall: %w", err)
+	}
+
+	// Update status
+	status := map[string]interface{}{
+		"phase":              phase,
+		"message":            message,
+		"lastTransitionTime": time.Now().UTC().Format(time.RFC3339),
+	}
+	obj.Object["status"] = status
+
+	_, err = c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).UpdateStatus(ctx, obj, metav1.UpdateOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to update ApplicationInstall status: %w", err)
+	}
+
+	return nil
+}
+
+// DeleteApplicationInstall deletes an ApplicationInstall
+func (c *Client) DeleteApplicationInstall(ctx context.Context, namespace, name string) error {
+	err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).Delete(ctx, name, metav1.DeleteOptions{})
+	if err != nil {
+		return fmt.Errorf("failed to delete ApplicationInstall: %w", err)
+	}
+
+	return nil
+}
+
+// WatchApplicationInstalls watches for ApplicationInstall changes
+func (c *Client) WatchApplicationInstalls(ctx context.Context, namespace string) (watch.Interface, error) {
+	watcher, err := c.dynamicClient.Resource(applicationInstallGVR).Namespace(namespace).Watch(ctx, metav1.ListOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to watch ApplicationInstalls: %w", err)
+	}
+
+	return watcher, nil
+}
+
+// parseApplicationInstall converts unstructured to typed ApplicationInstall
+func parseApplicationInstall(obj *unstructured.Unstructured) (*ApplicationInstall, error) {
+	appInstall := &ApplicationInstall{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}
+
+	spec, ok := obj.Object["spec"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid ApplicationInstall spec")
+	}
+
+	if catalogTemplateID, ok := spec["catalogTemplateID"].(float64); ok {
+		appInstall.CatalogTemplateID = int(catalogTemplateID)
+	}
+	if templateName, ok := spec["templateName"].(string); ok {
+		appInstall.TemplateName = templateName
+	}
+	if displayName, ok := spec["displayName"].(string); ok {
+		appInstall.DisplayName = displayName
+	}
+	if description, ok := spec["description"].(string); ok {
+		appInstall.Description = description
+	}
+	if category, ok := spec["category"].(string); ok {
+		appInstall.Category = category
+	}
+	if icon, ok := spec["icon"].(string); ok {
+		appInstall.Icon = icon
+	}
+	if manifest, ok := spec["manifest"].(string); ok {
+		appInstall.Manifest = manifest
+	}
+	if installedBy, ok := spec["installedBy"].(string); ok {
+		appInstall.InstalledBy = installedBy
+	}
+
+	// Parse status
+	if status, ok := obj.Object["status"].(map[string]interface{}); ok {
+		if phase, ok := status["phase"].(string); ok {
+			appInstall.Phase = phase
+		}
+		if message, ok := status["message"].(string); ok {
+			appInstall.StatusMessage = message
+		}
+		if templateName, ok := status["templateName"].(string); ok {
+			appInstall.CreatedTemplateName = templateName
+		}
+		if templateNS, ok := status["templateNamespace"].(string); ok {
+			appInstall.CreatedTemplateNS = templateNS
+		}
+	}
+
+	return appInstall, nil
 }
 
 // ============================================================================

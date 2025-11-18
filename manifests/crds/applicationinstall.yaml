@@ -1,0 +1,146 @@
+# ApplicationInstall CRD
+#
+# This resource represents an admin request to install an application from the catalog.
+# The controller watches these resources and creates the corresponding Template CRD.
+#
+# Flow:
+# 1. Admin installs app via API → API creates ApplicationInstall CRD
+# 2. Controller reconciles → Creates Template CRD from manifest
+# 3. Controller updates status → Ready or Failed
+# 4. Users can now launch sessions using the Template
+#
+# This pattern provides:
+# - Automatic retry on failure
+# - Clear status reporting
+# - Separation of concerns (API doesn't need K8s write permissions for Templates)
+# - Consistent with Kubernetes declarative patterns
+
+apiVersion: apiextensions.k8s.io/v1
+kind: CustomResourceDefinition
+metadata:
+  name: applicationinstalls.stream.space
+  annotations:
+    description: "Represents an installed application that creates a Template CRD"
+spec:
+  group: stream.space
+  versions:
+    - name: v1alpha1
+      served: true
+      storage: true
+      schema:
+        openAPIV3Schema:
+          type: object
+          required:
+            - spec
+          properties:
+            spec:
+              type: object
+              required:
+                - templateName
+                - displayName
+                - manifest
+              properties:
+                # Reference to catalog template (for tracking/analytics)
+                catalogTemplateID:
+                  type: integer
+                  description: "ID of the catalog template this was installed from"
+
+                # Template metadata
+                templateName:
+                  type: string
+                  description: "Name for the Kubernetes Template CRD to create"
+                  pattern: '^[a-z0-9]([-a-z0-9]*[a-z0-9])?$'
+                displayName:
+                  type: string
+                  description: "Human-readable display name"
+                description:
+                  type: string
+                  description: "Description of the application"
+                category:
+                  type: string
+                  description: "Application category (e.g., Web Browsers, Development)"
+                icon:
+                  type: string
+                  description: "URL to application icon"
+
+                # The full template manifest as YAML string
+                # Controller will parse this and create the Template CRD
+                manifest:
+                  type: string
+                  description: "YAML manifest for the Template CRD"
+
+                # Who installed this application
+                installedBy:
+                  type: string
+                  description: "User ID who installed this application"
+
+            status:
+              type: object
+              properties:
+                phase:
+                  type: string
+                  description: "Current phase of the installation"
+                  enum:
+                    - Pending
+                    - Creating
+                    - Ready
+                    - Failed
+                templateName:
+                  type: string
+                  description: "Name of the created Template CRD"
+                templateNamespace:
+                  type: string
+                  description: "Namespace of the created Template CRD"
+                message:
+                  type: string
+                  description: "Human-readable status message"
+                lastTransitionTime:
+                  type: string
+                  format: date-time
+                  description: "Last time the status changed"
+                conditions:
+                  type: array
+                  items:
+                    type: object
+                    required:
+                      - type
+                      - status
+                    properties:
+                      type:
+                        type: string
+                        description: "Type of condition"
+                      status:
+                        type: string
+                        enum: ["True", "False", "Unknown"]
+                      lastTransitionTime:
+                        type: string
+                        format: date-time
+                      reason:
+                        type: string
+                        description: "Machine-readable reason for the condition"
+                      message:
+                        type: string
+                        description: "Human-readable message"
+      subresources:
+        status: {}
+      additionalPrinterColumns:
+        - name: Template
+          type: string
+          jsonPath: .spec.templateName
+        - name: Display Name
+          type: string
+          jsonPath: .spec.displayName
+        - name: Phase
+          type: string
+          jsonPath: .status.phase
+        - name: Age
+          type: date
+          jsonPath: .metadata.creationTimestamp
+  scope: Namespaced
+  names:
+    plural: applicationinstalls
+    singular: applicationinstall
+    kind: ApplicationInstall
+    shortNames:
+      - appinstall
+      - ai
