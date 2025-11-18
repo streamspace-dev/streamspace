@@ -189,13 +189,13 @@ type Client struct {
 
 var (
 	sessionGVR = schema.GroupVersionResource{
-		Group:    "stream.streamspace.io",
+		Group:    "stream.space",
 		Version:  "v1alpha1",
 		Resource: "sessions",
 	}
 
 	templateGVR = schema.GroupVersionResource{
-		Group:    "stream.streamspace.io",
+		Group:    "stream.space",
 		Version:  "v1alpha1",
 		Resource: "templates",
 	}

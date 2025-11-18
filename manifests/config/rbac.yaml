@@ -118,3 +118,114 @@ roleRef:
   kind: ClusterRole
   name: streamspace-controller-crd-reader
   apiGroup: rbac.authorization.k8s.io
+
+---
+# ServiceAccount for StreamSpace API backend
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: api
+automountServiceAccountToken: true
+
+---
+# ClusterRole for API backend (needs cluster-wide node access)
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRole
+metadata:
+  name: streamspace-api
+rules:
+  # Read CRD definitions
+  - apiGroups: [apiextensions.k8s.io]
+    resources: [customresourcedefinitions]
+    verbs: [get, list, watch]
+
+  # Cluster-wide node access (nodes are cluster-scoped resources)
+  - apiGroups: [""]
+    resources: [nodes]
+    verbs: [get, list, watch, update, patch]
+
+  # Manage Sessions and Templates (cluster-wide for multi-namespace support)
+  - apiGroups: [stream.space]
+    resources: [sessions, templates]
+    verbs: [get, list, watch, create, update, patch, delete]
+  - apiGroups: [stream.space]
+    resources: [sessions/status, templates/status]
+    verbs: [get, update, patch]
+
+---
+# Role for API backend namespace-scoped resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+rules:
+  # Manage session pods
+  - apiGroups: [""]
+    resources: [pods]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Manage session services and PVCs
+  - apiGroups: [""]
+    resources: [services, persistentvolumeclaims]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Manage session deployments
+  - apiGroups: [apps]
+    resources: [deployments]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Access to configmaps and secrets
+  - apiGroups: [""]
+    resources: [configmaps, secrets]
+    verbs: [get, list, watch]
+
+  # Create events for logging
+  - apiGroups: [""]
+    resources: [events]
+    verbs: [create, patch]
+
+  # Manage ingress for session access
+  - apiGroups: [networking.k8s.io]
+    resources: [ingresses]
+    verbs: [get, list, watch, create, update, patch, delete]
+
+  # Read pod logs for debugging
+  - apiGroups: [""]
+    resources: [pods/log]
+    verbs: [get, list]
+
+---
+# ClusterRoleBinding for API backend cluster-wide permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: ClusterRoleBinding
+metadata:
+  name: streamspace-api
+subjects:
+  - kind: ServiceAccount
+    name: streamspace-api
+    namespace: streamspace
+roleRef:
+  kind: ClusterRole
+  name: streamspace-api
+  apiGroup: rbac.authorization.k8s.io
+
+---
+# RoleBinding for API backend namespace-scoped permissions
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: streamspace-api
+  namespace: streamspace
+subjects:
+  - kind: ServiceAccount
+    name: streamspace-api
+    namespace: streamspace
+roleRef:
+  kind: Role
+  name: streamspace-api
+  apiGroup: rbac.authorization.k8s.io
