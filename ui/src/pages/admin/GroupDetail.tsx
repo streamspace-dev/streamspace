@@ -333,7 +333,7 @@ export default function GroupDetail() {
                       Type
                     </Typography>
                     <Box sx={{ mt: 0.5 }}>
-                      <Chip label={group.type.toUpperCase()} size="small" />
+                      <Chip label={group.type?.toUpperCase() || 'UNKNOWN'} size="small" />
                     </Box>
                   </Box>
                   <Box>
