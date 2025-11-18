@@ -58,6 +58,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
@@ -209,7 +210,7 @@ func (h *CatalogHandler) ListTemplates(c *gin.Context) {
 	for rows.Next() {
 		var id, repositoryID, installCount, viewCount, ratingCount int
 		var name, displayName, description, category, appType, iconURL, version, repoName, repoURL string
-		var tags []string
+		var tags pq.StringArray
 		var isFeatured bool
 		var avgRating float64
 		var createdAt, updatedAt interface{}
@@ -323,7 +324,7 @@ func (h *CatalogHandler) GetTemplateDetails(c *gin.Context) {
 
 	var id, repositoryID, installCount, viewCount, ratingCount int
 	var name, displayName, description, category, appType, iconURL, manifest, version, repoName, repoURL string
-	var tags []string
+	var tags pq.StringArray
 	var isFeatured bool
 	var avgRating float64
 	var createdAt, updatedAt interface{}
