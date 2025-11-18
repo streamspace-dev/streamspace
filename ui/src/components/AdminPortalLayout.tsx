@@ -61,7 +61,7 @@ interface AdminPortalLayoutProps {
  * Navigation Sections:
  * - Overview: Admin dashboard
  * - Content Management: Templates, Plugins, Repositories
- * - User Management: Users, Groups, Quotas
+ * - User Management: Users, Groups
  * - System: Nodes, Integrations, Scaling, Compliance
  *
  * @component
@@ -132,7 +132,6 @@ function AdminPortalLayout({ children }: AdminPortalLayoutProps) {
       items: [
         { text: 'Users', icon: <PeopleIcon />, path: '/admin/users' },
         { text: 'Groups', icon: <GroupsIcon />, path: '/admin/groups' },
-        { text: 'User Quotas', icon: <PeopleIcon />, path: '/admin/quotas' },
       ],
     },
     {

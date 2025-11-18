@@ -44,6 +44,7 @@ import { useMFAMethods } from '../hooks/useApi';
 import { useQueryClient } from '@tanstack/react-query';
 import api from '../lib/api';
 import { toast } from '../lib/toast';
+import { useThemeMode } from '../App';
 
 /**
  * UserSettings - User account settings and preferences
@@ -62,6 +63,7 @@ export default function UserSettings() {
   const { user } = useUserStore();
   const queryClient = useQueryClient();
   const { data: mfaMethods = [], isLoading: mfaLoading } = useMFAMethods();
+  const { mode, toggleTheme } = useThemeMode();
 
   // Password change state
   const [passwordForm, setPasswordForm] = useState({
@@ -72,12 +74,6 @@ export default function UserSettings() {
   const [passwordError, setPasswordError] = useState('');
   const [passwordSuccess, setPasswordSuccess] = useState(false);
   const [changingPassword, setChangingPassword] = useState(false);
-
-  // Theme state
-  const [darkMode, setDarkMode] = useState(() => {
-    const stored = localStorage.getItem('theme');
-    return stored ? stored === 'dark' : true; // Default to dark
-  });
 
   // MFA setup state
   const [mfaDialogOpen, setMfaDialogOpen] = useState(false);
@@ -126,12 +122,7 @@ export default function UserSettings() {
 
   // Handle theme toggle
   const handleThemeToggle = () => {
-    const newTheme = !darkMode;
-    setDarkMode(newTheme);
-    localStorage.setItem('theme', newTheme ? 'dark' : 'light');
-    // Note: Full theme switching would require updating the ThemeProvider in App.tsx
-    // For now, this saves the preference
-    toast.info(`Theme preference saved. Refresh to apply ${newTheme ? 'dark' : 'light'} mode.`);
+    toggleTheme();
   };
 
   // Start MFA setup
@@ -217,12 +208,12 @@ export default function UserSettings() {
                 <FormControlLabel
                   control={
                     <Switch
-                      checked={darkMode}
+                      checked={mode === 'dark'}
                       onChange={handleThemeToggle}
                       color="primary"
                     />
                   }
-                  label={darkMode ? 'Dark Mode' : 'Light Mode'}
+                  label={mode === 'dark' ? 'Dark Mode' : 'Light Mode'}
                 />
                 <Typography variant="body2" color="text.secondary" sx={{ mt: 1 }}>
                   Choose your preferred color scheme for the interface.

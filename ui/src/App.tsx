@@ -1,10 +1,24 @@
-import { lazy, Suspense } from 'react';
+import { lazy, Suspense, useState, useMemo, createContext, useContext } from 'react';
 import { BrowserRouter, Routes, Route, Navigate } from 'react-router-dom';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { ThemeProvider, createTheme, CssBaseline, CircularProgress, Box } from '@mui/material';
 import { useUserStore } from './store/userStore';
 import ErrorBoundary from './components/ErrorBoundary';
 import NotificationQueue from './components/NotificationQueue';
+
+// Theme mode context
+type ThemeMode = 'light' | 'dark';
+interface ThemeContextType {
+  mode: ThemeMode;
+  toggleTheme: () => void;
+}
+
+const ThemeContext = createContext<ThemeContextType>({
+  mode: 'dark',
+  toggleTheme: () => {},
+});
+
+export const useThemeMode = () => useContext(ThemeContext);
 
 // Eagerly load Login page and SetupWizard (needed immediately)
 import Login from './pages/Login';
@@ -30,7 +44,6 @@ const InstalledPlugins = lazy(() => import('./pages/InstalledPlugins'));
 // Admin Pages (loaded only for admin users)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
 const AdminNodes = lazy(() => import('./pages/admin/Nodes'));
-const AdminQuotas = lazy(() => import('./pages/admin/Quotas'));
 const AdminPlugins = lazy(() => import('./pages/admin/Plugins'));
 const Users = lazy(() => import('./pages/admin/Users'));
 const UserDetail = lazy(() => import('./pages/admin/UserDetail'));
@@ -53,34 +66,41 @@ const queryClient = new QueryClient({
   },
 });
 
-// Create Material-UI theme
-const theme = createTheme({
-  palette: {
-    mode: 'dark',
-    primary: {
-      main: '#3f51b5',
+// Create Material-UI theme based on mode
+const createAppTheme = (mode: ThemeMode) =>
+  createTheme({
+    palette: {
+      mode,
+      primary: {
+        main: '#3f51b5',
+      },
+      secondary: {
+        main: '#f50057',
+      },
+      background:
+        mode === 'dark'
+          ? {
+              default: '#0a1929',
+              paper: '#132f4c',
+            }
+          : {
+              default: '#f5f5f5',
+              paper: '#ffffff',
+            },
     },
-    secondary: {
-      main: '#f50057',
+    typography: {
+      fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
     },
-    background: {
-      default: '#0a1929',
-      paper: '#132f4c',
-    },
-  },
-  typography: {
-    fontFamily: '"Inter", "Roboto", "Helvetica", "Arial", sans-serif',
-  },
-  components: {
-    MuiCard: {
-      styleOverrides: {
-        root: {
-          backgroundImage: 'none',
+    components: {
+      MuiCard: {
+        styleOverrides: {
+          root: {
+            backgroundImage: 'none',
+          },
         },
       },
     },
-  },
-});
+  });
 
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
@@ -127,14 +147,36 @@ function PageLoader() {
 }
 
 function App() {
+  // Initialize theme from localStorage or default to dark
+  const [mode, setMode] = useState<ThemeMode>(() => {
+    const stored = localStorage.getItem('theme');
+    return (stored === 'light' || stored === 'dark') ? stored : 'dark';
+  });
+
+  const toggleTheme = () => {
+    setMode((prevMode) => {
+      const newMode = prevMode === 'dark' ? 'light' : 'dark';
+      localStorage.setItem('theme', newMode);
+      return newMode;
+    });
+  };
+
+  const theme = useMemo(() => createAppTheme(mode), [mode]);
+
+  const themeContextValue = useMemo(
+    () => ({ mode, toggleTheme }),
+    [mode]
+  );
+
   return (
     <QueryClientProvider client={queryClient}>
-      <ThemeProvider theme={theme}>
-        <CssBaseline />
-        <ErrorBoundary>
-          <BrowserRouter>
-            <Suspense fallback={<PageLoader />}>
-              <Routes>
+      <ThemeContext.Provider value={themeContextValue}>
+        <ThemeProvider theme={theme}>
+          <CssBaseline />
+          <ErrorBoundary>
+            <BrowserRouter>
+              <Suspense fallback={<PageLoader />}>
+                <Routes>
             {/* Public routes */}
             <Route path="/login" element={<Login />} />
             <Route path="/setup" element={<SetupWizard />} />
@@ -209,14 +251,6 @@ function App() {
               element={
                 <AdminRoute>
                   <AdminNodes />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/quotas"
-              element={
-                <AdminRoute>
-                  <AdminQuotas />
                 </AdminRoute>
               }
             />
@@ -363,7 +397,8 @@ function App() {
           enableHistory={true}
           maxHistorySize={50}
         />
-      </ThemeProvider>
+        </ThemeProvider>
+      </ThemeContext.Provider>
     </QueryClientProvider>
   );
 }

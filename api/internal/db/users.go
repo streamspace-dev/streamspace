@@ -157,6 +157,12 @@ func (u *UserDB) CreateUser(ctx context.Context, req *models.CreateUserRequest) 
 		return nil, fmt.Errorf("failed to create default quota: %w", err)
 	}
 
+	// Add user to all_users group
+	if err := u.addToAllUsersGroup(ctx, user.ID); err != nil {
+		// Log but don't fail user creation
+		fmt.Printf("Warning: failed to add user %s to all_users group: %v\n", user.ID, err)
+	}
+
 	return user, nil
 }
 
@@ -573,6 +579,19 @@ func (u *UserDB) createDefaultQuota(ctx context.Context, userID string) error {
 		time.Now(), time.Now(),
 	)
 
+	return err
+}
+
+// addToAllUsersGroup adds a user to the default all_users group
+func (u *UserDB) addToAllUsersGroup(ctx context.Context, userID string) error {
+	query := `
+		INSERT INTO group_memberships (id, user_id, group_id, role, created_at)
+		SELECT $1, $2, id, 'member', NOW()
+		FROM groups WHERE name = 'all_users'
+		ON CONFLICT (user_id, group_id) DO NOTHING
+	`
+
+	_, err := u.db.ExecContext(ctx, query, uuid.New().String(), userID)
 	return err
 }
 

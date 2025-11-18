@@ -102,6 +102,7 @@ function EnhancedRepositoriesContent() {
   const [searchQuery, setSearchQuery] = useState('');
   const [viewMode, setViewMode] = useState<'grid' | 'list'>('grid');
   const [statusFilter, setStatusFilter] = useState<string>('all');
+  const [typeFilter, setTypeFilter] = useState<string>('all');
   const [snackbar, setSnackbar] = useState<{ open: boolean; message: string; severity: 'success' | 'error' }>({
     open: false,
     message: '',
@@ -262,14 +263,17 @@ function EnhancedRepositoriesContent() {
       repo.url.toLowerCase().includes(searchQuery.toLowerCase());
 
     const matchesStatus = statusFilter === 'all' || repo.status === statusFilter;
+    const matchesType = typeFilter === 'all' || repo.type === typeFilter;
 
-    return matchesSearch && matchesStatus;
+    return matchesSearch && matchesStatus && matchesType;
   });
 
   const syncingCount = repositories.filter((r) => r.status === 'syncing').length;
   const syncedCount = repositories.filter((r) => r.status === 'synced').length;
   const failedCount = repositories.filter((r) => r.status === 'failed').length;
-  const totalTemplates = repositories.reduce((sum, r) => sum + r.templateCount, 0);
+  const templateRepoCount = repositories.filter((r) => r.type === 'template').length;
+  const pluginRepoCount = repositories.filter((r) => r.type === 'plugin').length;
+  const totalTemplates = repositories.filter((r) => r.type === 'template').reduce((sum, r) => sum + r.templateCount, 0);
 
   if (isLoading) {
     return (
@@ -288,10 +292,10 @@ function EnhancedRepositoriesContent() {
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3 }}>
           <Box>
             <Typography variant="h4" sx={{ fontWeight: 700, mb: 0.5 }}>
-              Template Repositories
+              Repositories
             </Typography>
             <Typography variant="body2" color="text.secondary">
-              Manage external template repositories and sync status
+              Manage template and plugin repositories
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 1, alignItems: 'center' }}>
@@ -380,13 +384,13 @@ function EnhancedRepositoriesContent() {
 
         {/* Filters and View Controls */}
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 3, flexWrap: 'wrap', gap: 2 }}>
-          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1 }}>
+          <Box sx={{ display: 'flex', gap: 2, alignItems: 'center', flex: 1, flexWrap: 'wrap' }}>
             <TextField
               placeholder="Search repositories..."
               value={searchQuery}
               onChange={(e) => setSearchQuery(e.target.value)}
               size="small"
-              sx={{ minWidth: 300 }}
+              sx={{ minWidth: 250 }}
               InputProps={{
                 startAdornment: (
                   <InputAdornment position="start">
@@ -396,12 +400,18 @@ function EnhancedRepositoriesContent() {
               }}
             />
 
-            <Tabs value={statusFilter} onChange={(_, v) => setStatusFilter(v)}>
-              <Tab label="All" value="all" />
-              <Tab label="Synced" value="synced" />
-              <Tab label="Syncing" value="syncing" />
-              <Tab label="Failed" value="failed" />
-              <Tab label="Pending" value="pending" />
+            <Tabs value={typeFilter} onChange={(_, v) => setTypeFilter(v)} sx={{ minHeight: 36 }}>
+              <Tab label="All" value="all" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label={`Templates (${templateRepoCount})`} value="template" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label={`Plugins (${pluginRepoCount})`} value="plugin" sx={{ minHeight: 36, py: 0 }} />
+            </Tabs>
+
+            <Tabs value={statusFilter} onChange={(_, v) => setStatusFilter(v)} sx={{ minHeight: 36 }}>
+              <Tab label="All" value="all" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label="Synced" value="synced" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label="Syncing" value="syncing" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label="Failed" value="failed" sx={{ minHeight: 36, py: 0 }} />
+              <Tab label="Pending" value="pending" sx={{ minHeight: 36, py: 0 }} />
             </Tabs>
           </Box>
 

@@ -334,9 +334,14 @@ export default function UserDetail() {
           <Card>
             <CardContent>
               <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'center', mb: 2 }}>
-                <Typography variant="h6">
-                  Resource Quota
-                </Typography>
+                <Box>
+                  <Typography variant="h6">
+                    Resource Quota Override
+                  </Typography>
+                  <Typography variant="caption" color="text.secondary">
+                    User-specific limits that override group quotas
+                  </Typography>
+                </Box>
                 {!editQuotaMode && quota && (
                   <Button
                     size="small"
@@ -440,7 +445,7 @@ export default function UserDetail() {
                 )
               ) : (
                 <Typography color="text.secondary">
-                  No quota set for this user
+                  No user-specific quota override set. User will use group quota limits.
                 </Typography>
               )}
             </CardContent>

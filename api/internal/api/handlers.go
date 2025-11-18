@@ -1393,13 +1393,13 @@ func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 // Repository Endpoints (Template Repository Management)
 // ============================================================================
 
-// ListRepositories returns all template repositories
+// ListRepositories returns all template and plugin repositories
 func (h *Handler) ListRepositories(c *gin.Context) {
 	// SECURITY FIX: Use request context for proper cancellation and timeout handling
 	ctx := c.Request.Context()
 
 	rows, err := h.db.DB().QueryContext(ctx, `
-		SELECT id, name, url, branch, auth_type, last_sync, template_count, status, error_message, created_at, updated_at
+		SELECT id, name, url, branch, COALESCE(type, 'template'), auth_type, last_sync, template_count, status, error_message, created_at, updated_at
 		FROM repositories
 		ORDER BY name ASC
 	`)
@@ -1412,27 +1412,42 @@ func (h *Handler) ListRepositories(c *gin.Context) {
 	repos := []map[string]interface{}{}
 	for rows.Next() {
 		var id int
-		var name, url, branch, authType, status, errorMessage string
-		var lastSync, createdAt, updatedAt time.Time
+		var name, url, branch, repoType, authType, status string
+		var lastSync sql.NullTime
+		var errorMessage sql.NullString
+		var createdAt, updatedAt time.Time
 		var templateCount int
 
-		if err := rows.Scan(&id, &name, &url, &branch, &authType, &lastSync, &templateCount, &status, &errorMessage, &createdAt, &updatedAt); err != nil {
+		if err := rows.Scan(&id, &name, &url, &branch, &repoType, &authType, &lastSync, &templateCount, &status, &errorMessage, &createdAt, &updatedAt); err != nil {
 			continue
 		}
 
-		repos = append(repos, map[string]interface{}{
+		repo := map[string]interface{}{
 			"id":            id,
 			"name":          name,
 			"url":           url,
 			"branch":        branch,
+			"type":          repoType,
 			"authType":      authType,
-			"lastSync":      lastSync,
 			"templateCount": templateCount,
 			"status":        status,
-			"errorMessage":  errorMessage,
 			"createdAt":     createdAt,
 			"updatedAt":     updatedAt,
-		})
+		}
+
+		if lastSync.Valid {
+			repo["lastSync"] = lastSync.Time
+		} else {
+			repo["lastSync"] = nil
+		}
+
+		if errorMessage.Valid {
+			repo["errorMessage"] = errorMessage.String
+		} else {
+			repo["errorMessage"] = ""
+		}
+
+		repos = append(repos, repo)
 	}
 
 	c.JSON(http.StatusOK, gin.H{

@@ -180,12 +180,13 @@ func main() {
 	auditLogger := middleware.NewAuditLogger(database, false) // Don't log request bodies by default
 	router.Use(auditLogger.Middleware())
 
-	// Add gzip compression (exclude WebSocket and auth endpoints)
+	// Add gzip compression (exclude WebSocket, auth, and metrics endpoints)
 	router.Use(middleware.GzipWithExclusions(
 		middleware.BestSpeed, // Use best speed for balance of compression vs CPU
 		[]string{
-			"/api/v1/ws/",    // Exclude WebSocket paths
-			"/api/v1/auth/",  // Exclude auth endpoints (setup, login, etc.)
+			"/api/v1/ws/",      // Exclude WebSocket paths
+			"/api/v1/auth/",    // Exclude auth endpoints (setup, login, etc.)
+			"/api/v1/metrics",  // Exclude metrics (browser handles decompression inconsistently)
 		},
 	))
 

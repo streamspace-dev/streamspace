@@ -94,7 +94,6 @@ function Layout({ children }: LayoutProps) {
     { text: 'My Applications', icon: <AppsIcon />, path: '/' },
     { text: 'My Sessions', icon: <ComputerIcon />, path: '/sessions' },
     { text: 'Shared with Me', icon: <ShareIcon />, path: '/shared-sessions' },
-    { text: 'Settings', icon: <SettingsIcon />, path: '/settings' },
   ];
 
   const handleOpenAdminPortal = () => {
@@ -126,7 +125,10 @@ function Layout({ children }: LayoutProps) {
       <Divider />
       <List>
         <ListItem disablePadding>
-          <ListItemButton>
+          <ListItemButton
+            selected={location.pathname === '/settings'}
+            onClick={() => navigate('/settings')}
+          >
             <ListItemIcon>
               <SettingsIcon />
             </ListItemIcon>

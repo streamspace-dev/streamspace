@@ -363,12 +363,13 @@ func (d *Database) Migrate() error {
 		// Create index on session_id
 		`CREATE INDEX IF NOT EXISTS idx_connections_session_id ON connections(session_id)`,
 
-		// Template repositories
+		// Template and plugin repositories
 		`CREATE TABLE IF NOT EXISTS repositories (
 			id SERIAL PRIMARY KEY,
 			name VARCHAR(255) UNIQUE,
 			url TEXT NOT NULL,
 			branch VARCHAR(100) DEFAULT 'main',
+			type VARCHAR(50) DEFAULT 'template',
 			auth_type VARCHAR(50) DEFAULT 'none',
 			auth_secret VARCHAR(255),
 			last_sync TIMESTAMP,
@@ -380,9 +381,9 @@ func (d *Database) Migrate() error {
 		)`,
 
 		// Insert default repositories (plugins and templates)
-		`INSERT INTO repositories (name, url, branch, auth_type, status) VALUES
-			('Official Plugins', 'https://github.com/JoshuaAFerguson/streamspace-plugins', 'main', 'none', 'active'),
-			('Official Templates', 'https://github.com/JoshuaAFerguson/streamspace-templates', 'main', 'none', 'active')
+		`INSERT INTO repositories (name, url, branch, type, auth_type, status) VALUES
+			('Official Plugins', 'https://github.com/JoshuaAFerguson/streamspace-plugins', 'main', 'plugin', 'none', 'pending'),
+			('Official Templates', 'https://github.com/JoshuaAFerguson/streamspace-templates', 'main', 'template', 'none', 'pending')
 		ON CONFLICT (name) DO NOTHING`,
 
 		// Catalog templates (cache of templates from repos)
@@ -522,6 +523,16 @@ func (d *Database) Migrate() error {
 		`INSERT INTO user_quotas (user_id, max_sessions, max_cpu, max_memory, max_storage)
 		VALUES ('admin', 100, '64000m', '256Gi', '1Ti')
 		ON CONFLICT (user_id) DO NOTHING`,
+
+		// Insert default all_users group that all users belong to
+		`INSERT INTO groups (id, name, display_name, description, type)
+		VALUES ('all-users', 'all_users', 'All Users', 'Default group containing all users', 'system')
+		ON CONFLICT (id) DO NOTHING`,
+
+		// Add admin user to all_users group
+		`INSERT INTO group_memberships (id, user_id, group_id, role, created_at)
+		VALUES ('admin-all-users', 'admin', 'all-users', 'member', NOW())
+		ON CONFLICT (user_id, group_id) DO NOTHING`,
 
 		// Insert default configuration values
 		`INSERT INTO configuration (key, value, category, description) VALUES

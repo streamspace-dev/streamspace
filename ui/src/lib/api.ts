@@ -123,6 +123,7 @@ export interface Repository {
   name: string;
   url: string;
   branch: string;
+  type: 'template' | 'plugin';
   authType: string;
   lastSync?: string;
   templateCount: number;
