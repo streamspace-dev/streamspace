@@ -2121,65 +2121,70 @@ func (d *Database) checkPasswordReset() error {
 	return nil
 }
 
-// ensureDefaultRepository ensures the official StreamSpace templates repository is configured.
-// This hardcodes the default repository URL: https://github.com/JoshuaAFerguson/streamspace-templates
+// ensureDefaultRepository ensures the official StreamSpace repositories are configured.
+// This ensures both the templates and plugins repositories exist.
 //
-// The repository will be automatically synced by the sync service on startup.
+// The repositories will be automatically synced by the sync service on startup.
 //
 // Behavior:
-//   - If repository already exists (by name or URL), skip insertion
-//   - If not exists, insert with status 'pending' to trigger sync
-//   - Does not fail if repository already configured
+//   - Uses INSERT ... ON CONFLICT DO NOTHING for idempotency
+//   - Inserts both Official Templates and Official Plugins repositories
+//   - Does not fail if repositories already configured
 //
-// Default repository configuration:
-//   - Name: "streamspace-templates"
-//   - URL: https://github.com/JoshuaAFerguson/streamspace-templates
+// Default repository configurations:
+//   - Official Templates: https://github.com/JoshuaAFerguson/streamspace-templates
+//   - Official Plugins: https://github.com/JoshuaAFerguson/streamspace-plugins
 //   - Branch: main
-//   - Auth: none (public repository)
+//   - Auth: none (public repositories)
 //   - Status: pending (will be synced automatically)
 func (d *Database) ensureDefaultRepository() error {
-	const (
-		defaultRepoName = "streamspace-templates"
-		defaultRepoURL  = "https://github.com/JoshuaAFerguson/streamspace-templates"
-		defaultBranch   = "main"
-	)
-
-	// Check if default repository already exists (by name or URL)
-	var existingID int
-	err := d.db.QueryRow(`
-		SELECT id FROM repositories
-		WHERE name = $1 OR url = $2
-		LIMIT 1
-	`, defaultRepoName, defaultRepoURL).Scan(&existingID)
-
-	// Repository already exists - skip
-	if err == nil {
-		log.Printf("✓ Default template repository '%s' already configured (ID: %d)", defaultRepoName, existingID)
-		return nil
+	// Define default repositories
+	type defaultRepo struct {
+		name     string
+		url      string
+		branch   string
+		repoType string
 	}
 
-	// Error other than "not found" - report it
-	if err != sql.ErrNoRows {
-		return fmt.Errorf("failed to check existing repository: %w", err)
+	defaultRepos := []defaultRepo{
+		{
+			name:     "Official Templates",
+			url:      "https://github.com/JoshuaAFerguson/streamspace-templates",
+			branch:   "main",
+			repoType: "template",
+		},
+		{
+			name:     "Official Plugins",
+			url:      "https://github.com/JoshuaAFerguson/streamspace-plugins",
+			branch:   "main",
+			repoType: "plugin",
+		},
 	}
 
-	// Repository doesn't exist - insert it
-	log.Println("📦 Adding default template repository...")
-	log.Printf("   Name: %s", defaultRepoName)
-	log.Printf("   URL: %s", defaultRepoURL)
-	log.Printf("   Branch: %s", defaultBranch)
+	log.Println("📦 Ensuring default repositories are configured...")
 
-	_, err = d.db.Exec(`
-		INSERT INTO repositories (name, url, branch, auth_type, status, created_at, updated_at)
-		VALUES ($1, $2, $3, 'none', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-	`, defaultRepoName, defaultRepoURL, defaultBranch)
+	for _, repo := range defaultRepos {
+		// Use INSERT ... ON CONFLICT DO NOTHING for idempotency
+		result, err := d.db.Exec(`
+			INSERT INTO repositories (name, url, branch, type, auth_type, status, created_at, updated_at)
+			VALUES ($1, $2, $3, $4, 'none', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			ON CONFLICT (name) DO NOTHING
+		`, repo.name, repo.url, repo.branch, repo.repoType)
 
-	if err != nil {
-		return fmt.Errorf("failed to insert default repository: %w", err)
+		if err != nil {
+			return fmt.Errorf("failed to ensure repository '%s': %w", repo.name, err)
+		}
+
+		rowsAffected, _ := result.RowsAffected()
+		if rowsAffected > 0 {
+			log.Printf("   ✓ Added '%s' (%s)", repo.name, repo.url)
+		} else {
+			log.Printf("   ✓ '%s' already configured", repo.name)
+		}
 	}
 
-	log.Println("✓ Default template repository added successfully")
-	log.Println("   The repository will be synced automatically on startup")
+	log.Println("✓ Default repositories configured successfully")
+	log.Println("   Repositories will be synced automatically on startup")
 
 	return nil
 }
