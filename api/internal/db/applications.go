@@ -384,7 +384,7 @@ func (a *ApplicationDB) HasGroupAccess(ctx context.Context, appID, groupID strin
 	return exists, err
 }
 
-// GetUserAccessibleApplications retrieves applications accessible to a user (via their groups or public)
+// GetUserAccessibleApplications retrieves applications accessible to a user (via their groups, as creator, or public)
 func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userID string) ([]*models.InstalledApplication, error) {
 	query := `
 		SELECT DISTINCT
@@ -399,6 +399,7 @@ func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userI
 		WHERE ia.enabled = true
 		AND (
 			gm.user_id IS NOT NULL
+			OR ia.created_by = $1
 			OR NOT EXISTS (
 				SELECT 1 FROM application_group_access aga2
 				WHERE aga2.application_id = ia.id
