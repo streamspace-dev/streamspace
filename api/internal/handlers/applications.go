@@ -42,6 +42,7 @@ package handlers
 import (
 	"log"
 	"net/http"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace/streamspace/api/internal/db"
@@ -172,10 +173,20 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
+	// Check if manifest is empty
+	if manifest == "" {
+		log.Printf("Warning: Empty manifest for template %s (id: %d)", name, req.CatalogTemplateID)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Template manifest is empty",
+			Message: "The catalog template has no manifest data. Please sync the repository.",
+		})
+		return
+	}
+
 	// Parse the YAML manifest to get template configuration
 	var templateData map[string]interface{}
 	if err := yaml.Unmarshal([]byte(manifest), &templateData); err != nil {
-		log.Printf("Error parsing template manifest: %v", err)
+		log.Printf("Error parsing template manifest for %s: %v", name, err)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
 			Error:   "Invalid template manifest",
 			Message: err.Error(),
@@ -234,10 +245,23 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 	if h.k8sClient != nil {
 		_, err = h.k8sClient.CreateTemplate(ctx, template)
 		if err != nil {
-			// Check if template already exists (might have been installed previously)
-			log.Printf("Note: Could not create K8s template %s: %v (may already exist)", name, err)
-			// Don't fail - the template might already exist from a previous installation
+			// Check if it's an "already exists" error - that's OK
+			errStr := err.Error()
+			if strings.Contains(errStr, "already exists") {
+				log.Printf("K8s template %s already exists, continuing with installation", name)
+			} else {
+				log.Printf("Failed to create K8s template %s: %v", name, err)
+				c.JSON(http.StatusInternalServerError, ErrorResponse{
+					Error:   "Failed to create Kubernetes template",
+					Message: err.Error(),
+				})
+				return
+			}
+		} else {
+			log.Printf("Successfully created K8s template %s", name)
 		}
+	} else {
+		log.Printf("Warning: k8sClient is nil, cannot create K8s template for %s", name)
 	}
 
 	// Create database record
