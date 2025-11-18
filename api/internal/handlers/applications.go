@@ -35,29 +35,36 @@
 //
 // Example Usage:
 //
-//	handler := NewApplicationHandler(database)
+//	handler := NewApplicationHandler(database, k8sClient, "streamspace")
 //	handler.RegisterRoutes(router.Group("/api/v1"))
 package handlers
 
 import (
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace/streamspace/api/internal/k8s"
 	"github.com/streamspace/streamspace/api/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // ApplicationHandler handles installed application endpoints
 type ApplicationHandler struct {
-	db    *db.Database
-	appDB *db.ApplicationDB
+	db        *db.Database
+	appDB     *db.ApplicationDB
+	k8sClient *k8s.Client
+	namespace string
 }
 
 // NewApplicationHandler creates a new application handler
-func NewApplicationHandler(database *db.Database) *ApplicationHandler {
+func NewApplicationHandler(database *db.Database, k8sClient *k8s.Client, namespace string) *ApplicationHandler {
 	return &ApplicationHandler{
-		db:    database,
-		appDB: db.NewApplicationDB(database.DB()),
+		db:        database,
+		appDB:     db.NewApplicationDB(database.DB()),
+		k8sClient: k8sClient,
+		namespace: namespace,
 	}
 }
 
@@ -128,6 +135,8 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/applications [post]
 func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
+	ctx := c.Request.Context()
+
 	var req models.InstallApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -147,7 +156,92 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	app, err := h.appDB.InstallApplication(c.Request.Context(), &req, userID.(string))
+	// Get template manifest from catalog
+	var manifest, name, displayName, description, category, iconURL string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT manifest, name, display_name, description, category, COALESCE(icon_url, '')
+		FROM catalog_templates
+		WHERE id = $1
+	`, req.CatalogTemplateID).Scan(&manifest, &name, &displayName, &description, &category, &iconURL)
+
+	if err != nil {
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Catalog template not found",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Parse the YAML manifest to get template configuration
+	var templateData map[string]interface{}
+	if err := yaml.Unmarshal([]byte(manifest), &templateData); err != nil {
+		log.Printf("Error parsing template manifest: %v", err)
+		c.JSON(http.StatusBadRequest, ErrorResponse{
+			Error:   "Invalid template manifest",
+			Message: err.Error(),
+		})
+		return
+	}
+
+	// Build Template struct from manifest
+	template := &k8s.Template{
+		Name:        name,
+		Namespace:   h.namespace,
+		DisplayName: displayName,
+		Description: description,
+		Category:    category,
+		Icon:        iconURL,
+	}
+
+	// Extract spec fields if they exist in the manifest
+	if spec, ok := templateData["spec"].(map[string]interface{}); ok {
+		if baseImage, ok := spec["baseImage"].(string); ok {
+			template.BaseImage = baseImage
+		}
+		if icon, ok := spec["icon"].(string); ok {
+			template.Icon = icon
+		}
+		if appType, ok := spec["appType"].(string); ok {
+			template.AppType = appType
+		}
+		if defaultRes, ok := spec["defaultResources"].(map[string]interface{}); ok {
+			if memory, ok := defaultRes["memory"].(string); ok {
+				template.DefaultResources.Memory = memory
+			}
+			if cpu, ok := defaultRes["cpu"].(string); ok {
+				template.DefaultResources.CPU = cpu
+			}
+		}
+		if tags, ok := spec["tags"].([]interface{}); ok {
+			template.Tags = make([]string, 0, len(tags))
+			for _, tag := range tags {
+				if tagStr, ok := tag.(string); ok {
+					template.Tags = append(template.Tags, tagStr)
+				}
+			}
+		}
+		if capabilities, ok := spec["capabilities"].([]interface{}); ok {
+			template.Capabilities = make([]string, 0, len(capabilities))
+			for _, cap := range capabilities {
+				if capStr, ok := cap.(string); ok {
+					template.Capabilities = append(template.Capabilities, capStr)
+				}
+			}
+		}
+	}
+
+	// Create Template CRD in Kubernetes (if k8sClient is available)
+	if h.k8sClient != nil {
+		_, err = h.k8sClient.CreateTemplate(ctx, template)
+		if err != nil {
+			// Check if template already exists (might have been installed previously)
+			log.Printf("Note: Could not create K8s template %s: %v (may already exist)", name, err)
+			// Don't fail - the template might already exist from a previous installation
+		}
+	}
+
+	// Create database record
+	app, err := h.appDB.InstallApplication(ctx, &req, userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
 			Error:   "Installation failed",
@@ -158,17 +252,17 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 
 	// Grant initial group access if specified
 	for _, groupID := range req.GroupIDs {
-		h.appDB.AddGroupAccess(c.Request.Context(), app.ID, groupID, "launch")
+		h.appDB.AddGroupAccess(ctx, app.ID, groupID, "launch")
 	}
 
 	// Get full application with template info
-	fullApp, err := h.appDB.GetApplication(c.Request.Context(), app.ID)
+	fullApp, err := h.appDB.GetApplication(ctx, app.ID)
 	if err == nil {
 		app = fullApp
 	}
 
 	// Get group access
-	groups, err := h.appDB.GetApplicationGroups(c.Request.Context(), app.ID)
+	groups, err := h.appDB.GetApplicationGroups(ctx, app.ID)
 	if err == nil {
 		app.Groups = groups
 	}

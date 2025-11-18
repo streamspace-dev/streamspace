@@ -266,7 +266,12 @@ func main() {
 	securityHandler := handlers.NewSecurityHandler(database)
 	templateVersioningHandler := handlers.NewTemplateVersioningHandler(database)
 	setupHandler := handlers.NewSetupHandler(database)
-	applicationHandler := handlers.NewApplicationHandler(database)
+	// Get namespace from environment (same as api.NewHandler)
+	appNamespace := os.Getenv("NAMESPACE")
+	if appNamespace == "" {
+		appNamespace = "streamspace" // Default namespace
+	}
+	applicationHandler := handlers.NewApplicationHandler(database, k8sClient, appNamespace)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication
