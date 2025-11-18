@@ -358,17 +358,21 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Verify template exists
+	// Step 1: Verify Kubernetes Template CRD exists
+	// The template must be created during application installation (see handlers/applications.go)
+	// Without a valid template, the session cannot be created
 	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, req.Template)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Template not found: %s. Please ensure the application is properly installed.", req.Template)})
 		return
 	}
 
-	// Set default resources from template if not provided
-	memory := "2Gi"
-	cpu := "1000m"
+	// Step 2: Determine resource allocation (memory/CPU)
+	// Priority: request > template defaults > system defaults
+	memory := "2Gi"   // System default
+	cpu := "1000m"    // System default (1 core)
 	if req.Resources != nil {
+		// User explicitly specified resources
 		if req.Resources.Memory != "" {
 			memory = req.Resources.Memory
 		}
@@ -376,7 +380,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 			cpu = req.Resources.CPU
 		}
 	} else if template.DefaultResources.Memory != "" || template.DefaultResources.CPU != "" {
-		// Use template defaults
+		// Fall back to template-defined defaults
 		if template.DefaultResources.Memory != "" {
 			memory = template.DefaultResources.Memory
 		}
@@ -385,8 +389,8 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 	}
 
-	// Check user quota
-	// Parse CPU and memory to int64
+	// Step 3: Validate and parse resource specifications
+	// Convert human-readable formats (e.g., "2Gi", "500m") to int64 for quota checking
 	requestedCPU, requestedMemory, err := h.quotaEnforcer.ValidateResourceRequest(cpu, memory)
 	if err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{
@@ -396,15 +400,16 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Get current usage by listing user's pods
+	// Step 4: Check user quota before creating session
+	// Get current resource usage by listing all pods belonging to this user
 	podList, err := h.k8sClient.GetPods(ctx, h.namespace)
 	if err != nil {
 		log.Printf("Failed to get pods for quota check: %v", err)
-		// Continue with empty usage if we can't get pods
+		// Continue with empty usage if we can't get pods (fail-open for availability)
 		podList = &corev1.PodList{}
 	}
 
-	// Filter pods for this user
+	// Filter to only this user's pods based on the "user" label
 	userPods := make([]corev1.Pod, 0)
 	for _, pod := range podList.Items {
 		if user, ok := pod.Labels["user"]; ok && user == req.User {
@@ -412,9 +417,9 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 	}
 
+	// Calculate current usage and check if new session would exceed quota
 	currentUsage := h.quotaEnforcer.CalculateUsage(userPods)
 
-	// Check if user can create session
 	if err := h.quotaEnforcer.CheckSessionCreation(ctx, req.User, requestedCPU, requestedMemory, 0, currentUsage); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "Quota exceeded",

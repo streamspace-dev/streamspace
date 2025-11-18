@@ -126,7 +126,9 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 
 // InstallApplication godoc
 // @Summary Install a new application
-// @Description Install an application from the catalog
+// @Description Install an application from the catalog. This creates both a Kubernetes
+// Template CRD and a database record for the installed application. The K8s Template
+// is required for users to launch sessions from this application.
 // @Tags applications
 // @Accept json
 // @Produce json
@@ -135,9 +137,19 @@ func (h *ApplicationHandler) ListApplications(c *gin.Context) {
 // @Failure 400 {object} ErrorResponse
 // @Failure 500 {object} ErrorResponse
 // @Router /api/v1/applications [post]
+//
+// Installation Flow:
+// 1. Validate request and authenticate user
+// 2. Fetch template manifest from catalog_templates database
+// 3. Parse YAML manifest to extract template configuration
+// 4. Create Kubernetes Template CRD (required for session launching)
+// 5. Create installed_applications database record
+// 6. Grant group access permissions if specified
+// 7. Return the created application with full details
 func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 	ctx := c.Request.Context()
 
+	// Step 1: Parse and validate the installation request
 	var req models.InstallApplicationRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -147,7 +159,7 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Get user ID from context
+	// Step 1b: Get authenticated user ID from JWT context
 	userID, exists := c.Get("userID")
 	if !exists {
 		c.JSON(http.StatusUnauthorized, ErrorResponse{
@@ -157,7 +169,8 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Get template manifest from catalog
+	// Step 2: Fetch template manifest from catalog database
+	// The manifest contains the YAML definition for the Kubernetes Template CRD
 	var manifest, name, displayName, description, category, iconURL string
 	err := h.db.DB().QueryRowContext(ctx, `
 		SELECT manifest, name, display_name, description, category, COALESCE(icon_url, '')
@@ -173,7 +186,7 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Check if manifest is empty
+	// Step 2b: Validate manifest is not empty (indicates repository sync issue)
 	if manifest == "" {
 		log.Printf("Warning: Empty manifest for template %s (id: %d)", name, req.CatalogTemplateID)
 		c.JSON(http.StatusBadRequest, ErrorResponse{
@@ -183,7 +196,7 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Parse the YAML manifest to get template configuration
+	// Step 3: Parse the YAML manifest to extract template configuration
 	var templateData map[string]interface{}
 	if err := yaml.Unmarshal([]byte(manifest), &templateData); err != nil {
 		log.Printf("Error parsing template manifest for %s: %v", name, err)
@@ -194,7 +207,7 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Build Template struct from manifest
+	// Step 3b: Build Kubernetes Template struct from parsed manifest
 	template := &k8s.Template{
 		Name:        name,
 		Namespace:   h.namespace,
@@ -204,7 +217,7 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		Icon:        iconURL,
 	}
 
-	// Extract spec fields if they exist in the manifest
+	// Step 3c: Extract spec fields (baseImage, resources, tags, etc.) from manifest
 	if spec, ok := templateData["spec"].(map[string]interface{}); ok {
 		if baseImage, ok := spec["baseImage"].(string); ok {
 			template.BaseImage = baseImage
@@ -241,15 +254,17 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		}
 	}
 
-	// Create Template CRD in Kubernetes (if k8sClient is available)
+	// Step 4: Create Kubernetes Template CRD
+	// This is REQUIRED for users to launch sessions - without it, session creation fails
 	if h.k8sClient != nil {
 		_, err = h.k8sClient.CreateTemplate(ctx, template)
 		if err != nil {
-			// Check if it's an "already exists" error - that's OK
+			// "already exists" is OK - template may have been installed before
 			errStr := err.Error()
 			if strings.Contains(errStr, "already exists") {
 				log.Printf("K8s template %s already exists, continuing with installation", name)
 			} else {
+				// Any other error is fatal - fail the installation
 				log.Printf("Failed to create K8s template %s: %v", name, err)
 				c.JSON(http.StatusInternalServerError, ErrorResponse{
 					Error:   "Failed to create Kubernetes template",
@@ -261,10 +276,11 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 			log.Printf("Successfully created K8s template %s", name)
 		}
 	} else {
+		// k8sClient being nil is a configuration error - log warning
 		log.Printf("Warning: k8sClient is nil, cannot create K8s template for %s", name)
 	}
 
-	// Create database record
+	// Step 5: Create database record in installed_applications table
 	app, err := h.appDB.InstallApplication(ctx, &req, userID.(string))
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, ErrorResponse{
@@ -274,18 +290,17 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 		return
 	}
 
-	// Grant initial group access if specified
+	// Step 6: Grant initial group access permissions if specified in request
 	for _, groupID := range req.GroupIDs {
 		h.appDB.AddGroupAccess(ctx, app.ID, groupID, "launch")
 	}
 
-	// Get full application with template info
+	// Step 7: Fetch complete application record with template info and group access
 	fullApp, err := h.appDB.GetApplication(ctx, app.ID)
 	if err == nil {
 		app = fullApp
 	}
 
-	// Get group access
 	groups, err := h.appDB.GetApplicationGroups(ctx, app.ID)
 	if err == nil {
 		app.Groups = groups
