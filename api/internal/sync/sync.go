@@ -259,7 +259,7 @@ func (s *SyncService) SyncRepository(ctx context.Context, repoID int) error {
 
 	// Update last_sync timestamp and counts
 	_, err = s.db.DB().ExecContext(ctx, `
-		UPDATE catalog_repositories
+		UPDATE repositories
 		SET last_sync = $1, template_count = $2, updated_at = $3
 		WHERE id = $4
 	`, time.Now(), len(templates), time.Now(), repoID)
@@ -396,8 +396,14 @@ func (s *SyncService) updateCatalog(ctx context.Context, repoID int, templates [
 		return fmt.Errorf("failed to delete old templates: %w", err)
 	}
 
-	// Insert new templates
+	// Deduplicate templates by name (keep the last occurrence)
+	templateMap := make(map[string]*ParsedTemplate)
 	for _, template := range templates {
+		templateMap[template.Name] = template
+	}
+
+	// Insert deduplicated templates
+	for _, template := range templateMap {
 		// Convert manifest to JSON string for storage
 		manifestJSON := template.Manifest
 
