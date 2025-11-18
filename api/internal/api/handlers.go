@@ -358,11 +358,78 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Verify template exists
+	// Verify template exists, create from catalog if missing
 	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, req.Template)
 	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Template not found: %s", req.Template)})
-		return
+		// Template not found in K8s - try to create from catalog
+		log.Printf("Template %s not found in K8s, attempting to create from catalog", req.Template)
+
+		var manifest, name, displayName, description, category string
+		dbErr := h.db.DB().QueryRowContext(ctx, `
+			SELECT manifest, name, display_name, description, category
+			FROM catalog_templates
+			WHERE name = $1
+		`, req.Template).Scan(&manifest, &name, &displayName, &description, &category)
+
+		if dbErr != nil {
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Template not found: %s", req.Template)})
+			return
+		}
+
+		// Parse manifest and create K8s template
+		var templateData map[string]interface{}
+		if yamlErr := yaml.Unmarshal([]byte(manifest), &templateData); yamlErr != nil {
+			log.Printf("Error parsing template manifest for %s: %v", req.Template, yamlErr)
+			c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Invalid template manifest for: %s", req.Template)})
+			return
+		}
+
+		// Build Template struct
+		newTemplate := &k8s.Template{
+			Name:        name,
+			Namespace:   h.namespace,
+			DisplayName: displayName,
+			Description: description,
+			Category:    category,
+		}
+
+		// Extract spec fields from manifest
+		if spec, ok := templateData["spec"].(map[string]interface{}); ok {
+			if baseImage, ok := spec["baseImage"].(string); ok {
+				newTemplate.BaseImage = baseImage
+			}
+			if icon, ok := spec["icon"].(string); ok {
+				newTemplate.Icon = icon
+			}
+			if appType, ok := spec["appType"].(string); ok {
+				newTemplate.AppType = appType
+			}
+			if defaultRes, ok := spec["defaultResources"].(map[string]interface{}); ok {
+				if memory, ok := defaultRes["memory"].(string); ok {
+					newTemplate.DefaultResources.Memory = memory
+				}
+				if cpu, ok := defaultRes["cpu"].(string); ok {
+					newTemplate.DefaultResources.CPU = cpu
+				}
+			}
+			if tags, ok := spec["tags"].([]interface{}); ok {
+				newTemplate.Tags = make([]string, 0, len(tags))
+				for _, tag := range tags {
+					if tagStr, ok := tag.(string); ok {
+						newTemplate.Tags = append(newTemplate.Tags, tagStr)
+					}
+				}
+			}
+		}
+
+		// Create the K8s template
+		template, err = h.k8sClient.CreateTemplate(ctx, newTemplate)
+		if err != nil {
+			log.Printf("Failed to create K8s template %s: %v", req.Template, err)
+			c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create template: %s", req.Template)})
+			return
+		}
+		log.Printf("Successfully created K8s template %s from catalog", req.Template)
 	}
 
 	// Set default resources from template if not provided
