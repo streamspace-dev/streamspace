@@ -277,7 +277,162 @@ Phase 6 tasks will resume after Phase 5.5 is complete:
 
 ### Decision Log
 
-*(Design decisions will be documented here as they are made)*
+#### Decision 1: Installation Status Update Mechanism
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #6 - Installation Status Never Updates
+
+**Problem:** When a user installs an application, the status stays at 'pending' forever because there's no callback from the controller after Template CRD creation.
+
+**Decision:** Implement a polling-based status check in the API
+- API periodically checks if Template CRD exists in Kubernetes
+- When Template is found and valid, update status to 'installed'
+- If Template creation fails after timeout (5 min), update to 'failed'
+
+**Implementation:**
+```go
+// In applications handler, add a goroutine after publishing install event:
+go func() {
+    ctx := context.Background()
+    for i := 0; i < 30; i++ { // 30 attempts, 10s apart = 5 min timeout
+        time.Sleep(10 * time.Second)
+
+        // Check if Template CRD exists
+        template, err := k8sClient.GetTemplate(ctx, templateName)
+        if err == nil && template.Status.Valid {
+            // Update installation status to 'installed'
+            h.updateInstallStatus(ctx, app.ID, "installed", "Template created successfully")
+            return
+        }
+    }
+    // Timeout - mark as failed
+    h.updateInstallStatus(ctx, app.ID, "failed", "Template creation timed out")
+}()
+```
+
+**Rationale:**
+- Simpler than webhooks from controller
+- Works with existing NATS architecture
+- Self-healing if controller restarts
+
+---
+
+#### Decision 2: Plugin Runtime Loading Architecture
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #7 - Plugin Runtime Loading
+
+**Problem:** `LoadHandler()` returns "not yet implemented". Need to define how plugins should be loaded at runtime.
+
+**Decision:** Use Go plugin system with shared interface
+- Plugins compiled as `.so` files
+- Placed in `/plugins/` directory
+- Loaded using `plugin.Open()` at startup and on enable
+
+**Implementation Pattern:**
+```go
+func (r *Runtime) LoadHandler(name string) (PluginHandler, error) {
+    pluginPath := filepath.Join(r.pluginDir, name, name+".so")
+
+    // Open the plugin
+    p, err := plugin.Open(pluginPath)
+    if err != nil {
+        return nil, fmt.Errorf("failed to open plugin %s: %w", name, err)
+    }
+
+    // Look up the Handler symbol
+    sym, err := p.Lookup("Handler")
+    if err != nil {
+        return nil, fmt.Errorf("plugin %s missing Handler: %w", name, err)
+    }
+
+    // Assert to PluginHandler interface
+    handler, ok := sym.(PluginHandler)
+    if !ok {
+        return nil, fmt.Errorf("plugin %s Handler has wrong type", name)
+    }
+
+    return handler, nil
+}
+```
+
+**Alternative Considered:** Yaegi interpreter for Go scripts
+- Rejected: Too slow, security concerns
+
+**Rationale:**
+- Native Go performance
+- Type-safe interfaces
+- Standard Go plugin mechanism
+
+---
+
+#### Decision 3: Session Name Field Mapping
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #1 - Session Name/ID Mismatch
+
+**Problem:** `convertDBSessionToResponse()` returns wrong field. DB has both `id` (UUID) and `name` (human-readable).
+
+**Decision:** Return both fields in API response
+```go
+func (h *Handler) convertDBSessionToResponse(session *db.Session) map[string]interface{} {
+    return map[string]interface{}{
+        "id":        session.ID,      // UUID for internal use
+        "name":      session.Name,    // Human-readable for display/routing
+        "user":      session.User,
+        "template":  session.Template,
+        "state":     session.State,
+        // ... other fields
+    }
+}
+```
+
+**UI Contract:**
+- Use `session.name` for display and URL routing
+- Use `session.id` for API calls that need UUID
+
+**Rationale:**
+- Backward compatible
+- Clear separation of concerns
+- Matches Kubernetes resource naming
+
+---
+
+#### Decision 4: VNC URL Polling Strategy
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #4 - VNC URL Empty When Connecting
+
+**Decision:** Return connection with polling endpoint instead of blocking
+```go
+func (h *Handler) ConnectSession(c *gin.Context) {
+    // ... existing code ...
+
+    response := gin.H{
+        "connectionId": conn.ID,
+        "sessionUrl":   session.Status.URL,
+        "state":        session.State,
+        "ready":        session.Status.URL != "",
+    }
+
+    if session.Status.URL == "" {
+        response["message"] = "Session starting. Poll GET /sessions/{id}/status for URL."
+        response["pollInterval"] = 2000 // milliseconds
+    }
+
+    c.JSON(http.StatusOK, response)
+}
+```
+
+**UI Implementation:**
+- If `ready: false`, poll status endpoint every 2s
+- Show "Starting session..." spinner
+- Connect iframe when URL becomes available
+
+**Rationale:**
+- Non-blocking API
+- Better UX with progress indication
+- Handles slow pod startup gracefully
 
 ---
 
