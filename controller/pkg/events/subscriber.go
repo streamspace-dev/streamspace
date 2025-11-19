@@ -47,7 +47,7 @@ func NewSubscriber(cfg Config, k8sClient client.Client, namespace, controllerID 
 
 	// Connect to NATS
 	opts := []nats.Option{
-		nats.Name("streamspace-controller"),
+		nats.Name("streamspace-kubernetes-controller"),
 		nats.ReconnectWait(2 * time.Second),
 		nats.MaxReconnects(-1), // Infinite reconnects
 	}

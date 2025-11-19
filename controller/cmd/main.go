@@ -110,7 +110,7 @@ func main() {
 	flag.StringVar(&natsUser, "nats-user", getEnv("NATS_USER", ""), "NATS username")
 	flag.StringVar(&natsPassword, "nats-password", getEnv("NATS_PASSWORD", ""), "NATS password")
 	flag.StringVar(&namespace, "namespace", getEnv("NAMESPACE", "streamspace"), "Kubernetes namespace")
-	flag.StringVar(&controllerID, "controller-id", getEnv("CONTROLLER_ID", "streamspace-controller-1"), "Unique controller ID")
+	flag.StringVar(&controllerID, "controller-id", getEnv("CONTROLLER_ID", "streamspace-kubernetes-controller-1"), "Unique controller ID")
 
 	// Setup logging options (can be configured via flags like --zap-log-level=debug)
 	opts := zap.Options{

@@ -80,7 +80,7 @@ check_images() {
 
     local missing_images=0
 
-    for image in "streamspace/streamspace-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
+    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"
         else

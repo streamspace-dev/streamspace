@@ -11,13 +11,15 @@ global:
   # Storage class for all PVCs
   storageClass: ""
 
-## StreamSpace Controller
+## StreamSpace Kubernetes Controller
+## This is the Kubernetes-specific platform controller for the multi-platform architecture.
+## For Docker environments, use the Docker controller (docker-controller/).
 controller:
   enabled: true
 
   image:
     registry: ghcr.io
-    repository: streamspace/streamspace-controller
+    repository: streamspace/streamspace-kubernetes-controller
     tag: "v0.2.0"
     pullPolicy: IfNotPresent
 

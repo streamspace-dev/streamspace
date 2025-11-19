@@ -23,7 +23,7 @@ GIT_COMMIT="${GIT_COMMIT:-$(git -C "$PROJECT_ROOT" rev-parse --short HEAD 2>/dev
 BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 
 # Image names (matching Helm chart expectations)
-CONTROLLER_IMAGE="streamspace/streamspace-controller"
+KUBERNETES_CONTROLLER_IMAGE="streamspace/streamspace-kubernetes-controller"
 API_IMAGE="streamspace/streamspace-api"
 UI_IMAGE="streamspace/streamspace-ui"
 DOCKER_CONTROLLER_IMAGE="streamspace/streamspace-docker-controller"
@@ -69,19 +69,19 @@ check_prerequisites() {
     log_success "Docker is available and running"
 }
 
-# Build controller image
-build_controller() {
-    log "Building controller image..."
-    log_info "Image: ${CONTROLLER_IMAGE}:${VERSION}"
+# Build Kubernetes controller image
+build_kubernetes_controller() {
+    log "Building Kubernetes controller image..."
+    log_info "Image: ${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}"
     log_info "Context: ${PROJECT_ROOT}/controller"
 
     docker build ${BUILD_ARGS} \
-        -t "${CONTROLLER_IMAGE}:${VERSION}" \
-        -t "${CONTROLLER_IMAGE}:latest" \
+        -t "${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}" \
+        -t "${KUBERNETES_CONTROLLER_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/controller/Dockerfile" \
         "${PROJECT_ROOT}/controller/"
 
-    log_success "Controller image built successfully"
+    log_success "Kubernetes controller image built successfully"
 }
 
 # Build API image
@@ -140,7 +140,7 @@ list_images() {
     log "Built images:"
     echo ""
     docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}" | \
-        grep -E "REPOSITORY|streamspace/streamspace-(controller|api|ui|docker-controller)" || true
+        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|docker-controller)" || true
     echo ""
 }
 
@@ -160,7 +160,7 @@ main() {
     # Allow building individual components
     if [ $# -eq 0 ]; then
         # Build all components
-        build_controller
+        build_kubernetes_controller
         build_api
         build_ui
         build_docker_controller
@@ -168,8 +168,8 @@ main() {
         # Build specific components
         for component in "$@"; do
             case "$component" in
-                controller)
-                    build_controller
+                controller|kubernetes-controller)
+                    build_kubernetes_controller
                     ;;
                 api)
                     build_api
@@ -182,7 +182,7 @@ main() {
                     ;;
                 *)
                     log_error "Unknown component: $component"
-                    log_info "Valid components: controller, api, ui, docker-controller"
+                    log_info "Valid components: controller, kubernetes-controller, api, ui, docker-controller"
                     exit 1
                     ;;
             esac
