@@ -91,17 +91,28 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace/streamspace/api/internal/events"
+	"github.com/streamspace/streamspace/api/internal/k8s"
 )
 
 // SessionTemplatesHandler handles custom session templates and presets
 type SessionTemplatesHandler struct {
-	db *db.Database
+	db        *db.Database
+	k8sClient *k8s.Client
+	publisher *events.Publisher
+	platform  string
+	namespace string
 }
 
 // NewSessionTemplatesHandler creates a new session templates handler
-func NewSessionTemplatesHandler(database *db.Database) *SessionTemplatesHandler {
+func NewSessionTemplatesHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.Publisher, platform string) *SessionTemplatesHandler {
+	namespace := "streamspace" // Default namespace
 	return &SessionTemplatesHandler{
-		db: database,
+		db:        database,
+		k8sClient: k8sClient,
+		publisher: publisher,
+		platform:  platform,
+		namespace: namespace,
 	}
 }
 
@@ -488,22 +499,133 @@ func (h *SessionTemplatesHandler) CloneSessionTemplate(c *gin.Context) {
 // UseSessionTemplate creates a session from a template
 func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
+	userID, _ := c.Get("userID")
+	userIDStr := userID.(string)
 
-	ctx := context.Background()
+	ctx := c.Request.Context()
 
-	// Increment usage count
-	_, err := h.db.DB().ExecContext(ctx, `
-		UPDATE user_session_templates SET usage_count = usage_count + 1 WHERE id = $1
-	`, templateID)
+	// Get the user session template configuration
+	var baseTemplate string
+	var configJSON, resourcesJSON, envJSON sql.NullString
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT base_template, configuration, resources, environment
+		FROM user_session_templates
+		WHERE id = $1 AND (user_id = $2 OR visibility = 'public')
+	`, templateID, userIDStr).Scan(&baseTemplate, &configJSON, &resourcesJSON, &envJSON)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to use template"})
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Template not found or access denied"})
+		} else {
+			c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get template"})
+		}
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{
-		"message":    "Template usage recorded",
+	// Parse resources configuration
+	memory := "2Gi"
+	cpu := "1000m"
+	if resourcesJSON.Valid && resourcesJSON.String != "" {
+		var resources map[string]string
+		if err := json.Unmarshal([]byte(resourcesJSON.String), &resources); err == nil {
+			if m, ok := resources["memory"]; ok && m != "" {
+				memory = m
+			}
+			if c, ok := resources["cpu"]; ok && c != "" {
+				cpu = c
+			}
+		}
+	}
+
+	// Verify the base Kubernetes template exists and get its configuration
+	k8sTemplate, err := h.k8sClient.GetTemplate(ctx, h.namespace, baseTemplate)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Base template not found",
+			"message": fmt.Sprintf("Template '%s' is not available. Please check if the application is installed.", baseTemplate),
+		})
+		return
+	}
+
+	// Generate session name
+	sessionName := fmt.Sprintf("%s-%s-%s", userIDStr, baseTemplate, uuid.New().String()[:8])
+
+	// Create the Kubernetes session
+	session := &k8s.Session{
+		Name:           sessionName,
+		Namespace:      h.namespace,
+		User:           userIDStr,
+		Template:       baseTemplate,
+		State:          "running",
+		PersistentHome: true,
+	}
+	session.Resources.Memory = memory
+	session.Resources.CPU = cpu
+
+	created, err := h.k8sClient.CreateSession(ctx, session)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("Failed to create session: %v", err)})
+		return
+	}
+
+	// Increment usage count
+	_, err = h.db.DB().ExecContext(ctx, `
+		UPDATE user_session_templates SET usage_count = usage_count + 1 WHERE id = $1
+	`, templateID)
+	if err != nil {
+		log.Printf("Failed to update usage count for template %s: %v", templateID, err)
+	}
+
+	// Publish session create event for controllers
+	createEvent := &events.SessionCreateEvent{
+		SessionID:      sessionName,
+		UserID:         userIDStr,
+		TemplateID:     baseTemplate,
+		Platform:       h.platform,
+		Resources:      events.ResourceSpec{Memory: memory, CPU: cpu},
+		PersistentHome: true,
+	}
+
+	// Add template configuration for Docker controller
+	if k8sTemplate != nil {
+		vncPort := 3000 // Default VNC port
+		if k8sTemplate.VNC != nil && k8sTemplate.VNC.Port > 0 {
+			vncPort = int(k8sTemplate.VNC.Port)
+		}
+
+		// Convert env vars to map
+		envMap := make(map[string]string)
+		for _, env := range k8sTemplate.Env {
+			envMap[env.Name] = env.Value
+		}
+
+		createEvent.TemplateConfig = &events.TemplateConfig{
+			Image:       k8sTemplate.BaseImage,
+			VNCPort:     vncPort,
+			DisplayName: k8sTemplate.DisplayName,
+			Env:         envMap,
+		}
+	}
+
+	if err := h.publisher.PublishSessionCreate(ctx, createEvent); err != nil {
+		log.Printf("Warning: Failed to publish session create event: %v", err)
+	}
+
+	c.JSON(http.StatusCreated, gin.H{
+		"message":    "Session created from template",
 		"templateId": templateID,
+		"sessionId":  created.Name,
+		"session": map[string]interface{}{
+			"name":      created.Name,
+			"namespace": created.Namespace,
+			"user":      created.User,
+			"template":  created.Template,
+			"state":     created.State,
+			"resources": map[string]string{
+				"memory": created.Resources.Memory,
+				"cpu":    created.Resources.CPU,
+			},
+		},
 	})
 }
 

@@ -115,9 +115,29 @@ func (s *Subscriber) handleSessionCreate(data []byte) error {
 	memory := int64(2 * 1024 * 1024 * 1024) // 2GB default
 	cpuShares := int64(1024)                 // Default CPU shares
 
-	// TODO: Look up template to get image and other settings
-	// For now, use a default image
-	image := "lscr.io/linuxserver/firefox:latest"
+	// Get image and VNC port from template config, or use defaults
+	image := "lscr.io/linuxserver/firefox:latest" // Default fallback
+	vncPort := 3000                                // Default VNC port
+	env := map[string]string{
+		"PUID": "1000",
+		"PGID": "1000",
+	}
+
+	if event.TemplateConfig != nil {
+		if event.TemplateConfig.Image != "" {
+			image = event.TemplateConfig.Image
+		}
+		if event.TemplateConfig.VNCPort > 0 {
+			vncPort = event.TemplateConfig.VNCPort
+		}
+		// Merge template env vars with defaults
+		for k, v := range event.TemplateConfig.Env {
+			env[k] = v
+		}
+		log.Printf("Using template config: image=%s, vncPort=%d", image, vncPort)
+	} else {
+		log.Printf("No template config provided, using defaults: image=%s, vncPort=%d", image, vncPort)
+	}
 
 	// Create container
 	config := docker.SessionConfig{
@@ -127,13 +147,10 @@ func (s *Subscriber) handleSessionCreate(data []byte) error {
 		Image:          image,
 		Memory:         memory,
 		CPUShares:      cpuShares,
-		VNCPort:        3000,
+		VNCPort:        vncPort,
 		PersistentHome: event.PersistentHome,
 		HomeVolume:     homeVolume,
-		Env: map[string]string{
-			"PUID": "1000",
-			"PGID": "1000",
-		},
+		Env:            env,
 	}
 
 	_, err := s.docker.CreateSession(context.Background(), config)
@@ -143,7 +160,7 @@ func (s *Subscriber) handleSessionCreate(data []byte) error {
 	}
 
 	// Get URL
-	url, _ := s.docker.GetSessionURL(context.Background(), event.SessionID, 3000)
+	url, _ := s.docker.GetSessionURL(context.Background(), event.SessionID, vncPort)
 
 	s.publishStatusWithURL(event.SessionID, "running", "Session created", url)
 	return nil

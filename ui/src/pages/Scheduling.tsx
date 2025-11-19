@@ -154,7 +154,6 @@ function SchedulingContent() {
 
   // Real-time schedule events via WebSocket
   useScheduleEvents((data: any) => {
-    console.log('Schedule event:', data);
     setWsConnected(true);
     setWsReconnectAttempts(0);
 

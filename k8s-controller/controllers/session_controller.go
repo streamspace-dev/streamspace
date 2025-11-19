@@ -165,6 +165,7 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
+	"k8s.io/apimachinery/pkg/api/meta"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
@@ -221,6 +222,46 @@ import (
 type SessionReconciler struct {
 	client.Client  // Kubernetes API client
 	Scheme *runtime.Scheme  // Type information for objects
+}
+
+// setCondition sets or updates a condition on the Session's status.
+//
+// Standard condition types for Sessions:
+//   - "Ready": Session is running and accepting connections
+//   - "TemplateResolved": Template was found and validated
+//   - "PVCBound": Persistent volume is bound and mounted
+//   - "DeploymentReady": Deployment is created and running
+//
+// Parameters:
+//   - ctx: Context for API calls
+//   - session: The Session to update
+//   - conditionType: The type of condition (e.g., "TemplateResolved")
+//   - status: metav1.ConditionTrue, metav1.ConditionFalse, or metav1.ConditionUnknown
+//   - reason: Machine-readable reason code (e.g., "TemplateNotFound")
+//   - message: Human-readable description of the condition
+//
+// The function updates the session's status subresource in the cluster.
+func (r *SessionReconciler) setCondition(ctx context.Context, session *streamv1alpha1.Session, conditionType string, status metav1.ConditionStatus, reason, message string) {
+	log := log.FromContext(ctx)
+
+	condition := metav1.Condition{
+		Type:               conditionType,
+		Status:             status,
+		ObservedGeneration: session.Generation,
+		LastTransitionTime: metav1.Now(),
+		Reason:             reason,
+		Message:            message,
+	}
+
+	// Use meta.SetStatusCondition to properly update or add the condition
+	meta.SetStatusCondition(&session.Status.Conditions, condition)
+
+	// Update the status subresource
+	if err := r.Status().Update(ctx, session); err != nil {
+		log.Error(err, "Failed to update Session condition",
+			"conditionType", conditionType,
+			"reason", reason)
+	}
 }
 
 //+kubebuilder:rbac:groups=stream.streamspace.io,resources=sessions,verbs=get;list;watch;create;update;patch;delete
@@ -311,7 +352,9 @@ func (r *SessionReconciler) Reconcile(ctx context.Context, req ctrl.Request) (ct
 	if err != nil {
 		log.Error(err, "Failed to get Template")
 		metrics.RecordReconciliation(req.Namespace, "error")
-		// TODO: Set Session.Status.Conditions with "TemplateNotFound" condition
+		// Set condition to indicate template was not found
+		r.setCondition(ctx, &session, "TemplateResolved", metav1.ConditionFalse, "TemplateNotFound",
+			fmt.Sprintf("Template '%s' not found in namespace '%s'", session.Spec.Template, session.Namespace))
 		return ctrl.Result{}, err
 	}
 
@@ -432,7 +475,9 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 		deployment = r.createDeployment(session, template)
 		if err := r.Create(ctx, deployment); err != nil {
 			log.Error(err, "Failed to create Deployment")
-			// TODO: Update Session.Status.Conditions with creation failure
+			// Set condition to indicate deployment creation failed
+			r.setCondition(ctx, session, "DeploymentReady", metav1.ConditionFalse, "DeploymentCreationFailed",
+				fmt.Sprintf("Failed to create deployment: %v", err))
 			return ctrl.Result{}, err
 		}
 		log.Info("Created Deployment", "name", deploymentName)
@@ -490,7 +535,9 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 			if err := r.Create(ctx, pvc); err != nil {
 				log.Error(err, "Failed to create PVC")
 				// PVC creation failure is serious - pod won't start without it
-				// TODO: Set condition "PVCCreationFailed" in status
+				// Set condition to indicate PVC creation failed
+				r.setCondition(ctx, session, "PVCBound", metav1.ConditionFalse, "PVCCreationFailed",
+					fmt.Sprintf("Failed to create persistent volume claim for user '%s': %v", session.Spec.User, err))
 				return ctrl.Result{}, err
 			}
 			log.Info("Created user PVC", "name", pvcName)
@@ -1229,7 +1276,7 @@ func (r *SessionReconciler) createIngress(session *streamv1alpha1.Session, templ
 //   - Reconciliation fails
 //   - Controller requeues with backoff
 //   - Session remains in Pending phase
-//   - TODO: Set condition "TemplateNotFound" in status
+//   - Condition "TemplateResolved" is set to False by caller
 func (r *SessionReconciler) getTemplate(ctx context.Context, templateName, namespace string) (*streamv1alpha1.Template, error) {
 	template := &streamv1alpha1.Template{}
 	err := r.Get(ctx, types.NamespacedName{Name: templateName, Namespace: namespace}, template)

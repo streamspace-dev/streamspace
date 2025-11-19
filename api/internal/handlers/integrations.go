@@ -50,6 +50,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io"
+	"log"
 	"net"
 	"net/http"
 	"net/url"
@@ -58,6 +59,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/google/uuid"
 	"github.com/streamspace/streamspace/api/internal/db"
 )
 
@@ -892,8 +894,12 @@ func (h *IntegrationsHandler) generateWebhookSecret() string {
 	// Previous implementation used timestamp which is predictable
 	b := make([]byte, 32)
 	if _, err := rand.Read(b); err != nil {
-		// Should never happen, but fail safely if it does
-		panic("failed to generate secure random secret: " + err.Error())
+		// This should almost never happen, but don't panic if it does
+		// Log the error and use a UUID-based fallback for uniqueness
+		log.Printf("Warning: crypto/rand.Read failed, using fallback: %v", err)
+		// Generate a fallback using time-based UUID (still unique, less cryptographically secure)
+		fallback := fmt.Sprintf("%d_%s", time.Now().UnixNano(), uuid.New().String())
+		return "whsec_" + base64.URLEncoding.EncodeToString([]byte(fallback))[:43]
 	}
 	return "whsec_" + base64.URLEncoding.EncodeToString(b)
 }

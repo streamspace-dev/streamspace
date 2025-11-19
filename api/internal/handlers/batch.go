@@ -633,101 +633,146 @@ func (h *BatchHandler) executeBatchTerminate(jobID, userID string, sessionIDs []
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, sessionID := range sessionIDs {
 		// Update session state to terminated
-		_, err := h.db.DB().ExecContext(ctx, `
+		result, err := h.db.DB().ExecContext(ctx, `
 			UPDATE sessions SET state = 'terminated' WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
-		if err == nil {
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+		} else {
 			successCount++
 		}
 
 		// Update progress
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
-	// Mark as completed
+	// Marshal errors to JSON
+	errorsJSON, _ := json.Marshal(errors)
+
+	// Mark as completed with final error count
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }
 
 func (h *BatchHandler) executeBatchHibernate(jobID, userID string, sessionIDs []string) {
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, sessionID := range sessionIDs {
-		_, err := h.db.DB().ExecContext(ctx, `
+		result, err := h.db.DB().ExecContext(ctx, `
 			UPDATE sessions SET state = 'hibernated' WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
-		if err == nil {
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+		} else {
 			successCount++
 		}
 
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
+	errorsJSON, _ := json.Marshal(errors)
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }
 
 func (h *BatchHandler) executeBatchWake(jobID, userID string, sessionIDs []string) {
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, sessionID := range sessionIDs {
-		_, err := h.db.DB().ExecContext(ctx, `
+		result, err := h.db.DB().ExecContext(ctx, `
 			UPDATE sessions SET state = 'running' WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
-		if err == nil {
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+		} else {
 			successCount++
 		}
 
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
+	errorsJSON, _ := json.Marshal(errors)
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }
 
 func (h *BatchHandler) executeBatchDelete(jobID, userID string, sessionIDs []string) {
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, sessionID := range sessionIDs {
-		_, err := h.db.DB().ExecContext(ctx, `
+		result, err := h.db.DB().ExecContext(ctx, `
 			DELETE FROM sessions WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
-		if err == nil {
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+		} else {
 			successCount++
 		}
 
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
+	errorsJSON, _ := json.Marshal(errors)
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }
 
 func (h *BatchHandler) executeBatchUpdateTags(jobID, userID string, sessionIDs []string, tags []string, operation string) {
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, sessionID := range sessionIDs {
 		var err error
 
@@ -752,17 +797,20 @@ func (h *BatchHandler) executeBatchUpdateTags(jobID, userID string, sessionIDs [
 		if err == nil {
 			successCount++
 		} else {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
 			log.Printf("[ERROR] Failed to update tags for session %s: %v", sessionID, err)
 		}
 
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
+	errorsJSON, _ := json.Marshal(errors)
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }
 
 // addTagsToSession adds tags to a session, preventing duplicates
@@ -855,21 +903,31 @@ func (h *BatchHandler) executeBatchDeleteSnapshots(jobID, userID string, snapsho
 	ctx := context.Background()
 
 	successCount := 0
+	failureCount := 0
+	var errors []string
+
 	for _, snapshotID := range snapshotIDs {
-		_, err := h.db.DB().ExecContext(ctx, `
+		result, err := h.db.DB().ExecContext(ctx, `
 			UPDATE session_snapshots SET status = 'deleted' WHERE id = $1 AND user_id = $2
 		`, snapshotID, userID)
 
-		if err == nil {
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("snapshot %s: %v", snapshotID, err))
+		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("snapshot %s: not found or not owned by user", snapshotID))
+		} else {
 			successCount++
 		}
 
 		h.db.DB().ExecContext(ctx, `
-			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1 WHERE id = $2
-		`, successCount, jobID)
+			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+		`, successCount, failureCount, jobID)
 	}
 
+	errorsJSON, _ := json.Marshal(errors)
 	h.db.DB().ExecContext(ctx, `
-		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP WHERE id = $1
-	`, jobID)
+		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
+	`, string(errorsJSON), jobID)
 }

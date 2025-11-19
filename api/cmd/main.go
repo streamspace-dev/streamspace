@@ -313,7 +313,7 @@ func main() {
 	notificationsHandler := handlers.NewNotificationsHandler(database)
 	searchHandler := handlers.NewSearchHandler(database)
 	// NOTE: Session snapshots now handled by streamspace-snapshots plugin
-	sessionTemplatesHandler := handlers.NewSessionTemplatesHandler(database)
+	sessionTemplatesHandler := handlers.NewSessionTemplatesHandler(database, k8sClient, eventPublisher, platform)
 	batchHandler := handlers.NewBatchHandler(database)
 	monitoringHandler := handlers.NewMonitoringHandler(database)
 	quotasHandler := handlers.NewQuotasHandler(database)
@@ -327,7 +327,7 @@ func main() {
 	securityHandler := handlers.NewSecurityHandler(database)
 	templateVersioningHandler := handlers.NewTemplateVersioningHandler(database)
 	setupHandler := handlers.NewSetupHandler(database)
-	applicationHandler := handlers.NewApplicationHandler(database, eventPublisher, platform)
+	applicationHandler := handlers.NewApplicationHandler(database, eventPublisher, k8sClient, platform)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 
 	// SECURITY: Initialize webhook authentication

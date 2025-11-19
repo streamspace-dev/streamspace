@@ -18,6 +18,8 @@ import { api } from '../lib/api';
 // Authentication mode from environment
 const AUTH_MODE = import.meta.env.VITE_AUTH_MODE || 'jwt';
 const SAML_LOGIN_URL = import.meta.env.VITE_SAML_LOGIN_URL || '/saml/login';
+// SECURITY: Demo mode must be explicitly enabled and should never be used in production
+const DEMO_MODE_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
 
 /**
  * Login - User authentication page
@@ -88,20 +90,10 @@ export default function Login() {
     setError('');
 
     try {
-      if (AUTH_MODE === 'jwt') {
-        // JWT authentication
-        const loginResponse = await api.login(username, password);
-
-        // Update user store with full auth response
-        setAuth(loginResponse);
-
-        // Store token in localStorage for API client
-        localStorage.setItem('streamspace_token', loginResponse.token);
-
-        navigate('/');
-      } else {
-        // Demo mode for development
-        // Create a mock LoginResponse for demo purposes
+      // SECURITY FIX: Demo mode must be explicitly enabled via VITE_DEMO_MODE=true
+      if (DEMO_MODE_ENABLED) {
+        // Demo mode for development only - NEVER use in production
+        console.warn('WARNING: Demo mode is enabled. This should NEVER be used in production!');
         const demoResponse = {
           token: 'demo-token',
           expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(), // 24 hours
@@ -119,6 +111,17 @@ export default function Login() {
         };
         setAuth(demoResponse);
         localStorage.setItem('streamspace_token', demoResponse.token);
+        navigate('/');
+      } else {
+        // Standard JWT authentication
+        const loginResponse = await api.login(username, password);
+
+        // Update user store with full auth response
+        setAuth(loginResponse);
+
+        // Store token in localStorage for API client
+        localStorage.setItem('streamspace_token', loginResponse.token);
+
         navigate('/');
       }
     } catch (err: any) {

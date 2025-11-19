@@ -247,6 +247,9 @@ type Runtime struct {
 	// uiRegistry manages UI components and React hooks registered by plugins.
 	// Allows plugins to inject UI elements into the web interface.
 	uiRegistry *UIRegistry
+
+	// discovery handles dynamic plugin loading from filesystem (.so files)
+	discovery *PluginDiscovery
 }
 
 // LoadedPlugin represents a plugin that has been loaded into the runtime.
@@ -579,6 +582,7 @@ func NewRuntime(database *db.Database) *Runtime {
 		scheduler:   cron.New(),
 		apiRegistry: NewAPIRegistry(),
 		uiRegistry:  NewUIRegistry(),
+		discovery:   NewPluginDiscovery(),
 	}
 }
 
@@ -1033,16 +1037,25 @@ func (r *Runtime) ListPlugins() []*LoadedPlugin {
 }
 
 // loadPluginHandler loads the plugin handler implementation
-// This is a placeholder that would be replaced with dynamic loading
+// This method first checks built-in plugins, then attempts dynamic loading from filesystem
 func (r *Runtime) loadPluginHandler(name, version string, manifest models.PluginManifest) (PluginHandler, error) {
 	// Check if it's a built-in plugin
 	if handler := GetBuiltinPlugin(name); handler != nil {
 		return handler, nil
 	}
 
-	// TODO: Implement dynamic plugin loading from filesystem
-	// For now, return error
-	return nil, fmt.Errorf("dynamic plugin loading not yet implemented (plugin: %s)", name)
+	// Try dynamic loading from filesystem using PluginDiscovery
+	if r.discovery != nil {
+		handler, err := r.discovery.LoadPlugin(name)
+		if err == nil {
+			return handler, nil
+		}
+		// Log the error but continue to provide helpful message
+		log.Printf("Dynamic plugin loading failed for %s: %v", name, err)
+	}
+
+	// Plugin not found in built-in or filesystem
+	return nil, fmt.Errorf("plugin '%s' not found: check that the plugin is installed or registered as a built-in", name)
 }
 
 // GetEventBus returns the event bus for direct access

@@ -73,36 +73,60 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [launching, setLaunching] = useState<Set<string>>(new Set());
+  const [favoritesLoading, setFavoritesLoading] = useState(false);
 
-  // Load user favorites from backend
+  // Load user favorites from backend API
   useEffect(() => {
     const loadFavorites = async () => {
+      if (!username) return;
+
+      setFavoritesLoading(true);
       try {
-        // TODO: Implement API endpoint to fetch user's favorite templates
-        // For now, use localStorage as temporary solution
+        const response = await api.getFavorites();
+        const favoriteNames = response.favorites.map((f: { templateName: string }) => f.templateName);
+        setFavorites(new Set(favoriteNames));
+      } catch (error) {
+        // Fallback to localStorage for backward compatibility
         const stored = localStorage.getItem(`favorites_${username}`);
         if (stored) {
           setFavorites(new Set(JSON.parse(stored)));
         }
-      } catch (error) {
-        console.error('Failed to load favorites:', error);
+      } finally {
+        setFavoritesLoading(false);
       }
     };
-    if (username) {
-      loadFavorites();
-    }
+    loadFavorites();
   }, [username]);
 
-  // Save favorites to localStorage (temporary until backend endpoint exists)
-  const toggleFavorite = (templateName: string) => {
+  // Toggle favorite using backend API
+  const toggleFavorite = async (templateName: string) => {
     const newFavorites = new Set(favorites);
-    if (newFavorites.has(templateName)) {
+    const isCurrentlyFavorite = newFavorites.has(templateName);
+
+    // Optimistic update
+    if (isCurrentlyFavorite) {
       newFavorites.delete(templateName);
     } else {
       newFavorites.add(templateName);
     }
     setFavorites(newFavorites);
-    localStorage.setItem(`favorites_${username}`, JSON.stringify(Array.from(newFavorites)));
+
+    try {
+      if (isCurrentlyFavorite) {
+        await api.removeFavorite(templateName);
+      } else {
+        await api.addFavorite(templateName);
+      }
+    } catch (error) {
+      // Revert on error
+      if (isCurrentlyFavorite) {
+        newFavorites.add(templateName);
+      } else {
+        newFavorites.delete(templateName);
+      }
+      setFavorites(newFavorites);
+      toast.error('Failed to update favorite');
+    }
   };
 
   // Launch an application (create new session)

@@ -1258,22 +1258,19 @@ func (sa *SAMLAuthenticator) SetupRoutes(router *gin.Engine) {
 		// - return_url (optional): Where to redirect after authentication
 		//   Default: "/"
 		//
-		// SECURITY NOTE: return_url should be validated to prevent open redirects
-		// TODO: Add whitelist validation for return_url
+		// SECURITY: return_url is validated to prevent open redirect attacks
 		samlGroup.GET("/login", func(c *gin.Context) {
 			// STEP 1: Get return URL from query parameter
 			// This is where user will be redirected after successful authentication
-			returnURL := c.Query("return_url")
-			if returnURL == "" {
-				returnURL = "/" // Default to home page
-			}
+			// SECURITY: Validate to prevent open redirect attacks
+			returnURL := validateReturnURL(c.Query("return_url"))
 
 			// STEP 2: Store return URL in cookie
 			// The ACS endpoint will read this cookie and redirect user after auth
 			//
 			// Cookie parameters:
 			// - Name: "saml_return_url"
-			// - Value: returnURL (e.g., "/api/sessions")
+			// - Value: returnURL (validated, e.g., "/api/sessions")
 			// - MaxAge: 3600 seconds (1 hour) - plenty of time for auth flow
 			// - Path: "/" - available to all endpoints
 			// - Domain: "" - current domain

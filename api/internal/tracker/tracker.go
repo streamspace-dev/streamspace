@@ -449,6 +449,24 @@ func (ct *ConnectionTracker) GetConnectionCount(sessionID string) int {
 	return len(conns)
 }
 
+// GetConnection returns a connection by ID, or nil if not found
+func (ct *ConnectionTracker) GetConnection(connectionID string) *Connection {
+	ct.mu.RLock()
+	defer ct.mu.RUnlock()
+
+	conn, exists := ct.connections[connectionID]
+	if !exists {
+		return nil
+	}
+
+	// Check if connection is still within heartbeat window
+	if time.Since(conn.LastHeartbeat) > ct.heartbeatWindow {
+		return nil
+	}
+
+	return conn
+}
+
 // autoStartSession automatically starts a hibernated session
 func (ct *ConnectionTracker) autoStartSession(ctx context.Context, sessionID string) {
 	// Get session from K8s

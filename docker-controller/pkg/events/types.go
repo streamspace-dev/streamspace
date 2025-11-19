@@ -15,6 +15,16 @@ type SessionCreateEvent struct {
 	PersistentHome bool              `json:"persistent_home"`
 	IdleTimeout    string            `json:"idle_timeout"`
 	Metadata       map[string]string `json:"metadata,omitempty"`
+	// Template configuration - used by controllers to create sessions
+	TemplateConfig *TemplateConfig `json:"template_config,omitempty"`
+}
+
+// TemplateConfig holds template configuration for session creation.
+type TemplateConfig struct {
+	Image       string            `json:"image"`
+	VNCPort     int               `json:"vnc_port"`
+	DisplayName string            `json:"display_name,omitempty"`
+	Env         map[string]string `json:"env,omitempty"`
 }
 
 // SessionDeleteEvent is received when a session should be deleted.

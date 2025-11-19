@@ -47,6 +47,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/events"
+	"github.com/streamspace/streamspace/api/internal/k8s"
 	"github.com/streamspace/streamspace/api/internal/models"
 )
 
@@ -55,19 +56,24 @@ type ApplicationHandler struct {
 	db        *db.Database
 	appDB     *db.ApplicationDB
 	publisher *events.Publisher
+	k8sClient *k8s.Client
 	platform  string
+	namespace string
 }
 
 // NewApplicationHandler creates a new application handler
-func NewApplicationHandler(database *db.Database, publisher *events.Publisher, platform string) *ApplicationHandler {
+func NewApplicationHandler(database *db.Database, publisher *events.Publisher, k8sClient *k8s.Client, platform string) *ApplicationHandler {
 	if platform == "" {
 		platform = events.PlatformKubernetes
 	}
+	namespace := "streamspace" // Default namespace
 	return &ApplicationHandler{
 		db:        database,
 		appDB:     db.NewApplicationDB(database.DB()),
 		publisher: publisher,
+		k8sClient: k8sClient,
 		platform:  platform,
+		namespace: namespace,
 	}
 }
 
@@ -279,8 +285,9 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 // @Router /api/v1/applications/{id} [get]
 func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 	appID := c.Param("id")
+	ctx := c.Request.Context()
 
-	app, err := h.appDB.GetApplication(c.Request.Context(), appID)
+	app, err := h.appDB.GetApplication(ctx, appID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, ErrorResponse{
 			Error:   "Application not found",
@@ -289,8 +296,24 @@ func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 		return
 	}
 
+	// Self-healing: Check if installation status needs to be updated
+	// If status is 'pending' or 'creating', check if the Template CRD exists
+	if app.InstallStatus == "pending" || app.InstallStatus == "creating" {
+		if h.k8sClient != nil && app.TemplateName != "" {
+			// Check if Template CRD exists in Kubernetes
+			_, err := h.k8sClient.GetTemplate(ctx, h.namespace, app.TemplateName)
+			if err == nil {
+				// Template exists! Update status to installed
+				h.updateInstallStatus(ctx, appID, "installed", "Template ready")
+				app.InstallStatus = "installed"
+				app.InstallMessage = "Template ready"
+				log.Printf("Updated installation status for %s to installed (template found)", appID)
+			}
+		}
+	}
+
 	// Get group access
-	groups, err := h.appDB.GetApplicationGroups(c.Request.Context(), appID)
+	groups, err := h.appDB.GetApplicationGroups(ctx, appID)
 	if err == nil {
 		app.Groups = groups
 	}

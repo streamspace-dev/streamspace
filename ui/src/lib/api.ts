@@ -2014,6 +2014,25 @@ class APIClient {
     const response = await this.client.get<ComplianceDashboard>('/compliance/dashboard');
     return response.data;
   }
+
+  // ============================================================================
+  // User Preferences & Favorites
+  // ============================================================================
+
+  async getFavorites(): Promise<{ favorites: { templateName: string; addedAt: string }[]; total: number }> {
+    const response = await this.client.get('/preferences/favorites');
+    return response.data;
+  }
+
+  async addFavorite(templateName: string): Promise<{ message: string; templateName: string }> {
+    const response = await this.client.post(`/preferences/favorites/${encodeURIComponent(templateName)}`);
+    return response.data;
+  }
+
+  async removeFavorite(templateName: string): Promise<{ message: string; templateName: string }> {
+    const response = await this.client.delete(`/preferences/favorites/${encodeURIComponent(templateName)}`);
+    return response.data;
+  }
 }
 
 // Export singleton instance

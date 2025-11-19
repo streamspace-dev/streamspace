@@ -548,13 +548,14 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 
 	// Generate session name: {user}-{template}-{random}
-	sessionName := fmt.Sprintf("%s-%s-%s", req.User, req.Template, uuid.New().String()[:8])
+	// Use resolved templateName (from applicationId lookup or req.Template)
+	sessionName := fmt.Sprintf("%s-%s-%s", req.User, templateName, uuid.New().String()[:8])
 
 	session := &k8s.Session{
 		Name:      sessionName,
 		Namespace: h.namespace,
 		User:      req.User,
-		Template:  req.Template,
+		Template:  templateName,
 		State:     "running",
 	}
 
@@ -596,12 +597,34 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	createEvent := &events.SessionCreateEvent{
 		SessionID:      sessionName,
 		UserID:         req.User,
-		TemplateID:     req.Template,
+		TemplateID:     templateName,
 		Platform:       h.platform,
 		Resources:      events.ResourceSpec{Memory: memory, CPU: cpu},
 		PersistentHome: session.PersistentHome,
 		IdleTimeout:    session.IdleTimeout,
 	}
+
+	// Add template configuration for Docker controller
+	if template != nil {
+		vncPort := 3000 // Default VNC port
+		if template.VNC != nil && template.VNC.Port > 0 {
+			vncPort = int(template.VNC.Port)
+		}
+
+		// Convert env vars to map
+		envMap := make(map[string]string)
+		for _, env := range template.Env {
+			envMap[env.Name] = env.Value
+		}
+
+		createEvent.TemplateConfig = &events.TemplateConfig{
+			Image:       template.BaseImage,
+			VNCPort:     vncPort,
+			DisplayName: template.DisplayName,
+			Env:         envMap,
+		}
+	}
+
 	if err := h.publisher.PublishSessionCreate(ctx, createEvent); err != nil {
 		log.Printf("Warning: Failed to publish session create event: %v", err)
 	}
@@ -739,11 +762,29 @@ func (h *Handler) ConnectSession(c *gin.Context) {
 		return
 	}
 
+	// Determine session readiness and URL availability
+	sessionUrl := session.Status.URL
+	message := "Connection established."
+	ready := true
+
+	if session.State == "hibernated" {
+		message = "Connection established. Session is waking from hibernation - please wait."
+		ready = false
+	} else if session.State == "pending" {
+		message = "Connection established. Session is starting up - please wait."
+		ready = false
+	} else if sessionUrl == "" {
+		// Session is running but URL not yet available (pod still initializing)
+		message = "Connection established. Waiting for session endpoint - please wait."
+		ready = false
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"connectionId": conn.ID,
-		"sessionUrl":   session.Status.URL,
+		"sessionUrl":   sessionUrl,
 		"state":        session.State,
-		"message":      "Connection established. Session will auto-start if hibernated.",
+		"ready":        ready,
+		"message":      message,
 	})
 }
 
@@ -776,6 +817,7 @@ func (h *Handler) DisconnectSession(c *gin.Context) {
 func (h *Handler) SessionHeartbeat(c *gin.Context) {
 	// SECURITY FIX: Use request context for proper cancellation and timeout handling
 	ctx := c.Request.Context()
+	sessionID := c.Param("id")
 	connectionID := c.Query("connectionId")
 
 	if connectionID == "" {
@@ -783,8 +825,20 @@ func (h *Handler) SessionHeartbeat(c *gin.Context) {
 		return
 	}
 
-	if err := h.connTracker.UpdateHeartbeat(ctx, connectionID); err != nil {
+	// Validate that the connection belongs to the specified session
+	conn := h.connTracker.GetConnection(connectionID)
+	if conn == nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Connection not found"})
+		return
+	}
+
+	if conn.SessionID != sessionID {
+		c.JSON(http.StatusForbidden, gin.H{"error": "Connection does not belong to this session"})
+		return
+	}
+
+	if err := h.connTracker.UpdateHeartbeat(ctx, connectionID); err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update heartbeat"})
 		return
 	}
 
