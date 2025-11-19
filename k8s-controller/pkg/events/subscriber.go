@@ -45,7 +45,7 @@ func NewSubscriber(cfg Config, k8sClient client.Client, namespace, controllerID 
 		cfg.URL = nats.DefaultURL
 	}
 
-	// Connect to NATS
+	// Connect to NATS with retry logic
 	opts := []nats.Option{
 		nats.Name("streamspace-kubernetes-controller"),
 		nats.ReconnectWait(2 * time.Second),
@@ -56,10 +56,31 @@ func NewSubscriber(cfg Config, k8sClient client.Client, namespace, controllerID 
 		opts = append(opts, nats.UserInfo(cfg.User, cfg.Password))
 	}
 
-	conn, err := nats.Connect(cfg.URL, opts...)
-	if err != nil {
-		return nil, fmt.Errorf("failed to connect to NATS: %w", err)
+	// Retry connection with exponential backoff
+	var conn *nats.Conn
+	var err error
+	maxRetries := 5
+	backoff := 2 * time.Second
+
+	for i := 0; i < maxRetries; i++ {
+		conn, err = nats.Connect(cfg.URL, opts...)
+		if err == nil {
+			break
+		}
+
+		if i < maxRetries-1 {
+			log.Printf("Failed to connect to NATS (attempt %d/%d): %v, retrying in %v",
+				i+1, maxRetries, err, backoff)
+			time.Sleep(backoff)
+			backoff *= 2 // Exponential backoff
+		}
 	}
+
+	if err != nil {
+		return nil, fmt.Errorf("failed to connect to NATS after %d attempts: %w", maxRetries, err)
+	}
+
+	log.Printf("Connected to NATS at %s", conn.ConnectedUrl())
 
 	// Create JetStream context for durable subscriptions
 	js, err := conn.JetStream()
