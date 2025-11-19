@@ -109,11 +109,15 @@ func (s *Subscriber) registerHandlers() {
 // Start starts the subscriber and begins processing events.
 func (s *Subscriber) Start(ctx context.Context) error {
 	// Subscribe to all registered subjects with platform filter
+	// Use queue group so multiple controllers of the same platform share the load
+	// This ensures only ONE controller in the group handles each message
+	queueGroup := fmt.Sprintf("streamspace-%s-controllers", s.platform)
+
 	for subject := range s.handlers {
-		// Subscribe to platform-specific subject
+		// Subscribe to platform-specific subject with queue group
 		platformSubject := fmt.Sprintf("%s.%s", subject, s.platform)
 
-		_, err := s.conn.Subscribe(platformSubject, func(msg *nats.Msg) {
+		_, err := s.conn.QueueSubscribe(platformSubject, queueGroup, func(msg *nats.Msg) {
 			// Extract base subject from the platform-specific subject
 			baseSubject := subject
 
@@ -131,7 +135,7 @@ func (s *Subscriber) Start(ctx context.Context) error {
 			return fmt.Errorf("failed to subscribe to %s: %w", platformSubject, err)
 		}
 
-		log.Printf("Subscribed to NATS subject: %s", platformSubject)
+		log.Printf("Subscribed to NATS subject: %s (queue: %s)", platformSubject, queueGroup)
 	}
 
 	// Request sync from API to get all installed applications

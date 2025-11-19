@@ -253,24 +253,27 @@ func (s *Subscriber) handleControllerSyncRequest(data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
 	defer cancel()
 
+	// Query installed applications filtered by platform
+	// Each catalog_template is platform-specific (kubernetes, docker, hyperv, vcenter)
 	query := `
 		SELECT
 			ia.id,
 			ia.catalog_template_id,
-			ia.template_name,
+			ia.name,
 			ct.display_name,
 			ct.description,
 			ct.category,
 			ct.icon_url,
 			ct.manifest,
-			ia.installed_by
+			ia.created_by
 		FROM installed_applications ia
 		JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
 		WHERE ia.install_status = 'installed'
-		ORDER BY ia.installed_at
+		  AND (ct.platform = $1 OR ct.platform IS NULL OR ct.platform = '')
+		ORDER BY ia.created_at
 	`
 
-	rows, err := s.db.QueryContext(ctx, query)
+	rows, err := s.db.QueryContext(ctx, query, event.Platform)
 	if err != nil {
 		log.Printf("Failed to query installed applications for sync: %v", err)
 		return

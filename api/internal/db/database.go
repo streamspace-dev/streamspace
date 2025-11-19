@@ -481,6 +481,11 @@ func (d *Database) Migrate() error {
 		`ALTER TABLE catalog_templates ADD COLUMN IF NOT EXISTS avg_rating DECIMAL(3,2) DEFAULT 0.0`,
 		`ALTER TABLE catalog_templates ADD COLUMN IF NOT EXISTS rating_count INT DEFAULT 0`,
 
+		// Add platform column for multi-platform support (kubernetes, docker, hyperv, vcenter)
+		// Defaults to 'kubernetes' for backward compatibility
+		`ALTER TABLE catalog_templates ADD COLUMN IF NOT EXISTS platform VARCHAR(50) DEFAULT 'kubernetes'`,
+		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_platform ON catalog_templates(platform)`,
+
 		// Create indexes for featured templates
 		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_featured ON catalog_templates(is_featured)`,
 		`CREATE INDEX IF NOT EXISTS idx_catalog_templates_rating ON catalog_templates(avg_rating DESC)`,
