@@ -25,12 +25,12 @@ All agents should read this document frequently and update it with their progres
 
 ### Agents
 
-| Agent | Role | Responsibilities |
-|-------|------|------------------|
-| **Agent 1: Architect** | Strategic Leader | Research, architecture design, planning, coordination |
-| **Agent 2: Builder** | Implementation | Code implementation, feature development |
-| **Agent 3: Validator** | Quality Assurance | Testing, validation, security audits |
-| **Agent 4: Scribe** | Documentation | Documentation, guides, migration docs |
+| Agent | Role | Responsibilities | Branch |
+|-------|------|------------------|--------|
+| **Agent 1: Architect** | Strategic Leader | Research, architecture design, planning, coordination | `claude/streamspace-architect-research-01GnWyRVhkDkCQ2JJQtr56sW` |
+| **Agent 2: Builder** | Implementation | Code implementation, feature development | `claude/setup-builder-agent-01WY9VL1GrfE1C8whMxUAv6k` |
+| **Agent 3: Validator** | Quality Assurance | Testing, validation, security audits | `claude/setup-agent3-validator-01Up3UEcZzBbmB8ZW3QcuXjk` |
+| **Agent 4: Scribe** | Documentation | Documentation, guides, migration docs | `claude/setup-agent4-scribe-01Mwt87JrQ4ZrjXSHHooUKZ9` |
 
 ---
 
