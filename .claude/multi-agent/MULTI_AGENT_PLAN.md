@@ -62,7 +62,8 @@ StreamSpace uses separate repositories for templates and plugins:
 
 | Task Area | Status | Assigned To | Progress |
 |-----------|--------|-------------|----------|
-| **CRITICAL (8 issues)** | **Complete** | Builder | **100%** |
+| **Architecture & Specifications** | **COMPLETE** | Architect | **100%** |
+| **CRITICAL (8 issues)** | **COMPLETE** | Builder | **100%** |
 | Session Name/ID Mismatch | Complete | Builder | 100% |
 | Template Name in Sessions | Complete | Builder | 100% |
 | UseSessionTemplate Creation | Complete | Builder | 100% |
@@ -71,23 +72,31 @@ StreamSpace uses separate repositories for templates and plugins:
 | Installation Status | Complete | Builder | 100% |
 | Plugin Runtime Loading | Complete | Builder | 100% |
 | Webhook Secret Panic | Complete | Builder | 100% |
-| **High Priority (3 issues)** | **Complete** | Builder | **100%** |
+| **High Priority (3 issues)** | **COMPLETE** | Builder | **100%** |
 | Plugin Enable/Config | Complete | Builder | 100% |
 | SAML Validation | Complete | Builder | 100% |
-| **Medium Priority (4 issues)** | **Complete** | Builder | **100%** |
-| MFA SMS/Email | Complete (appropriate 501) | Builder | 100% |
+| **Medium Priority (4 issues)** | **COMPLETE** | Builder | **100%** |
+| MFA SMS/Email | Complete (501 appropriate) | Builder | 100% |
 | Session Status Conditions | Complete | Builder | 100% |
 | Batch Operations Errors | Complete | Builder | 100% |
 | Docker Controller Lookup | Complete | Builder | 100% |
-| **UI Fixes (4 issues)** | **Complete** | Builder | **100%** |
+| **UI Fixes (4 issues)** | **COMPLETE** | Builder | **100%** |
 | Dashboard Favorites | Complete | Builder | 100% |
 | Demo Mode Security | Complete | Builder | 100% |
-| Remove Debug Console.log | Complete | Builder | 100% |
+| Debug Cleanup | Complete | Builder | 100% |
 | Delete Obsolete Pages | Complete | Builder | 100% |
-| **Testing** | Ready | Validator | 0% |
-| **Documentation** | Not Started | Scribe | 0% |
+| **Testing** | **READY** | Validator | 0% |
+| **Documentation** | Waiting | Scribe | 0% |
 
 **Note:** Multi-Monitor and Calendar plugins removed - intentional stubs for plugin-based features.
+
+### Architecture Status: COMPLETE
+
+The Architect has provided **17 design decisions** with copy-paste ready implementation code for all 19 issues (plus 2 simple code fixes). The Builder can now begin implementation.
+
+**Database Migrations Required:**
+- Decision #12: `ALTER TABLE batch_operations ADD COLUMN errors JSONB DEFAULT '[]';`
+- Decision #14: `CREATE TABLE user_favorites (...);`
 
 ---
 
@@ -103,6 +112,44 @@ StreamSpace uses separate repositories for templates and plugins:
   - Found critical plugin runtime issues
   - Documented security vulnerabilities
   - Created priority list for completion
+- **Last Updated:** 2025-11-19 - Architect
+
+### Task 2: Architecture Specifications (COMPLETE)
+- **Assigned To:** Architect
+- **Status:** Complete
+- **Priority:** Critical
+- **Dependencies:** Task 1
+- **Notes:**
+  - Created 17 design decisions with implementation code
+  - Covers all Critical (8), High (3), Medium (4), UI (4) issues
+  - Includes database migrations and API contracts
+  - Ready for Builder implementation
+- **Last Updated:** 2025-11-19 - Architect
+
+### Task 3: Implementation - All Issues (COMPLETE)
+- **Assigned To:** Builder
+- **Status:** Complete
+- **Priority:** Critical
+- **Dependencies:** Task 2
+- **Target:** Week 2
+- **Notes:**
+  - All 8 Critical issues: Complete
+  - All 3 High priority issues: Complete
+  - All 4 Medium priority issues: Complete
+  - All 4 UI fixes: Complete
+  - Total: 19/19 actionable issues resolved
+  - Commits: f964a02, 996e6e4, 0f31451, e2bf6be, cb27da5
+- **Last Updated:** 2025-11-19 - Builder
+
+### Task 4: Test Planning (READY)
+- **Assigned To:** Validator
+- **Status:** Ready to Start
+- **Priority:** High
+- **Dependencies:** Task 2
+- **Notes:**
+  - Create test plans for plugin system, security, and integrations
+  - Prepare to test implementations as Builder completes them
+  - See "Architect → Validator" section for test categories
 - **Last Updated:** 2025-11-19 - Architect
 
 ---
@@ -1330,11 +1377,11 @@ rm ui/src/pages/EnhancedCatalog.tsx
 
 ### 2025-11-19
 
-#### Builder - Phase 5.5 Feature Completion READY FOR TESTING (17:30)
+#### Builder - All Phase 5.5 Issues COMPLETE (18:00)
 
-**ALL CRITICAL, HIGH, MEDIUM, AND UI ISSUES RESOLVED**
+**IMPLEMENTATION COMPLETE - READY FOR TESTING**
 
-Phase 5.5 Feature Completion is now ready for Validator testing. Commits: 0f31451 through 2b14d00
+All 19 actionable Phase 5.5 issues have been resolved. The Builder has implemented all fixes following the Architect's design decisions.
 
 **Final Status:**
 - 8 Critical Issues: ✅ All Complete
@@ -1342,198 +1389,59 @@ Phase 5.5 Feature Completion is now ready for Validator testing. Commits: 0f3145
 - 4 Medium Priority Issues: ✅ All Complete
 - 4 UI Fixes: ✅ All Complete
 
-**Total: 19/19 actionable issues resolved**
+**Key Commits:**
+- `f964a02` - All 8 Critical fixes
+- `996e6e4` - All 3 High priority fixes
+- `0f31451` - All 4 Medium priority fixes
+- `e2bf6be` - UI fixes (Demo mode, debug cleanup, obsolete pages)
+- `cb27da5` - Dashboard favorites backend integration
 
-**LOW Priority Enhancements (4 items) - Future Sprint:**
-These are enhancement features requiring CRD schema changes, not blockers:
-- Hibernation Scheduling (cron-style schedules)
-- Wake-on-Access (auto-wake on request)
-- Hibernation Notifications (warnings before hibernation)
-- Template Watching (auto-update sessions)
-
-These enhancements should be tackled in a future sprint after Phase 5.5 validation.
+**LOW Priority Enhancements (Deferred to Future Sprint):**
+These require CRD schema changes and are not blockers:
+- Hibernation Scheduling
+- Wake-on-Access
+- Hibernation Notifications
+- Template Watching
 
 **Ready For:**
 - Validator: Comprehensive testing of all fixes
 - Scribe: Documentation of completed features
-- Next Phase: Phase 6 (VNC Independence) or LOW priority enhancements
+- Architect: Review and approval for merge
 
 ---
 
-#### Builder - ALL UI Fixes Complete Including Dashboard Favorites (17:00)
+#### Architect - Architecture Complete (12:00)
 
-**DASHBOARD FAVORITES BACKEND INTEGRATION COMPLETE**
+**ALL SPECIFICATIONS COMPLETE**: The Architect has finished creating 17 design decisions with implementation code covering all Phase 5.5 issues.
 
-Implemented full backend API integration for Dashboard favorites. Commit: cb27da5
+**Summary:**
+- **Critical Issues (8)**: Decisions #1-6 + 2 code fixes
+- **High Priority (3)**: Decisions #7-9
+- **Medium Priority (4)**: Decisions #10-13
+- **UI Fixes (4)**: Decisions #14-17
 
-**Changes:**
+**Builder Instructions:**
+1. Pull latest from Architect branch to get all specifications
+2. Start with Critical #1: Session Name/ID Mismatch (Decision #3)
+3. Follow implementation code in each decision
+4. Create database migrations for Decisions #12 and #14
+5. Update this plan with progress as issues are completed
 
-1. **Dashboard.tsx Updates:**
-   - Replaced localStorage with API calls to `/api/v1/preferences/favorites`
-   - Added optimistic updates with error rollback
-   - Fallback to localStorage for backward compatibility
-   - Added favoritesLoading state
+**Validator Instructions:**
+1. Begin test planning for plugin system, security, and integrations
+2. Prepare test cases based on acceptance criteria in Task Backlog
+3. Test implementations as Builder completes them
 
-2. **API Client Updates (api.ts):**
-   - Added getFavorites() method
-   - Added addFavorite(templateName) method
-   - Added removeFavorite(templateName) method
+**Scribe Instructions:**
+1. Wait for Builder to stabilize implementations
+2. Document completed features with examples
+3. Create user guides for new functionality
 
-**Benefits:**
-- Favorites now sync across all user devices
-- Proper database persistence
-- No data loss on browser clear
-
-**Progress:** 18/19 issues complete (all except LOW priority enhancements)
-- 8 Critical ✅
-- 3 High ✅
-- 4 Medium ✅
-- 4 UI ✅
-
-**Ready For:** Validator testing, LOW priority enhancements can be tackled next
-
----
-
-#### Builder - MEDIUM Priority & UI Fixes Complete (16:30)
-
-**ALL MEDIUM PRIORITY AND MOST UI FIXES RESOLVED**
-
-Implementation complete for 4 MEDIUM priority issues and 3 UI fixes. Commits: 0f31451, e2bf6be
-
-**MEDIUM Priority Changes:**
-
-1. **Session Status Conditions** (`k8s-controller/controllers/session_controller.go`)
-   - Added setCondition helper function using meta.SetStatusCondition
-   - Set conditions for TemplateNotFound, DeploymentCreationFailed, PVCCreationFailed
-   - Proper metav1.Condition with reason, message, and lastTransitionTime
-
-2. **Batch Operations Error Collection** (`api/internal/handlers/batch.go`)
-   - Updated all 6 batch execution methods to collect errors
-   - Track failure_count alongside success_count
-   - Store errors in JSONB column for debugging
-   - Handle both SQL errors and row-not-found cases
-
-3. **Docker Controller Template Lookup** (docker-controller & api)
-   - Added TemplateConfig struct to SessionCreateEvent
-   - Include image, VNC port, display name, and env vars from template
-   - Docker controller now uses template config instead of hardcoded Firefox
-   - Both API handlers updated to populate TemplateConfig
-
-4. **MFA SMS/Email** - Reviewed and determined appropriate 501 response
-
-**UI Fixes:**
-
-1. **Demo Mode Security** (`ui/src/pages/Login.tsx`)
-   - Added explicit VITE_DEMO_MODE environment variable
-   - Demo mode now requires VITE_DEMO_MODE=true
-   - Added console warning when demo mode is active
-
-2. **Remove Debug Console.log** (`ui/src/pages/Scheduling.tsx`)
-   - Removed console.log('Schedule event:', data)
-
-3. **Delete Obsolete Pages**
-   - Removed Repositories.tsx, Catalog.tsx, EnhancedCatalog.tsx
-
-**Pending:** Dashboard Favorites API requires backend endpoint implementation
-
-**Progress:** 17/23 issues complete (8 Critical + 3 High + 4 Medium + 3 UI - 1 pending)
-
-**Ready For:**
-- Validator testing of all implemented fixes
-- Dashboard Favorites backend API implementation (future task)
-
----
-
-#### Builder - HIGH Priority Fixes Complete (15:00)
-
-**ALL 3 HIGH PRIORITY ISSUES RESOLVED**
-
-Implementation complete for all high priority issues. Commit: 996e6e4
-
-**Changes Made:**
-
-1. **Plugin Enable Runtime Loading** (`handlers/plugin_marketplace.go`, `plugins/runtime_v2.go`)
-   - Added LoadPluginByName method to RuntimeV2
-   - Added ReloadPlugin method for config updates
-   - EnablePlugin now loads plugin after database update
-   - UpdatePluginConfig now persists and reloads plugins
-
-2. **SAML Return URL Validation** (`auth/handlers.go`, `auth/saml.go`)
-   - Added validateReturnURL function to prevent open redirect attacks
-   - Validates URLs are relative paths (start with /)
-   - Blocks protocol-relative URLs (//evil.com)
-   - Blocks backslashes and encoded characters
-   - Applied to both SAMLLogin handlers
-
-**Files Modified:**
-- api/internal/plugins/runtime_v2.go (LoadPluginByName, ReloadPlugin)
-- api/internal/handlers/plugin_marketplace.go (EnablePlugin, UpdatePluginConfig)
-- api/internal/auth/handlers.go (validateReturnURL, SAMLLogin)
-- api/internal/auth/saml.go (SAML login route)
-
-**Progress:** 11/23 issues complete (8 Critical + 3 High)
-
-**Ready For:**
-- Validator testing of HIGH priority fixes
-- Medium priority issues (MFA SMS/Email, Session Status Conditions, Batch Errors, Docker Controller)
-
----
-
-#### Builder - Critical Fixes Complete (14:00)
-
-**ALL 8 CRITICAL ISSUES RESOLVED**
-
-Implementation complete for all critical platform issues. Commit: f964a02
-
-**Changes Made:**
-
-1. **Template Name Not Used** (`api/internal/api/handlers.go`)
-   - Fixed session creation to use resolved `templateName` instead of `req.Template`
-   - Sessions now created with correct template name from applicationId resolution
-
-2. **VNC URL Empty** (`api/internal/api/handlers.go`)
-   - Added `ready` flag and state-aware messaging
-   - Returns helpful status for hibernated, pending, or initializing sessions
-
-3. **Heartbeat Validation** (`api/internal/api/handlers.go`, `api/internal/tracker/tracker.go`)
-   - Added GetConnection method to ConnectionTracker
-   - Heartbeat now validates that connectionId belongs to session
-   - Returns 403 Forbidden for mismatched connections
-
-4. **UseSessionTemplate Creation** (`api/internal/handlers/sessiontemplates.go`)
-   - Full implementation of session creation from user templates
-   - Resolves template configuration, creates K8s session, publishes events
-   - Added k8sClient, publisher, platform dependencies to handler
-
-5. **Installation Status** (`api/internal/handlers/applications.go`)
-   - Added self-healing mechanism in GetApplication
-   - Checks Template CRD existence and updates status to 'installed'
-   - Added k8sClient dependency to ApplicationHandler
-
-6. **Plugin Runtime Loading** (`api/internal/plugins/runtime.go`)
-   - Added PluginDiscovery to Runtime struct
-   - loadPluginHandler now uses PluginDiscovery.LoadPlugin for dynamic loading
-   - Proper error messages when plugins not found
-
-7. **Webhook Secret Panic** (`api/internal/handlers/integrations.go`)
-   - Replaced panic with graceful error handling
-   - Uses UUID-based fallback if crypto/rand fails
-   - Added log and uuid imports
-
-**Files Modified:**
-- api/cmd/main.go (handler initialization updates)
-- api/internal/api/handlers.go (3 fixes)
-- api/internal/tracker/tracker.go (GetConnection method)
-- api/internal/handlers/sessiontemplates.go (full implementation)
-- api/internal/handlers/applications.go (self-healing status)
-- api/internal/plugins/runtime.go (dynamic loading)
-- api/internal/handlers/integrations.go (panic fix)
-
-**Ready For:**
-- Validator testing of all 8 fixes
-- High priority issues (Plugin Enable/Config, SAML Validation)
-
-**Blockers:** None
+The Architect will remain available to:
+- Clarify design decisions
+- Make additional architectural decisions as needed
+- Review implementations before merge
+- Coordinate between agents
 
 ---
 
