@@ -1,0 +1,92 @@
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamspace-default-apps
+  namespace: streamspace
+  labels:
+    app.kubernetes.io/name: streamspace
+    app.kubernetes.io/component: config
+data:
+  # List of applications to install automatically on controller startup.
+  # The controller will check if these exist and create them if missing.
+  applications: |
+    - templateName: firefox
+      catalogTemplateID: 1
+      displayName: Firefox Browser
+      description: Fast, private, and secure web browser
+      category: Web Browsers
+      manifest: |
+        apiVersion: stream.space/v1alpha1
+        kind: Template
+        spec:
+          displayName: Firefox Browser
+          description: Fast, private, and secure web browser
+          category: Web Browsers
+          icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/firefox-logo.png
+          baseImage: lscr.io/linuxserver/firefox:latest
+          defaultResources:
+            memory: 2Gi
+            cpu: "1"
+          ports:
+            - name: vnc
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "UTC"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          capabilities:
+            - Network
+            - Audio
+            - Clipboard
+          tags:
+            - browser
+            - web
+            - privacy
+    - templateName: chrome
+      catalogTemplateID: 2
+      displayName: Google Chrome
+      description: Fast and secure web browser by Google
+      category: Web Browsers
+      manifest: |
+        apiVersion: stream.space/v1alpha1
+        kind: Template
+        spec:
+          displayName: Google Chrome
+          description: Fast and secure web browser by Google
+          category: Web Browsers
+          icon: https://raw.githubusercontent.com/linuxserver/docker-templates/master/linuxserver.io/img/chromium-logo.png
+          baseImage: lscr.io/linuxserver/chromium:latest
+          defaultResources:
+            memory: 2Gi
+            cpu: "1"
+          ports:
+            - name: vnc
+              containerPort: 3000
+              protocol: TCP
+          env:
+            - name: PUID
+              value: "1000"
+            - name: PGID
+              value: "1000"
+            - name: TZ
+              value: "UTC"
+            - name: CHROME_CLI
+              value: "https://www.google.com"
+          volumeMounts:
+            - name: config
+              mountPath: /config
+          capabilities:
+            - Network
+            - Audio
+            - Clipboard
+          tags:
+            - browser
+            - web
+            - google

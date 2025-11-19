@@ -56,6 +56,7 @@ import (
 
 	streamv1alpha1 "github.com/streamspace/streamspace/api/v1alpha1"
 	"github.com/streamspace/streamspace/controllers"
+	"github.com/streamspace/streamspace/pkg/bootstrap"
 	"github.com/streamspace/streamspace/pkg/events"
 	_ "github.com/streamspace/streamspace/pkg/metrics" // Initialize custom metrics
 )
@@ -213,6 +214,15 @@ func main() {
 		setupLog.Error(err, "unable to set up ready check")
 		os.Exit(1)
 	}
+
+	// Register bootstrap reconciler for startup application installation
+	// Runs once when controller starts to ensure default applications are installed
+	// Reads from ConfigMap 'streamspace-default-apps' in the namespace
+	if err := mgr.Add(bootstrap.NewReconciler(mgr.GetClient(), namespace)); err != nil {
+		setupLog.Error(err, "unable to add bootstrap reconciler")
+		os.Exit(1)
+	}
+	setupLog.Info("Bootstrap reconciler registered")
 
 	// Initialize NATS event subscriber for platform-agnostic event handling
 	setupLog.Info("initializing NATS event subscriber", "url", natsURL)
