@@ -6,12 +6,11 @@ WORKDIR /app
 # Install build dependencies
 RUN apk add --no-cache git ca-certificates
 
-# Copy go mod files
-COPY go.mod go.sum* ./
-RUN go mod download
-
 # Copy source code
 COPY . .
+
+# Download dependencies and generate go.sum if missing
+RUN go mod tidy && go mod download
 
 # Build binary
 RUN CGO_ENABLED=0 GOOS=linux go build -o docker-controller ./cmd/main.go
