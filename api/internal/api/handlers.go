@@ -444,11 +444,35 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 
 		if installStatus == "pending" || installStatus == "creating" {
-			c.JSON(http.StatusBadRequest, gin.H{
-				"error":   "Application still installing",
-				"message": fmt.Sprintf("The application '%s' is still being installed. Please wait and try again.", appDisplayName),
-			})
-			return
+			// Self-healing: Check if the Template CRD actually exists in Kubernetes
+			// This handles cases where the controller created the template but status wasn't updated
+			if appTemplateName != "" {
+				_, templateErr := h.k8sClient.GetTemplate(ctx, h.namespace, appTemplateName)
+				if templateErr == nil {
+					// Template exists! Update status in database and continue
+					_, updateErr := h.db.DB().ExecContext(ctx, `
+						UPDATE installed_applications
+						SET install_status = 'installed', install_message = 'Template ready (self-healed)', updated_at = NOW()
+						WHERE id = $1
+					`, req.ApplicationId)
+					if updateErr != nil {
+						log.Printf("Failed to update install status for %s: %v", req.ApplicationId, updateErr)
+					} else {
+						log.Printf("Self-healed application %s status to installed (template found)", req.ApplicationId)
+					}
+					// Continue with session creation - don't reject
+					installStatus = "installed"
+				}
+			}
+
+			// If still pending after self-healing check, reject
+			if installStatus == "pending" || installStatus == "creating" {
+				c.JSON(http.StatusBadRequest, gin.H{
+					"error":   "Application still installing",
+					"message": fmt.Sprintf("The application '%s' is still being installed. Please wait and try again.", appDisplayName),
+				})
+				return
+			}
 		}
 
 		// Validate template name was found

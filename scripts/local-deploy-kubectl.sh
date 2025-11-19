@@ -244,6 +244,97 @@ EOF
     log_success "PostgreSQL deployed"
 }
 
+# Deploy NATS message broker
+deploy_nats() {
+    log "Deploying NATS..."
+
+    cat <<EOF | kubectl apply -f -
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamspace-nats
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: streamspace
+    app.kubernetes.io/component: nats
+spec:
+  type: ClusterIP
+  ports:
+    - port: 4222
+      targetPort: 4222
+      protocol: TCP
+      name: client
+    - port: 8222
+      targetPort: 8222
+      protocol: TCP
+      name: monitoring
+  selector:
+    app.kubernetes.io/name: streamspace
+    app.kubernetes.io/component: nats
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamspace-nats
+  namespace: ${NAMESPACE}
+  labels:
+    app.kubernetes.io/name: streamspace
+    app.kubernetes.io/component: nats
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app.kubernetes.io/name: streamspace
+      app.kubernetes.io/component: nats
+  template:
+    metadata:
+      labels:
+        app.kubernetes.io/name: streamspace
+        app.kubernetes.io/component: nats
+    spec:
+      containers:
+      - name: nats
+        image: nats:2.10-alpine
+        imagePullPolicy: IfNotPresent
+        args:
+          - "--jetstream"
+          - "--store_dir=/data"
+          - "--http_port=8222"
+        ports:
+        - containerPort: 4222
+          name: client
+        - containerPort: 8222
+          name: monitoring
+        resources:
+          requests:
+            memory: 64Mi
+            cpu: 50m
+          limits:
+            memory: 256Mi
+            cpu: 200m
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: monitoring
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: monitoring
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: data
+          mountPath: /data
+      volumes:
+      - name: data
+        emptyDir: {}
+EOF
+
+    log_success "NATS deployed"
+}
+
 # Deploy Controller
 deploy_controller() {
     log "Deploying Controller..."
@@ -287,6 +378,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NATS_URL
+          value: nats://streamspace-nats:4222
+        - name: CONTROLLER_ID
+          value: streamspace-kubernetes-controller-1
         resources:
           requests:
             memory: 128Mi
@@ -404,6 +499,10 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
+        - name: NATS_URL
+          value: nats://streamspace-nats:4222
+        - name: PLATFORM
+          value: kubernetes
         resources:
           requests:
             memory: 256Mi
@@ -632,6 +731,7 @@ main() {
     apply_crds
     create_secrets
     deploy_postgresql
+    deploy_nats
     deploy_controller
     deploy_api
     deploy_ui

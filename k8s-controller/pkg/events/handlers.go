@@ -227,10 +227,16 @@ func (s *Subscriber) handleAppInstall(ctx context.Context, data []byte) error {
 	if err := s.client.Create(ctx, appInstall); err != nil {
 		if errors.IsAlreadyExists(err) {
 			log.Printf("ApplicationInstall %s already exists", event.InstallID)
+			// Publish status as installed since it already exists
+			s.publishAppStatus(event.InstallID, "installed", event.TemplateName, "ApplicationInstall already exists")
 		} else {
 			s.publishAppStatus(event.InstallID, "failed", event.TemplateName, fmt.Sprintf("Failed to create ApplicationInstall: %v", err))
 			return fmt.Errorf("failed to create ApplicationInstall: %w", err)
 		}
+	} else {
+		// Successfully created - publish creating status
+		// The ApplicationInstallReconciler will update to "installed" when Template is ready
+		s.publishAppStatus(event.InstallID, "creating", event.TemplateName, "ApplicationInstall CRD created, creating Template...")
 	}
 
 	log.Printf("ApplicationInstall %s created successfully", event.InstallID)
