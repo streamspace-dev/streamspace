@@ -1,0 +1,44 @@
+# Test fixture: Firefox template
+# Used by integration and E2E tests
+apiVersion: stream.space/v1alpha1
+kind: Template
+metadata:
+  name: firefox-browser
+  namespace: streamspace-test
+  labels:
+    test: "true"
+    category: browsers
+spec:
+  displayName: Firefox Web Browser
+  description: Modern, privacy-focused web browser for testing
+  category: Web Browsers
+  icon: https://example.com/firefox-icon.png
+  baseImage: lscr.io/linuxserver/firefox:latest
+  defaultResources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+  ports:
+    - name: vnc
+      containerPort: 3000
+      protocol: TCP
+  env:
+    - name: PUID
+      value: "1000"
+    - name: PGID
+      value: "1000"
+  volumeMounts:
+    - name: user-home
+      mountPath: /config
+  vnc:
+    enabled: true
+    port: 3000
+    protocol: websocket
+  capabilities:
+    - Network
+    - Audio
+    - Clipboard
+  tags:
+    - browser
+    - web
+    - test

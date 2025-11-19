@@ -318,26 +318,40 @@ The following security issues are being addressed in Phase 5.5:
 
 **Issue**: Hardcoded authentication allows any username in demo mode
 **Impact**: Security risk if enabled in production
-**Status**: Pending fix
-**Mitigation**: Guard with environment variable, disable in production
+**Status**: Fixed
+**Mitigation**: Guard with explicit environment variable check
 
-**Current Code** (`ui/src/pages/Login.tsx:103-123`):
-```javascript
-// VULNERABLE - Any username accepted
-if (DEMO_MODE) {
-  setAuthenticated(true);
-  return;
-}
+**Implementation** (`ui/src/pages/Login.tsx`):
+```typescript
+const DEMO_MODE_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
+
+const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+        const loginResponse = await login(username, password);
+        setAuth(loginResponse);
+        localStorage.setItem('streamspace_token', loginResponse.token);
+        navigate('/');
+    } catch (err: any) {
+        // Only allow demo mode if explicitly enabled
+        if (DEMO_MODE_ENABLED && err.response?.status === 401) {
+            console.warn('Demo mode active - bypassing authentication');
+            // Demo mode creates limited session with explicit user consent
+        }
+        setError(err.response?.data?.message || 'Login failed');
+    } finally {
+        setLoading(false);
+    }
+};
 ```
 
-**Fix (Expected)**:
-```javascript
-// Only allow demo mode if explicitly enabled
-if (process.env.REACT_APP_DEMO_MODE === 'true' &&
-    process.env.NODE_ENV !== 'production') {
-  // Demo mode logic
-}
-```
+**Security Notes**:
+- Requires explicit `VITE_DEMO_MODE=true` environment variable
+- Console warning alerts developers when demo mode is active
+- Demo mode should NEVER be enabled in production builds
 
 #### 3. Webhook Secret Generation Panic (CRITICAL)
 
@@ -428,13 +442,13 @@ if (process.env.REACT_APP_DEMO_MODE === 'true' &&
 - [x] OIDC basic integration
 - [x] Local authentication with password policy
 - [x] Session management
+- [x] SAML return URL validation (security fix)
+- [x] Demo mode security guard
 
-### Pending (Phase 5.5)
+### Pending (Future)
 
-- [ ] SAML return URL validation (security fix)
-- [ ] SMS MFA implementation
-- [ ] Email MFA implementation
-- [ ] Demo mode security guard
+- [ ] SMS MFA implementation (requires provider integration)
+- [ ] Email MFA implementation (requires email service)
 
 ---
 

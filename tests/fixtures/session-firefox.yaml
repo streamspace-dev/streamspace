@@ -1,0 +1,24 @@
+# Test fixture: Firefox session
+# Used by integration and E2E tests
+apiVersion: stream.space/v1alpha1
+kind: Session
+metadata:
+  name: test-firefox-session
+  namespace: streamspace-test
+  labels:
+    test: "true"
+    test-suite: integration
+spec:
+  user: testuser
+  template: firefox-browser
+  state: running
+  resources:
+    requests:
+      memory: "2Gi"
+      cpu: "1000m"
+    limits:
+      memory: "4Gi"
+      cpu: "2000m"
+  persistentHome: true
+  idleTimeout: 30m
+  maxSessionDuration: 8h
