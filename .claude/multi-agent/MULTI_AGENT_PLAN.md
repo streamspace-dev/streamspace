@@ -100,6 +100,84 @@ The Architect has provided **17 design decisions** with copy-paste ready impleme
 
 ---
 
+## Quick Reference: Issue → Decision Mapping
+
+| Issue # | Issue Name | Decision # | File Location |
+|---------|------------|------------|---------------|
+| 1 | Session Name/ID Mismatch | #3 | `api/internal/api/handlers.go:1838` |
+| 2 | Template Name Not Used | Code fix | `api/internal/api/handlers.go:551,557` |
+| 3 | UseSessionTemplate | #5 | `api/internal/handlers/sessiontemplates.go:488-508` |
+| 4 | VNC URL Empty | #4 | `api/internal/api/handlers.go:744-748` |
+| 5 | Heartbeat Validation | #6 | `api/internal/api/handlers.go:776-792` |
+| 6 | Installation Status | #1 | `api/internal/handlers/applications.go:232-268` |
+| 7 | Plugin Runtime Loading | #2 | `api/internal/plugins/runtime.go:1043` |
+| 8 | Webhook Secret Panic | Code fix | `api/internal/handlers/integrations.go:896` |
+| 9 | Plugin Enable Runtime | #7 | `api/internal/handlers/plugin_marketplace.go:455-476` |
+| 10 | Plugin Config Update | #8 | `api/internal/handlers/plugin_marketplace.go:620-641` |
+| 11 | SAML Return URL | #9 | SAML handler |
+| 12 | MFA SMS/Email | #10 | `ui/src/pages/MFASetup.tsx` |
+| 13 | Session Status Conditions | #11 | `k8s-controller/controllers/session_controller.go` |
+| 14 | Batch Operations Errors | #12 | `api/internal/handlers/batch.go:632-851` |
+| 15 | Docker Template Lookup | #13 | `docker-controller/pkg/events/subscriber.go:118` |
+| 16 | Dashboard Favorites | #14 | `ui/src/pages/Dashboard.tsx:78-94` |
+| 17 | Demo Mode Security | #15 | `ui/src/pages/Login.tsx:103-123` |
+| 18 | Debug Console.log | #16 | `ui/src/pages/Scheduling.tsx:157` |
+| 19 | Delete Obsolete Pages | #17 | 3 files to delete |
+
+---
+
+## Current Agent Assignments
+
+### Builder - START NOW
+**Branch:** `claude/setup-builder-agent-01WY9VL1GrfE1C8whMxUAv6k`
+
+**Immediate Actions:**
+1. Pull latest from Architect branch to get MULTI_AGENT_PLAN.md
+2. Start with **Issue #1: Session Name/ID Mismatch** (Decision #3)
+   - File: `api/internal/api/handlers.go:1838`
+   - Fix `convertDBSessionToResponse()` to return both `id` and `name`
+3. Commit each fix separately with clear messages
+4. Update progress in this plan after each issue
+
+**Week 2 Target (8 Critical Issues):**
+- Day 1-2: Issues #1, #2, #4 (Session viewing fixes)
+- Day 3-4: Issues #3, #6, #5 (Application launching fixes)
+- Day 5: Issues #7, #8 (Plugin and stability fixes)
+
+### Validator - START NOW
+**Branch:** `claude/setup-agent3-validator-01Up3UEcZzBbmB8ZW3QcuXjk`
+
+**Immediate Actions:**
+1. Pull latest from Architect branch
+2. Create test plan document for Phase 5.5
+3. Write test cases for Critical issues (based on acceptance criteria in Task Backlog)
+
+**Test Categories to Cover:**
+1. **Session Flow Tests** - Create, connect, view, heartbeat, hibernate
+2. **Plugin System Tests** - Install, enable, configure, load runtime
+3. **Security Tests** - SAML validation, demo mode, CSRF
+4. **API Integration Tests** - Batch operations, favorites, webhooks
+
+**First Deliverable:** Test plan outline with test cases for Issues #1-8
+
+### Scribe - PREPARATION PHASE
+**Branch:** `claude/setup-agent4-scribe-01Mwt87JrQ4ZrjXSHHooUKZ9`
+
+**Immediate Actions:**
+1. Pull latest from Architect branch
+2. Review the 17 design decisions to understand what's being implemented
+3. Create documentation outline for Phase 5.5 release notes
+
+**Documentation to Prepare:**
+1. **User Guide Updates** - Session management, plugin configuration
+2. **Admin Guide Updates** - Security settings, SAML configuration
+3. **API Documentation** - New endpoints (favorites, updated responses)
+4. **Migration Notes** - Database migrations, breaking changes
+
+**First Deliverable:** Documentation outline and structure
+
+---
+
 ## Active Tasks
 
 ### Task 1: Feature Completion Research (COMPLETE)
