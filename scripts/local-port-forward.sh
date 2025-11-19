@@ -38,6 +38,8 @@ NATS_LOCAL_PORT=4222
 NATS_REMOTE_PORT=4222
 NATS_MONITOR_LOCAL_PORT=8222
 NATS_MONITOR_REMOTE_PORT=8222
+REDIS_LOCAL_PORT=6379
+REDIS_REMOTE_PORT=6379
 
 # Helper functions
 log() {
@@ -208,6 +210,13 @@ show_access_urls() {
         echo ""
     fi
 
+    # Show Redis info if available
+    if [ -f "${PID_DIR}/redis.pid" ] || kubectl get svc "streamspace-redis" -n "${NAMESPACE}" &> /dev/null 2>&1; then
+        log_info "Redis Cache:"
+        echo "  ${COLOR_GREEN}localhost:${REDIS_LOCAL_PORT}${COLOR_RESET}"
+        echo ""
+    fi
+
     log_info "Logs:"
     echo "  UI:  tail -f ${LOG_DIR}/ui.log"
     echo "  API: tail -f ${LOG_DIR}/api.log"
@@ -267,6 +276,13 @@ main() {
             success=$((success + 1))
         fi
         if start_port_forward "streamspace-nats" "${NATS_MONITOR_LOCAL_PORT}" "${NATS_MONITOR_REMOTE_PORT}" "nats-monitor"; then
+            success=$((success + 1))
+        fi
+    fi
+
+    # Optional Redis port forwards (if Redis is deployed)
+    if kubectl get svc "streamspace-redis" -n "${NAMESPACE}" &> /dev/null; then
+        if start_port_forward "streamspace-redis" "${REDIS_LOCAL_PORT}" "${REDIS_REMOTE_PORT}" "redis"; then
             success=$((success + 1))
         fi
     fi

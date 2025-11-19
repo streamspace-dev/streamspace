@@ -388,6 +388,67 @@ postgresql:
     secretKeys:
       adminPasswordKey: "postgres-password"
 
+## NATS Message Broker (Required for multi-platform support)
+nats:
+  enabled: true  # Required for event communication between API and controllers
+
+  # Use external NATS
+  external:
+    enabled: false
+    url: ""  # e.g., "nats://nats.example.com:4222"
+    user: ""
+    password: ""
+    existingSecret: ""
+    existingSecretUserKey: "nats-user"
+    existingSecretPasswordKey: "nats-password"
+
+  # Internal NATS (for development/testing)
+  internal:
+    image:
+      registry: docker.io
+      repository: nats
+      tag: "2.10-alpine"
+      pullPolicy: IfNotPresent
+
+    # Enable JetStream for durable messaging
+    jetstream:
+      enabled: true
+      storeDir: /data
+
+    resources:
+      requests:
+        memory: 64Mi
+        cpu: 50m
+      limits:
+        memory: 256Mi
+        cpu: 200m
+
+    # Persistence for JetStream (optional)
+    persistence:
+      enabled: false
+      storageClass: ""
+      size: 1Gi
+      accessMode: ReadWriteOnce
+
+    # Security
+    podSecurityContext:
+      fsGroup: 1000
+      runAsNonRoot: true
+      runAsUser: 1000
+
+    securityContext:
+      allowPrivilegeEscalation: false
+      capabilities:
+        drop:
+          - ALL
+
+    # Service configuration
+    service:
+      type: ClusterIP
+      clientPort: 4222
+      monitorPort: 8222
+      clusterPort: 6222
+
 ## Redis Cache (Optional)
 redis:
   enabled: false  # Set to true to enable caching
