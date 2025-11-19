@@ -1151,7 +1151,7 @@ class APIClient {
   // ============================================================================
 
   async listApplications(enabledOnly?: boolean): Promise<{ applications: InstalledApplication[]; total: number }> {
-    const params: Record<string, string> = {};
+    const params: Record<string, string> = { _t: Date.now().toString() }; // Cache bust
     if (enabledOnly) params.enabled = 'true';
     const response = await this.client.get<{ applications: InstalledApplication[]; total: number }>('/applications', { params });
     return response.data;
