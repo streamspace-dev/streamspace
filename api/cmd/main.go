@@ -262,7 +262,22 @@ func main() {
 		Issuer:        "streamspace-api",
 		TokenDuration: 24 * time.Hour,
 	}
-	jwtManager := auth.NewJWTManager(jwtConfig)
+	// Use session-aware JWT manager for server-side session tracking
+	// This enables proper logout, session invalidation, and forced re-login on restart
+	jwtManager := auth.NewJWTManagerWithSessions(jwtConfig, redisCache)
+
+	// Clear all sessions on startup to force users to re-login
+	// This is a security feature that ensures tokens from previous server runs are invalid
+	if redisCache.IsEnabled() {
+		log.Println("Clearing existing sessions (forcing re-login)...")
+		clearCtx, clearCancel := context.WithTimeout(context.Background(), 10*time.Second)
+		if err := jwtManager.ClearAllSessions(clearCtx); err != nil {
+			log.Printf("Warning: Failed to clear sessions: %v", err)
+		} else {
+			log.Println("Sessions cleared - users will need to re-login")
+		}
+		clearCancel()
+	}
 
 	// Initialize SAML authentication (optional)
 	var samlAuth *auth.SAMLAuthenticator

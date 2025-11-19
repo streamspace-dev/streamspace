@@ -99,11 +99,13 @@
 package auth
 
 import (
+	"context"
 	"errors"
 	"fmt"
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
+	"github.com/streamspace/streamspace/api/internal/cache"
 )
 
 // JWTConfig holds JWT configuration.
@@ -188,7 +190,8 @@ type Claims struct {
 
 // JWTManager handles JWT token operations
 type JWTManager struct {
-	config *JWTConfig
+	config       *JWTConfig
+	sessionStore *SessionStore
 }
 
 // NewJWTManager creates a new JWT manager
@@ -202,6 +205,23 @@ func NewJWTManager(config *JWTConfig) *JWTManager {
 	return &JWTManager{
 		config: config,
 	}
+}
+
+// SetSessionStore sets the session store for server-side session tracking
+func (m *JWTManager) SetSessionStore(store *SessionStore) {
+	m.sessionStore = store
+}
+
+// NewJWTManagerWithSessions creates a new JWT manager with session tracking
+func NewJWTManagerWithSessions(config *JWTConfig, cacheClient *cache.Cache) *JWTManager {
+	manager := NewJWTManager(config)
+	manager.sessionStore = NewSessionStore(cacheClient)
+	return manager
+}
+
+// GetSessionStore returns the session store
+func (m *JWTManager) GetSessionStore() *SessionStore {
+	return m.sessionStore
 }
 
 // GenerateToken generates a new JWT token for a user.
@@ -285,8 +305,21 @@ func NewJWTManager(config *JWTConfig) *JWTManager {
 // NOTE: The generated token contains sensitive information (user identity, role).
 // Always transmit tokens over HTTPS to prevent interception.
 func (m *JWTManager) GenerateToken(userID, username, email, role string, groups []string) (string, error) {
+	// Use background context for backward compatibility
+	return m.GenerateTokenWithContext(context.Background(), userID, username, email, role, groups, "", "")
+}
+
+// GenerateTokenWithContext generates a new JWT token with session tracking
+func (m *JWTManager) GenerateTokenWithContext(ctx context.Context, userID, username, email, role string, groups []string, ipAddress, userAgent string) (string, error) {
 	// Get current time for timestamp claims
 	now := time.Now()
+	expiresAt := now.Add(m.config.TokenDuration)
+
+	// Generate unique session ID for server-side tracking
+	sessionID, err := GenerateSessionID()
+	if err != nil {
+		return "", fmt.Errorf("failed to generate session ID: %w", err)
+	}
 
 	// STEP 1: Build Claims structure
 	// This includes both custom claims (user info) and standard JWT claims
@@ -300,6 +333,10 @@ func (m *JWTManager) GenerateToken(userID, username, email, role string, groups 
 
 		// Standard JWT claims - defined by RFC 7519
 		RegisteredClaims: jwt.RegisteredClaims{
+			// ID (jti): Unique identifier for this token (session ID)
+			// Used for server-side session tracking and revocation
+			ID: sessionID,
+
 			// Issuer (iss): Identifies who created the token
 			// Used to prevent tokens from other systems being accepted
 			Issuer: m.config.Issuer,
@@ -315,7 +352,7 @@ func (m *JWTManager) GenerateToken(userID, username, email, role string, groups 
 			// Expires At (exp): When the token expires
 			// SECURITY: Limits exposure window for stolen tokens
 			// Default: 24 hours from now
-			ExpiresAt: jwt.NewNumericDate(now.Add(m.config.TokenDuration)),
+			ExpiresAt: jwt.NewNumericDate(expiresAt),
 
 			// Not Before (nbf): Token cannot be used before this time
 			// Prevents premature token usage (e.g., for scheduled access)
@@ -338,8 +375,61 @@ func (m *JWTManager) GenerateToken(userID, username, email, role string, groups 
 		return "", fmt.Errorf("failed to sign token: %w", err)
 	}
 
+	// STEP 4: Store session in Redis for server-side tracking
+	if m.sessionStore != nil && m.sessionStore.IsEnabled() {
+		session := &SessionData{
+			SessionID: sessionID,
+			UserID:    userID,
+			Username:  username,
+			Role:      role,
+			CreatedAt: now,
+			ExpiresAt: expiresAt,
+			IPAddress: ipAddress,
+			UserAgent: userAgent,
+		}
+
+		if err := m.sessionStore.CreateSession(ctx, session, m.config.TokenDuration); err != nil {
+			// Log the error but don't fail token generation
+			// This allows graceful degradation if Redis is temporarily unavailable
+			fmt.Printf("Warning: Failed to store session in Redis: %v\n", err)
+		}
+	}
+
 	// Return the complete token: "header.payload.signature"
 	return tokenString, nil
+}
+
+// InvalidateSession invalidates a session by its ID (logout)
+func (m *JWTManager) InvalidateSession(ctx context.Context, sessionID string) error {
+	if m.sessionStore == nil {
+		return nil
+	}
+	return m.sessionStore.DeleteSession(ctx, sessionID)
+}
+
+// InvalidateUserSessions invalidates all sessions for a user
+func (m *JWTManager) InvalidateUserSessions(ctx context.Context, userID string) error {
+	if m.sessionStore == nil {
+		return nil
+	}
+	return m.sessionStore.DeleteUserSessions(ctx, userID)
+}
+
+// ValidateSession checks if a session is valid (exists in Redis)
+func (m *JWTManager) ValidateSession(ctx context.Context, sessionID string) (bool, error) {
+	if m.sessionStore == nil {
+		// No session store = all sessions valid (backward compatibility)
+		return true, nil
+	}
+	return m.sessionStore.ValidateSession(ctx, sessionID)
+}
+
+// ClearAllSessions clears all sessions (force re-login on restart)
+func (m *JWTManager) ClearAllSessions(ctx context.Context) error {
+	if m.sessionStore == nil {
+		return nil
+	}
+	return m.sessionStore.ClearAllSessions(ctx)
 }
 
 // ValidateToken validates a JWT token and returns the claims.

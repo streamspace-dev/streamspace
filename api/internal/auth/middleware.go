@@ -216,6 +216,23 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 			return
 		}
 
+		// Validate session exists in Redis (server-side session tracking)
+		// This ensures tokens can be invalidated on logout or server restart
+		if claims.ID != "" {
+			valid, err := jwtManager.ValidateSession(c.Request.Context(), claims.ID)
+			if err != nil || !valid {
+				if isWebSocket {
+					c.AbortWithStatus(http.StatusUnauthorized)
+					return
+				}
+				c.JSON(http.StatusUnauthorized, gin.H{
+					"error": "Session expired or invalidated",
+				})
+				c.Abort()
+				return
+			}
+		}
+
 		// Verify user still exists and is active
 		user, err := userDB.GetUser(c.Request.Context(), claims.UserID)
 		if err != nil {
@@ -249,6 +266,7 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		c.Set("userRole", claims.Role)
 		c.Set("userGroups", claims.Groups)
 		c.Set("claims", claims)
+		c.Set("sessionID", claims.ID) // For logout/session management
 
 		c.Next()
 	}
@@ -277,6 +295,16 @@ func OptionalAuth(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 			return
 		}
 
+		// Validate session exists in Redis
+		if claims.ID != "" {
+			valid, err := jwtManager.ValidateSession(c.Request.Context(), claims.ID)
+			if err != nil || !valid {
+				// Session invalid, continue without user context
+				c.Next()
+				return
+			}
+		}
+
 		// Set user info if valid
 		user, err := userDB.GetUser(c.Request.Context(), claims.UserID)
 		if err == nil && user.Active {
@@ -285,6 +313,7 @@ func OptionalAuth(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 			c.Set("userEmail", claims.Email)
 			c.Set("userRole", claims.Role)
 			c.Set("userGroups", claims.Groups)
+			c.Set("sessionID", claims.ID)
 		}
 
 		c.Next()

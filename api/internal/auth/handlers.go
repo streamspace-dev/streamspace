@@ -190,8 +190,12 @@ func (h *AuthHandler) Login(c *gin.Context) {
 		groupIDs = []string{} // Continue without groups if error
 	}
 
-	// Generate JWT token
-	token, err := h.jwtManager.GenerateToken(user.ID, user.Username, user.Email, user.Role, groupIDs)
+	// Capture client info for session tracking
+	ipAddress := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	// Generate JWT token with session tracking
+	token, err := h.jwtManager.GenerateTokenWithContext(ctx, user.ID, user.Username, user.Email, user.Role, groupIDs, ipAddress, userAgent)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to generate token",
@@ -268,10 +272,21 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 	})
 }
 
-// Logout handles logout (client-side token invalidation)
+// Logout handles logout and invalidates the session in Redis
 func (h *AuthHandler) Logout(c *gin.Context) {
-	// With JWT, logout is primarily client-side (remove token)
-	// Could implement token blacklist here if needed
+	// Get session ID from context (set by auth middleware)
+	sessionID, exists := c.Get("sessionID")
+	if exists && sessionID != nil {
+		if sid, ok := sessionID.(string); ok && sid != "" {
+			// Invalidate session in Redis
+			ctx := c.Request.Context()
+			if err := h.jwtManager.InvalidateSession(ctx, sid); err != nil {
+				// Log error but don't fail logout
+				log.Printf("Warning: Failed to invalidate session %s: %v", sid, err)
+			}
+		}
+	}
+
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Logged out successfully",
 	})
@@ -417,8 +432,12 @@ func (h *AuthHandler) SAMLCallback(c *gin.Context) {
 		groupIDs = []string{} // Continue without groups if error
 	}
 
-	// Generate JWT token
-	token, err := h.jwtManager.GenerateToken(user.ID, user.Username, user.Email, user.Role, groupIDs)
+	// Capture client info for session tracking
+	ipAddress := c.ClientIP()
+	userAgent := c.Request.UserAgent()
+
+	// Generate JWT token with session tracking
+	token, err := h.jwtManager.GenerateTokenWithContext(ctx, user.ID, user.Username, user.Email, user.Role, groupIDs, ipAddress, userAgent)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to generate token",
