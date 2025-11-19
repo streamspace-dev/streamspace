@@ -22,7 +22,7 @@ NAMESPACE="${NAMESPACE:-streamspace}"
 VERSION="${VERSION:-local}"
 
 # Image configuration
-CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-streamspace/streamspace-controller:${VERSION}}"
+CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-streamspace/streamspace-kubernetes-controller:${VERSION}}"
 API_IMAGE="${API_IMAGE:-streamspace/streamspace-api:${VERSION}}"
 UI_IMAGE="${UI_IMAGE:-streamspace/streamspace-ui:${VERSION}}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:15-alpine}"
@@ -107,7 +107,7 @@ check_images() {
 
     local missing_images=0
 
-    for image in "streamspace/streamspace-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
+    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"
         else
