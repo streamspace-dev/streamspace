@@ -9,13 +9,17 @@ const mockSession = {
   user: 'testuser',
   template: 'firefox-browser',
   state: 'running',
-  phase: 'Running',
+  status: {
+    phase: 'Running',
+  },
   url: 'https://test-session.streamspace.local',
   createdAt: '2025-01-15T10:00:00Z',
   resources: {
     memory: '2Gi',
     cpu: '1000m',
   },
+  isActive: true,
+  isIdle: false,
 };
 
 describe('SessionCard Component', () => {
@@ -83,7 +87,7 @@ describe('SessionCard Component', () => {
   });
 
   it('disables actions for hibernated session', () => {
-    const hibernatedSession = { ...mockSession, state: 'hibernated', phase: 'Hibernated' };
+    const hibernatedSession = { ...mockSession, state: 'hibernated', status: { phase: 'Hibernated' } };
     render(<SessionCard session={hibernatedSession} />);
 
     // Connect button should be disabled or not present
@@ -94,7 +98,7 @@ describe('SessionCard Component', () => {
   });
 
   it('shows wake button for hibernated session', () => {
-    const hibernatedSession = { ...mockSession, state: 'hibernated', phase: 'Hibernated' };
+    const hibernatedSession = { ...mockSession, state: 'hibernated', status: { phase: 'Hibernated' } };
     const onWake = vi.fn();
     render(<SessionCard session={hibernatedSession} onWake={onWake} />);
 

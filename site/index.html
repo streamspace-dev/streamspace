@@ -39,8 +39,10 @@
   <section class="hero">
     <div class="hero-content">
       <h1>Stream Any App to Your Browser</h1>
-      <p>Kubernetes-native platform for delivering containerized applications with browser-based access, auto-hibernation, and a powerful plugin system.</p>
-      <p class="mt-2" style="font-size: 1.1rem; opacity: 0.9;">🚀 <strong>Coming Soon:</strong> Managed SaaS offering - Skip the setup and start streaming apps in minutes!</p>
+      <p>Kubernetes-native platform for delivering containerized applications with browser-based access, auto-hibernation, and enterprise security features.</p>
+      <p class="mt-2" style="font-size: 1.1rem; opacity: 0.9; background: rgba(255,255,255,0.1); padding: 0.75rem 1rem; border-radius: 8px; display: inline-block;">
+        <strong>v1.0.0-beta</strong> - Core Kubernetes platform functional. <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md" style="color: #a5b4fc;">See roadmap</a>
+      </p>
       <div class="hero-buttons">
         <a href="getting-started.html" class="button button-primary">Get Started</a>
         <a href="https://github.com/JoshuaAFerguson/streamspace" class="button button-secondary">View on GitHub</a>
@@ -63,8 +65,8 @@
         </div>
         <div class="feature-card">
           <div class="feature-icon">🖥️</div>
-          <h3>Multi-Platform</h3>
-          <p>Deploy on Kubernetes, Docker, or hybrid environments. Event-driven architecture with NATS messaging.</p>
+          <h3>Kubernetes-Native</h3>
+          <p>Built for Kubernetes with CRDs, auto-scaling, and native resource management. Docker support planned.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
@@ -73,8 +75,8 @@
         </div>
         <div class="feature-card">
           <div class="feature-icon">🔌</div>
-          <h3>Plugin System</h3>
-          <p>Extend functionality with plugins for webhooks, external integrations, custom UI themes, and more.</p>
+          <h3>Plugin Framework</h3>
+          <p>Extensible plugin architecture for webhooks, integrations, and UI themes. Plugin implementations in progress.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">👥</div>
@@ -159,16 +161,16 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
       </div>
       <div class="features-grid mt-4">
         <div class="feature-card">
-          <h3>Platform Controllers</h3>
-          <p>Kubernetes and Docker controllers manage sessions on their respective platforms via NATS events.</p>
+          <h3>Kubernetes Controller</h3>
+          <p>Production-ready controller for session lifecycle, auto-hibernation, and resource management.</p>
         </div>
         <div class="feature-card">
           <h3>Go API Backend</h3>
-          <p>REST + WebSocket API with PostgreSQL for caching, repository sync, and plugin management.</p>
+          <p>70+ handlers, 87 database tables, WebSocket support, and comprehensive authentication.</p>
         </div>
         <div class="feature-card">
           <h3>React UI</h3>
-          <p>TypeScript-based web interface with Material-UI, real-time updates, and admin dashboard.</p>
+          <p>50+ components with Material-UI, real-time updates, and full admin dashboard.</p>
         </div>
       </div>
     </div>

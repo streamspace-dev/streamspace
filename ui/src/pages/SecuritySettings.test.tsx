@@ -2,10 +2,21 @@ import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { render, screen, fireEvent, waitFor } from '@testing-library/react';
 import { BrowserRouter } from 'react-router-dom';
 import SecuritySettings from './SecuritySettings';
-import * as api from '../lib/api';
+import { api } from '../lib/api';
 
 // Mock the API module
-vi.mock('../lib/api');
+vi.mock('../lib/api', () => ({
+  api: {
+    setupMFA: vi.fn(),
+    verifyMFA: vi.fn(),
+    getSecurityAlerts: vi.fn(),
+    listMFAMethods: vi.fn(),
+    deleteMFAMethod: vi.fn(),
+    getIPWhitelist: vi.fn(),
+    addIPToWhitelist: vi.fn(),
+    removeIPFromWhitelist: vi.fn(),
+  },
+}));
 
 // Mock Layout component
 vi.mock('../components/Layout', () => ({

@@ -1,611 +1,267 @@
 # StreamSpace Development Roadmap
 
-**Goal**: Build StreamSpace into a feature-complete, fully open source container streaming platform with complete independence from proprietary technologies.
-
-**Status**: **Phase 5 (Production-Ready) - ✅ COMPLETE**
-**Last Updated**: 2025-11-16
-**Version**: v1.0.0
+**Current Version**: v1.0.0-beta
+**Last Updated**: 2025-11-19
 
 ---
 
-## 🎯 Strategic Vision
+## Current State
 
-StreamSpace is now a **100% feature-complete**, production-ready open source container streaming platform, offering:
+StreamSpace has a functional core platform but several areas require significant work before production readiness.
 
-- ✅ **Zero Proprietary Dependencies** (except VNC - migration planned)
-- ✅ **Feature Completeness**: Enterprise-grade features matching commercial offerings
-- ✅ **Kubernetes-Native**: Built for cloud-native deployments
-- ✅ **ARM64 Optimized**: First-class support for ARM architectures
-- ✅ **Self-Hostable**: Complete platform control and data sovereignty
-- ✅ **Extensible**: Plugin architecture for custom integrations
+### Implementation Summary
 
-### Independence Strategy
-
-**Current Dependencies to Eliminate**:
-1. ⚠️ **KasmVNC / LinuxServer.io images** → Open source VNC stack (noVNC + TigerVNC) - **PLANNED: Phase 6**
-2. ✅ **Kasm references** → StreamSpace brand and identity - **COMPLETE**
-
-**Timeline**: Achieve full VNC independence by v2.0 (Phase 6, ~6 months)
-
----
-
-## 📊 Development Phases
-
-### Phase 1: Foundation (Months 1-3) ✅ **COMPLETE**
-
-**Status**: ✅ **100% COMPLETE**
-
-**Goal**: Build core Kubernetes controller and basic session lifecycle management.
-
-#### Deliverables
-- ✅ Architecture design and documentation
-- ✅ CRD definitions (Session, Template, User)
-- ✅ Kubernetes manifests and Helm chart structure
-- ✅ Go controller implementation (Kubebuilder)
-  - ✅ Session reconciler with state management
-  - ✅ Template reconciler
-  - ✅ User reconciler with PVC provisioning
-  - ✅ Hibernation controller with idle detection
-  - ✅ Comprehensive metrics and health checks
-- ✅ Container image builds
-  - ✅ Controller image
-  - ✅ API backend image
-  - ✅ Web UI image
-  - ✅ 200+ workspace template images
-- ✅ Integration testing framework
-- ✅ CI/CD pipeline (GitHub Actions)
-
-#### Success Criteria - All Met ✅
-- ✅ Sessions can be created, started, and terminated via kubectl
-- ✅ Templates can be defined and instantiated
-- ✅ User PVCs are automatically provisioned
-- ✅ Controller runs stably for 7+ days
-- ✅ Comprehensive Prometheus metrics exposed
+| Component | Status | Completeness |
+|-----------|--------|--------------|
+| Kubernetes Controller | Complete | 100% |
+| API Backend | Complete | 95% |
+| Web UI | Complete | 95% |
+| Database Schema | Complete | 100% |
+| Helm Chart | Complete | 95% |
+| Plugin System | Partial | 40% (framework only) |
+| Docker Controller | Stub | 5% |
+| Test Coverage | Incomplete | 15-20% |
+| VNC Migration | Not Started | 0% |
 
 ---
 
-### Phase 2: Core Platform (Months 4-6) ✅ **COMPLETE**
+## Completed Work
 
-**Status**: ✅ **100% COMPLETE**
+### Core Platform
 
-**Goal**: Build API backend, web UI, and hibernation system.
+- **Kubernetes Controller** (5,282 lines)
+  - Session reconciler with full lifecycle management
+  - Hibernation controller with idle detection
+  - Template reconciler
+  - ApplicationInstall reconciler
+  - Prometheus metrics (40+ metric types)
 
-#### 2.1 API Backend - ✅ COMPLETE
-- ✅ REST API (Go + Gin framework) - 70+ handler files
-  - ✅ Session CRUD operations
-  - ✅ Template browsing and filtering
-  - ✅ User management endpoints
-  - ✅ Health and metrics endpoints
-- ✅ WebSocket proxy for VNC connections
-- ✅ JWT authentication with Local, SAML, OIDC
-- ✅ Kubernetes client integration
-- ✅ API rate limiting and throttling (15+ middleware layers)
-- ✅ API documentation
+- **API Backend** (61,289 lines)
+  - 70+ API handler files
+  - 87 database tables
+  - 15+ middleware layers
+  - Authentication: Local, SAML 2.0, OIDC OAuth2, MFA
+  - WebSocket support for real-time updates
+  - Webhook system (16 event types)
+  - Integration support (Slack, Teams, Discord, PagerDuty, email)
 
-#### 2.2 Web UI - ✅ COMPLETE
-- ✅ React + TypeScript frontend (50+ components)
-  - ✅ User dashboard (my sessions)
-  - ✅ Application catalog with search/filter
-  - ✅ Session viewer (embedded or new tab)
-  - ✅ Real-time session status updates (WebSocket - basic integration)
-  - ✅ User profile and settings
-- ✅ Admin panel (12 pages)
-  - ✅ All sessions overview
-  - ✅ User management
-  - ✅ Group management
-  - ✅ Quota management
-  - ✅ Plugin management
-  - ✅ Node management
-  - ✅ Scaling configuration
-  - ✅ Integrations management
-  - ✅ Compliance dashboard
-  - ✅ System analytics
-- ✅ Material-UI (MUI) component library
-- ✅ Responsive design (mobile-friendly)
+- **Web UI** (25,629 lines)
+  - 27 pages (14 user, 12 admin + login)
+  - 27 React components
+  - Real-time WebSocket integration
+  - Material-UI design system
 
-#### 2.3 Hibernation System - ✅ COMPLETE
-- ✅ Hibernation controller (idle detection)
-- ✅ Configurable idle timeout
-- ✅ Scale-to-zero deployment management
-- ✅ Wake-on-access functionality
-- ✅ Hibernation metrics and monitoring
+- **Infrastructure**
+  - CRD definitions (Session, Template, ApplicationInstall)
+  - Helm chart with 19 templates
+  - Kubernetes manifests for deployment
+  - Monitoring configuration (Prometheus, Grafana)
 
 ---
 
-### Phase 3: Enhanced Features (Months 7-9) ✅ **COMPLETE**
+## Priority Work Items
 
-**Status**: ✅ **100% COMPLETE**
+### Priority 1: Test Coverage (High)
 
-**Goal**: Plugin system, advanced features, and operational excellence.
+**Current**: ~15-20%
+**Target**: 80%+
 
-#### 3.1 Plugin System - ✅ COMPLETE
-- ✅ Plugin architecture design
-- ✅ Plugin API (registration, lifecycle hooks, storage)
-- ✅ Plugin catalog UI
-- ✅ Plugin installation/removal
-- ✅ Plugin marketplace integration
-- ✅ Plugin versioning and updates
-- ✅ Plugin ratings and reviews
-- ✅ Plugin documentation generator
+The existing test infrastructure needs significant expansion:
 
-#### 3.2 Repository System - ✅ COMPLETE
-- ✅ Template repository manager
-- ✅ Git-based template sync
-- ✅ Repository credentials management
-- ✅ Automatic template updates
-- ✅ Repository health monitoring
+#### Controller Tests
+- **Existing**: 4 test files (529 lines)
+- **Needs**: Error handling, edge cases, concurrent operations
+- **Blocker**: Requires envtest setup for local execution
 
-#### 3.3 Advanced Features - ✅ COMPLETE
-- ✅ Session sharing with permissions
-- ✅ Real-time collaboration (chat, annotations, presence)
-- ✅ Session snapshots and restore
-- ✅ Session recording
-- ✅ Tag management system
-- ✅ Advanced search and filtering
-- ✅ Template favorites
-- ✅ Template versioning
-- ✅ Saved searches
-- ✅ Batch operations
+#### API Tests
+- **Existing**: 11 test files (~2,700 lines)
+- **Needs**: 63+ untested handler files, database layer tests
+- **Blocker**: Some tests have build errors (method name mismatches)
 
-#### 3.4 Operational Excellence - ✅ COMPLETE
-- ✅ Comprehensive monitoring dashboards
-- ✅ Alert rules and notifications
-- ✅ Audit logging
-- ✅ Performance optimization
-- ✅ Resource usage analytics
-- ✅ Cost tracking (billing integration)
+#### UI Tests
+- **Existing**: 2 test files (SessionCard, SecuritySettings)
+- **Needs**: 48+ untested components, all pages
+- **Ready**: Vitest configured with 80% threshold
 
----
+#### Integration Tests
+- **Existing**: 5 test files with 23 test functions
+- **Status**: Complete and passing
 
-### Phase 4: Enterprise Features (Months 10-12) ✅ **COMPLETE**
+**Estimated effort**: 6-8 weeks with dedicated testing focus
 
-**Status**: ✅ **100% COMPLETE**
+### Priority 2: Plugin Implementations (High)
 
-**Goal**: Enterprise-grade security, compliance, and management.
+**Current**: Framework complete, 28 plugins are stubs
+**Target**: Working implementations
 
-#### 4.1 Advanced Authentication - ✅ COMPLETE
-- ✅ Local authentication (username/password)
-- ✅ SAML 2.0 SSO (Okta, Azure AD, Authentik, Keycloak, Auth0)
-- ✅ OIDC OAuth2 (8 providers: Keycloak, Okta, Auth0, Google, Azure AD, GitHub, GitLab, Generic)
-- ✅ Multi-Factor Authentication (TOTP/Authenticator apps)
-- ✅ MFA backup codes
-- ✅ LDAP/AD integration (via SAML/OIDC)
-- ✅ API key management
+The plugin system has a complete framework but individual plugins contain only TODOs:
 
-#### 4.2 Security Features - ✅ COMPLETE
-- ✅ IP whitelisting
-- ✅ CSRF protection
-- ✅ Rate limiting (multiple tiers)
-- ✅ SSRF protection
-- ✅ Session verification
-- ✅ Device posture checks
-- ✅ Trusted device management
-- ✅ Security alerts
+```
+plugins/
+├── streamspace-calendar/        # TODO: Extract from scheduling handler
+├── streamspace-multi-monitor/   # TODO: 3 items
+├── streamspace-compliance/      # TODO: Stub
+├── streamspace-dlp/             # TODO: Stub
+├── streamspace-analytics/       # TODO: Stub
+├── streamspace-slack/           # TODO: Extract from integrations
+├── streamspace-teams/           # TODO: Extract from integrations
+├── streamspace-discord/         # TODO: Extract from integrations
+└── ... (20 more stubs)
+```
 
-#### 4.3 Compliance & Governance - ✅ COMPLETE
-- ✅ Compliance frameworks (SOC2, HIPAA, GDPR)
-- ✅ Compliance policies
-- ✅ Compliance violation tracking
-- ✅ Compliance reporting
-- ✅ Compliance dashboard
-- ✅ DLP (Data Loss Prevention) policies
-- ✅ DLP violation tracking
-- ✅ Audit log retention
-- ✅ Session recording policies
+**Work required**:
+1. Extract existing handler logic into plugin modules
+2. Implement plugin configuration UI
+3. Add plugin-specific tests
+4. Document each plugin
 
-#### 4.4 Advanced Management - ✅ COMPLETE
-- ✅ Resource quotas (user, group, system)
-- ✅ Quota policies
-- ✅ Quota alerts
-- ✅ User groups and teams
-- ✅ Team RBAC with fine-grained permissions
-- ✅ Load balancing policies
-- ✅ Auto-scaling configuration
-- ✅ Node management
-- ✅ Workflow automation
+**Estimated effort**: 4-6 weeks to convert top 10 plugins
 
-#### 4.5 Integrations - ✅ COMPLETE
-- ✅ Webhooks (16 event types)
-- ✅ HMAC signature validation
-- ✅ Slack integration
-- ✅ Microsoft Teams integration
-- ✅ Discord integration
-- ✅ PagerDuty integration
-- ✅ Email integration (SMTP with TLS/STARTTLS)
-- ✅ Custom webhook support
+### Priority 3: Docker Controller (Medium)
+
+**Current**: 102-line skeleton
+**Target**: Functional parity with Kubernetes controller
+
+The Docker controller exists as a framework only:
+- NATS event subscription set up
+- No actual Docker operations implemented
+- Packages `pkg/docker` and `pkg/events` are stubs
+
+**Work required**:
+1. Implement container lifecycle management
+2. Volume management for user storage
+3. Network configuration
+4. Event publishing back to API
+5. Integration testing
+
+**Estimated effort**: 4-6 weeks for MVP
+
+### Priority 4: VNC Independence (Medium)
+
+**Current**: Using LinuxServer.io images with KasmVNC
+**Target**: StreamSpace-native images with TigerVNC + noVNC
+
+**Work required**:
+1. Create base container images (Ubuntu, Alpine, Debian)
+2. Integrate TigerVNC server
+3. Configure noVNC client
+4. Rebuild all 200+ application templates
+5. Set up image build pipeline
+6. Security scanning and signing
+
+**Estimated effort**: 4-6 months
 
 ---
 
-### Phase 5: Production Readiness (Months 13-15) ✅ **COMPLETE**
+## Backlog
 
-**Status**: ✅ **100% COMPLETE**
+### Nice to Have
 
-**Goal**: Production deployment, testing, and documentation.
+- Multi-cluster federation
+- WebRTC streaming (lower latency)
+- GPU acceleration support
+- Advanced caching with Redis
+- Machine learning-based idle detection
 
-#### 5.1 Production Deployment - ✅ COMPLETE
-- ✅ Helm chart for production deployment
-- ✅ HA configuration
-- ✅ Backup and restore procedures
-- ✅ Disaster recovery plan
-- ✅ Upgrade procedures
-- ✅ Rollback procedures
+### Known Issues
 
-#### 5.2 Testing - ✅ COMPLETE
-- ✅ Unit tests
-- ✅ Integration tests
-- ✅ End-to-end tests
-- ✅ Performance tests
-- ✅ Security tests
-- ✅ Load tests
-
-#### 5.3 Documentation - ✅ COMPLETE
-- ✅ User guides
-- ✅ Admin guides
-- ✅ API documentation
-- ✅ Plugin development guide
-- ✅ Security documentation
-- ✅ Compliance documentation
-- ✅ Deployment guides (AWS, Container, SAML)
-- ✅ Architecture documentation
-- ✅ Feature documentation (FEATURES.md)
-
-#### 5.4 Observability - ✅ COMPLETE
-- ✅ Prometheus metrics (40+ metrics)
-- ✅ Grafana dashboards
-- ✅ Log aggregation
-- ✅ Distributed tracing (request IDs)
-- ✅ Health check endpoints
-- ✅ Alert rules
-
-#### 5.5 Production-Ready WebSocket Enhancements - ✅ COMPLETE
-- ✅ Enhanced WebSocket components
-  - ✅ EnhancedWebSocketStatus component with connection quality
-  - ✅ NotificationQueue system with priority-based stacking
-  - ✅ WebSocketErrorBoundary for graceful degradation
-  - ✅ Connection quality monitoring (latency tracking)
-  - ✅ Manual reconnect capability
-  - ✅ Notification history with 50-item buffer
-- ✅ WebSocket utility hooks
-  - ✅ useEnhancedWebSocket (unified enhancement hook)
-  - ✅ useConnectionQuality (latency and quality tracking)
-  - ✅ useThrottle and useDebounce (performance optimization)
-  - ✅ useMessageBatching (batch processing)
-  - ✅ useManualReconnect (connection management)
-- ✅ Full integration across key pages
-  - ✅ SessionViewer (state change notifications)
-  - ✅ SharedSessions (real-time shared session updates)
-  - ✅ admin/Nodes (node health alerts and operation notifications)
-  - ✅ admin/Scaling (scaling event notifications)
-  - ✅ Global NotificationQueue in App.tsx
-- ✅ Production features
-  - ✅ Priority-based notification ordering (critical > high > medium > low)
-  - ✅ Critical alerts persist until manually dismissed
-  - ✅ Connection quality indicators (Excellent/Good/Fair/Poor)
-  - ✅ Exponential backoff reconnection strategy
-  - ✅ Smart state change detection (only notify on actual changes)
-  - ✅ Comprehensive documentation (README_WEBSOCKET_ENHANCEMENTS.md)
-
-#### 5.6 Complete WebSocket Enhancement Polish - ✅ COMPLETE
-- ✅ New WebSocket Event Hooks
-  - ✅ useUserEvents (user.event) - User creation, updates, deletion, login events
-  - ✅ useGroupEvents (group.event) - Group operations and membership changes
-  - ✅ useQuotaEvents (quota.event) - Quota updates, warnings, exceeded alerts
-  - ✅ usePluginEvents (plugin.event) - Plugin lifecycle and error events
-- ✅ Admin Page WebSocket Integration (4 new pages)
-  - ✅ admin/Users - Real-time user event notifications with EnhancedWebSocketStatus
-  - ✅ admin/Groups - Real-time group operations with notifications
-  - ✅ admin/Quotas - Quota warnings, exceeded alerts, critical notifications
-  - ✅ admin/Plugins - Plugin installation, updates, error notifications
-- ✅ Enhanced Existing Pages (3 pages)
-  - ✅ Dashboard - Session state change notifications, enhanced status indicator
-  - ✅ Sessions - Session state notifications with EnhancedWebSocketStatus
-  - ✅ admin/Dashboard - Critical resource alerts (CPU, memory, pods, nodes)
-- ✅ Production Features
-  - ✅ Smart state change detection (only notify on actual changes)
-  - ✅ Critical resource threshold alerts (CPU/Memory/Pods >90%)
-  - ✅ Node health monitoring with critical alerts
-  - ✅ Quota exceeded alerts (high priority, persistent)
-  - ✅ Plugin error notifications
-  - ✅ Consistent UX with EnhancedWebSocketStatus across all pages
-  - ✅ WebSocketErrorBoundary on all 8 enhanced pages
-- ✅ Implementation Impact
-  - ✅ 8 total pages with production-ready WebSocket features
-  - ✅ 4 new admin event hooks added
-  - ✅ Comprehensive real-time monitoring across platform
-  - ✅ 584 insertions, 156 deletions (8 files changed)
-
-#### 5.7 Expand WebSocket Coverage to Core Pages - ✅ COMPLETE
-- ✅ New WebSocket Event Hooks
-  - ✅ useTemplateEvents (template.event) - Template creation, updates, deletion, featured
-  - ✅ useRepositoryEvents (repository.event) - Repository sync events, add/delete
-  - ✅ useIntegrationEvents (integration.event) - Integration test and webhook events
-- ✅ Template & Repository Pages (4 pages)
-  - ✅ EnhancedCatalog - Real-time template updates, new templates, featured notifications
-  - ✅ Catalog - Real-time template additions with Enhanced WebSocket status
-  - ✅ EnhancedRepositories - Real-time sync status, repository events, failure alerts
-  - ✅ Repositories - Real-time repository sync notifications
-- ✅ Feature Pages (1 page)
-  - ✅ InstalledPlugins - Real-time plugin install/update/error notifications
-  - ✅ Scheduling - Enhanced schedule execution alerts, improved notification system
-- ✅ Production Features
-  - ✅ Persistent critical alerts for repository sync failures
-  - ✅ Template featured notifications (high priority)
-  - ✅ Plugin error tracking (non-dismissible critical alerts)
-  - ✅ Enhanced notification queue integration across all pages
-  - ✅ Consistent EnhancedWebSocketStatus across all pages
-  - ✅ WebSocketErrorBoundary on all 5 enhanced pages
-- ✅ Implementation Impact
-  - ✅ 5 total pages enhanced with production-ready WebSocket features
-  - ✅ 3 new event hooks added (template, repository, integration)
-  - ✅ 13 total pages now with comprehensive real-time monitoring
-  - ✅ Improved notification system with priority-based stacking
-
-#### 5.8 Complete WebSocket Enhancement - 100% Coverage - ✅ COMPLETE
-- ✅ Upgraded Existing Pages to Enhanced WebSocket Pattern (3 pages)
-  - ✅ SecuritySettings - Upgraded from basic Chip/Snackbar to EnhancedWebSocketStatus and NotificationQueue
-  - ✅ admin/Compliance - Upgraded from basic Chip/Snackbar to EnhancedWebSocketStatus and NotificationQueue
-  - ✅ admin/Integrations - Upgraded from basic Chip/Snackbar to EnhancedWebSocketStatus and NotificationQueue
-- ✅ Enhanced Features
-  - ✅ Security alerts with severity-based priority (critical/high/medium)
-  - ✅ Compliance violations with non-dismissible critical alerts
-  - ✅ Webhook delivery notifications with status-based severity
-  - ✅ Consistent error boundary wrapping for graceful degradation
-  - ✅ Reconnect attempt tracking across all pages
-- ✅ Production Polish
-  - ✅ All WebSocket pages now use consistent enhanced pattern
-  - ✅ Removed legacy Snackbar notifications in favor of NotificationQueue
-  - ✅ Removed legacy Chip components in favor of EnhancedWebSocketStatus
-  - ✅ Improved UX consistency across all real-time pages
-- ✅ Implementation Impact
-  - ✅ 3 pages upgraded from basic to enhanced WebSocket pattern
-  - ✅ 16 total pages now with production-ready WebSocket features (57% coverage)
-  - ✅ 100% consistency in WebSocket implementation across all integrated pages
-  - ✅ Enhanced user experience with priority-based notification system
+- Some API handlers have TODO comments for minor enhancements
+- Plugin configuration endpoints have incomplete implementations
+- SMS/Email MFA deliberately disabled (security concerns)
 
 ---
 
-### Phase 6: VNC Independence (Months 16-21) ⏳ **PLANNED**
+## Release Plan
 
-**Status**: ⚠️ **NOT STARTED**
+### v1.0.0-beta (Current)
 
-**Goal**: Eliminate LinuxServer.io dependency and migrate to fully open source VNC stack.
+What's included:
+- Functional Kubernetes platform
+- Complete authentication stack
+- 87 database tables
+- 70+ API handlers
+- 50+ UI components
+- Helm chart for deployment
 
-#### 6.1 VNC Stack Migration
-- [ ] Research and select VNC stack (TigerVNC + noVNC recommended)
-- [ ] Build proof-of-concept with open source VNC
-- [ ] Create base container images with TigerVNC
-- [ ] Implement WebSocket proxy for VNC in API backend
-- [ ] Rebuild all 200+ templates with new VNC stack
-- [ ] Update all documentation
-- [ ] Remove all KasmVNC/LinuxServer.io references from code
-- [ ] Remove all Kasm references from docs
-- [ ] Update CRD field names (kasmvnc → vnc)
-- [ ] Create migration guide for existing deployments
-- [ ] Performance testing and optimization
-- [ ] Security audit of new VNC stack
+Known limitations:
+- 15-20% test coverage
+- Plugin stubs only
+- Docker controller not functional
+- Using external VNC images
 
-#### 6.2 StreamSpace Container Images
-- [ ] Design base image tiers (Ubuntu, Alpine, Debian)
-- [ ] Create Tier 1 base images (Core OS + VNC + WM)
-- [ ] Build Tier 2 application images (100+ images)
-- [ ] Build Tier 3 specialized images (50+ images)
-- [ ] Set up image build infrastructure (GitHub Actions)
-- [ ] Implement image security scanning (Trivy)
-- [ ] Image signing with Cosign
-- [ ] Push to ghcr.io/streamspace registry
-- [ ] Weekly rebuild schedule
-- [ ] Image documentation
+### v1.0.0 (Stable Release)
 
-#### 6.3 Brand Independence
-- [ ] Final audit for remaining Kasm references
-- [ ] Update all screenshots and demos
-- [ ] Update marketing materials
-- [ ] Update website with StreamSpace-native stack
+Requirements before stable:
+- [ ] Test coverage reaches 70%+
+- [ ] Top 10 plugins implemented
+- [ ] All critical API handler TODOs resolved
+- [ ] Documentation audit complete
+- [ ] Security audit complete
 
-#### Success Criteria
-- ✅ Zero mentions of "Kasm", "kasmvnc", or "LinuxServer.io" in codebase
-- ✅ All container images built and maintained by StreamSpace
-- ✅ No external dependencies on proprietary software
-- ✅ Documentation explains 100% open source stack
-- ✅ Migration path documented for existing users
-- ✅ Performance equal to or better than LinuxServer.io images
+### v1.1.0 (Docker Support)
 
-**Estimated Timeline**: 6 months (Months 16-21)
+- [ ] Functional Docker controller
+- [ ] Docker Compose deployment option
+- [ ] Local volume management
+- [ ] Integration tests for Docker platform
+
+### v2.0.0 (VNC Independence)
+
+- [ ] StreamSpace-native container images
+- [ ] TigerVNC + noVNC stack
+- [ ] Image build pipeline
+- [ ] All templates migrated
+- [ ] Performance optimization
 
 ---
 
-### Phase 7: Advanced Features (Future Enhancements)
+## Contributing
 
-**Status**: ⏳ **PLANNED FOR FUTURE**
+See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
 
-**Goal**: Advanced capabilities and optimizations.
+### High-Impact Contribution Areas
 
-#### Potential Features
-- [ ] Multi-cluster federation
-- [ ] Cross-cluster sessions
-- [ ] Global load balancing
-- [ ] Session migration between clusters
-- [ ] Advanced caching (Redis integration)
-- [ ] Materialized views for analytics
-- [ ] WebRTC-based streaming (lower latency alternative to VNC)
-- [ ] GPU acceleration support
-- [ ] Container image caching
-- [ ] Advanced scheduling (Kubernetes scheduler extensions)
-- [ ] Cost optimization recommendations
-- [ ] Capacity planning tools
-- [ ] Predictive auto-scaling
-- [ ] Machine learning-based idle detection
+1. **Write tests** - Any test coverage helps
+2. **Convert plugin stubs** - Pick a plugin and implement it
+3. **Docker controller** - Help build multi-platform support
+4. **Documentation** - Fix inaccuracies, add examples
 
----
+### Getting Started
 
-## 🎯 Current Status Summary
+```bash
+# Clone and explore
+git clone https://github.com/JoshuaAFerguson/streamspace.git
+cd streamspace
 
-### ✅ What's Complete (Phases 1-5)
-
-**Core Platform**:
-- ✅ Kubernetes controller with hibernation
-- ✅ Complete API backend (70+ handlers)
-- ✅ Full-featured Web UI (50+ components)
-- ✅ PostgreSQL database (82+ tables)
-
-**Authentication**:
-- ✅ Local authentication
-- ✅ SAML 2.0 SSO (6 providers)
-- ✅ OIDC OAuth2 (8 providers)
-- ✅ Multi-factor authentication (TOTP)
-
-**Features**:
-- ✅ Session management (CRUD, sharing, snapshots, recording)
-- ✅ Template management (catalog, favorites, versioning)
-- ✅ Plugin system (catalog, install, configure)
-- ✅ Real-time collaboration (chat, annotations)
-- ✅ Scheduling and automation
-- ✅ Webhooks and integrations
-- ✅ Analytics and reporting
-- ✅ In-browser features (console, file manager, multi-monitor)
-
-**Enterprise**:
-- ✅ IP whitelisting
-- ✅ DLP and compliance
-- ✅ Resource quotas and policies
-- ✅ Team RBAC
-- ✅ Audit logging
-- ✅ Load balancing and auto-scaling
-
-**Operations**:
-- ✅ Monitoring (Prometheus, Grafana)
-- ✅ WebSocket real-time updates (16 pages with full integration)
-- ✅ Comprehensive middleware (15+ layers)
-- ✅ API keys
-- ✅ Batch operations
-
-### ⚠️ What's Pending (Phase 6)
-
-**VNC Independence**:
-- ⏳ Migration from LinuxServer.io to StreamSpace-native images
-- ⏳ TigerVNC + noVNC implementation
-- ⏳ 200+ container image builds
-- ⏳ Image build infrastructure
-- ⏳ Security scanning and signing
-
-### 🚫 What's Not Implemented
-
-**Deliberately Disabled**:
-- ❌ SMS/Email MFA (security concerns - always returns valid=true)
-
-**Future Enhancements**:
-- ⏳ Multi-cluster federation
-- ⏳ WebRTC streaming
-- ⏳ GPU acceleration
+# Run existing tests
+cd k8s-controller && make test
+cd ../api && go test ./... -v
+cd ../ui && npm test
+```
 
 ---
 
-## 📈 Development Statistics
+## Timeline Estimates
 
-### Implementation Metrics
-- **Total Development Time**: ~15 months
-- **API Handler Files**: 70+
-- **Database Tables**: 82+
-- **UI Components**: 50+
-- **Middleware Layers**: 15+
-- **Authentication Methods**: 3 (Local, SAML, OIDC)
-- **OIDC Providers**: 8
-- **Webhook Events**: 16
-- **WebSocket Event Hooks**: 10+ (sessions, users, groups, quotas, plugins, templates, repositories, integrations, security alerts, compliance violations, webhook deliveries)
-- **Pages with WebSocket**: 16 (57% of total UI pages)
-- **Integration Types**: 6+
-- **Documentation Files**: 34 essential docs
+| Milestone | Target | Dependencies |
+|-----------|--------|--------------|
+| 70% test coverage | 8 weeks | Testing infrastructure fixes |
+| Top 10 plugins | 10 weeks | Plugin framework validation |
+| Stable v1.0.0 | 12 weeks | Test coverage, plugin work |
+| Docker support | 16 weeks | Docker controller completion |
+| VNC independence | 6 months | Image build infrastructure |
 
-### Feature Coverage
-- **Core Features**: 100% ✅
-- **Enterprise Features**: 100% ✅
-- **Security Features**: 95% ✅ (SMS/Email MFA disabled)
-- **Admin Features**: 100% ✅
-- **User Features**: 100% ✅
-- **Developer Features**: 100% ✅
+These are rough estimates and depend on contributor availability.
 
 ---
 
-## 🎯 Next Steps (Phase 6)
+## References
 
-### Immediate Priorities
-
-1. **VNC Stack Research** (1 month)
-   - Evaluate TigerVNC vs. alternatives
-   - Test noVNC client integration
-   - Prototype WebSocket VNC proxy
-   - Performance benchmarking
-
-2. **Base Image Development** (2 months)
-   - Create base Ubuntu/Alpine/Debian images
-   - Integrate TigerVNC server
-   - Add window managers (XFCE, i3, MATE)
-   - Test and optimize
-
-3. **Application Image Migration** (2 months)
-   - Migrate top 50 templates first
-   - Build remaining 150+ images
-   - Test all images
-   - Update template definitions
-
-4. **Infrastructure Setup** (1 month)
-   - GitHub Actions workflows
-   - Image signing with Cosign
-   - Security scanning with Trivy
-   - Registry setup (ghcr.io)
-
-5. **Documentation & Migration** (1 month)
-   - Update all documentation
-   - Create migration guide
-   - Update CLAUDE.md
-   - Update website
-
-**Estimated Timeline**: 6-7 months for complete VNC independence
+- [FEATURES.md](FEATURES.md) - Detailed feature status
+- [TEST_COVERAGE_REPORT.md](tests/reports/TEST_COVERAGE_REPORT.md) - Test coverage analysis
+- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
 
 ---
 
-## 🚀 Release Plan
-
-### v1.0.0 (Current) - Production Release
-- ✅ Complete core platform
-- ✅ All enterprise features
-- ✅ Production-ready security
-- ✅ Comprehensive documentation
-- ✅ Full test coverage
-- ⚠️ Using LinuxServer.io images (temporary)
-
-### v2.0.0 (Planned) - Full Independence
-- ⏳ StreamSpace-native container images
-- ⏳ TigerVNC + noVNC stack
-- ⏳ Zero proprietary dependencies
-- ⏳ Enhanced performance
-- ⏳ Complete brand independence
-
-### v3.0.0 (Future) - Advanced Features
-- ⏳ Multi-cluster federation
-- ⏳ WebRTC streaming option
-- ⏳ GPU acceleration
-- ⏳ ML-based optimizations
-
----
-
-## 📚 References
-
-**For detailed documentation, see:**
-- [FEATURES.md](FEATURES.md) - Complete feature list
-- [ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
-- [DEPLOYMENT.md](DEPLOYMENT.md) - Deployment instructions
-- [CLAUDE.md](CLAUDE.md) - AI assistant guide
-- [SECURITY.md](SECURITY.md) - Security policy
-- [VNC_MIGRATION.md](docs/VNC_MIGRATION.md) - VNC migration plan
-
-**For implementation status:**
-- All Phases 1-5: ✅ 100% Complete
-- Phase 6 (VNC Independence): ⏳ Planned
-- Phase 7 (Future Enhancements): ⏳ TBD
-
----
-
-**Last Updated**: 2025-11-16
-**Version**: v1.0.0 (Production-Ready)
-**Next Milestone**: Phase 6 - VNC Independence (v2.0.0)
+**Last Updated**: 2025-11-19
