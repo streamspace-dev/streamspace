@@ -347,7 +347,7 @@ type TemplateStatus struct {
 	//
 	// Optional: Yes (computed by controller)
 	// +optional
-	Valid bool `json:"valid,omitempty"`
+	Valid bool `json:"valid"`
 
 	// Message provides human-readable validation results.
 	//

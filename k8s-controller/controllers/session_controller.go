@@ -446,6 +446,15 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 	// BUG FIX: Validate template before creating session resources
 	// Previously controller would create deployment even with invalid templates
 	if !template.Status.Valid {
+		// Check if template hasn't been validated yet vs validation failed
+		// Empty message means TemplateReconciler hasn't run yet - wait for it
+		if template.Status.Message == "" {
+			log.Info("Template not yet validated, waiting for TemplateReconciler", "template", template.Name)
+			// Requeue after a short delay to allow TemplateReconciler to validate
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+
+		// Template was validated but is invalid - this is a real error
 		err := fmt.Errorf("template %s is not valid: %s", template.Name, template.Status.Message)
 		log.Error(err, "Cannot create session from invalid template")
 
