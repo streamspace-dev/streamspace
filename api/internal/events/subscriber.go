@@ -160,14 +160,17 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Update the session state and URL
+	// Update the session state (using Phase which is the Kubernetes phase like "Running", "Pending"),
+	// URL, and pod_name
 	query := `
 		UPDATE sessions
-		SET state = $1, url = $2, updated_at = $3
-		WHERE id = $4
+		SET state = $1, url = $2, pod_name = $3, updated_at = $4
+		WHERE id = $5
 	`
 
-	result, err := s.db.ExecContext(ctx, query, event.Status, event.URL, time.Now(), event.SessionID)
+	// Use Phase (Kubernetes phase like "Running") instead of Status (like "created")
+	// because the UI expects the phase value for the Connect button to be enabled
+	result, err := s.db.ExecContext(ctx, query, event.Phase, event.URL, event.PodName, time.Now(), event.SessionID)
 	if err != nil {
 		log.Printf("Failed to update session %s status: %v", event.SessionID, err)
 		return
@@ -177,7 +180,7 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 	if rows == 0 {
 		log.Printf("Session %s not found in database (may not be created yet)", event.SessionID)
 	} else {
-		log.Printf("Updated session %s to status=%s", event.SessionID, event.Status)
+		log.Printf("Updated session %s to phase=%s url=%s", event.SessionID, event.Phase, event.URL)
 	}
 }
 
