@@ -9,7 +9,7 @@ on:
       - 'v*'
     paths:
       - 'api/**'
-      - 'controller/**'
+      - 'k8s-controller/**'
       - 'ui/**'
       - '.github/workflows/container-images.yml'
   pull_request:
@@ -31,7 +31,7 @@ permissions:
 
 jobs:
   build-and-sign-controller:
-    name: Build & Sign Controller
+    name: Build & Sign Kubernetes Controller
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -58,7 +58,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}-controller
+          images: ${{ env.IMAGE_PREFIX }}-kubernetes-controller
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -75,12 +75,12 @@ jobs:
           echo "COMMIT=${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 
-      - name: Build and push Controller image
+      - name: Build and push Kubernetes Controller image
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./controller
-          file: ./controller/Dockerfile
+          context: ./k8s-controller
+          file: ./k8s-controller/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -139,20 +139,20 @@ jobs:
             fi
           done
 
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-kubernetes-controller@${DIGEST}"
           echo "Image reference for signing: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
-      - name: Generate SBOM for Controller
+      - name: Generate SBOM for Kubernetes Controller
         if: github.event_name != 'pull_request'
         uses: anchore/sbom-action@v0
         with:
-          path: ./controller
-          artifact-name: streamspace-controller-sbom.spdx.json
-          output-file: sbom-controller.spdx.json
+          path: ./k8s-controller
+          artifact-name: streamspace-kubernetes-controller-sbom.spdx.json
+          output-file: sbom-kubernetes-controller.spdx.json
           format: spdx-json
 
-      - name: Attest Controller SBOM
+      - name: Attest Kubernetes Controller SBOM
         if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
@@ -185,18 +185,18 @@ jobs:
             fi
           done
 
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-controller@${DIGEST}"
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-kubernetes-controller@${DIGEST}"
           echo "Using digest for SBOM attestation: $DIGEST"
           cosign attest --yes --type spdxjson \
-            --predicate sbom-controller.spdx.json \
+            --predicate sbom-kubernetes-controller.spdx.json \
             "$IMAGE_REF"
 
-      - name: Upload Controller SBOM
+      - name: Upload Kubernetes Controller SBOM
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-controller
-          path: sbom-controller.spdx.json
+          name: sbom-kubernetes-controller
+          path: sbom-kubernetes-controller.spdx.json
           retention-days: 90
 
   build-and-sign-api:
@@ -544,7 +544,7 @@ jobs:
     needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
     strategy:
       matrix:
-        component: [controller, api, ui]
+        component: [kubernetes-controller, api, ui]
     steps:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -725,7 +725,7 @@ jobs:
           echo "## 🐳 Container Images Built" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Images" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-controller:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-kubernetes-controller:latest\`" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ \`${{ env.IMAGE_PREFIX }}-api:latest\`" >> $GITHUB_STEP_SUMMARY
           echo "- ✅ \`${{ env.IMAGE_PREFIX }}-ui:latest\`" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY

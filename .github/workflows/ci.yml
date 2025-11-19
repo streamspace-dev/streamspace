@@ -32,14 +32,14 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Download Controller dependencies
-        working-directory: ./controller
+      - name: Download Kubernetes Controller dependencies
+        working-directory: ./k8s-controller
         run: |
           go mod tidy
           go mod download
 
-      - name: Lint Controller
-        working-directory: ./controller
+      - name: Lint Kubernetes Controller
+        working-directory: ./k8s-controller
         run: |
           go fmt ./...
           go vet ./...
@@ -67,7 +67,7 @@ jobs:
           npm run lint
 
   test-controller:
-    name: Test Controller
+    name: Test Kubernetes Controller
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -84,18 +84,18 @@ jobs:
           path: |
             ~/.cache/go-build
             ~/go/pkg/mod
-          key: ${{ runner.os }}-go-${{ hashFiles('controller/go.sum', 'controller/go.mod') }}
+          key: ${{ runner.os }}-go-${{ hashFiles('k8s-controller/go.sum', 'k8s-controller/go.mod') }}
           restore-keys: |
             ${{ runner.os }}-go-
 
       - name: Download dependencies
-        working-directory: ./controller
+        working-directory: ./k8s-controller
         run: |
           go mod download
           go mod tidy
 
       - name: Run tests
-        working-directory: ./controller
+        working-directory: ./k8s-controller
         run: |
           go test -v -race -coverprofile=coverage.out -covermode=atomic ./...
           go tool cover -func=coverage.out
@@ -103,9 +103,9 @@ jobs:
       - name: Upload coverage to Codecov
         uses: codecov/codecov-action@v4
         with:
-          files: ./controller/coverage.out
-          flags: controller
-          name: controller-coverage
+          files: ./k8s-controller/coverage.out
+          flags: k8s-controller
+          name: k8s-controller-coverage
 
   test-api:
     name: Test API
@@ -231,17 +231,17 @@ jobs:
         with:
           node-version: ${{ env.NODE_VERSION }}
 
-      - name: Download Controller dependencies
-        working-directory: ./controller
+      - name: Download Kubernetes Controller dependencies
+        working-directory: ./k8s-controller
         run: |
           go mod tidy
           go mod download
 
-      - name: Build Controller
-        working-directory: ./controller
+      - name: Build Kubernetes Controller
+        working-directory: ./k8s-controller
         run: |
           CGO_ENABLED=0 GOOS=linux GOARCH=amd64 go build -a -o bin/manager cmd/main.go
-          echo "Controller binary size: $(ls -lh bin/manager | awk '{print $5}')"
+          echo "Kubernetes Controller binary size: $(ls -lh bin/manager | awk '{print $5}')"
 
       - name: Download API dependencies
         working-directory: ./api
@@ -262,11 +262,11 @@ jobs:
           npm run build
           echo "UI build size: $(du -sh build | awk '{print $1}')"
 
-      - name: Upload Controller artifact
+      - name: Upload Kubernetes Controller artifact
         uses: actions/upload-artifact@v4
         with:
-          name: controller-binary
-          path: controller/bin/manager
+          name: k8s-controller-binary
+          path: k8s-controller/bin/manager
 
       - name: Upload API artifact
         uses: actions/upload-artifact@v4
