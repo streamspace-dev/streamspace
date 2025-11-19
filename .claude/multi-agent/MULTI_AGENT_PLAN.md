@@ -1055,6 +1055,276 @@ func (s *Subscriber) handleSessionCreate(event *SessionEvent) error {
 
 ---
 
+#### Decision 14: Dashboard Favorites API
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #16 - Dashboard Favorites API
+
+**Problem:** Favorites use localStorage which doesn't sync across devices. Need backend persistence.
+
+**Decision:** Add user_favorites table and API endpoints
+
+**Database Migration:**
+```sql
+CREATE TABLE user_favorites (
+    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
+    template_name VARCHAR(255) NOT NULL,
+    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+    UNIQUE(user_id, template_name)
+);
+
+CREATE INDEX idx_user_favorites_user_id ON user_favorites(user_id);
+```
+
+**API Endpoints:**
+```go
+// GET /api/user/favorites - Get user's favorites
+func (h *Handler) GetFavorites(c *gin.Context) {
+    userID := c.GetString("user_id")
+
+    rows, err := h.db.DB().QueryContext(c.Request.Context(), `
+        SELECT template_name FROM user_favorites WHERE user_id = $1
+    `, userID)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch favorites"})
+        return
+    }
+    defer rows.Close()
+
+    var favorites []string
+    for rows.Next() {
+        var name string
+        rows.Scan(&name)
+        favorites = append(favorites, name)
+    }
+
+    c.JSON(http.StatusOK, gin.H{"favorites": favorites})
+}
+
+// POST /api/user/favorites/:templateName - Add favorite
+func (h *Handler) AddFavorite(c *gin.Context) {
+    userID := c.GetString("user_id")
+    templateName := c.Param("templateName")
+
+    _, err := h.db.DB().ExecContext(c.Request.Context(), `
+        INSERT INTO user_favorites (user_id, template_name)
+        VALUES ($1, $2) ON CONFLICT DO NOTHING
+    `, userID, templateName)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add favorite"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Favorite added"})
+}
+
+// DELETE /api/user/favorites/:templateName - Remove favorite
+func (h *Handler) RemoveFavorite(c *gin.Context) {
+    userID := c.GetString("user_id")
+    templateName := c.Param("templateName")
+
+    _, err := h.db.DB().ExecContext(c.Request.Context(), `
+        DELETE FROM user_favorites WHERE user_id = $1 AND template_name = $2
+    `, userID, templateName)
+    if err != nil {
+        c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove favorite"})
+        return
+    }
+
+    c.JSON(http.StatusOK, gin.H{"message": "Favorite removed"})
+}
+```
+
+**UI Implementation:**
+```typescript
+// ui/src/pages/Dashboard.tsx
+const { data: favoritesData } = useQuery(['favorites'], () =>
+    api.get('/user/favorites').then(res => res.data.favorites)
+);
+
+const toggleFavorite = async (templateName: string) => {
+    if (favorites.has(templateName)) {
+        await api.delete(`/user/favorites/${templateName}`);
+    } else {
+        await api.post(`/user/favorites/${templateName}`);
+    }
+    queryClient.invalidateQueries(['favorites']);
+};
+
+useEffect(() => {
+    if (favoritesData) {
+        setFavorites(new Set(favoritesData));
+    }
+}, [favoritesData]);
+```
+
+**Rationale:**
+- Syncs across devices and sessions
+- Survives browser clear
+- Can be used for analytics
+
+---
+
+#### Decision 15: Demo Mode Security
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #17 - Demo Mode Security
+
+**Problem:** Demo mode bypasses authentication and allows ANY username. Risk if enabled in production.
+
+**Decision:** Guard with explicit environment variable check
+
+**Implementation:**
+```typescript
+// ui/src/pages/Login.tsx
+const DEMO_MODE_ENABLED = import.meta.env.VITE_DEMO_MODE === 'true';
+
+const handleSubmit = async (e: React.FormEvent) => {
+    e.preventDefault();
+    setLoading(true);
+    setError('');
+
+    try {
+        const loginResponse = await login(username, password);
+        setAuth(loginResponse);
+        localStorage.setItem('streamspace_token', loginResponse.token);
+        navigate('/');
+    } catch (err: any) {
+        // Only allow demo mode if explicitly enabled
+        if (DEMO_MODE_ENABLED && err.response?.status === 401) {
+            console.warn('Demo mode active - bypassing authentication');
+            const demoResponse = {
+                token: 'demo-token',
+                expiresAt: new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
+                user: {
+                    id: 'demo-id',
+                    username: username,
+                    email: `${username}@demo.local`,
+                    fullName: username,
+                    role: (username === 'admin' ? 'admin' : 'user') as 'user' | 'operator' | 'admin',
+                    provider: 'local' as const,
+                    active: true,
+                    createdAt: new Date().toISOString(),
+                    updatedAt: new Date().toISOString(),
+                },
+            };
+            setAuth(demoResponse);
+            localStorage.setItem('streamspace_token', demoResponse.token);
+            navigate('/');
+        } else {
+            console.error('Login failed:', err);
+            setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+        }
+    } finally {
+        setLoading(false);
+    }
+};
+```
+
+**Environment Configuration:**
+```bash
+# Development only - NEVER set in production
+VITE_DEMO_MODE=true
+```
+
+**Production Safeguards:**
+- Default is `false` (demo mode disabled)
+- CI/CD should verify this is not set in production builds
+- Add warning banner when demo mode is active
+
+**Optional Warning Banner:**
+```typescript
+{DEMO_MODE_ENABLED && (
+    <Alert severity="warning" sx={{ mb: 2 }}>
+        Demo mode active. Authentication is bypassed.
+    </Alert>
+)}
+```
+
+**Rationale:**
+- Explicit opt-in required
+- Safe by default
+- Clear indication when active
+
+---
+
+#### Decision 16: Remove Debug Console.log
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #18 - Remove Debug Console.log
+
+**Problem:** Debug console.log statement left in production code at Scheduling.tsx:157
+
+**Decision:** Remove the debug statement
+
+**Implementation:**
+```typescript
+// BEFORE (ui/src/pages/Scheduling.tsx:156-158)
+useScheduleEvents((data: any) => {
+    console.log('Schedule event:', data);  // DELETE THIS LINE
+    setWsConnected(true);
+
+// AFTER
+useScheduleEvents((data: any) => {
+    setWsConnected(true);
+```
+
+**Additional Cleanup:**
+- Search for other debug console.log statements in production code
+- Consider adding ESLint rule: `no-console: ["error", { allow: ["warn", "error"] }]`
+- Use proper logging utility for development
+
+**Rationale:**
+- Keeps browser console clean
+- Prevents accidental data exposure
+- Professional appearance
+
+---
+
+#### Decision 17: Delete Obsolete UI Pages
+**Date:** 2025-11-19
+**Decided By:** Architect
+**Issue:** #19 - Delete Obsolete UI Pages
+
+**Problem:** Obsolete pages from UI redesign still exist in codebase. Not routed but cause confusion.
+
+**Decision:** Delete the following files:
+1. `/home/user/streamspace/ui/src/pages/Repositories.tsx` - Replaced by EnhancedRepositories
+2. `/home/user/streamspace/ui/src/pages/Catalog.tsx` - Obsolete, not routed
+3. `/home/user/streamspace/ui/src/pages/EnhancedCatalog.tsx` - Experimental, never integrated
+
+**Pre-deletion Checklist:**
+```bash
+# Verify files are not imported anywhere
+grep -r "from.*Repositories" ui/src/ --include="*.tsx" --include="*.ts"
+grep -r "from.*Catalog" ui/src/ --include="*.tsx" --include="*.ts"
+grep -r "from.*EnhancedCatalog" ui/src/ --include="*.tsx" --include="*.ts"
+
+# Verify not in routes
+grep -r "Repositories\|Catalog\|EnhancedCatalog" ui/src/App.tsx
+```
+
+**Deletion Commands:**
+```bash
+rm ui/src/pages/Repositories.tsx
+rm ui/src/pages/Catalog.tsx
+rm ui/src/pages/EnhancedCatalog.tsx
+```
+
+**Verification:**
+- Build should succeed: `npm run build`
+- No TypeScript errors
+- Routes still work
+- EnhancedRepositories.tsx remains (this is the active version)
+
+**Rationale:**
+- Reduces codebase confusion
+- Prevents false bug reports
+- Cleaner project structure
+
+---
+
 ## Agent Communication Log
 
 ### 2025-11-19
