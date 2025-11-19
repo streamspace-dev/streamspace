@@ -110,6 +110,12 @@ func main() {
 	}
 	defer eventPublisher.Close()
 
+	// Get platform from environment (for multi-platform support)
+	platform := os.Getenv("PLATFORM")
+	if platform == "" {
+		platform = events.PlatformKubernetes // Default platform
+	}
+
 	// Initialize connection tracker
 	log.Println("Starting connection tracker...")
 	connTracker := tracker.NewConnectionTracker(database, k8sClient)
@@ -253,7 +259,7 @@ func main() {
 	}
 
 	// Initialize API handlers
-	apiHandler := api.NewHandler(database, k8sClient, connTracker, syncService, wsManager, quotaEnforcer)
+	apiHandler := api.NewHandler(database, k8sClient, eventPublisher, connTracker, syncService, wsManager, quotaEnforcer, platform)
 	userHandler := handlers.NewUserHandler(userDB, groupDB)
 	groupHandler := handlers.NewGroupHandler(groupDB, userDB)
 	authHandler := auth.NewAuthHandler(userDB, jwtManager, samlAuth)
@@ -284,11 +290,6 @@ func main() {
 	securityHandler := handlers.NewSecurityHandler(database)
 	templateVersioningHandler := handlers.NewTemplateVersioningHandler(database)
 	setupHandler := handlers.NewSetupHandler(database)
-	// Get platform from environment (for multi-platform support)
-	platform := os.Getenv("PLATFORM")
-	if platform == "" {
-		platform = events.PlatformKubernetes // Default platform
-	}
 	applicationHandler := handlers.NewApplicationHandler(database, eventPublisher, platform)
 	// NOTE: Billing is now handled by the streamspace-billing plugin
 

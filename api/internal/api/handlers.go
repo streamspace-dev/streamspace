@@ -106,6 +106,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace/streamspace/api/internal/events"
 	"github.com/streamspace/streamspace/api/internal/k8s"
 	"github.com/streamspace/streamspace/api/internal/quota"
 	"github.com/streamspace/streamspace/api/internal/sync"
@@ -155,11 +156,13 @@ var (
 type Handler struct {
 	db             *db.Database                 // Database for caching and metadata
 	k8sClient      *k8s.Client                  // Kubernetes client for CRD operations
+	publisher      *events.Publisher            // NATS event publisher
 	connTracker    *tracker.ConnectionTracker   // Active connection tracking
 	syncService    *sync.SyncService            // Repository synchronization
 	wsManager      *websocket.Manager           // WebSocket connection manager
 	quotaEnforcer  *quota.Enforcer              // Resource quota enforcement
 	namespace      string                       // Kubernetes namespace for resources
+	platform       string                       // Target platform (kubernetes, docker, etc.)
 }
 
 // NewHandler creates a new API handler with injected dependencies.
@@ -168,10 +171,12 @@ type Handler struct {
 //
 // - database: PostgreSQL database connection for caching and metadata
 // - k8sClient: Kubernetes client for Session/Template CRD operations
+// - publisher: NATS event publisher for platform-agnostic operations
 // - connTracker: Connection tracker for active session monitoring
 // - syncService: Service for syncing external template repositories
 // - wsManager: Manager for WebSocket connections and real-time updates
 // - quotaEnforcer: Enforcer for validating resource quotas
+// - platform: Target platform (kubernetes, docker, hyperv, vcenter)
 //
 // NAMESPACE RESOLUTION:
 //
@@ -180,24 +185,29 @@ type Handler struct {
 //
 // EXAMPLE USAGE:
 //
-//   handler := NewHandler(db, k8sClient, connTracker, syncService, wsManager, quotaEnforcer)
+//   handler := NewHandler(db, k8sClient, publisher, connTracker, syncService, wsManager, quotaEnforcer, "kubernetes")
 //   router := gin.Default()
 //   router.GET("/api/sessions", handler.ListSessions)
 //   router.POST("/api/sessions", handler.CreateSession)
-func NewHandler(database *db.Database, k8sClient *k8s.Client, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer) *Handler {
+func NewHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.Publisher, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer, platform string) *Handler {
 	// Read namespace from environment variable for deployment flexibility
 	namespace := os.Getenv("NAMESPACE")
 	if namespace == "" {
 		namespace = "streamspace" // Default namespace
 	}
+	if platform == "" {
+		platform = events.PlatformKubernetes // Default platform
+	}
 	return &Handler{
 		db:            database,
 		k8sClient:     k8sClient,
+		publisher:     publisher,
 		connTracker:   connTracker,
 		syncService:   syncService,
 		wsManager:     wsManager,
 		quotaEnforcer: quotaEnforcer,
 		namespace:     namespace,
+		platform:      platform,
 	}
 }
 
@@ -472,6 +482,21 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		log.Printf("Failed to cache session in database: %v", err)
 	}
 
+	// Publish session create event for controllers
+	// This enables platform-agnostic session management
+	createEvent := &events.SessionCreateEvent{
+		SessionID:      sessionName,
+		UserID:         req.User,
+		TemplateID:     req.Template,
+		Platform:       h.platform,
+		Resources:      events.ResourceSpec{Memory: memory, CPU: cpu},
+		PersistentHome: session.PersistentHome,
+		IdleTimeout:    session.IdleTimeout,
+	}
+	if err := h.publisher.PublishSessionCreate(ctx, createEvent); err != nil {
+		log.Printf("Warning: Failed to publish session create event: %v", err)
+	}
+
 	c.JSON(http.StatusCreated, created)
 }
 
@@ -508,6 +533,28 @@ func (h *Handler) UpdateSession(c *gin.Context) {
 		log.Printf("Failed to update session in database: %v", err)
 	}
 
+	// Publish state change event for controllers
+	switch req.State {
+	case "hibernated":
+		event := &events.SessionHibernateEvent{
+			SessionID: sessionID,
+			UserID:    updated.User,
+			Platform:  h.platform,
+		}
+		if err := h.publisher.PublishSessionHibernate(ctx, event); err != nil {
+			log.Printf("Warning: Failed to publish session hibernate event: %v", err)
+		}
+	case "running":
+		event := &events.SessionWakeEvent{
+			SessionID: sessionID,
+			UserID:    updated.User,
+			Platform:  h.platform,
+		}
+		if err := h.publisher.PublishSessionWake(ctx, event); err != nil {
+			log.Printf("Warning: Failed to publish session wake event: %v", err)
+		}
+	}
+
 	c.JSON(http.StatusOK, updated)
 }
 
@@ -517,8 +564,8 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
-	// Verify session exists before deletion
-	_, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
+	// Verify session exists before deletion and get user info for event
+	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 		return
@@ -533,6 +580,16 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	// Delete from database cache
 	if err := h.deleteSessionFromDB(ctx, sessionID); err != nil {
 		log.Printf("Failed to delete session from database: %v", err)
+	}
+
+	// Publish session delete event for controllers
+	deleteEvent := &events.SessionDeleteEvent{
+		SessionID: sessionID,
+		UserID:    session.User,
+		Platform:  h.platform,
+	}
+	if err := h.publisher.PublishSessionDelete(ctx, deleteEvent); err != nil {
+		log.Printf("Warning: Failed to publish session delete event: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Session deleted"})
@@ -909,6 +966,18 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 		return
 	}
 
+	// Publish template create event for controllers
+	createEvent := &events.TemplateCreateEvent{
+		TemplateID:  created.Name,
+		DisplayName: created.DisplayName,
+		Category:    created.Category,
+		BaseImage:   created.BaseImage,
+		Platform:    h.platform,
+	}
+	if err := h.publisher.PublishTemplateCreate(ctx, createEvent); err != nil {
+		log.Printf("Warning: Failed to publish template create event: %v", err)
+	}
+
 	c.JSON(http.StatusCreated, created)
 }
 
@@ -921,6 +990,15 @@ func (h *Handler) DeleteTemplate(c *gin.Context) {
 	if err := h.k8sClient.DeleteTemplate(ctx, h.namespace, templateID); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
+	}
+
+	// Publish template delete event for controllers
+	deleteEvent := &events.TemplateDeleteEvent{
+		TemplateID: templateID,
+		Platform:   h.platform,
+	}
+	if err := h.publisher.PublishTemplateDelete(ctx, deleteEvent); err != nil {
+		log.Printf("Warning: Failed to publish template delete event: %v", err)
 	}
 
 	c.JSON(http.StatusOK, gin.H{"message": "Template deleted"})
