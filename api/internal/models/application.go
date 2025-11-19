@@ -77,6 +77,12 @@ type InstalledApplication struct {
 	IconURL             string `json:"icon,omitempty"`
 	Manifest            string `json:"manifest,omitempty"`
 
+	// InstallStatus tracks the installation state (pending, creating, installed, failed)
+	InstallStatus string `json:"installStatus,omitempty" db:"install_status"`
+
+	// InstallMessage provides additional context about the installation status
+	InstallMessage string `json:"installMessage,omitempty" db:"install_message"`
+
 	// Groups with access to this application (populated separately)
 	Groups []*ApplicationGroupAccess `json:"groups,omitempty"`
 }

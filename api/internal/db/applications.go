@@ -167,7 +167,9 @@ func (a *ApplicationDB) GetApplication(ctx context.Context, appID string) (*mode
 			COALESCE(ct.name, '') as template_name, COALESCE(ct.display_name, ia.display_name) as template_display_name,
 			COALESCE(ct.description, '') as description, COALESCE(ct.category, '') as category,
 			COALESCE(ct.app_type, '') as app_type, COALESCE(ct.icon_url, '') as icon_url,
-			COALESCE(ct.manifest, '') as manifest
+			COALESCE(ct.manifest, '') as manifest,
+			COALESCE(ia.install_status, '') as install_status,
+			COALESCE(ia.install_message, '') as install_message
 		FROM installed_applications ia
 		LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
 		WHERE ia.id = $1
@@ -178,6 +180,7 @@ func (a *ApplicationDB) GetApplication(ctx context.Context, appID string) (*mode
 		&app.Enabled, &configJSON, &app.CreatedBy, &app.CreatedAt, &app.UpdatedAt,
 		&app.TemplateName, &app.TemplateDisplayName, &app.Description,
 		&app.Category, &app.AppType, &app.IconURL, &app.Manifest,
+		&app.InstallStatus, &app.InstallMessage,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -207,7 +210,9 @@ func (a *ApplicationDB) ListApplications(ctx context.Context, enabledOnly bool) 
 			ia.enabled, ia.configuration, ia.created_by, ia.created_at, ia.updated_at,
 			COALESCE(ct.name, '') as template_name, COALESCE(ct.display_name, ia.display_name) as template_display_name,
 			COALESCE(ct.description, '') as description, COALESCE(ct.category, '') as category,
-			COALESCE(ct.app_type, '') as app_type, COALESCE(ct.icon_url, '') as icon_url
+			COALESCE(ct.app_type, '') as app_type, COALESCE(ct.icon_url, '') as icon_url,
+			COALESCE(ia.install_status, '') as install_status,
+			COALESCE(ia.install_message, '') as install_message
 		FROM installed_applications ia
 		LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
 		WHERE 1=1
@@ -242,6 +247,7 @@ func (a *ApplicationDB) ListApplications(ctx context.Context, enabledOnly bool) 
 			&app.Enabled, &configJSON, &app.CreatedBy, &app.CreatedAt, &app.UpdatedAt,
 			&app.TemplateName, &app.TemplateDisplayName, &app.Description,
 			&app.Category, &app.AppType, &app.IconURL,
+			&app.InstallStatus, &app.InstallMessage,
 		)
 		if err != nil {
 			fmt.Printf("Error scanning application row: %v\n", err)
@@ -458,7 +464,9 @@ func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userI
 			ia.enabled, ia.configuration, ia.created_by, ia.created_at, ia.updated_at,
 			COALESCE(ct.name, '') as template_name, COALESCE(ct.display_name, ia.display_name) as template_display_name,
 			COALESCE(ct.description, '') as description, COALESCE(ct.category, '') as category,
-			COALESCE(ct.app_type, '') as app_type, COALESCE(ct.icon_url, '') as icon_url
+			COALESCE(ct.app_type, '') as app_type, COALESCE(ct.icon_url, '') as icon_url,
+			COALESCE(ia.install_status, '') as install_status,
+			COALESCE(ia.install_message, '') as install_message
 		FROM installed_applications ia
 		LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
 		WHERE ia.enabled = true
@@ -494,6 +502,7 @@ func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userI
 			&app.Enabled, &configJSON, &app.CreatedBy, &app.CreatedAt, &app.UpdatedAt,
 			&app.TemplateName, &app.TemplateDisplayName, &app.Description,
 			&app.Category, &app.AppType, &app.IconURL,
+			&app.InstallStatus, &app.InstallMessage,
 		)
 		if err != nil {
 			fmt.Printf("Error scanning application row: %v\n", err)
