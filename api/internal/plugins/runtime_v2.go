@@ -468,6 +468,95 @@ func (r *RuntimeV2) loadEnabledPlugins(ctx context.Context) (int, error) {
 	return loadedCount, nil
 }
 
+// LoadPluginByName loads a single plugin from the database by its name.
+//
+// This method is useful for enabling a plugin at runtime after it was previously
+// disabled. It queries the database for the plugin's configuration and manifest,
+// then loads it into the runtime.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - name: Plugin name to load
+//
+// Returns:
+//   - nil on success
+//   - error if plugin not found in database or loading fails
+//
+// Thread Safety: Thread-safe via internal LoadPluginWithConfig locking.
+func (r *RuntimeV2) LoadPluginByName(ctx context.Context, name string) error {
+	// Query plugin from database
+	var plugin models.InstalledPlugin
+	var catalogID sql.NullInt64
+	var configJSON []byte
+
+	err := r.db.DB().QueryRowContext(ctx, `
+		SELECT id, name, version, enabled, config, catalog_plugin_id
+		FROM installed_plugins
+		WHERE name = $1
+	`, name).Scan(
+		&plugin.ID,
+		&plugin.Name,
+		&plugin.Version,
+		&plugin.Enabled,
+		&configJSON,
+		&catalogID,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("plugin %s not found in database", name)
+		}
+		return fmt.Errorf("failed to query plugin %s: %w", name, err)
+	}
+
+	// Parse config
+	var config map[string]interface{}
+	if len(configJSON) > 0 {
+		if err := json.Unmarshal(configJSON, &config); err != nil {
+			log.Printf("[Plugin Runtime] Error parsing config for %s: %v", plugin.Name, err)
+			config = make(map[string]interface{})
+		}
+	}
+
+	// Load manifest from catalog if available
+	var manifest models.PluginManifest
+	if catalogID.Valid {
+		err = r.db.DB().QueryRowContext(ctx, `
+			SELECT manifest FROM catalog_plugins WHERE id = $1
+		`, catalogID.Int64).Scan(&manifest)
+		if err != nil {
+			log.Printf("[Plugin Runtime] Warning: Could not load manifest for %s: %v", plugin.Name, err)
+			// Continue without manifest
+		}
+	}
+
+	// Load the plugin
+	return r.LoadPluginWithConfig(ctx, plugin.Name, plugin.Version, config, manifest)
+}
+
+// ReloadPlugin unloads and reloads a plugin with updated configuration.
+//
+// This is useful for applying configuration changes without restarting the API.
+//
+// Parameters:
+//   - ctx: Context for cancellation
+//   - name: Plugin name to reload
+//
+// Returns:
+//   - nil on success
+//   - error if unload or load fails
+//
+// Thread Safety: Thread-safe via internal locking.
+func (r *RuntimeV2) ReloadPlugin(ctx context.Context, name string) error {
+	// Unload if currently loaded
+	if err := r.UnloadPlugin(ctx, name); err != nil {
+		// Log but continue - plugin might not be loaded
+		log.Printf("[Plugin Runtime] Note: Could not unload %s before reload: %v", name, err)
+	}
+
+	// Load with fresh config from database
+	return r.LoadPluginByName(ctx, name)
+}
+
 // LoadPluginWithConfig loads and initializes a plugin with specific configuration.
 //
 // This is the core plugin loading method that:

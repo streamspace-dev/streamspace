@@ -106,6 +106,7 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"strings"
 	"time"
 
 	"github.com/crewjam/saml"
@@ -113,6 +114,53 @@ import (
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/models"
 )
+
+// validateReturnURL validates that a return URL is safe to redirect to.
+//
+// Security Considerations:
+//   - Only allows relative URLs (starting with /)
+//   - Prevents protocol-relative URLs (//evil.com)
+//   - Prevents URLs with multiple slashes that could be exploited
+//   - Returns "/" as safe default if validation fails
+//
+// This prevents open redirect vulnerabilities where an attacker could
+// craft a URL like ?return_url=//evil.com/steal-token to redirect
+// users to malicious sites after authentication.
+func validateReturnURL(returnURL string) string {
+	// Default to home page
+	if returnURL == "" {
+		return "/"
+	}
+
+	// Must start with a single slash (relative path)
+	if !strings.HasPrefix(returnURL, "/") {
+		return "/"
+	}
+
+	// Prevent protocol-relative URLs (//evil.com)
+	if strings.HasPrefix(returnURL, "//") {
+		return "/"
+	}
+
+	// Prevent URLs that could be manipulated
+	// e.g., /\evil.com on some servers
+	if strings.ContainsAny(returnURL, "\\") {
+		return "/"
+	}
+
+	// Prevent URLs with scheme-like patterns
+	if strings.Contains(returnURL, "://") {
+		return "/"
+	}
+
+	// Prevent URLs with encoded characters that could be exploited
+	// after being decoded by the browser
+	if strings.Contains(returnURL, "%2f") || strings.Contains(returnURL, "%2F") {
+		return "/"
+	}
+
+	return returnURL
+}
 
 // AuthHandler handles authentication requests
 type AuthHandler struct {
@@ -303,10 +351,8 @@ func (h *AuthHandler) SAMLLogin(c *gin.Context) {
 	}
 
 	// Store return URL in cookie for post-login redirect
-	returnURL := c.Query("return_url")
-	if returnURL == "" {
-		returnURL = "/"
-	}
+	// SECURITY: Validate return URL to prevent open redirect attacks
+	returnURL := validateReturnURL(c.Query("return_url"))
 
 	// Set secure cookie with return URL (1 hour expiration)
 	c.SetCookie(

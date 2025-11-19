@@ -71,6 +71,8 @@
 package handlers
 
 import (
+	"encoding/json"
+	"log"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -454,9 +456,10 @@ func (h *PluginMarketplaceHandler) UninstallPlugin(c *gin.Context) {
 //   - 500: Database update failed
 func (h *PluginMarketplaceHandler) EnablePlugin(c *gin.Context) {
 	name := c.Param("name")
+	ctx := c.Request.Context()
 
 	// Update database
-	_, err := h.db.DB().ExecContext(c.Request.Context(), `
+	result, err := h.db.DB().ExecContext(ctx, `
 		UPDATE installed_plugins SET enabled = true, updated_at = NOW()
 		WHERE name = $1
 	`, name)
@@ -468,10 +471,29 @@ func (h *PluginMarketplaceHandler) EnablePlugin(c *gin.Context) {
 		return
 	}
 
-	// TODO: Load plugin into runtime if not already loaded
+	// Check if plugin was found
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Plugin not found",
+		})
+		return
+	}
+
+	// Load plugin into runtime
+	if err := h.runtime.LoadPluginByName(ctx, name); err != nil {
+		// Log the error but return success since DB was updated
+		// Plugin will be loaded on next restart
+		log.Printf("Warning: Failed to load plugin %s into runtime: %v", name, err)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Plugin enabled in database. Note: Failed to load into runtime - will load on restart.",
+			"warning": err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Plugin enabled successfully",
+		"message": "Plugin enabled and loaded successfully",
 	})
 }
 
@@ -618,7 +640,8 @@ func (h *PluginMarketplaceHandler) GetInstalledPlugin(c *gin.Context) {
 //   - 200: Config updated (currently always succeeds - TODO)
 //   - 400: Invalid request body
 func (h *PluginMarketplaceHandler) UpdatePluginConfig(c *gin.Context) {
-	_ = c.Param("name") // Plugin name not used - config update handled generically
+	name := c.Param("name")
+	ctx := c.Request.Context()
 
 	var req struct {
 		Config map[string]interface{} `json:"config"`
@@ -632,10 +655,51 @@ func (h *PluginMarketplaceHandler) UpdatePluginConfig(c *gin.Context) {
 		return
 	}
 
-	// Update in database (implementation depends on schema)
-	// TODO: Implement config update
+	// Marshal config to JSON
+	configJSON, err := json.Marshal(req.Config)
+	if err != nil {
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Invalid config format",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Update config in database
+	result, err := h.db.DB().ExecContext(ctx, `
+		UPDATE installed_plugins
+		SET config = $1, updated_at = NOW()
+		WHERE name = $2
+	`, configJSON, name)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update plugin config",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Check if plugin was found
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Plugin not found",
+		})
+		return
+	}
+
+	// Reload plugin with new config
+	if err := h.runtime.ReloadPlugin(ctx, name); err != nil {
+		// Log but return success since DB was updated
+		log.Printf("Warning: Failed to reload plugin %s with new config: %v", name, err)
+		c.JSON(http.StatusOK, gin.H{
+			"message": "Config updated in database. Note: Failed to reload plugin - will apply on restart.",
+			"warning": err.Error(),
+		})
+		return
+	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "Plugin configuration updated",
+		"message": "Plugin configuration updated and reloaded successfully",
 	})
 }
