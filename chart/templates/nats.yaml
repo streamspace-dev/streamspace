@@ -1,0 +1,122 @@
+{{- if and .Values.nats.enabled (not .Values.nats.external.enabled) }}
+{{- if .Values.nats.internal.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "streamspace.fullname" . }}-nats
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.nats.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.nats.internal.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.nats.internal.persistence.size }}
+  {{- if or .Values.global.storageClass .Values.nats.internal.persistence.storageClass }}
+  storageClassName: {{ .Values.global.storageClass | default .Values.nats.internal.persistence.storageClass }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "streamspace.fullname" . }}-nats
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.nats.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: nats
+  template:
+    metadata:
+      labels:
+        {{- include "streamspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: nats
+    spec:
+      securityContext:
+        {{- toYaml .Values.nats.internal.podSecurityContext | nindent 8 }}
+      containers:
+      - name: nats
+        image: {{ include "streamspace.nats.image" . }}
+        imagePullPolicy: {{ .Values.nats.internal.image.pullPolicy }}
+        args:
+          {{- if .Values.nats.internal.jetstream.enabled }}
+          - "--jetstream"
+          - "--store_dir={{ .Values.nats.internal.jetstream.storeDir }}"
+          {{- end }}
+          - "--http_port={{ .Values.nats.internal.service.monitorPort }}"
+        ports:
+          - name: client
+            containerPort: {{ .Values.nats.internal.service.clientPort }}
+            protocol: TCP
+          - name: monitoring
+            containerPort: {{ .Values.nats.internal.service.monitorPort }}
+            protocol: TCP
+          - name: cluster
+            containerPort: {{ .Values.nats.internal.service.clusterPort }}
+            protocol: TCP
+        resources:
+          {{- toYaml .Values.nats.internal.resources | nindent 10 }}
+        {{- if .Values.nats.internal.persistence.enabled }}
+        volumeMounts:
+          - name: nats-data
+            mountPath: {{ .Values.nats.internal.jetstream.storeDir }}
+        {{- else }}
+        volumeMounts:
+          - name: nats-data
+            mountPath: {{ .Values.nats.internal.jetstream.storeDir }}
+        {{- end }}
+        livenessProbe:
+          httpGet:
+            path: /healthz
+            port: monitoring
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          httpGet:
+            path: /healthz
+            port: monitoring
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          {{- toYaml .Values.nats.internal.securityContext | nindent 10 }}
+      volumes:
+        {{- if .Values.nats.internal.persistence.enabled }}
+        - name: nats-data
+          persistentVolumeClaim:
+            claimName: {{ include "streamspace.fullname" . }}-nats
+        {{- else }}
+        - name: nats-data
+          emptyDir: {}
+        {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "streamspace.fullname" . }}-nats
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.nats.labels" . | nindent 4 }}
+spec:
+  type: {{ .Values.nats.internal.service.type }}
+  ports:
+    - name: client
+      port: {{ .Values.nats.internal.service.clientPort }}
+      targetPort: client
+      protocol: TCP
+    - name: monitoring
+      port: {{ .Values.nats.internal.service.monitorPort }}
+      targetPort: monitoring
+      protocol: TCP
+    - name: cluster
+      port: {{ .Values.nats.internal.service.clusterPort }}
+      targetPort: cluster
+      protocol: TCP
+  selector:
+    {{- include "streamspace.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: nats
+{{- end }}

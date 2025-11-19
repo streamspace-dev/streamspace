@@ -244,3 +244,80 @@ Storage class for user home directories
 {{- define "streamspace.sessionDefaults.storageClass" -}}
 {{- .Values.global.storageClass | default .Values.sessionDefaults.persistentHome.storageClass }}
 {{- end }}
+
+{{/*
+NATS labels
+*/}}
+{{- define "streamspace.nats.labels" -}}
+{{ include "streamspace.labels" . }}
+app.kubernetes.io/component: nats
+{{- end }}
+
+{{/*
+Get the NATS URL
+*/}}
+{{- define "streamspace.nats.url" -}}
+{{- if .Values.nats.external.enabled }}
+{{- .Values.nats.external.url }}
+{{- else }}
+{{- printf "nats://%s-nats:%d" (include "streamspace.fullname" .) (int .Values.nats.internal.service.clientPort) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Image name for NATS
+*/}}
+{{- define "streamspace.nats.image" -}}
+{{- $registry := .Values.global.imageRegistry | default .Values.nats.internal.image.registry }}
+{{- $repository := .Values.nats.internal.image.repository }}
+{{- $tag := .Values.nats.internal.image.tag }}
+{{- if $registry }}
+{{- printf "%s/%s:%s" $registry $repository $tag }}
+{{- else }}
+{{- printf "%s:%s" $repository $tag }}
+{{- end }}
+{{- end }}
+
+{{/*
+Redis labels
+*/}}
+{{- define "streamspace.redis.labels" -}}
+{{ include "streamspace.labels" . }}
+app.kubernetes.io/component: redis
+{{- end }}
+
+{{/*
+Get the Redis host
+*/}}
+{{- define "streamspace.redis.host" -}}
+{{- if .Values.redis.external.enabled }}
+{{- .Values.redis.external.host }}
+{{- else }}
+{{- printf "%s-redis" (include "streamspace.fullname" .) }}
+{{- end }}
+{{- end }}
+
+{{/*
+Get the Redis port
+*/}}
+{{- define "streamspace.redis.port" -}}
+{{- if .Values.redis.external.enabled }}
+{{- .Values.redis.external.port }}
+{{- else }}
+{{- 6379 }}
+{{- end }}
+{{- end }}
+
+{{/*
+Image name for Redis
+*/}}
+{{- define "streamspace.redis.image" -}}
+{{- $registry := .Values.global.imageRegistry | default .Values.redis.internal.image.registry }}
+{{- $repository := .Values.redis.internal.image.repository }}
+{{- $tag := .Values.redis.internal.image.tag }}
+{{- if $registry }}
+{{- printf "%s/%s:%s" $registry $repository $tag }}
+{{- else }}
+{{- printf "%s:%s" $repository $tag }}
+{{- end }}
+{{- end }}

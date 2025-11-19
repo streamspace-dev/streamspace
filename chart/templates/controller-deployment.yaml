@@ -58,6 +58,25 @@ spec:
             value: {{ .Values.controller.config.ingressDomain | quote }}
           - name: INGRESS_CLASS
             value: {{ .Values.controller.config.ingressClass | quote }}
+          - name: NAMESPACE
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.namespace
+          - name: CONTROLLER_ID
+            value: {{ include "streamspace.fullname" . }}-controller-1
+          {{- if .Values.nats.enabled }}
+          - name: NATS_URL
+            value: {{ include "streamspace.nats.url" . }}
+          {{- if and .Values.nats.external.enabled .Values.nats.external.user }}
+          - name: NATS_USER
+            value: {{ .Values.nats.external.user }}
+          - name: NATS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.nats.external.existingSecret }}
+                key: {{ .Values.nats.external.existingSecretPasswordKey }}
+          {{- end }}
+          {{- end }}
         ports:
           - name: metrics
             containerPort: 8080

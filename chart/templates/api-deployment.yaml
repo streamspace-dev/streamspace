@@ -79,6 +79,39 @@ spec:
             valueFrom:
               fieldRef:
                 fieldPath: metadata.namespace
+          - name: PLATFORM
+            value: kubernetes
+          {{- if .Values.nats.enabled }}
+          - name: NATS_URL
+            value: {{ include "streamspace.nats.url" . }}
+          {{- if and .Values.nats.external.enabled .Values.nats.external.user }}
+          - name: NATS_USER
+            value: {{ .Values.nats.external.user }}
+          - name: NATS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.nats.external.existingSecret }}
+                key: {{ .Values.nats.external.existingSecretPasswordKey }}
+          {{- end }}
+          {{- end }}
+          {{- if .Values.redis.enabled }}
+          - name: CACHE_ENABLED
+            value: "true"
+          - name: REDIS_HOST
+            value: {{ include "streamspace.redis.host" . }}
+          - name: REDIS_PORT
+            value: {{ include "streamspace.redis.port" . | quote }}
+          {{- if and .Values.redis.external.enabled .Values.redis.external.password }}
+          - name: REDIS_PASSWORD
+            valueFrom:
+              secretKeyRef:
+                name: {{ .Values.redis.external.existingSecret }}
+                key: {{ .Values.redis.external.existingSecretPasswordKey }}
+          {{- end }}
+          {{- else }}
+          - name: CACHE_ENABLED
+            value: "false"
+          {{- end }}
           # Admin password for initial setup (Priority 1: Kubernetes Secret)
           - name: ADMIN_PASSWORD
             valueFrom:

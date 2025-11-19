@@ -1,0 +1,107 @@
+{{- if and .Values.redis.enabled (not .Values.redis.external.enabled) }}
+{{- if .Values.redis.internal.persistence.enabled }}
+apiVersion: v1
+kind: PersistentVolumeClaim
+metadata:
+  name: {{ include "streamspace.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.redis.labels" . | nindent 4 }}
+spec:
+  accessModes:
+    - {{ .Values.redis.internal.persistence.accessMode }}
+  resources:
+    requests:
+      storage: {{ .Values.redis.internal.persistence.size }}
+  {{- if or .Values.global.storageClass .Values.redis.internal.persistence.storageClass }}
+  storageClassName: {{ .Values.global.storageClass | default .Values.redis.internal.persistence.storageClass }}
+  {{- end }}
+---
+{{- end }}
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "streamspace.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.redis.labels" . | nindent 4 }}
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: redis
+  template:
+    metadata:
+      labels:
+        {{- include "streamspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: redis
+    spec:
+      securityContext:
+        {{- toYaml .Values.redis.internal.podSecurityContext | nindent 8 }}
+      containers:
+      - name: redis
+        image: {{ include "streamspace.redis.image" . }}
+        imagePullPolicy: {{ .Values.redis.internal.image.pullPolicy }}
+        args:
+          - redis-server
+          - --maxmemory
+          - {{ .Values.redis.internal.config.maxMemory }}
+          - --maxmemory-policy
+          - {{ .Values.redis.internal.config.maxMemoryPolicy }}
+          {{- if eq .Values.redis.internal.config.appendOnly "yes" }}
+          - --appendonly
+          - yes
+          {{- end }}
+        ports:
+          - name: redis
+            containerPort: 6379
+            protocol: TCP
+        resources:
+          {{- toYaml .Values.redis.internal.resources | nindent 10 }}
+        {{- if .Values.redis.internal.persistence.enabled }}
+        volumeMounts:
+          - name: redis-data
+            mountPath: /data
+        {{- end }}
+        livenessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 10
+          periodSeconds: 10
+        readinessProbe:
+          exec:
+            command:
+              - redis-cli
+              - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        securityContext:
+          {{- toYaml .Values.redis.internal.securityContext | nindent 10 }}
+      {{- if .Values.redis.internal.persistence.enabled }}
+      volumes:
+        - name: redis-data
+          persistentVolumeClaim:
+            claimName: {{ include "streamspace.fullname" . }}-redis
+      {{- end }}
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: {{ include "streamspace.fullname" . }}-redis
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.redis.labels" . | nindent 4 }}
+spec:
+  type: ClusterIP
+  ports:
+    - name: redis
+      port: 6379
+      targetPort: redis
+      protocol: TCP
+  selector:
+    {{- include "streamspace.selectorLabels" . | nindent 4 }}
+    app.kubernetes.io/component: redis
+{{- end }}
