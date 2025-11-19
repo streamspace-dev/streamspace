@@ -74,13 +74,19 @@ StreamSpace uses separate repositories for templates and plugins:
 | **High Priority (3 issues)** | Not Started | Builder | 0% |
 | Plugin Enable/Config | Not Started | Builder | 0% |
 | SAML Validation | Not Started | Builder | 0% |
-| **Medium Priority (6 issues)** | Not Started | Builder | 0% |
+| **Medium Priority (4 issues)** | Not Started | Builder | 0% |
 | MFA SMS/Email | Not Started | Builder | 0% |
-| Multi-Monitor Plugin | Not Started | Builder | 0% |
-| Calendar Plugin | Not Started | Builder | 0% |
+| Session Status Conditions | Not Started | Builder | 0% |
+| Batch Operations Errors | Not Started | Builder | 0% |
+| Docker Controller Lookup | Not Started | Builder | 0% |
 | **UI Fixes (4 issues)** | Not Started | Builder | 0% |
+| Dashboard Favorites | Not Started | Builder | 0% |
+| Demo Mode Security | Not Started | Builder | 0% |
+| Delete Obsolete Pages | Not Started | Builder | 0% |
 | **Testing** | Not Started | Validator | 0% |
 | **Documentation** | Not Started | Scribe | 0% |
+
+**Note:** Multi-Monitor and Calendar plugins removed - intentional stubs for plugin-based features.
 
 ---
 
@@ -182,79 +188,74 @@ StreamSpace uses separate repositories for templates and plugins:
     - **Impact:** Users cannot use SMS/Email for 2FA
     - **Acceptance Criteria:** SMS/Email MFA works end-to-end (or remove from UI)
 
-13. **Multi-Monitor Plugin** (Builder)
-    - **File:** `/home/user/streamspace/plugins/streamspace-multi-monitor/multi_monitor_plugin.go:20-28`
-    - **Issue:** `OnLoad()` returns nil without doing anything
-    - **Impact:** Multi-monitor feature completely non-functional
-    - **Acceptance Criteria:** Plugin registers endpoints and creates tables
-
-14. **Calendar Plugin** (Builder)
-    - **File:** `/home/user/streamspace/plugins/streamspace-calendar/calendar_plugin.go:20-30`
-    - **Issue:** `OnLoad()` returns nil without doing anything
-    - **Impact:** Calendar integration completely non-functional
-    - **Acceptance Criteria:** OAuth handlers and sync jobs functional
-
-15. **Session Status Conditions** (Builder)
+13. **Session Status Conditions** (Builder)
     - **Files:** `/home/user/streamspace/k8s-controller/controllers/session_controller.go:314,435,493`
     - **Issue:** TODOs for setting Status.Conditions on errors
     - **Impact:** API users can't track failure reasons
     - **Acceptance Criteria:** Proper conditions set for all error states
 
-16. **Batch Operations Error Collection** (Builder)
+14. **Batch Operations Error Collection** (Builder)
     - **File:** `/home/user/streamspace/api/internal/handlers/batch.go:632-851`
     - **Issue:** Errors not collected in error array
     - **Impact:** Users can't see what failed in batch operations
     - **Acceptance Criteria:** All errors included in response
 
-17. **Docker Controller Template Lookup** (Builder)
+15. **Docker Controller Template Lookup** (Builder)
     - **File:** `/home/user/streamspace/docker-controller/pkg/events/subscriber.go:118`
     - **Issue:** Hardcodes Firefox image instead of looking up template
     - **Impact:** Docker sessions ignore template settings
     - **Acceptance Criteria:** Actually look up template configuration
 
+**Note:** Multi-Monitor Plugin and Calendar Plugin stubs are INTENTIONAL (plugin-based features). See "Plugin-Based Features (NOT BUGS)" section above.
+
 ### UI Fixes (User-Facing Issues)
 
-18. **Marketplace Install Button** (Builder)
-    - **File:** `/home/user/streamspace/ui/src/pages/Catalog.tsx:185-187`
-    - **Issue:** Install button has no onClick handler
-    - **Impact:** Users cannot install marketplace templates
-    - **Acceptance Criteria:** Install functionality works
-
-19. **Dashboard Favorites API** (Builder)
+16. **Dashboard Favorites API** (Builder)
     - **File:** `/home/user/streamspace/ui/src/pages/Dashboard.tsx:78-94`
     - **Issue:** Uses localStorage instead of backend API
     - **Impact:** Favorites not synced across devices
     - **Acceptance Criteria:** API endpoint for user favorites
 
-20. **Demo Mode Security** (Builder)
+17. **Demo Mode Security** (Builder)
     - **File:** `/home/user/streamspace/ui/src/pages/Login.tsx:103-123`
     - **Issue:** Hardcoded auth allows ANY username
     - **Impact:** Security risk if enabled in production
     - **Acceptance Criteria:** Guard with environment variable
 
-21. **Remove Debug Console.log** (Builder)
+18. **Remove Debug Console.log** (Builder)
     - **File:** `/home/user/streamspace/ui/src/pages/Scheduling.tsx:157`
     - **Issue:** Debug console.log in production
     - **Acceptance Criteria:** Remove debug statements
 
+19. **Delete Obsolete UI Pages** (Builder)
+    - **Files to delete:**
+      - `/home/user/streamspace/ui/src/pages/Repositories.tsx` (replaced by EnhancedRepositories)
+      - `/home/user/streamspace/ui/src/pages/Catalog.tsx` (obsolete, not routed)
+      - `/home/user/streamspace/ui/src/pages/EnhancedCatalog.tsx` (experimental, never integrated)
+    - **Issue:** Obsolete files from UI redesign still in codebase
+    - **Impact:** Confusion, potential false bug reports
+    - **Acceptance Criteria:** Files deleted, no broken imports
+
+**Note:** Marketplace Install Button issue removed - Catalog.tsx is OBSOLETE and not routed.
+
 ### LOW Priority (Enhancements)
 
-22. **Hibernation Scheduling** (Builder)
+20. **Hibernation Scheduling** (Builder)
     - **File:** `/home/user/streamspace/k8s-controller/controllers/hibernation_controller.go:286-289`
     - **Issue:** Scheduled hibernation not implemented
     - **Impact:** Cannot hibernate at specific times
 
-23. **Wake-on-Access** (Builder)
+21. **Wake-on-Access** (Builder)
     - **File:** `/home/user/streamspace/k8s-controller/controllers/hibernation_controller.go:291-293`
     - **Issue:** Sessions don't auto-wake on request
     - **Impact:** Manual wake required
 
-24. **Hibernation Notifications** (Builder)
+22. **Hibernation Notifications** (Builder)
     - **File:** `/home/user/streamspace/k8s-controller/controllers/hibernation_controller.go:295-297`
     - **Issue:** No warnings before hibernation
     - **Impact:** Users lose unsaved work
 
-25. **Template Watching** (Builder)
+23. **Template Watching** (Builder)
     - **File:** `/home/user/streamspace/k8s-controller/controllers/session_controller.go:1272`
     - **Issue:** Sessions not updated when template changes
     - **Impact:** Manual session updates required
@@ -342,6 +343,37 @@ Conducted additional research and found **CRITICAL PLATFORM BLOCKERS**:
 - Use the session viewer at all
 
 These are now the **TOP PRIORITY** issues in the task backlog.
+
+#### Architect - UI & Plugin Analysis (11:30)
+
+User feedback: "Some features moved to plugins, UI redesign occurred, obsolete pages still in directory."
+
+**Findings:**
+
+**Obsolete UI Pages (3 files to delete):**
+1. `/home/user/streamspace/ui/src/pages/Repositories.tsx` - Replaced by EnhancedRepositories
+2. `/home/user/streamspace/ui/src/pages/Catalog.tsx` - Obsolete, not routed
+3. `/home/user/streamspace/ui/src/pages/EnhancedCatalog.tsx` - Experimental, never integrated
+
+**Plugin-Based Features (NOT BUGS):**
+These stubs are intentional - they return empty data or 501 until plugin is installed:
+- Compliance endpoints (SOC2, HIPAA, GDPR) → streamspace-compliance plugin
+- Multi-monitor support → streamspace-multi-monitor plugin
+- Calendar integration → streamspace-calendar plugin
+- Recording/Snapshots → streamspace-recording, streamspace-snapshots plugins
+- Billing → streamspace-billing plugin
+- Various integrations → respective plugins
+
+**Graceful Degradation Pattern:**
+- Without plugin: Returns empty array (200) or 501 with helpful message
+- With plugin: Plugin registers real handlers that override stubs
+- This is WORKING AS DESIGNED
+
+**Impact on Task List:**
+- REMOVED: Multi-Monitor Plugin stub (intentional)
+- REMOVED: Calendar Plugin stub (intentional)
+- ADDED: Delete obsolete UI pages (cleanup)
+- ADDED: Verify Catalog.tsx issues don't apply (page is obsolete)
 
 ---
 
@@ -435,12 +467,18 @@ Wait for implementation to stabilize before writing final docs.
 ### Phase 5.5: Incomplete Features Analysis (COMPLETE)
 
 #### Summary Statistics
-- **Total incomplete features found:** 50+
-- **Critical issues:** 8 (including core platform blockers)
+- **Total actual issues:** 23 (reduced from 50+ after removing false positives)
+- **Critical issues:** 8 (core platform blockers)
 - **High priority issues:** 3
-- **Medium priority issues:** 6
-- **UI fixes needed:** 4
+- **Medium priority issues:** 4 (removed 2 plugin stubs)
+- **UI fixes needed:** 4 (including obsolete page cleanup)
 - **Low priority enhancements:** 4
+
+**Removed from task list:**
+- Multi-Monitor Plugin stub (intentional plugin-based feature)
+- Calendar Plugin stub (intentional plugin-based feature)
+- Marketplace Install Button (Catalog.tsx is obsolete)
+- Various compliance stubs (intentional plugin-based features)
 
 #### CRITICAL: Core Platform Blockers
 
@@ -467,14 +505,21 @@ Wait for implementation to stabilize before writing final docs.
 2. **Sessions Manager** - Cannot create/view/connect to sessions
 3. **Plugin System** - Enable/Config updates don't work
 4. **MFA SMS/Email** - Returns 501 Not Implemented
-5. **Multi-Monitor Plugin** - Completely non-functional
-6. **Calendar Plugin** - Completely non-functional
+
+**Plugin-Based (Intentional Stubs - NOT BUGS):**
+- Multi-Monitor → streamspace-multi-monitor plugin
+- Calendar → streamspace-calendar plugin
+- Compliance → streamspace-compliance plugin
+- Recording/Snapshots → respective plugins
 
 #### UI Issues
 
-1. **Marketplace Install** - Button does nothing
-2. **Dashboard Favorites** - Uses localStorage, not persisted
-3. **Debug Code** - Console.log in production
+1. **Dashboard Favorites** - Uses localStorage, not persisted
+2. **Debug Code** - Console.log in production
+3. **Obsolete Pages** - 3 pages need to be deleted (Catalog, Repositories, EnhancedCatalog)
+
+**Removed from task list:**
+- Marketplace Install Button - Catalog.tsx is obsolete and not routed
 
 ### Phase 6 Research (FOR REFERENCE)
 
