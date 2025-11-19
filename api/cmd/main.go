@@ -149,7 +149,7 @@ func main() {
 
 	// Initialize activity tracker
 	log.Println("Initializing activity tracker...")
-	activityTracker := activity.NewTracker(k8sClient)
+	activityTracker := activity.NewTracker(k8sClient, eventPublisher, platform)
 
 	// Start idle session monitor (check every 1 minute)
 	idleCheckInterval := getEnv("IDLE_CHECK_INTERVAL", "1m")

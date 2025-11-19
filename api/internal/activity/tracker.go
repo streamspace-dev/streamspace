@@ -41,6 +41,7 @@ import (
 	"log"
 	"time"
 
+	"github.com/streamspace/streamspace/api/internal/events"
 	"github.com/streamspace/streamspace/api/internal/k8s"
 )
 
@@ -58,11 +59,15 @@ import (
 //
 // Example:
 //
-//	tracker := NewTracker(k8sClient)
+//	tracker := NewTracker(k8sClient, publisher, "kubernetes")
 //	err := tracker.UpdateSessionActivity(ctx, namespace, sessionName)
 type Tracker struct {
 	// k8sClient interacts with Kubernetes to read and update Sessions.
 	k8sClient *k8s.Client
+	// publisher publishes NATS events for platform-agnostic operations.
+	publisher *events.Publisher
+	// platform identifies the target platform (kubernetes, docker, etc.)
+	platform string
 }
 
 // NewTracker creates a new activity tracker instance.
@@ -71,11 +76,16 @@ type Tracker struct {
 //
 // Example:
 //
-//	tracker := NewTracker(k8sClient)
+//	tracker := NewTracker(k8sClient, publisher, "kubernetes")
 //	go tracker.StartIdleMonitor(ctx, "streamspace", 1*time.Minute)
-func NewTracker(k8sClient *k8s.Client) *Tracker {
+func NewTracker(k8sClient *k8s.Client, publisher *events.Publisher, platform string) *Tracker {
+	if platform == "" {
+		platform = events.PlatformKubernetes
+	}
 	return &Tracker{
 		k8sClient: k8sClient,
+		publisher: publisher,
+		platform:  platform,
 	}
 }
 
@@ -231,6 +241,16 @@ func (t *Tracker) HibernateIdleSession(ctx context.Context, namespace, sessionNa
 	session.State = "hibernated"
 	if err := t.k8sClient.UpdateSession(ctx, session); err != nil {
 		return fmt.Errorf("failed to hibernate session: %w", err)
+	}
+
+	// Publish hibernate event for controllers
+	event := &events.SessionHibernateEvent{
+		SessionID: sessionName,
+		UserID:    session.User,
+		Platform:  t.platform,
+	}
+	if err := t.publisher.PublishSessionHibernate(ctx, event); err != nil {
+		log.Printf("Warning: Failed to publish session hibernate event: %v", err)
 	}
 
 	log.Printf("Auto-hibernated idle session: %s/%s (idle for %v)", namespace, sessionName, status.IdleDuration)
