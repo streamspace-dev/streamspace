@@ -101,37 +101,6 @@ Key design decisions made during Phase 5.5 development:
 
 **Rationale**: Backward compatible, clear separation of concerns
 
-### Dashboard Favorites API
-
-**Decision**: Backend persistence with database table and REST endpoints
-
-- New `user_favorites` table with user_id and template_name
-- GET/POST/DELETE endpoints for favorites management
-- React Query integration for real-time sync
-
-**Implementation**:
-```sql
-CREATE TABLE user_favorites (
-    id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
-    user_id VARCHAR(255) NOT NULL REFERENCES users(id) ON DELETE CASCADE,
-    template_name VARCHAR(255) NOT NULL,
-    created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
-    UNIQUE(user_id, template_name)
-);
-```
-
-**Rationale**: Syncs across devices and sessions, survives browser clear, enables analytics
-
-### Demo Mode Security
-
-**Decision**: Guard with explicit environment variable check
-
-- Demo mode requires `VITE_DEMO_MODE=true` environment variable
-- Clear console warning when demo mode is active
-- Only bypasses authentication if explicitly enabled
-
-**Rationale**: Prevents accidental security exposure in production, explicit opt-in required
-
 ---
 
 ## Bug Fixes
