@@ -1,0 +1,307 @@
+================================================================================
+TEMPLATE CRD VNC FIELD MIGRATION - QUICK REFERENCE
+================================================================================
+
+CRITICAL ISSUE: Partial Migration State Detected
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Component                Status          Current             Target
+─────────────────────────────────────────────────────────────────────────────
+Go Type Definitions      MIGRATED        VNC (generic)       ✓ Complete
+Template CRD YAML        LEGACY          kasmvnc             vnc (needed)
+Template Manifests       LEGACY          kasmvnc (40+ files) vnc (needed)
+Database Schema          LEGACY          kasmvnc_*           vnc_* (needed)
+API Handlers             MIGRATED        VNC-agnostic        ✓ Complete
+
+
+WHAT'S ALREADY DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+✓ Go Type Definitions (template_types.go)
+  - VNCConfig struct is VNC-agnostic (not Kasm-specific)
+  - Fields: enabled, port, protocol, encryption
+  - Supports both RFB and WebSocket protocols
+  - Ready for TigerVNC migration
+
+✓ API Integration
+  - Template parser (sync/parser.go) uses VNC-agnostic handling
+  - API handlers support generic VNC configuration
+  - No Kasm-specific code in API backend
+
+
+WHAT NEEDS TO BE DONE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. CRD YAML UPDATE
+   File: manifests/crds/template.yaml (lines 73-81)
+   
+   CHANGE FROM:
+   ───────────────────────────────────────────────────────
+   kasmvnc:
+     type: object
+     properties:
+       enabled:
+         type: boolean
+         default: true
+       port:
+         type: integer
+         default: 3000
+   
+   CHANGE TO:
+   ───────────────────────────────────────────────────────
+   vnc:
+     type: object
+     properties:
+       enabled:
+         type: boolean
+         default: true
+       port:
+         type: integer
+         default: 5900
+       protocol:
+         type: string
+         default: rfb
+         enum: [rfb, websocket]
+       encryption:
+         type: boolean
+         default: false
+
+   Also update workspacetemplate.yaml (legacy, for compatibility)
+
+
+2. TEMPLATE MANIFEST UPDATES (36 files total)
+
+   Location: manifests/templates/browsers/firefox.yaml
+   
+   CHANGE FROM:
+   ───────────────────────────────────────────────────────
+   kasmvnc:
+     enabled: true
+     port: 3000
+   
+   CHANGE TO:
+   ───────────────────────────────────────────────────────
+   vnc:
+     enabled: true
+     port: 3000          # Keep 3000 for now (LinuxServer.io)
+     protocol: websocket # Add protocol specification
+     encryption: false   # Add encryption flag
+
+
+   FILES TO MIGRATE (40+ templates):
+   - manifests/templates/browsers/firefox.yaml
+   - manifests/templates-generated/web-browsers/*.yaml (5 files)
+   - manifests/templates-generated/design-graphics/*.yaml (7 files)
+   - manifests/templates-generated/development/*.yaml (3 files)
+   - manifests/templates-generated/gaming/*.yaml (2 files)
+   - manifests/templates-generated/audio-video/*.yaml (3 files)
+   - manifests/templates-generated/desktop-environments/*.yaml (3 files)
+   - manifests/templates-generated/productivity/*.yaml (3 files)
+   - manifests/templates-generated/communication/*.yaml (2 files)
+   - manifests/templates-generated/file-management/*.yaml (3 files)
+   - manifests/templates-generated/remote-access/*.yaml (1 file)
+   
+   Note: Code Server (dev/code-server.yaml) has vnc.enabled=false (correct)
+
+
+3. DATABASE SCHEMA UPDATE
+   File: manifests/config/database-init.yaml (lines 99-100)
+   
+   CHANGE FROM:
+   ───────────────────────────────────────────────────────
+   kasmvnc_enabled BOOLEAN DEFAULT true
+   kasmvnc_port INTEGER DEFAULT 3000
+   
+   CHANGE TO:
+   ───────────────────────────────────────────────────────
+   vnc_enabled BOOLEAN DEFAULT true
+   vnc_port INTEGER DEFAULT 5900
+   vnc_protocol VARCHAR(50) DEFAULT 'rfb'
+   vnc_encryption BOOLEAN DEFAULT false
+
+
+4. DOCUMENTATION UPDATES
+   - TEMPLATE_MIGRATION_GUIDE.md (line 134, 265-267)
+   - VNC_MIGRATION.md (already mentions migration)
+   - Any examples in docs/
+
+
+VNC CONFIGURATION STRUCTURE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Target VNC Field Structure (Modern, VNC-Agnostic):
+
+type VNCConfig struct {
+    Enabled    bool   `json:"enabled"`           // VNC enabled/disabled
+    Port       int    `json:"port,omitempty"`    // Container VNC port
+    Protocol   string `json:"protocol,omitempty"` // rfb or websocket
+    Encryption bool   `json:"encryption,omitempty"` // TLS encryption
+}
+
+Port Conventions:
+  - 5900: Standard RFB protocol (future TigerVNC)
+  - 3000: LinuxServer.io convention (current)
+  - 6080: noVNC HTTP port (alternative)
+
+Protocol Options:
+  - "rfb": Raw RFB protocol (standard VNC)
+  - "websocket": WebSocket-wrapped RFB (for browser)
+
+Template Examples:
+
+VNC-Enabled Desktop App (Firefox):
+  vnc:
+    enabled: true
+    port: 3000
+    protocol: websocket
+    encryption: false
+
+VNC-Disabled HTTP App (Code Server):
+  vnc:
+    enabled: false
+    port: null
+    protocol: null
+    encryption: null
+
+
+CURRENT TEMPLATE STATISTICS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Total Templates: 36 YAML files
+VNC-Enabled (kasmvnc.enabled=true): 34 templates
+VNC-Disabled (kasmvnc.enabled=false): 2 templates
+
+Categories:
+  - Web Browsers: 5 templates (all use port 3000)
+  - Design & Graphics: 7 templates (all use port 3000)
+  - Development: 3 templates (2 use port 3000, 1 disabled HTTP)
+  - Gaming: 2 templates (all use port 3000)
+  - Audio/Video: 3 templates (all use port 3000)
+  - Desktop Environments: 3 templates (all use port 3000)
+  - Productivity: 3 templates (all use port 3000)
+  - Communication: 2 templates (all use port 3000)
+  - File Management: 3 templates (all use port 3000)
+  - Remote Access: 1 template (uses port 3000)
+
+
+GO TYPE CHANGES ALREADY MADE
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+File: k8s-controller/api/v1alpha1/template_types.go
+
+TemplateSpec struct:
+  - Removed: No kasmvnc field (correct!)
+  - Added: VNC VNCConfig `json:"vnc,omitempty"` field
+  - Documentation explicitly states this is VNC-agnostic
+  - Comments reference migration to TigerVNC
+
+VNCConfig struct:
+  - Enabled: bool (VNC enabled/disabled flag)
+  - Port: int (container port, defaults to 5900)
+  - Protocol: string (rfb or websocket)
+  - Encryption: bool (TLS encryption flag)
+
+Status: Ready for migration!
+
+
+MIGRATION IMPACT ANALYSIS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Breaking Changes:
+  - Templates using "spec.kasmvnc" field must be updated to "spec.vnc"
+  - Database schema changes require migration script
+  - CRD schema validation will reject old "kasmvnc" field (unless backward compat added)
+
+Backward Compatibility Options:
+  1. Dual-field support: Accept both "kasmvnc" and "vnc" during migration
+  2. Conversion webhook: Automatically convert old to new format
+  3. Migration period: Support both for 2-3 releases, then deprecate
+
+Recommended Approach: Dual-field support in API layer + gradual migration
+
+
+FILES AFFECTED BY MIGRATION
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Core CRD Files:
+  ✓ manifests/crds/template.yaml (needs update)
+  ✓ manifests/crds/workspacetemplate.yaml (legacy, needs update)
+
+Template Manifests (36 files):
+  ✓ manifests/templates/ (1 file)
+  ✓ manifests/templates-generated/ (35 files across 10 directories)
+
+Database:
+  ✓ manifests/config/database-init.yaml (schema)
+
+API Backend:
+  ✓ api/internal/sync/parser.go (already VNC-agnostic)
+  ✓ api/internal/handlers/ (check for kasmvnc references)
+
+Documentation:
+  ✓ docs/VNC_MIGRATION.md
+  ✓ TEMPLATE_MIGRATION_GUIDE.md
+  ✓ docs/TEMPLATE_CRD_ANALYSIS.md (this analysis)
+
+Scripts:
+  ✓ scripts/migrate-templates.sh (update template structure references)
+  ✓ scripts/generate-templates.py (update generation)
+
+
+VALIDATION CHECKLIST
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+Phase 1: CRD Updates
+  [ ] Update manifests/crds/template.yaml (kasmvnc → vnc)
+  [ ] Update manifests/crds/workspacetemplate.yaml (legacy)
+  [ ] Validate CRD schema with kubectl
+  [ ] Test CRD validation rules
+
+Phase 2: Template Migration
+  [ ] Migrate all 36 template YAML files
+  [ ] Update API versions to stream.space/v1alpha1
+  [ ] Update port configurations as needed
+  [ ] Run validation script: scripts/validate-templates.sh
+  [ ] Test template parsing with updated schema
+
+Phase 3: Database Updates
+  [ ] Update manifests/config/database-init.yaml
+  [ ] Create migration script for existing data
+  [ ] Test schema migration in dev environment
+  [ ] Verify data integrity after migration
+
+Phase 4: API Updates
+  [ ] Add backward compatibility layer (if needed)
+  [ ] Update API handlers to use new schema
+  [ ] Update template parser
+  [ ] Add integration tests
+
+Phase 5: Testing
+  [ ] Unit tests for VNCConfig
+  [ ] Integration tests with templates
+  [ ] End-to-end session creation tests
+  [ ] Verify WebSocket proxy works with new config
+
+Phase 6: Documentation
+  [ ] Update migration guide
+  [ ] Update API documentation
+  [ ] Add examples for new VNC field
+  [ ] Document breaking changes
+
+
+KEY INSIGHTS
+━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━━
+
+1. Go code is READY - VNCConfig struct is already generic/VNC-agnostic
+2. YAML is LEGACY - Still uses proprietary "kasmvnc" field name
+3. Database is LEGACY - Still uses "kasmvnc_*" column names
+4. All VNC ports currently use 3000 (LinuxServer.io default)
+5. Future port will be 5900 (standard RFB)
+6. 2 templates have vnc.enabled=false (HTTP-based apps)
+7. Migration is straightforward - just rename field in YAML/schema
+
+This is NOT a complex refactoring - just standardizing field names
+to match the VNC-agnostic Go types that are already in place.
+
+
+================================================================================
