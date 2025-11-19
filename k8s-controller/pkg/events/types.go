@@ -24,7 +24,8 @@ const (
 	SubjectNodeUncordon = "streamspace.node.uncordon"
 	SubjectNodeDrain    = "streamspace.node.drain"
 
-	SubjectControllerHeartbeat = "streamspace.controller.heartbeat"
+	SubjectControllerHeartbeat   = "streamspace.controller.heartbeat"
+	SubjectControllerSyncRequest = "streamspace.controller.sync.request"
 )
 
 // Platform constants
@@ -179,4 +180,14 @@ type NodeDrainEvent struct {
 type ResourceSpec struct {
 	Memory string `json:"memory,omitempty"`
 	CPU    string `json:"cpu,omitempty"`
+}
+
+// ControllerSyncRequestEvent is published when a controller starts and needs
+// to sync its state with the API. The API should respond by publishing
+// AppInstallEvent for each installed application.
+type ControllerSyncRequestEvent struct {
+	EventID      string    `json:"event_id"`
+	Timestamp    time.Time `json:"timestamp"`
+	ControllerID string    `json:"controller_id"`
+	Platform     string    `json:"platform"`
 }

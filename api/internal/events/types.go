@@ -171,6 +171,16 @@ type ControllerHeartbeatEvent struct {
 	ClusterInfo  map[string]interface{} `json:"cluster_info,omitempty"`
 }
 
+// ControllerSyncRequestEvent is received from controllers requesting
+// a list of all installed applications. The API responds by publishing
+// AppInstallEvent for each installed application.
+type ControllerSyncRequestEvent struct {
+	EventID      string    `json:"event_id"`
+	Timestamp    time.Time `json:"timestamp"`
+	ControllerID string    `json:"controller_id"`
+	Platform     string    `json:"platform"`
+}
+
 // ResourceSpec defines resource requirements.
 type ResourceSpec struct {
 	Memory string `json:"memory,omitempty"`

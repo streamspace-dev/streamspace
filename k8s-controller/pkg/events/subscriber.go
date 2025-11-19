@@ -134,9 +134,35 @@ func (s *Subscriber) Start(ctx context.Context) error {
 		log.Printf("Subscribed to NATS subject: %s", platformSubject)
 	}
 
+	// Request sync from API to get all installed applications
+	if err := s.requestSync(); err != nil {
+		log.Printf("Warning: failed to request sync from API: %v", err)
+		// Don't fail startup - applications can still be installed via events
+	} else {
+		log.Printf("Sent sync request to API for platform: %s", s.platform)
+	}
+
 	// Block until context is cancelled
 	<-ctx.Done()
 	return nil
+}
+
+// requestSync publishes a sync request to the API to get all installed applications.
+func (s *Subscriber) requestSync() error {
+	event := ControllerSyncRequestEvent{
+		EventID:      fmt.Sprintf("sync-%s-%d", s.controllerID, time.Now().UnixNano()),
+		Timestamp:    time.Now(),
+		ControllerID: s.controllerID,
+		Platform:     s.platform,
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		return err
+	}
+
+	// Publish to generic subject (not platform-specific) so API receives it
+	return s.conn.Publish(SubjectControllerSyncRequest, data)
 }
 
 // Close closes the NATS connection.

@@ -26,7 +26,8 @@ const (
 	SubjectNodeDrain    = "streamspace.node.drain"
 
 	// Controller events
-	SubjectControllerHeartbeat = "streamspace.controller.heartbeat"
+	SubjectControllerHeartbeat   = "streamspace.controller.heartbeat"
+	SubjectControllerSyncRequest = "streamspace.controller.sync.request"
 
 	// Dead letter queue prefix
 	SubjectDLQPrefix = "streamspace.dlq"

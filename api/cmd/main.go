@@ -122,7 +122,7 @@ func main() {
 		URL:      natsURL,
 		User:     natsUser,
 		Password: natsPassword,
-	}, database.DB())
+	}, database.DB(), eventPublisher)
 	if err != nil {
 		log.Printf("Warning: Failed to initialize NATS subscriber: %v", err)
 		log.Println("Status feedback from controllers will be disabled")

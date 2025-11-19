@@ -19,6 +19,7 @@ import (
 type Subscriber struct {
 	conn         *nats.Conn
 	db           *sql.DB
+	publisher    *Publisher
 	enabled      bool
 	controllerID string
 	subs         []*nats.Subscription
@@ -26,7 +27,7 @@ type Subscriber struct {
 
 // NewSubscriber creates a new NATS event subscriber.
 // If NATS is unavailable, returns a disabled subscriber.
-func NewSubscriber(cfg Config, db *sql.DB) (*Subscriber, error) {
+func NewSubscriber(cfg Config, db *sql.DB, publisher *Publisher) (*Subscriber, error) {
 	if cfg.URL == "" {
 		log.Println("Warning: NATS_URL not configured, event subscription disabled")
 		return &Subscriber{enabled: false}, nil
@@ -66,10 +67,11 @@ func NewSubscriber(cfg Config, db *sql.DB) (*Subscriber, error) {
 	log.Printf("API subscriber connected to NATS at %s", conn.ConnectedUrl())
 
 	return &Subscriber{
-		conn:    conn,
-		db:      db,
-		enabled: true,
-		subs:    make([]*nats.Subscription, 0),
+		conn:      conn,
+		db:        db,
+		publisher: publisher,
+		enabled:   true,
+		subs:      make([]*nats.Subscription, 0),
 	}, nil
 }
 
@@ -109,6 +111,16 @@ func (s *Subscriber) Start(ctx context.Context) error {
 	}
 	s.subs = append(s.subs, heartbeatSub)
 	log.Printf("Subscribed to %s", SubjectControllerHeartbeat)
+
+	// Subscribe to controller sync requests
+	syncSub, err := s.conn.Subscribe(SubjectControllerSyncRequest, func(msg *nats.Msg) {
+		s.handleControllerSyncRequest(msg.Data)
+	})
+	if err != nil {
+		return fmt.Errorf("failed to subscribe to controller sync request: %w", err)
+	}
+	s.subs = append(s.subs, syncSub)
+	log.Printf("Subscribed to %s", SubjectControllerSyncRequest)
 
 	log.Println("API event subscriber started, listening for controller status events")
 
@@ -217,4 +229,97 @@ func (s *Subscriber) handleControllerHeartbeat(data []byte) {
 
 	// Could update a controllers table here to track controller health
 	// For now, just log it
+}
+
+// handleControllerSyncRequest processes sync requests from controllers.
+// It queries the database for installed applications and publishes AppInstallEvent
+// for each one so the controller can create the necessary resources.
+func (s *Subscriber) handleControllerSyncRequest(data []byte) {
+	var event ControllerSyncRequestEvent
+	if err := json.Unmarshal(data, &event); err != nil {
+		log.Printf("Failed to unmarshal controller sync request: %v", err)
+		return
+	}
+
+	log.Printf("Controller sync request: id=%s platform=%s",
+		event.ControllerID, event.Platform)
+
+	if s.publisher == nil || !s.publisher.enabled {
+		log.Printf("Warning: Cannot process sync request - publisher not available")
+		return
+	}
+
+	// Query database for installed applications
+	ctx, cancel := context.WithTimeout(context.Background(), 30*time.Second)
+	defer cancel()
+
+	query := `
+		SELECT
+			ia.id,
+			ia.catalog_template_id,
+			ia.template_name,
+			ct.display_name,
+			ct.description,
+			ct.category,
+			ct.icon_url,
+			ct.manifest,
+			ia.installed_by
+		FROM installed_applications ia
+		JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
+		WHERE ia.install_status = 'installed'
+		ORDER BY ia.installed_at
+	`
+
+	rows, err := s.db.QueryContext(ctx, query)
+	if err != nil {
+		log.Printf("Failed to query installed applications for sync: %v", err)
+		return
+	}
+	defer rows.Close()
+
+	count := 0
+	for rows.Next() {
+		var (
+			id                string
+			catalogTemplateID int
+			templateName      string
+			displayName       string
+			description       sql.NullString
+			category          sql.NullString
+			iconURL           sql.NullString
+			manifest          string
+			installedBy       string
+		)
+
+		if err := rows.Scan(&id, &catalogTemplateID, &templateName, &displayName,
+			&description, &category, &iconURL, &manifest, &installedBy); err != nil {
+			log.Printf("Failed to scan installed application: %v", err)
+			continue
+		}
+
+		// Publish AppInstallEvent for this application
+		if err := s.publisher.PublishAppInstall(ctx, AppInstallEvent{
+			InstallID:         id,
+			CatalogTemplateID: catalogTemplateID,
+			TemplateName:      templateName,
+			DisplayName:       displayName,
+			Description:       description.String,
+			Category:          category.String,
+			IconURL:           iconURL.String,
+			Manifest:          manifest,
+			InstalledBy:       installedBy,
+			Platform:          event.Platform,
+		}); err != nil {
+			log.Printf("Failed to publish app install event for %s: %v", templateName, err)
+			continue
+		}
+
+		count++
+	}
+
+	if err := rows.Err(); err != nil {
+		log.Printf("Error iterating installed applications: %v", err)
+	}
+
+	log.Printf("Sync complete: sent %d app install events to controller %s", count, event.ControllerID)
 }
