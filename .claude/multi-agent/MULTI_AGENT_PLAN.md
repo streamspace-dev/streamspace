@@ -79,10 +79,11 @@ StreamSpace uses separate repositories for templates and plugins:
 | Session Status Conditions | Complete | Builder | 100% |
 | Batch Operations Errors | Complete | Builder | 100% |
 | Docker Controller Lookup | Complete | Builder | 100% |
-| **UI Fixes (4 issues)** | In Progress | Builder | 0% |
-| Dashboard Favorites | Not Started | Builder | 0% |
-| Demo Mode Security | Not Started | Builder | 0% |
-| Delete Obsolete Pages | Not Started | Builder | 0% |
+| **UI Fixes (4 issues)** | **75%** | Builder | **75%** |
+| Dashboard Favorites | Pending (needs backend API) | Builder | 0% |
+| Demo Mode Security | Complete | Builder | 100% |
+| Remove Debug Console.log | Complete | Builder | 100% |
+| Delete Obsolete Pages | Complete | Builder | 100% |
 | **Testing** | Ready | Validator | 0% |
 | **Documentation** | Not Started | Scribe | 0% |
 
@@ -284,6 +285,56 @@ Phase 6 tasks will resume after Phase 5.5 is complete:
 ## Agent Communication Log
 
 ### 2025-11-19
+
+#### Builder - MEDIUM Priority & UI Fixes Complete (16:30)
+
+**ALL MEDIUM PRIORITY AND MOST UI FIXES RESOLVED**
+
+Implementation complete for 4 MEDIUM priority issues and 3 UI fixes. Commits: 0f31451, e2bf6be
+
+**MEDIUM Priority Changes:**
+
+1. **Session Status Conditions** (`k8s-controller/controllers/session_controller.go`)
+   - Added setCondition helper function using meta.SetStatusCondition
+   - Set conditions for TemplateNotFound, DeploymentCreationFailed, PVCCreationFailed
+   - Proper metav1.Condition with reason, message, and lastTransitionTime
+
+2. **Batch Operations Error Collection** (`api/internal/handlers/batch.go`)
+   - Updated all 6 batch execution methods to collect errors
+   - Track failure_count alongside success_count
+   - Store errors in JSONB column for debugging
+   - Handle both SQL errors and row-not-found cases
+
+3. **Docker Controller Template Lookup** (docker-controller & api)
+   - Added TemplateConfig struct to SessionCreateEvent
+   - Include image, VNC port, display name, and env vars from template
+   - Docker controller now uses template config instead of hardcoded Firefox
+   - Both API handlers updated to populate TemplateConfig
+
+4. **MFA SMS/Email** - Reviewed and determined appropriate 501 response
+
+**UI Fixes:**
+
+1. **Demo Mode Security** (`ui/src/pages/Login.tsx`)
+   - Added explicit VITE_DEMO_MODE environment variable
+   - Demo mode now requires VITE_DEMO_MODE=true
+   - Added console warning when demo mode is active
+
+2. **Remove Debug Console.log** (`ui/src/pages/Scheduling.tsx`)
+   - Removed console.log('Schedule event:', data)
+
+3. **Delete Obsolete Pages**
+   - Removed Repositories.tsx, Catalog.tsx, EnhancedCatalog.tsx
+
+**Pending:** Dashboard Favorites API requires backend endpoint implementation
+
+**Progress:** 17/23 issues complete (8 Critical + 3 High + 4 Medium + 3 UI - 1 pending)
+
+**Ready For:**
+- Validator testing of all implemented fixes
+- Dashboard Favorites backend API implementation (future task)
+
+---
 
 #### Builder - HIGH Priority Fixes Complete (15:00)
 
