@@ -15,6 +15,7 @@ import (
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime"
+	"k8s.io/apimachinery/pkg/types"
 	ctrl "sigs.k8s.io/controller-runtime"
 	"sigs.k8s.io/controller-runtime/pkg/client"
 	"sigs.k8s.io/controller-runtime/pkg/log"
@@ -294,14 +295,31 @@ func parseQuantity(s string) (resource.Quantity, error) {
 	return resource.ParseQuantity(s)
 }
 
-// updateStatus updates the ApplicationInstall status.
+// updateStatus updates the ApplicationInstall status with retry on conflict.
 func (r *ApplicationInstallReconciler) updateStatus(ctx context.Context, appInstall *streamspacev1alpha1.ApplicationInstall, phase, message string) error {
-	appInstall.Status.Phase = phase
-	appInstall.Status.Message = message
-	now := metav1.Now()
-	appInstall.Status.LastTransitionTime = &now
+	// Re-fetch to get latest version to avoid conflicts
+	latest := &streamspacev1alpha1.ApplicationInstall{}
+	if err := r.Get(ctx, types.NamespacedName{
+		Name:      appInstall.Name,
+		Namespace: appInstall.Namespace,
+	}, latest); err != nil {
+		return err
+	}
 
-	return r.Status().Update(ctx, appInstall)
+	latest.Status.Phase = phase
+	latest.Status.Message = message
+	now := metav1.Now()
+	latest.Status.LastTransitionTime = &now
+
+	// Copy back any fields the caller may have set
+	if appInstall.Status.TemplateName != "" {
+		latest.Status.TemplateName = appInstall.Status.TemplateName
+	}
+	if appInstall.Status.TemplateNamespace != "" {
+		latest.Status.TemplateNamespace = appInstall.Status.TemplateNamespace
+	}
+
+	return r.Status().Update(ctx, latest)
 }
 
 // SetupWithManager sets up the controller with the Manager.

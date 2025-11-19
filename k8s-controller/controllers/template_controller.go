@@ -323,6 +323,13 @@ func (r *TemplateReconciler) Reconcile(ctx context.Context, req ctrl.Request) (c
 			return ctrl.Result{}, err
 		}
 		log.Info("Applied default values to Template", "name", template.Name)
+
+		// Re-fetch the template to get the updated ResourceVersion
+		// This is required because the status update needs the latest version
+		if err := r.Get(ctx, req.NamespacedName, &template); err != nil {
+			log.Error(err, "Failed to re-fetch Template after spec update")
+			return ctrl.Result{}, err
+		}
 	}
 
 	// Validate template configuration
