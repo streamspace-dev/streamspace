@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -168,9 +169,10 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 		WHERE id = $5
 	`
 
-	// Use Phase (Kubernetes phase like "Running") instead of Status (like "created")
-	// because the UI expects the phase value for the Connect button to be enabled
-	result, err := s.db.ExecContext(ctx, query, event.Phase, event.URL, event.PodName, time.Now(), event.SessionID)
+	// Convert Phase to lowercase for state field (running, hibernated, pending, failed)
+	// The UI expects lowercase state values for session lifecycle checks
+	state := strings.ToLower(event.Phase)
+	result, err := s.db.ExecContext(ctx, query, state, event.URL, event.PodName, time.Now(), event.SessionID)
 	if err != nil {
 		log.Printf("Failed to update session %s status: %v", event.SessionID, err)
 		return
@@ -180,7 +182,7 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 	if rows == 0 {
 		log.Printf("Session %s not found in database (may not be created yet)", event.SessionID)
 	} else {
-		log.Printf("Updated session %s to phase=%s url=%s", event.SessionID, event.Phase, event.URL)
+		log.Printf("Updated session %s to state=%s url=%s", event.SessionID, state, event.URL)
 	}
 }
 
