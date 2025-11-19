@@ -288,7 +288,10 @@ func (h *SchedulingHandler) CreateScheduledSession(c *gin.Context) {
 		req.NextRunAt, req.Metadata).Scan(&id)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create scheduled session"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create scheduled session",
+			"message": fmt.Sprintf("Database insert failed for user %s with template %s: %v", userID, req.TemplateID, err),
+		})
 		return
 	}
 
@@ -320,7 +323,10 @@ func (h *SchedulingHandler) ListScheduledSessions(c *gin.Context) {
 
 	rows, err := h.DB.DB().Query(query, userID, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list scheduled sessions",
+			"message": fmt.Sprintf("Database query failed for user %s: %v", userID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -387,11 +393,17 @@ func (h *SchedulingHandler) GetScheduledSession(c *gin.Context) {
 		&s.CreatedAt, &s.UpdatedAt)
 
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scheduled session not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Scheduled session not found",
+			"message": fmt.Sprintf("No scheduled session found with ID %s for user %s", scheduleID, userID),
+		})
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get scheduled session",
+			"message": fmt.Sprintf("Database query failed for schedule ID %s: %v", scheduleID, err),
+		})
 		return
 	}
 
@@ -427,11 +439,24 @@ func (h *SchedulingHandler) UpdateScheduledSession(c *gin.Context) {
 	var ownerID string
 	err := h.DB.DB().QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scheduled session not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Scheduled session not found",
+			"message": fmt.Sprintf("No scheduled session found with ID %s", scheduleID),
+		})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to check ownership",
+			"message": fmt.Sprintf("Database query failed for schedule ID %s: %v", scheduleID, err),
+		})
 		return
 	}
 	if ownerID != userID && role != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "Access denied",
+			"message": fmt.Sprintf("User %s does not have permission to update schedule %s", userID, scheduleID),
+		})
 		return
 	}
 
@@ -464,7 +489,10 @@ func (h *SchedulingHandler) UpdateScheduledSession(c *gin.Context) {
 		req.TerminateAfter, req.PreWarm, req.PreWarmMinutes, req.NextRunAt, scheduleID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update scheduled session"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update scheduled session",
+			"message": fmt.Sprintf("Database update failed for schedule ID %s: %v", scheduleID, err),
+		})
 		return
 	}
 
@@ -481,17 +509,33 @@ func (h *SchedulingHandler) DeleteScheduledSession(c *gin.Context) {
 	var ownerID string
 	err := h.DB.DB().QueryRow(`SELECT user_id FROM scheduled_sessions WHERE id = $1`, scheduleID).Scan(&ownerID)
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "scheduled session not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Scheduled session not found",
+			"message": fmt.Sprintf("No scheduled session found with ID %s", scheduleID),
+		})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to check ownership",
+			"message": fmt.Sprintf("Database query failed for schedule ID %s: %v", scheduleID, err),
+		})
 		return
 	}
 	if ownerID != userID && role != "admin" {
-		c.JSON(http.StatusForbidden, gin.H{"error": "access denied"})
+		c.JSON(http.StatusForbidden, gin.H{
+			"error":   "Access denied",
+			"message": fmt.Sprintf("User %s does not have permission to delete schedule %s", userID, scheduleID),
+		})
 		return
 	}
 
 	_, err = h.DB.DB().Exec(`DELETE FROM scheduled_sessions WHERE id = $1`, scheduleID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete scheduled session",
+			"message": fmt.Sprintf("Database delete failed for schedule ID %s: %v", scheduleID, err),
+		})
 		return
 	}
 
@@ -509,7 +553,10 @@ func (h *SchedulingHandler) EnableScheduledSession(c *gin.Context) {
 	`, scheduleID, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enable schedule"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to enable schedule",
+			"message": fmt.Sprintf("Database update failed for schedule ID %s, user %s: %v", scheduleID, userID, err),
+		})
 		return
 	}
 
@@ -527,7 +574,10 @@ func (h *SchedulingHandler) DisableScheduledSession(c *gin.Context) {
 	`, scheduleID, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable schedule"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to disable schedule",
+			"message": fmt.Sprintf("Database update failed for schedule ID %s, user %s: %v", scheduleID, userID, err),
+		})
 		return
 	}
 
@@ -654,7 +704,10 @@ func (h *SchedulingHandler) CalendarOAuthCallback(c *gin.Context) {
 	`, state, provider, email, accessToken, refreshToken, expiry).Scan(&id)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to save integration"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to save calendar integration",
+			"message": fmt.Sprintf("Database insert failed for user %s with provider %s: %v", state, provider, err),
+		})
 		return
 	}
 
@@ -677,7 +730,10 @@ func (h *SchedulingHandler) ListCalendarIntegrations(c *gin.Context) {
 	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list calendar integrations",
+			"message": fmt.Sprintf("Database query failed for user %s: %v", userID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -721,13 +777,19 @@ func (h *SchedulingHandler) DisconnectCalendar(c *gin.Context) {
 	`, integrationID, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disconnect"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to disconnect calendar",
+			"message": fmt.Sprintf("Database delete failed for integration ID %s, user %s: %v", integrationID, userID, err),
+		})
 		return
 	}
 
-	rows, _ := result.RowsAffected()
-	if rows == 0 {
-		c.JSON(http.StatusNotFound, gin.H{"error": "integration not found"})
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Calendar integration not found",
+			"message": fmt.Sprintf("No integration found with ID %s for user %s", integrationID, userID),
+		})
 		return
 	}
 
@@ -749,7 +811,17 @@ func (h *SchedulingHandler) SyncCalendar(c *gin.Context) {
 		&ci.RefreshToken, &ci.CalendarID)
 
 	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{"error": "integration not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Calendar integration not found",
+			"message": fmt.Sprintf("No integration found with ID %s for user %s", integrationID, userID),
+		})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get calendar integration",
+			"message": fmt.Sprintf("Database query failed for integration ID %s: %v", integrationID, err),
+		})
 		return
 	}
 
@@ -786,7 +858,10 @@ func (h *SchedulingHandler) ExportICalendar(c *gin.Context) {
 	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to export calendar",
+			"message": fmt.Sprintf("Database query failed for user %s scheduled sessions: %v", userID, err),
+		})
 		return
 	}
 	defer rows.Close()

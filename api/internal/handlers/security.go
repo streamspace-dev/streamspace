@@ -322,7 +322,10 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 	`, userID, req.Type).Scan(&existingID)
 
 	if err != nil && err != sql.ErrNoRows {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to check existing MFA methods",
+			"message": fmt.Sprintf("Database query failed for user %s, MFA type %s: %v", userID, req.Type, err),
+		})
 		return
 	}
 
@@ -340,7 +343,10 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 			AccountName: userID,
 		})
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate TOTP secret"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate TOTP secret",
+				"message": fmt.Sprintf("TOTP generation failed for user %s: %v", userID, err),
+			})
 			return
 		}
 
@@ -357,7 +363,10 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 	`, userID, req.Type, secret, req.PhoneNumber, req.Email).Scan(&mfaID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create MFA method"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create MFA method",
+			"message": fmt.Sprintf("Database insert failed for user %s, MFA type %s: %v", userID, req.Type, err),
+		})
 		return
 	}
 
@@ -404,7 +413,10 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve MFA method",
+			"message": fmt.Sprintf("Database query failed for MFA ID %s, user %s: %v", mfaID, userID, err),
+		})
 		return
 	}
 
@@ -423,7 +435,10 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 	// Either both MFA enable AND backup codes succeed, or neither
 	tx, err := h.DB.DB().Begin()
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to start database transaction",
+			"message": fmt.Sprintf("Transaction begin failed for MFA setup verification, user %s: %v", userID, err),
+		})
 		return
 	}
 	defer tx.Rollback() // Rollback if not committed
@@ -436,7 +451,10 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 	`, mfaID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to enable MFA"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to enable MFA",
+			"message": fmt.Sprintf("Database update failed for MFA ID %s, user %s: %v", mfaID, userID, err),
+		})
 		return
 	}
 
@@ -456,14 +474,20 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 		`, userID, hashStr)
 
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to generate backup codes"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate backup codes",
+				"message": fmt.Sprintf("Database insert failed for backup code %d of %d, user %s: %v", i+1, BackupCodesCount, userID, err),
+			})
 			return
 		}
 	}
 
 	// Commit transaction
 	if err := tx.Commit(); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to commit changes"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to commit MFA setup changes",
+			"message": fmt.Sprintf("Transaction commit failed for MFA ID %s, user %s: %v", mfaID, userID, err),
+		})
 		return
 	}
 
@@ -569,7 +593,10 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 			return
 		}
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to retrieve MFA secret",
+				"message": fmt.Sprintf("Database query failed for user %s, method type %s: %v", userID, req.MethodType, err),
+			})
 			return
 		}
 
@@ -617,7 +644,10 @@ func (h *SecurityHandler) ListMFAMethods(c *gin.Context) {
 	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list MFA methods",
+			"message": fmt.Sprintf("Database query failed for user %s: %v", userID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -659,7 +689,10 @@ func (h *SecurityHandler) DisableMFA(c *gin.Context) {
 	`, mfaID, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to disable MFA"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to disable MFA",
+			"message": fmt.Sprintf("Database update failed for MFA ID %s, user %s: %v", mfaID, userID, err),
+		})
 		return
 	}
 
@@ -801,7 +834,10 @@ func (h *SecurityHandler) CreateIPWhitelist(c *gin.Context) {
 	`, req.UserID, req.IPAddress, req.Description, createdBy, req.ExpiresAt).Scan(&id)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create IP whitelist entry"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create IP whitelist entry",
+			"message": fmt.Sprintf("Database insert failed for IP %s, created by %s: %v", req.IPAddress, createdBy, err),
+		})
 		return
 	}
 
@@ -894,7 +930,10 @@ func (h *SecurityHandler) ListIPWhitelist(c *gin.Context) {
 
 	rows, err := h.DB.DB().Query(query, userID, role)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list IP whitelist entries",
+			"message": fmt.Sprintf("Database query failed for user %s, role %s: %v", userID, role, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -976,7 +1015,10 @@ func (h *SecurityHandler) DeleteIPWhitelist(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete entry"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete IP whitelist entry",
+			"message": fmt.Sprintf("Database delete failed for entry ID %s, user %s: %v", entryID, userID, err),
+		})
 		return
 	}
 
@@ -1059,7 +1101,10 @@ func (h *SecurityHandler) VerifySession(c *gin.Context) {
 	`, sessionID, userID, deviceID, ipAddress, riskScore, riskLevel, verified).Scan(&verificationID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record verification"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to record session verification",
+			"message": fmt.Sprintf("Database insert failed for session %s, user %s, IP %s: %v", sessionID, userID, ipAddress, err),
+		})
 		return
 	}
 
@@ -1126,7 +1171,10 @@ func (h *SecurityHandler) GetSecurityAlerts(c *gin.Context) {
 	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve security alerts",
+			"message": fmt.Sprintf("Database query failed for user %s: %v", userID, err),
+		})
 		return
 	}
 	defer rows.Close()

@@ -282,7 +282,8 @@ export interface AddGroupAccessRequest {
 
 export interface CreateSessionRequest {
   user: string;
-  template: string;
+  template?: string;
+  applicationId?: string;
   resources?: {
     memory?: string;
     cpu?: string;

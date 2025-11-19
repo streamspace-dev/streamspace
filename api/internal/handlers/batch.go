@@ -162,7 +162,10 @@ func (h *BatchHandler) TerminateSessions(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch terminate job for user %s with %d sessions: %v", userIDStr, len(req.SessionIDs), err),
+		})
 		return
 	}
 
@@ -200,7 +203,10 @@ func (h *BatchHandler) HibernateSessions(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch hibernate job for user %s with %d sessions: %v", userIDStr, len(req.SessionIDs), err),
+		})
 		return
 	}
 
@@ -237,7 +243,10 @@ func (h *BatchHandler) WakeSessions(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch wake job for user %s with %d sessions: %v", userIDStr, len(req.SessionIDs), err),
+		})
 		return
 	}
 
@@ -274,7 +283,10 @@ func (h *BatchHandler) DeleteSessions(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch delete job for user %s with %d sessions: %v", userIDStr, len(req.SessionIDs), err),
+		})
 		return
 	}
 
@@ -317,7 +329,10 @@ func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch update_tags job for user %s with %d sessions (operation: %s): %v", userIDStr, len(req.SessionIDs), req.Operation, err),
+		})
 		return
 	}
 
@@ -355,7 +370,10 @@ func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch update_resources job for user %s with %d sessions: %v", userIDStr, len(req.SessionIDs), err),
+		})
 		return
 	}
 
@@ -390,7 +408,10 @@ func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SnapshotIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch delete snapshots job for user %s with %d snapshots: %v", userIDStr, len(req.SnapshotIDs), err),
+		})
 		return
 	}
 
@@ -428,7 +449,10 @@ func (h *BatchHandler) CreateSnapshots(c *gin.Context) {
 	`, jobID, userIDStr, len(req.SessionIDs))
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create batch job",
+			"message": fmt.Sprintf("Failed to create batch snapshot creation job for user %s with %d sessions (snapshot name: %s): %v", userIDStr, len(req.SessionIDs), req.Name, err),
+		})
 		return
 	}
 
@@ -490,7 +514,10 @@ func (h *BatchHandler) ListBatchJobs(c *gin.Context) {
 	`, userIDStr)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list batch jobs"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list batch jobs",
+			"message": fmt.Sprintf("Failed to query batch jobs for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -549,7 +576,10 @@ func (h *BatchHandler) GetBatchJob(c *gin.Context) {
 	`, jobID, userIDStr).Scan(&id, &operationType, &resourceType, &status, &totalItems, &processedItems, &successCount, &failureCount, &createdAt, &completedAt)
 
 	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Batch job not found"})
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Batch job not found",
+			"message": fmt.Sprintf("Failed to retrieve batch job %s for user %s: %v", jobID, userIDStr, err),
+		})
 		return
 	}
 
@@ -584,7 +614,10 @@ func (h *BatchHandler) CancelBatchJob(c *gin.Context) {
 	`, jobID, userIDStr)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to cancel batch job"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to cancel batch job",
+			"message": fmt.Sprintf("Failed to cancel batch job %s for user %s: %v", jobID, userIDStr, err),
+		})
 		return
 	}
 

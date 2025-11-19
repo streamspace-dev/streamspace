@@ -80,6 +80,7 @@ import (
 	"context"
 	"database/sql"
 	"encoding/json"
+	"fmt"
 	"net/http"
 
 	"github.com/gin-gonic/gin"
@@ -156,13 +157,19 @@ func (h *PreferencesHandler) GetPreferences(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get preferences",
+			"message": fmt.Sprintf("Database query failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
 	var prefs map[string]interface{}
 	if err := json.Unmarshal(prefsJSON, &prefs); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to parse preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to parse preferences",
+			"message": fmt.Sprintf("JSON unmarshal failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -194,7 +201,10 @@ func (h *PreferencesHandler) UpdatePreferences(c *gin.Context) {
 	// Serialize preferences
 	prefsJSON, err := json.Marshal(prefs)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to serialize preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to serialize preferences",
+			"message": fmt.Sprintf("JSON marshal failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -207,7 +217,10 @@ func (h *PreferencesHandler) UpdatePreferences(c *gin.Context) {
 	`, userIDStr, prefsJSON)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update preferences",
+			"message": fmt.Sprintf("Database upsert failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -235,7 +248,10 @@ func (h *PreferencesHandler) GetUIPreferences(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get UI preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get UI preferences",
+			"message": fmt.Sprintf("Database query for UI preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -271,7 +287,10 @@ func (h *PreferencesHandler) UpdateUIPreferences(c *gin.Context) {
 	`, userIDStr, uiPrefsJSON)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update UI preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update UI preferences",
+			"message": fmt.Sprintf("Database upsert for UI preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -299,7 +318,10 @@ func (h *PreferencesHandler) GetNotificationPreferences(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get notification preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get notification preferences",
+			"message": fmt.Sprintf("Database query for notification preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -334,7 +356,10 @@ func (h *PreferencesHandler) UpdateNotificationPreferences(c *gin.Context) {
 	`, userIDStr, notifPrefsJSON)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update notification preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update notification preferences",
+			"message": fmt.Sprintf("Database upsert for notification preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -362,7 +387,10 @@ func (h *PreferencesHandler) GetDefaultsPreferences(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get defaults"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get defaults",
+			"message": fmt.Sprintf("Database query for default session preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -397,7 +425,10 @@ func (h *PreferencesHandler) UpdateDefaultsPreferences(c *gin.Context) {
 	`, userIDStr, defaultsJSON)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update defaults"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update defaults",
+			"message": fmt.Sprintf("Database upsert for default session preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 
@@ -422,7 +453,10 @@ func (h *PreferencesHandler) GetFavorites(c *gin.Context) {
 	`, userIDStr)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get favorites"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get favorites",
+			"message": fmt.Sprintf("Database query for favorite templates failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -460,7 +494,10 @@ func (h *PreferencesHandler) AddFavorite(c *gin.Context) {
 	`, userIDStr, templateName)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to add favorite"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to add favorite",
+			"message": fmt.Sprintf("Database insert for favorite template '%s' failed for user %s: %v", templateName, userIDStr, err),
+		})
 		return
 	}
 
@@ -484,7 +521,10 @@ func (h *PreferencesHandler) RemoveFavorite(c *gin.Context) {
 	`, userIDStr, templateName)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to remove favorite"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to remove favorite",
+			"message": fmt.Sprintf("Database delete for favorite template '%s' failed for user %s: %v", templateName, userIDStr, err),
+		})
 		return
 	}
 
@@ -510,7 +550,10 @@ func (h *PreferencesHandler) GetRecentSessions(c *gin.Context) {
 	`, userIDStr)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get recent sessions"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get recent sessions",
+			"message": fmt.Sprintf("Database query for recent sessions failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -547,7 +590,10 @@ func (h *PreferencesHandler) ResetPreferences(c *gin.Context) {
 	`, userIDStr)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to reset preferences"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to reset preferences",
+			"message": fmt.Sprintf("Database delete for user preferences failed for user %s: %v", userIDStr, err),
+		})
 		return
 	}
 

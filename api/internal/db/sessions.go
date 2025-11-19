@@ -80,7 +80,10 @@ func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 		session.Memory, session.CPU, session.PersistentHome, session.IdleTimeout, session.MaxSessionDuration,
 		session.CreatedAt, session.UpdatedAt, session.LastConnection, session.LastDisconnect, session.LastActivity,
 	)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to create session %s for user %s: %w", session.ID, session.UserID, err)
+	}
+	return nil
 }
 
 // GetSession retrieves a session by ID.
@@ -109,7 +112,7 @@ func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session,
 		if err == sql.ErrNoRows {
 			return nil, fmt.Errorf("session not found: %s", sessionID)
 		}
-		return nil, err
+		return nil, fmt.Errorf("failed to get session %s: %w", sessionID, err)
 	}
 
 	return session, nil
@@ -150,11 +153,15 @@ func (s *SessionDB) ListSessionsByUser(ctx context.Context, userID string) ([]*S
 
 	rows, err := s.db.QueryContext(ctx, query, userID)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list sessions for user %s: %w", userID, err)
 	}
 	defer rows.Close()
 
-	return s.scanSessions(rows)
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions for user %s: %w", userID, err)
+	}
+	return sessions, nil
 }
 
 // ListSessionsByState retrieves all sessions with a specific state.
@@ -174,11 +181,15 @@ func (s *SessionDB) ListSessionsByState(ctx context.Context, state string) ([]*S
 
 	rows, err := s.db.QueryContext(ctx, query, state)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to list sessions with state %s: %w", state, err)
 	}
 	defer rows.Close()
 
-	return s.scanSessions(rows)
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions with state %s: %w", state, err)
+	}
+	return sessions, nil
 }
 
 // UpdateSessionState updates the state of a session.
@@ -191,7 +202,7 @@ func (s *SessionDB) UpdateSessionState(ctx context.Context, sessionID, state str
 
 	result, err := s.db.ExecContext(ctx, query, state, time.Now(), sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update state to %s for session %s: %w", state, sessionID, err)
 	}
 
 	rows, _ := result.RowsAffected()
@@ -211,7 +222,10 @@ func (s *SessionDB) UpdateSessionURL(ctx context.Context, sessionID, url string)
 	`
 
 	_, err := s.db.ExecContext(ctx, query, url, time.Now(), sessionID)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update URL for session %s: %w", sessionID, err)
+	}
+	return nil
 }
 
 // UpdateSessionStatus updates session state, URL, and pod name from controller status events.
@@ -224,7 +238,7 @@ func (s *SessionDB) UpdateSessionStatus(ctx context.Context, sessionID, state, u
 
 	result, err := s.db.ExecContext(ctx, query, state, url, podName, time.Now(), sessionID)
 	if err != nil {
-		return err
+		return fmt.Errorf("failed to update status for session %s (state=%s, url=%s, pod=%s): %w", sessionID, state, url, podName, err)
 	}
 
 	rows, _ := result.RowsAffected()
@@ -244,7 +258,10 @@ func (s *SessionDB) UpdateLastActivity(ctx context.Context, sessionID string) er
 	`
 
 	_, err := s.db.ExecContext(ctx, query, time.Now(), sessionID)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update last activity for session %s: %w", sessionID, err)
+	}
+	return nil
 }
 
 // UpdateActiveConnections updates the connection count for a session.
@@ -257,7 +274,10 @@ func (s *SessionDB) UpdateActiveConnections(ctx context.Context, sessionID strin
 	`
 
 	_, err := s.db.ExecContext(ctx, query, count, now, sessionID)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to update active connections to %d for session %s: %w", count, sessionID, err)
+	}
+	return nil
 }
 
 // DeleteSession marks a session as deleted.
@@ -269,13 +289,19 @@ func (s *SessionDB) DeleteSession(ctx context.Context, sessionID string) error {
 	`
 
 	_, err := s.db.ExecContext(ctx, query, time.Now(), sessionID)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to mark session %s as deleted: %w", sessionID, err)
+	}
+	return nil
 }
 
 // HardDeleteSession permanently removes a session from the database.
 func (s *SessionDB) HardDeleteSession(ctx context.Context, sessionID string) error {
 	_, err := s.db.ExecContext(ctx, "DELETE FROM sessions WHERE id = $1", sessionID)
-	return err
+	if err != nil {
+		return fmt.Errorf("failed to permanently delete session %s: %w", sessionID, err)
+	}
+	return nil
 }
 
 // CountSessionsByUser returns the number of active sessions for a user.
@@ -285,7 +311,10 @@ func (s *SessionDB) CountSessionsByUser(ctx context.Context, userID string) (int
 		SELECT COUNT(*) FROM sessions
 		WHERE user_id = $1 AND state IN ('running', 'pending', 'hibernated')
 	`, userID).Scan(&count)
-	return count, err
+	if err != nil {
+		return 0, fmt.Errorf("failed to count sessions for user %s: %w", userID, err)
+	}
+	return count, nil
 }
 
 // GetIdleSessions returns sessions that have been idle beyond their timeout.
@@ -313,11 +342,15 @@ func (s *SessionDB) GetIdleSessions(ctx context.Context) ([]*Session, error) {
 func (s *SessionDB) querySessions(ctx context.Context, query string, args ...interface{}) ([]*Session, error) {
 	rows, err := s.db.QueryContext(ctx, query, args...)
 	if err != nil {
-		return nil, err
+		return nil, fmt.Errorf("failed to execute session query: %w", err)
 	}
 	defer rows.Close()
 
-	return s.scanSessions(rows)
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan session results: %w", err)
+	}
+	return sessions, nil
 }
 
 // scanSessions scans rows into Session structs.
@@ -333,13 +366,13 @@ func (s *SessionDB) scanSessions(rows *sql.Rows) ([]*Session, error) {
 			&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
 		)
 		if err != nil {
-			return nil, err
+			return nil, fmt.Errorf("failed to scan session row: %w", err)
 		}
 		sessions = append(sessions, session)
 	}
 
 	if err := rows.Err(); err != nil {
-		return nil, err
+		return nil, fmt.Errorf("error iterating session rows: %w", err)
 	}
 
 	return sessions, nil

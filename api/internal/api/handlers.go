@@ -379,7 +379,8 @@ func (h *Handler) CreateSession(c *gin.Context) {
 
 	var req struct {
 		User               string   `json:"user" binding:"required"`
-		Template           string   `json:"template" binding:"required"`
+		Template           string   `json:"template"`
+		ApplicationId      string   `json:"applicationId"`
 		Resources          *struct {
 			Memory string `json:"memory"`
 			CPU    string `json:"cpu"`
@@ -395,16 +396,97 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Step 1: Verify Kubernetes Template CRD exists
-	// The template must be created during application installation (see handlers/applications.go)
-	// Without a valid template, the session cannot be created
-	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, req.Template)
-	if err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": fmt.Sprintf("Template not found: %s. Please ensure the application is properly installed.", req.Template)})
+	// Step 1: Resolve template name from application ID or direct template name
+	// If applicationId is provided, look up the application to get the template name
+	// This provides better error messages and validation
+	templateName := req.Template
+
+	if req.ApplicationId != "" {
+		// Look up the installed application in the database
+		var appTemplateName, appDisplayName, installStatus, installMessage string
+		var enabled bool
+		err := h.db.DB().QueryRowContext(ctx, `
+			SELECT
+				COALESCE(ct.name, '') as template_name,
+				ia.display_name,
+				ia.enabled,
+				COALESCE(ia.install_status, 'unknown') as install_status,
+				COALESCE(ia.install_message, '') as install_message
+			FROM installed_applications ia
+			LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
+			WHERE ia.id = $1
+		`, req.ApplicationId).Scan(&appTemplateName, &appDisplayName, &enabled, &installStatus, &installMessage)
+
+		if err != nil {
+			c.JSON(http.StatusNotFound, gin.H{
+				"error":   "Application not found",
+				"message": fmt.Sprintf("No application found with ID: %s", req.ApplicationId),
+			})
+			return
+		}
+
+		// Check if the application is enabled
+		if !enabled {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Application disabled",
+				"message": fmt.Sprintf("The application '%s' is currently disabled", appDisplayName),
+			})
+			return
+		}
+
+		// Check installation status
+		if installStatus == "failed" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Application installation failed",
+				"message": fmt.Sprintf("The application '%s' failed to install: %s", appDisplayName, installMessage),
+			})
+			return
+		}
+
+		if installStatus == "pending" || installStatus == "creating" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Application still installing",
+				"message": fmt.Sprintf("The application '%s' is still being installed. Please wait and try again.", appDisplayName),
+			})
+			return
+		}
+
+		// Validate template name was found
+		if appTemplateName == "" {
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":   "Application configuration error",
+				"message": fmt.Sprintf("The application '%s' does not have a valid template configuration", appDisplayName),
+			})
+			return
+		}
+
+		templateName = appTemplateName
+	} else if req.Template == "" {
+		// Neither applicationId nor template provided
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error":   "Missing required field",
+			"message": "Either 'applicationId' or 'template' must be provided",
+		})
 		return
 	}
 
-	// Step 2: Determine resource allocation (memory/CPU)
+	// Step 2: Verify Kubernetes Template CRD exists
+	// The template must be created during application installation (see handlers/applications.go)
+	// Without a valid template, the session cannot be created
+	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateName)
+	if err != nil {
+		// Provide a more helpful error message
+		errorMsg := fmt.Sprintf("Template not found: %s.", templateName)
+		if req.ApplicationId != "" {
+			errorMsg += " The application may still be installing or the Kubernetes controller may not be running."
+		} else {
+			errorMsg += " Please ensure the application is properly installed."
+		}
+		c.JSON(http.StatusBadRequest, gin.H{"error": errorMsg})
+		return
+	}
+
+	// Step 3: Determine resource allocation (memory/CPU)
 	// Priority: request > template defaults > system defaults
 	memory := "2Gi"   // System default
 	cpu := "1000m"    // System default (1 core)
@@ -426,7 +508,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 	}
 
-	// Step 3: Validate and parse resource specifications
+	// Step 4: Validate and parse resource specifications
 	// Convert human-readable formats (e.g., "2Gi", "500m") to int64 for quota checking
 	requestedCPU, requestedMemory, err := h.quotaEnforcer.ValidateResourceRequest(cpu, memory)
 	if err != nil {
@@ -437,7 +519,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Step 4: Check user quota before creating session
+	// Step 5: Check user quota before creating session
 	// Get current resource usage by listing all pods belonging to this user
 	podList, err := h.k8sClient.GetPods(ctx, h.namespace)
 	if err != nil {

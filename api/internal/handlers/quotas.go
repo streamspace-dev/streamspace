@@ -176,7 +176,10 @@ func (h *QuotasHandler) GetUserQuota(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get user quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get user quota",
+			"message": fmt.Sprintf("Database error querying quota for user %s: %v", userID, err),
+		})
 		return
 	}
 
@@ -224,7 +227,10 @@ func (h *QuotasHandler) SetUserQuota(c *gin.Context) {
 	`, id, userID, req.MaxSessions, req.MaxCPU, req.MaxMemory, req.MaxStorage)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set user quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to set user quota",
+			"message": fmt.Sprintf("Database error setting quota for user %s (sessions=%d, cpu=%d, memory=%d, storage=%d): %v", userID, req.MaxSessions, req.MaxCPU, req.MaxMemory, req.MaxStorage, err),
+		})
 		return
 	}
 
@@ -249,7 +255,10 @@ func (h *QuotasHandler) DeleteUserQuota(c *gin.Context) {
 	`, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete user quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete user quota",
+			"message": fmt.Sprintf("Database error deleting quota for user %s: %v", userID, err),
+		})
 		return
 	}
 
@@ -329,7 +338,10 @@ func (h *QuotasHandler) GetUserQuotaStatus(c *gin.Context) {
 		maxMemory = sql.NullInt64{Int64: 8192, Valid: true}
 		maxStorage = sql.NullInt64{Int64: 100, Valid: true}
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get quota",
+			"message": fmt.Sprintf("Database error querying quota status for user %s: %v", userID, err),
+		})
 		return
 	}
 
@@ -445,7 +457,10 @@ func (h *QuotasHandler) GetTeamQuota(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get team quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get team quota",
+			"message": fmt.Sprintf("Database error querying quota for team %s: %v", teamID, err),
+		})
 		return
 	}
 
@@ -493,7 +508,10 @@ func (h *QuotasHandler) SetTeamQuota(c *gin.Context) {
 	`, id, teamID, req.MaxSessions, req.MaxCPU, req.MaxMemory, req.MaxStorage)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to set team quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to set team quota",
+			"message": fmt.Sprintf("Database error setting quota for team %s (sessions=%d, cpu=%d, memory=%d, storage=%d): %v", teamID, req.MaxSessions, req.MaxCPU, req.MaxMemory, req.MaxStorage, err),
+		})
 		return
 	}
 
@@ -518,7 +536,10 @@ func (h *QuotasHandler) DeleteTeamQuota(c *gin.Context) {
 	`, teamID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete team quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete team quota",
+			"message": fmt.Sprintf("Database error deleting quota for team %s: %v", teamID, err),
+		})
 		return
 	}
 
@@ -538,7 +559,10 @@ func (h *QuotasHandler) GetTeamUsage(c *gin.Context) {
 		SELECT user_id FROM group_members WHERE group_id = $1
 	`, teamID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get team members"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get team members",
+			"message": fmt.Sprintf("Database error querying members for team %s: %v", teamID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -641,7 +665,10 @@ func (h *QuotasHandler) GetTeamQuotaStatus(c *gin.Context) {
 		maxMemory = sql.NullInt64{Int64: 40960, Valid: true}
 		maxStorage = sql.NullInt64{Int64: 500, Valid: true}
 	} else if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get quota"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get quota",
+			"message": fmt.Sprintf("Database error querying quota status for team %s: %v", teamID, err),
+		})
 		return
 	}
 
@@ -650,7 +677,10 @@ func (h *QuotasHandler) GetTeamQuotaStatus(c *gin.Context) {
 		SELECT user_id FROM group_members WHERE group_id = $1
 	`, teamID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get team members"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get team members",
+			"message": fmt.Sprintf("Database error querying members for team %s: %v", teamID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -814,7 +844,10 @@ func (h *QuotasHandler) ListAllQuotas(c *gin.Context) {
 
 	rows, err := h.db.DB().QueryContext(ctx, query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to list quotas"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list quotas",
+			"message": fmt.Sprintf("Database error listing quotas (type=%s): %v", quotaType, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -1004,7 +1037,10 @@ func (h *QuotasHandler) GetPolicies(c *gin.Context) {
 		ORDER BY priority DESC, created_at DESC
 	`)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get policies"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get policies",
+			"message": fmt.Sprintf("Database error listing quota policies: %v", err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -1060,7 +1096,10 @@ func (h *QuotasHandler) CreatePolicy(c *gin.Context) {
 	`, id, req.Name, req.Description, req.Rules, req.Priority, req.Enabled)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to create policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create policy",
+			"message": fmt.Sprintf("Database error creating policy '%s': %v", req.Name, err),
+		})
 		return
 	}
 
@@ -1091,7 +1130,10 @@ func (h *QuotasHandler) GetPolicy(c *gin.Context) {
 		return
 	}
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to get policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get policy",
+			"message": fmt.Sprintf("Database error getting policy %s: %v", policyID, err),
+		})
 		return
 	}
 
@@ -1133,7 +1175,10 @@ func (h *QuotasHandler) UpdatePolicy(c *gin.Context) {
 	`, req.Name, req.Description, req.Rules, req.Priority, req.Enabled, policyID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to update policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update policy",
+			"message": fmt.Sprintf("Database error updating policy %s: %v", policyID, err),
+		})
 		return
 	}
 
@@ -1150,7 +1195,10 @@ func (h *QuotasHandler) DeletePolicy(c *gin.Context) {
 
 	_, err := h.db.DB().ExecContext(ctx, `DELETE FROM quota_policies WHERE id = $1`, policyID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to delete policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete policy",
+			"message": fmt.Sprintf("Database error deleting policy %s: %v", policyID, err),
+		})
 		return
 	}
 

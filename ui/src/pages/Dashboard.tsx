@@ -142,7 +142,7 @@ export default function Dashboard() {
         name: sessionName,
         namespace: 'streamspace',
         user: username,
-        template: templateName,
+        applicationId: app.id,
         state: 'running',
         persistentHome: true,
       });
@@ -155,7 +155,9 @@ export default function Dashboard() {
         navigate('/sessions');
       }, 1000);
     } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to launch application');
+      const errorData = error.response?.data;
+      const errorMessage = errorData?.message || errorData?.error || 'Failed to launch application';
+      toast.error(errorMessage);
     } finally {
       const newLaunching = new Set(launching);
       newLaunching.delete(app.id);

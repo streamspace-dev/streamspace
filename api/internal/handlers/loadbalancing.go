@@ -193,7 +193,10 @@ func (h *LoadBalancingHandler) CreateLoadBalancingPolicy(c *gin.Context) {
 		req.ResourceThresholds, req.Metadata, createdBy).Scan(&id)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create load balancing policy",
+			"message": fmt.Sprintf("Database insert failed for policy '%s' with strategy '%s': %v", req.Name, req.Strategy, err),
+		})
 		return
 	}
 
@@ -217,7 +220,10 @@ func (h *LoadBalancingHandler) ListLoadBalancingPolicies(c *gin.Context) {
 	`)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list load balancing policies",
+			"message": fmt.Sprintf("Database query failed: %v", err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -247,7 +253,10 @@ func (h *LoadBalancingHandler) GetNodeStatus(c *gin.Context) {
 		// Fall back to database if K8s API is not available
 		nodes, err = h.fetchNodeStatusFromDatabase()
 		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get node status"})
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to get node status",
+				"message": fmt.Sprintf("Both Kubernetes API and database fallback failed: %v", err),
+			})
 			return
 		}
 	}
@@ -653,7 +662,10 @@ func (h *LoadBalancingHandler) SelectNode(c *gin.Context) {
 	`)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to get node status"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get node status for selection",
+			"message": fmt.Sprintf("Database query for available nodes failed: %v", err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -861,7 +873,10 @@ func (h *LoadBalancingHandler) CreateAutoScalingPolicy(c *gin.Context) {
 		req.Metadata, createdBy).Scan(&id)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create policy"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create auto-scaling policy",
+			"message": fmt.Sprintf("Database insert failed for policy '%s' targeting %s '%s': %v", req.Name, req.TargetType, req.TargetID, err),
+		})
 		return
 	}
 
@@ -886,7 +901,10 @@ func (h *LoadBalancingHandler) ListAutoScalingPolicies(c *gin.Context) {
 	`)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list auto-scaling policies",
+			"message": fmt.Sprintf("Database query failed: %v", err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -1009,7 +1027,10 @@ func (h *LoadBalancingHandler) TriggerScaling(c *gin.Context) {
 		newReplicas, req.Reason).Scan(&eventID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to record scaling event"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to record scaling event",
+			"message": fmt.Sprintf("Database insert failed for scaling event on policy %s (action: %s, %d -> %d replicas): %v", policyID, req.Action, currentReplicas, newReplicas, err),
+		})
 		return
 	}
 
@@ -1063,7 +1084,10 @@ func (h *LoadBalancingHandler) GetScalingHistory(c *gin.Context) {
 	}
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "database error"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to get scaling history",
+			"message": fmt.Sprintf("Database query failed for scaling events (policy_id filter: %s, limit: %s): %v", policyID, limit, err),
+		})
 		return
 	}
 	defer rows.Close()

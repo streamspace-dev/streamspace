@@ -465,7 +465,10 @@ func (h *CollaborationHandler) CreateCollaborationSession(c *gin.Context) {
 	`, collabID, sessionID, userID, toJSONB(req.Settings), true, true, true, "active").Scan(&collabID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create collaboration session"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create collaboration session",
+			"message": fmt.Sprintf("Database insert failed for session %s by user %s: %v", sessionID, userID, err),
+		})
 		return
 	}
 
@@ -588,7 +591,10 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 	`, collabID, userID, "participant", toJSONB(participantPerms), userColor, true)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to join collaboration"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to join collaboration",
+			"message": fmt.Sprintf("Database insert failed for user %s joining collaboration %s: %v", userID, collabID, err),
+		})
 		return
 	}
 
@@ -627,7 +633,10 @@ func (h *CollaborationHandler) LeaveCollaborationSession(c *gin.Context) {
 	`, time.Now(), collabID, userID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to leave"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to leave collaboration",
+			"message": fmt.Sprintf("Database update failed for user %s leaving collaboration %s: %v", userID, collabID, err),
+		})
 		return
 	}
 
@@ -669,7 +678,10 @@ func (h *CollaborationHandler) GetCollaborationParticipants(c *gin.Context) {
 	`, collabID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve participants"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve participants",
+			"message": fmt.Sprintf("Database query failed for collaboration %s: %v", collabID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -730,7 +742,10 @@ func (h *CollaborationHandler) UpdateParticipantRole(c *gin.Context) {
 	`, req.Role, toJSONB(req.Permissions), collabID, targetUserID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to update role"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to update role",
+			"message": fmt.Sprintf("Database update failed for user %s in collaboration %s: %v", targetUserID, collabID, err),
+		})
 		return
 	}
 
@@ -775,7 +790,10 @@ func (h *CollaborationHandler) SendChatMessage(c *gin.Context) {
 	`, collabID, userID, req.Message, req.MessageType, toJSONB(req.Metadata)).Scan(&msgID)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to send message"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to send message",
+			"message": fmt.Sprintf("Database insert failed for chat message from user %s in collaboration %s: %v", userID, collabID, err),
+		})
 		return
 	}
 
@@ -820,7 +838,10 @@ func (h *CollaborationHandler) GetChatHistory(c *gin.Context) {
 
 	rows, err := h.DB.DB().Query(query, args...)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve chat"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve chat history",
+			"message": fmt.Sprintf("Database query failed for collaboration %s: %v", collabID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -897,7 +918,10 @@ func (h *CollaborationHandler) CreateAnnotation(c *gin.Context) {
 		toJSONB(req.Points), req.Text, req.IsPersistent, expiresAt)
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to create annotation"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create annotation",
+			"message": fmt.Sprintf("Database insert failed for annotation %s by user %s in collaboration %s: %v", annotationID, userID, collabID, err),
+		})
 		return
 	}
 
@@ -923,7 +947,10 @@ func (h *CollaborationHandler) GetAnnotations(c *gin.Context) {
 	`, collabID, time.Now())
 
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to retrieve annotations"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to retrieve annotations",
+			"message": fmt.Sprintf("Database query failed for collaboration %s: %v", collabID, err),
+		})
 		return
 	}
 	defer rows.Close()
@@ -964,7 +991,10 @@ func (h *CollaborationHandler) DeleteAnnotation(c *gin.Context) {
 
 	_, err := h.DB.DB().Exec("DELETE FROM collaboration_annotations WHERE id = $1", annotationID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to delete annotation"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to delete annotation",
+			"message": fmt.Sprintf("Database delete failed for annotation %s in collaboration %s: %v", annotationID, collabID, err),
+		})
 		return
 	}
 
@@ -983,7 +1013,10 @@ func (h *CollaborationHandler) ClearAllAnnotations(c *gin.Context) {
 
 	result, err := h.DB.DB().Exec("DELETE FROM collaboration_annotations WHERE collaboration_id = $1", collabID)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "failed to clear annotations"})
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to clear annotations",
+			"message": fmt.Sprintf("Database delete failed for all annotations in collaboration %s: %v", collabID, err),
+		})
 		return
 	}
 
