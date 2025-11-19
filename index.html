@@ -62,9 +62,9 @@
           <p>No client installation required. Access any application directly from your web browser using VNC streaming technology.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">☸️</div>
-          <h3>Kubernetes Native</h3>
-          <p>Built on Kubernetes with custom CRDs. Leverage your existing K8s infrastructure and tools.</p>
+          <div class="feature-icon">🖥️</div>
+          <h3>Multi-Platform</h3>
+          <p>Deploy on Kubernetes, Docker, or hybrid environments. Event-driven architecture with NATS messaging.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
@@ -148,20 +148,19 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
       </div>
       <div class="code-block">
         <pre><code>┌─────────────┐         ┌─────────────┐         ┌──────────────┐
-│   Web UI    │────────▶│ API Backend │────────▶│ Kubernetes   │
-│  (React)    │  REST/WS│  (Go/Gin)   │  K8s API│  Controller  │
+│   Web UI    │────────▶│ API Backend │────────▶│     NATS     │
+│  (React)    │  REST/WS│  (Go/Gin)   │  Events │  JetStream   │
 └─────────────┘         └──────┬──────┘         └──────┬───────┘
-                               │                        │
-                               │                        │
-                        ┌──────┴────────┐       ┌──────┴───────┐
-                        │  PostgreSQL   │       │  Sessions    │
-                        │   Database    │       │  (CRDs)      │
-                        └───────────────┘       └──────────────┘</code></pre>
+                               │                   ┌───┴───┐
+                        ┌──────┴────────┐    ┌─────┴───┐   └───────┐
+                        │  PostgreSQL   │    │ K8s     │   │Docker │
+                        │   Database    │    │ Ctrl    │   │ Ctrl  │
+                        └───────────────┘    └─────────┘   └───────┘</code></pre>
       </div>
       <div class="features-grid mt-4">
         <div class="feature-card">
-          <h3>Go Controller</h3>
-          <p>Kubebuilder-based controller manages session lifecycle, hibernation, and resource provisioning.</p>
+          <h3>Platform Controllers</h3>
+          <p>Kubernetes and Docker controllers manage sessions on their respective platforms via NATS events.</p>
         </div>
         <div class="feature-card">
           <h3>Go API Backend</h3>

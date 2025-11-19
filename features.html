@@ -75,14 +75,14 @@
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">☸️</div>
-          <h3>Kubernetes Native</h3>
-          <p>Built on Kubernetes with custom resource definitions (CRDs). Leverage your existing K8s infrastructure, monitoring, and deployment tools.</p>
+          <div class="feature-icon">🖥️</div>
+          <h3>Multi-Platform Support</h3>
+          <p>Deploy on Kubernetes, Docker, or hybrid environments. Event-driven architecture with NATS JetStream for platform coordination.</p>
           <ul style="margin-top: 1rem; color: var(--text-secondary);">
-            <li>Session CRD for user workspaces</li>
-            <li>Template CRD for applications</li>
-            <li>Native kubectl integration</li>
-            <li>Helm chart for deployment</li>
+            <li>Kubernetes controller with CRDs</li>
+            <li>Docker controller for standalone hosts</li>
+            <li>NATS JetStream messaging</li>
+            <li>Helm chart for K8s deployment</li>
           </ul>
         </div>
 
@@ -263,14 +263,14 @@
       </div>
       <div class="features-grid">
         <div class="feature-card">
-          <h3>Controller (Go + Kubebuilder)</h3>
+          <h3>Platform Controllers (Go)</h3>
           <ul style="color: var(--text-secondary);">
+            <li>Kubernetes controller (Kubebuilder)</li>
+            <li>Docker controller (standalone)</li>
+            <li>NATS JetStream event handling</li>
             <li>Session lifecycle management</li>
             <li>Automatic resource provisioning</li>
-            <li>State machine (running/hibernated/terminated)</li>
-            <li>Deployment scaling (0/1 replicas)</li>
-            <li>Service and Ingress creation</li>
-            <li>PVC provisioning for user homes</li>
+            <li>State machine (running/hibernated)</li>
             <li>Prometheus metrics export</li>
             <li>Leader election for HA</li>
           </ul>
@@ -319,6 +319,12 @@
           <div class="feature-icon">⎈</div>
           <h3>K3s (Recommended)</h3>
           <p>Optimized for k3s lightweight Kubernetes. Perfect for edge deployments and ARM64 architectures like Raspberry Pi clusters.</p>
+        </div>
+
+        <div class="feature-card">
+          <div class="feature-icon">🐳</div>
+          <h3>Docker Standalone</h3>
+          <p>Deploy on a single Docker host with Docker Compose. Great for development, testing, or small teams.</p>
         </div>
 
         <div class="feature-card">

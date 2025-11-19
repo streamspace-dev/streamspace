@@ -60,15 +60,15 @@
       </ul>
 
       <h2 id="architecture">Architecture</h2>
-      <p>StreamSpace consists of three main components:</p>
+      <p>StreamSpace uses a multi-platform event-driven architecture with NATS messaging:</p>
 
-      <h3>1. Kubernetes Controller</h3>
-      <p>Go-based controller using Kubebuilder framework that manages Session and Template CRDs.</p>
+      <h3>1. Platform Controllers</h3>
+      <p>Platform-specific controllers that manage sessions on their respective infrastructure via NATS events.</p>
       <ul>
-        <li>Reconciles Session CRDs with Kubernetes resources</li>
-        <li>Creates Deployments, Services, Ingresses, PVCs</li>
-        <li>Handles state transitions and hibernation</li>
-        <li>Exports Prometheus metrics</li>
+        <li><strong>Kubernetes Controller</strong> (k8s-controller/) - Kubebuilder-based, manages CRDs</li>
+        <li><strong>Docker Controller</strong> (docker-controller/) - Manages Docker containers</li>
+        <li>NATS JetStream for durable event delivery</li>
+        <li>Prometheus metrics export</li>
       </ul>
       <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/ARCHITECTURE.md">View detailed architecture →</a></p>
 
@@ -216,13 +216,13 @@ kubectl delete session user1-firefox -n streamspace</code></pre>
 
       <h2 id="development">Development</h2>
 
-      <h3>Controller Development</h3>
+      <h3>Kubernetes Controller Development</h3>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>cd controller
+        <pre><code>cd k8s-controller
 
 # Run locally
 make run
@@ -231,10 +231,28 @@ make run
 make test
 
 # Build Docker image
-make docker-build IMG=myregistry/streamspace-controller:dev</code></pre>
+make docker-build IMG=myregistry/streamspace-kubernetes-controller:dev</code></pre>
       </div>
 
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/controller/README.md">Controller development guide →</a></p>
+      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/k8s-controller/README.md">Kubernetes controller development guide →</a></p>
+
+      <h3>Docker Controller Development</h3>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code>cd docker-controller
+
+# Build locally
+go build -o streamspace-docker-controller
+
+# Run with Docker Compose
+./scripts/docker-dev.sh
+
+# Test NATS connectivity
+./scripts/test-nats.sh</code></pre>
+      </div>
 
       <h3>API Development</h3>
       <div class="code-block">
