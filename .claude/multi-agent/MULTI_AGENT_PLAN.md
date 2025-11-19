@@ -25,12 +25,12 @@ All agents should read this document frequently and update it with their progres
 
 ### Agents
 
-| Agent | Role | Responsibilities |
-|-------|------|------------------|
-| **Agent 1: Architect** | Strategic Leader | Research, architecture design, planning, coordination |
-| **Agent 2: Builder** | Implementation | Code implementation, feature development |
-| **Agent 3: Validator** | Quality Assurance | Testing, validation, security audits |
-| **Agent 4: Scribe** | Documentation | Documentation, guides, migration docs |
+| Agent | Role | Responsibilities | Branch |
+|-------|------|------------------|--------|
+| **Agent 1: Architect** | Strategic Leader | Research, architecture design, planning, coordination | `claude/streamspace-architect-research-01GnWyRVhkDkCQ2JJQtr56sW` |
+| **Agent 2: Builder** | Implementation | Code implementation, feature development | `claude/setup-builder-agent-01WY9VL1GrfE1C8whMxUAv6k` |
+| **Agent 3: Validator** | Quality Assurance | Testing, validation, security audits | `claude/setup-agent3-validator-01Up3UEcZzBbmB8ZW3QcuXjk` |
+| **Agent 4: Scribe** | Documentation | Documentation, guides, migration docs | `claude/setup-agent4-scribe-01Mwt87JrQ4ZrjXSHHooUKZ9` |
 
 ---
 
@@ -763,27 +763,32 @@ spec:
 - [x] Create priority list
 - [x] Update MULTI_AGENT_PLAN.md
 
-### Week 2 - Critical & High Priority Fixes
-- [ ] Fix Plugin Runtime Loading (Critical)
-- [ ] Fix Webhook Secret Panic (Critical)
-- [ ] Fix Plugin Enable/Config (High)
-- [ ] Fix SAML Return URL Validation (High)
+### Week 2 - Critical Issues (Core Platform)
+- [ ] Fix Session Name/ID Mismatch (Critical #1)
+- [ ] Fix Template Name in Sessions (Critical #2)
+- [ ] Fix UseSessionTemplate Creation (Critical #3)
+- [ ] Fix VNC URL Empty (Critical #4)
+- [ ] Fix Heartbeat Validation (Critical #5)
+- [ ] Fix Installation Status (Critical #6)
+- [ ] Fix Plugin Runtime Loading (Critical #7)
+- [ ] Fix Webhook Secret Panic (Critical #8)
 
-### Week 3 - Medium Priority (Plugin System)
-- [ ] Implement Multi-Monitor Plugin
-- [ ] Implement Calendar Plugin
-- [ ] Complete Session Status Conditions
-- [ ] Fix Batch Operations Error Collection
+### Week 3 - High Priority Issues
+- [ ] Fix Plugin Enable Runtime Loading (High #9)
+- [ ] Fix Plugin Config Update (High #10)
+- [ ] Fix SAML Return URL Validation (High #11)
 
-### Week 4 - Medium Priority (Controllers)
-- [ ] Fix Docker Controller Template Lookup
-- [ ] Implement MFA SMS/Email (or remove from UI)
+### Week 4 - Medium Priority Issues
+- [ ] Implement MFA SMS/Email or remove from UI (Medium #12)
+- [ ] Complete Session Status Conditions (Medium #13)
+- [ ] Fix Batch Operations Error Collection (Medium #14)
+- [ ] Fix Docker Controller Template Lookup (Medium #15)
 
 ### Week 5 - UI Fixes
-- [ ] Fix Marketplace Install Button
-- [ ] Implement Dashboard Favorites API
-- [ ] Fix Demo Mode Security
-- [ ] Remove Debug Console.log
+- [ ] Implement Dashboard Favorites API (UI #16)
+- [ ] Fix Demo Mode Security (UI #17)
+- [ ] Remove Debug Console.log (UI #18)
+- [ ] Delete Obsolete UI Pages (UI #19)
 
 ### Week 6 - Testing & Validation
 - [ ] Complete test coverage for all fixes
