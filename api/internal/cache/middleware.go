@@ -130,10 +130,19 @@ func CacheMiddleware(cache *Cache, ttl time.Duration) gin.HandlerFunc {
 
 		// Only cache successful responses
 		if c.Writer.Status() >= 200 && c.Writer.Status() < 300 {
-			// Capture headers
+			// Capture headers, excluding security-sensitive ones that shouldn't be cached
 			headers := make(map[string]string)
+			excludeHeaders := map[string]bool{
+				"X-Csrf-Token":  true, // CSRF tokens must be fresh per-request
+				"X-CSRF-Token":  true, // CSRF tokens (alternate case)
+				"Set-Cookie":    true, // Cookies are user-specific
+				"Authorization": true, // Auth headers shouldn't be cached
+				"X-Request-Id":  true, // Request IDs are unique per request
+			}
 			for key := range c.Writer.Header() {
-				headers[key] = c.Writer.Header().Get(key)
+				if !excludeHeaders[key] {
+					headers[key] = c.Writer.Header().Get(key)
+				}
 			}
 
 			// Store in cache
