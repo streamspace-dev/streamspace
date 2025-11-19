@@ -135,6 +135,37 @@ func (r *ApplicationInstallReconciler) Reconcile(ctx context.Context, req ctrl.R
 	return ctrl.Result{}, nil
 }
 
+// getStringField gets a string value from a map, checking multiple key variations.
+// This handles both camelCase (yaml tags) and PascalCase (json without tags).
+func getStringField(data map[string]interface{}, keys ...string) string {
+	for _, key := range keys {
+		if val, ok := data[key].(string); ok {
+			return val
+		}
+	}
+	return ""
+}
+
+// getMapField gets a map value from a map, checking multiple key variations.
+func getMapField(data map[string]interface{}, keys ...string) map[string]interface{} {
+	for _, key := range keys {
+		if val, ok := data[key].(map[string]interface{}); ok {
+			return val
+		}
+	}
+	return nil
+}
+
+// getSliceField gets a slice value from a map, checking multiple key variations.
+func getSliceField(data map[string]interface{}, keys ...string) []interface{} {
+	for _, key := range keys {
+		if val, ok := data[key].([]interface{}); ok {
+			return val
+		}
+	}
+	return nil
+}
+
 // parseManifest parses the YAML manifest and returns a TemplateSpec.
 func (r *ApplicationInstallReconciler) parseManifest(manifest string) (*streamspacev1alpha1.TemplateSpec, error) {
 	// Parse the YAML manifest
@@ -146,58 +177,48 @@ func (r *ApplicationInstallReconciler) parseManifest(manifest string) (*streamsp
 	spec := &streamspacev1alpha1.TemplateSpec{}
 
 	// Extract spec from manifest - support both wrapped and unwrapped formats
-	// Try to get 'spec' field first, otherwise use root level as spec
-	specData, ok := manifestData["spec"].(map[string]interface{})
-	if !ok {
+	// Try to get 'spec' or 'Spec' field first, otherwise use root level as spec
+	specData := getMapField(manifestData, "spec", "Spec")
+	if specData == nil {
 		// No 'spec' wrapper, use root level as spec data
 		specData = manifestData
 	}
 
 	// Map fields from manifest to TemplateSpec
-	if displayName, ok := specData["displayName"].(string); ok {
-		spec.DisplayName = displayName
-	}
-	if description, ok := specData["description"].(string); ok {
-		spec.Description = description
-	}
-	if category, ok := specData["category"].(string); ok {
-		spec.Category = category
-	}
-	if icon, ok := specData["icon"].(string); ok {
-		spec.Icon = icon
-	}
-	if baseImage, ok := specData["baseImage"].(string); ok {
-		spec.BaseImage = baseImage
-	}
+	// Check both camelCase (yaml) and PascalCase (json) keys
+	spec.DisplayName = getStringField(specData, "displayName", "DisplayName")
+	spec.Description = getStringField(specData, "description", "Description")
+	spec.Category = getStringField(specData, "category", "Category")
+	spec.Icon = getStringField(specData, "icon", "Icon")
+	spec.BaseImage = getStringField(specData, "baseImage", "BaseImage")
 
 	// Parse defaultResources
-	if defaultRes, ok := specData["defaultResources"].(map[string]interface{}); ok {
-		if requests, ok := defaultRes["requests"].(map[string]interface{}); ok {
+	defaultRes := getMapField(specData, "defaultResources", "DefaultResources")
+	if defaultRes != nil {
+		requests := getMapField(defaultRes, "requests", "Requests")
+		if requests != nil {
 			spec.DefaultResources.Requests = corev1.ResourceList{}
-			if memory, ok := requests["memory"].(string); ok {
-				quantity, err := parseQuantity(memory)
-				if err == nil {
+			if memory := getStringField(requests, "memory", "Memory"); memory != "" {
+				if quantity, err := parseQuantity(memory); err == nil {
 					spec.DefaultResources.Requests[corev1.ResourceMemory] = quantity
 				}
 			}
-			if cpu, ok := requests["cpu"].(string); ok {
-				quantity, err := parseQuantity(cpu)
-				if err == nil {
+			if cpu := getStringField(requests, "cpu", "CPU", "Cpu"); cpu != "" {
+				if quantity, err := parseQuantity(cpu); err == nil {
 					spec.DefaultResources.Requests[corev1.ResourceCPU] = quantity
 				}
 			}
 		}
-		if limits, ok := defaultRes["limits"].(map[string]interface{}); ok {
+		limits := getMapField(defaultRes, "limits", "Limits")
+		if limits != nil {
 			spec.DefaultResources.Limits = corev1.ResourceList{}
-			if memory, ok := limits["memory"].(string); ok {
-				quantity, err := parseQuantity(memory)
-				if err == nil {
+			if memory := getStringField(limits, "memory", "Memory"); memory != "" {
+				if quantity, err := parseQuantity(memory); err == nil {
 					spec.DefaultResources.Limits[corev1.ResourceMemory] = quantity
 				}
 			}
-			if cpu, ok := limits["cpu"].(string); ok {
-				quantity, err := parseQuantity(cpu)
-				if err == nil {
+			if cpu := getStringField(limits, "cpu", "CPU", "Cpu"); cpu != "" {
+				if quantity, err := parseQuantity(cpu); err == nil {
 					spec.DefaultResources.Limits[corev1.ResourceCPU] = quantity
 				}
 			}
@@ -205,68 +226,63 @@ func (r *ApplicationInstallReconciler) parseManifest(manifest string) (*streamsp
 	}
 
 	// Parse ports
-	if ports, ok := specData["ports"].([]interface{}); ok {
-		for _, p := range ports {
-			if portMap, ok := p.(map[string]interface{}); ok {
-				port := corev1.ContainerPort{}
-				if name, ok := portMap["name"].(string); ok {
-					port.Name = name
-				}
-				if containerPort, ok := portMap["containerPort"].(float64); ok {
-					port.ContainerPort = int32(containerPort)
-				}
-				if protocol, ok := portMap["protocol"].(string); ok {
-					port.Protocol = corev1.Protocol(protocol)
-				}
-				spec.Ports = append(spec.Ports, port)
+	ports := getSliceField(specData, "ports", "Ports")
+	for _, p := range ports {
+		if portMap, ok := p.(map[string]interface{}); ok {
+			port := corev1.ContainerPort{}
+			port.Name = getStringField(portMap, "name", "Name")
+			if containerPort, ok := portMap["containerPort"].(float64); ok {
+				port.ContainerPort = int32(containerPort)
+			} else if containerPort, ok := portMap["ContainerPort"].(float64); ok {
+				port.ContainerPort = int32(containerPort)
 			}
+			if protocol := getStringField(portMap, "protocol", "Protocol"); protocol != "" {
+				port.Protocol = corev1.Protocol(protocol)
+			}
+			spec.Ports = append(spec.Ports, port)
 		}
 	}
 
 	// Parse env
-	if envVars, ok := specData["env"].([]interface{}); ok {
-		for _, e := range envVars {
-			if envMap, ok := e.(map[string]interface{}); ok {
-				env := corev1.EnvVar{}
-				if name, ok := envMap["name"].(string); ok {
-					env.Name = name
-				}
-				if value, ok := envMap["value"].(string); ok {
-					env.Value = value
-				}
-				spec.Env = append(spec.Env, env)
-			}
+	envVars := getSliceField(specData, "env", "Env")
+	for _, e := range envVars {
+		if envMap, ok := e.(map[string]interface{}); ok {
+			env := corev1.EnvVar{}
+			env.Name = getStringField(envMap, "name", "Name")
+			env.Value = getStringField(envMap, "value", "Value")
+			spec.Env = append(spec.Env, env)
 		}
 	}
 
 	// Parse VNC config
-	if vnc, ok := specData["vnc"].(map[string]interface{}); ok {
+	vnc := getMapField(specData, "vnc", "VNC", "Vnc")
+	if vnc != nil {
 		if enabled, ok := vnc["enabled"].(bool); ok {
+			spec.VNC.Enabled = enabled
+		} else if enabled, ok := vnc["Enabled"].(bool); ok {
 			spec.VNC.Enabled = enabled
 		}
 		if port, ok := vnc["port"].(float64); ok {
 			spec.VNC.Port = int(port)
+		} else if port, ok := vnc["Port"].(float64); ok {
+			spec.VNC.Port = int(port)
 		}
-		if protocol, ok := vnc["protocol"].(string); ok {
-			spec.VNC.Protocol = protocol
-		}
+		spec.VNC.Protocol = getStringField(vnc, "protocol", "Protocol")
 	}
 
 	// Parse tags
-	if tags, ok := specData["tags"].([]interface{}); ok {
-		for _, t := range tags {
-			if tag, ok := t.(string); ok {
-				spec.Tags = append(spec.Tags, tag)
-			}
+	tags := getSliceField(specData, "tags", "Tags")
+	for _, t := range tags {
+		if tag, ok := t.(string); ok {
+			spec.Tags = append(spec.Tags, tag)
 		}
 	}
 
 	// Parse capabilities
-	if capabilities, ok := specData["capabilities"].([]interface{}); ok {
-		for _, c := range capabilities {
-			if cap, ok := c.(string); ok {
-				spec.Capabilities = append(spec.Capabilities, cap)
-			}
+	capabilities := getSliceField(specData, "capabilities", "Capabilities")
+	for _, c := range capabilities {
+		if cap, ok := c.(string); ok {
+			spec.Capabilities = append(spec.Capabilities, cap)
 		}
 	}
 
