@@ -69,7 +69,7 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
 
 ### Task: Test Coverage - Controller Tests
 
-- **Assigned To**: Builder / Validator
+- **Assigned To**: Validator
 - **Status**: In Progress (ACTIVE)
 - **Priority**: CRITICAL (P0)
 - **Dependencies**: None
@@ -79,13 +79,14 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
   - Add tests for error handling, edge cases, concurrent operations
   - Test hibernation cycles, session lifecycle, resource quotas
   - Use envtest for local execution
+  - See: `.claude/multi-agent/VALIDATOR_TASK_CONTROLLER_TESTS.md` for detailed guide
 - **Estimated Effort**: 2-3 weeks
-- **Last Updated**: 2025-11-20 - Architect
-- **Started**: 2025-11-20 - Builder handoff initiated
+- **Last Updated**: 2025-11-20 - Architect (corrected role assignment)
+- **Started**: 2025-11-20 - Validator handoff initiated
 
 ### Task: Test Coverage - API Handler Tests
 
-- **Assigned To**: Builder / Validator
+- **Assigned To**: Validator
 - **Status**: Not Started
 - **Priority**: CRITICAL (P0)
 - **Dependencies**: None
@@ -96,11 +97,11 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
   - Test error handling, validation, authorization
   - Fix existing test build errors (method name mismatches)
 - **Estimated Effort**: 3-4 weeks
-- **Last Updated**: 2025-11-20 - Architect
+- **Last Updated**: 2025-11-20 - Architect (corrected role assignment)
 
 ### Task: Test Coverage - UI Component Tests
 
-- **Assigned To**: Builder / Validator
+- **Assigned To**: Validator
 - **Status**: Not Started
 - **Priority**: HIGH (P1)
 - **Dependencies**: None
@@ -111,7 +112,7 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
   - Vitest already configured with 80% threshold
   - Focus on critical user flows first
 - **Estimated Effort**: 2-3 weeks
-- **Last Updated**: 2025-11-20 - Architect
+- **Last Updated**: 2025-11-20 - Architect (corrected role assignment)
 
 ### Task: Plugin Implementation - Top 10 Plugins
 
@@ -747,11 +748,13 @@ After thorough examination of 150+ files across all components, I'm pleased to r
 
 ---
 
-### Architect → Builder - 2025-11-20 19:05 UTC 🚀
+### Architect → Validator - 2025-11-20 19:05 UTC (CORRECTED 20:30 UTC) 🧪
 
-**HANDOFF: Starting v1.0.0 Stable Development**
+**HANDOFF: Starting v1.0.0 Test Coverage Work**
 
 User has approved starting development. First task: **Controller Test Coverage** (P0).
+
+**Role Clarification:** Test coverage is Validator work, not Builder work. Builder focuses on feature implementation.
 
 **Your Mission:**
 Expand test coverage in `k8s-controller/controllers/` from 30-40% to 70%+
@@ -816,6 +819,7 @@ go tool cover -func=coverage.out
 ```
 
 **References:**
+- Detailed task guide: `.claude/multi-agent/VALIDATOR_TASK_CONTROLLER_TESTS.md`
 - Existing test patterns: `k8s-controller/controllers/*_test.go`
 - Controller code: `k8s-controller/controllers/*_controller.go`
 - Kubebuilder testing docs: https://book.kubebuilder.io/reference/testing
@@ -825,11 +829,48 @@ go tool cover -func=coverage.out
 **Report Back:**
 - Update task status in MULTI_AGENT_PLAN.md as you progress
 - Document any bugs discovered (create GitHub issues)
-- Let Validator know when tests are ready for review
+- Notify Builder of bugs that need fixing
 
 **Questions?** Ask in Notes and Blockers section.
 
 Ready when you are! 💪
+
+---
+
+### Architect → Team - 2025-11-20 20:30 UTC 📋
+
+**Role Assignment Correction ✅**
+
+User correctly identified that test coverage work should be assigned to **Validator**, not Builder.
+
+**Corrected Role Separation:**
+
+**Builder (Agent 2)**:
+- ✅ Feature development (new admin UI pages, API handlers, controllers)
+- ✅ Bug fixes and refactoring
+- ✅ Core implementation work
+- ❌ NOT test writing
+
+**Validator (Agent 3)**:
+- ✅ Unit tests, integration tests, E2E tests
+- ✅ Test coverage improvements
+- ✅ Quality assurance and security validation
+- ✅ Edge case testing
+
+**Changes Made:**
+- All test coverage tasks reassigned from "Builder / Validator" to "Validator"
+- Handoff message corrected from "Architect → Builder" to "Architect → Validator"
+- Task file renamed: `BUILDER_TASK_CONTROLLER_TESTS.md` → `VALIDATOR_TASK_CONTROLLER_TESTS.md`
+
+**Builder's Focus (Next):**
+- Admin UI P0 features (Audit Logs, System Config, License Management)
+- Plugin implementation (extracting handler logic)
+- Bug fixes discovered by Validator
+
+**Validator's Focus (Current):**
+- Controller test coverage (30% → 70%+)
+- API handler test coverage (10% → 70%+)
+- UI component test coverage (5% → 70%+)
 
 ---
 
