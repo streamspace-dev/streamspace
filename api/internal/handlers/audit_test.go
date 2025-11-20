@@ -27,7 +27,6 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/stretchr/testify/assert"
-	"github.com/stretchr/testify/require"
 )
 
 // setupAuditTest creates a test environment with mocked database
