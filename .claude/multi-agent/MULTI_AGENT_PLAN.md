@@ -69,7 +69,7 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
 ### Task: Test Coverage - Controller Tests
 
 - **Assigned To**: Builder / Validator
-- **Status**: Not Started
+- **Status**: In Progress (ACTIVE)
 - **Priority**: CRITICAL (P0)
 - **Dependencies**: None
 - **Target Coverage**: 30-40% → 70%+
@@ -80,6 +80,7 @@ See "Deferred Tasks (v1.1+)" section below for detailed plans.
   - Use envtest for local execution
 - **Estimated Effort**: 2-3 weeks
 - **Last Updated**: 2025-11-20 - Architect
+- **Started**: 2025-11-20 - Builder handoff initiated
 
 ### Task: Test Coverage - API Handler Tests
 
@@ -569,6 +570,92 @@ After thorough examination of 150+ files across all components, I'm pleased to r
 - Scribe: Ready to document testing patterns and plugin migration
 
 **No Blockers:** All tasks defined and ready to begin
+
+---
+
+### Architect → Builder - 2025-11-20 19:05 UTC 🚀
+
+**HANDOFF: Starting v1.0.0 Stable Development**
+
+User has approved starting development. First task: **Controller Test Coverage** (P0).
+
+**Your Mission:**
+Expand test coverage in `k8s-controller/controllers/` from 30-40% to 70%+
+
+**Starting Point:**
+```
+k8s-controller/controllers/
+├── session_controller_test.go (7,242 bytes) ← Expand this
+├── hibernation_controller_test.go (6,412 bytes) ← Expand this
+├── template_controller_test.go (4,971 bytes) ← Expand this
+├── suite_test.go (2,537 bytes) ← Setup file
+```
+
+**What to Test (Priority Order):**
+
+1. **Session Controller** (`session_controller_test.go`)
+   - Error handling: What happens when pod creation fails?
+   - Edge cases: Duplicate session names, invalid templates, resource limits exceeded
+   - State transitions: running → hibernated → running → terminated
+   - Concurrent operations: Multiple sessions for same user
+   - Resource cleanup: Pod/PVC deletion on session termination
+   - User PVC creation: Verify persistent home directory setup
+
+2. **Hibernation Controller** (`hibernation_controller_test.go`)
+   - Idle detection: Correctly identifies inactive sessions
+   - Timeout thresholds: Respects custom idleTimeout values
+   - Scale to zero: Deployment replicas set to 0 correctly
+   - Wake cycle: Session wakes properly when accessed
+   - Edge cases: Session deleted while hibernated, concurrent wake/hibernate
+
+3. **Template Controller** (`template_controller_test.go`)
+   - Template validation: Invalid image names, missing required fields
+   - Resource defaults: Properly applies defaultResources
+   - Template updates: Changes propagate to existing sessions
+   - Template deletion: Handles orphaned sessions
+
+**Test Framework:**
+- Use `envtest` for local Kubernetes API simulation
+- Follow existing patterns in current test files
+- Use Ginkgo/Gomega BDD-style tests (already set up)
+
+**Success Criteria:**
+- [ ] Test coverage ≥ 70% for all controller files
+- [ ] All critical paths tested (create, update, delete, reconcile)
+- [ ] Error handling tested (API failures, resource conflicts)
+- [ ] Edge cases covered (concurrent ops, race conditions)
+- [ ] Tests pass locally with `make test`
+
+**Commands:**
+```bash
+cd k8s-controller
+
+# Run tests
+make test
+
+# Run specific test
+go test ./controllers -run TestSessionController -v
+
+# Check coverage
+go test ./controllers -coverprofile=coverage.out
+go tool cover -func=coverage.out
+```
+
+**References:**
+- Existing test patterns: `k8s-controller/controllers/*_test.go`
+- Controller code: `k8s-controller/controllers/*_controller.go`
+- Kubebuilder testing docs: https://book.kubebuilder.io/reference/testing
+
+**Estimated Time:** 2-3 weeks
+
+**Report Back:**
+- Update task status in MULTI_AGENT_PLAN.md as you progress
+- Document any bugs discovered (create GitHub issues)
+- Let Validator know when tests are ready for review
+
+**Questions?** Ask in Notes and Blockers section.
+
+Ready when you are! 💪
 
 ---
 
