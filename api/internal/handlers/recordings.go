@@ -5,7 +5,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
-	"io"
+
 	"net/http"
 	"os"
 	"path/filepath"
@@ -31,68 +31,62 @@ func NewRecordingHandler(database *db.Database) *RecordingHandler {
 
 // Recording represents a session recording
 type Recording struct {
-	ID               int64      `json:"id"`
-	SessionID        string     `json:"session_id"`
-	RecordingType    string     `json:"recording_type"`
-	StoragePath      string     `json:"storage_path"`
-	FileSizeBytes    int64      `json:"file_size_bytes"`
-	DurationSeconds  int        `json:"duration_seconds"`
-	StartedAt        *time.Time `json:"started_at"`
-	EndedAt          *time.Time `json:"ended_at"`
-	Status           string     `json:"status"`
-	ErrorMessage     *string    `json:"error_message"`
-	CreatedBy        *string    `json:"created_by"`
-	CreatedAt        time.Time  `json:"created_at"`
-	UpdatedAt        time.Time  `json:"updated_at"`
+	ID              int64      `json:"id"`
+	SessionID       string     `json:"session_id"`
+	RecordingType   string     `json:"recording_type"`
+	StoragePath     string     `json:"storage_path"`
+	FileSizeBytes   int64      `json:"file_size_bytes"`
+	DurationSeconds int        `json:"duration_seconds"`
+	StartedAt       *time.Time `json:"started_at"`
+	EndedAt         *time.Time `json:"ended_at"`
+	Status          string     `json:"status"`
+	ErrorMessage    *string    `json:"error_message"`
+	CreatedBy       *string    `json:"created_by"`
+	CreatedAt       time.Time  `json:"created_at"`
+	UpdatedAt       time.Time  `json:"updated_at"`
 
 	// Computed fields
-	SessionName      string     `json:"session_name,omitempty"`
-	UserName         string     `json:"user_name,omitempty"`
-	FileSizeMB       float64    `json:"file_size_mb,omitempty"`
-	DurationFormatted string    `json:"duration_formatted,omitempty"`
+	SessionName       string  `json:"session_name,omitempty"`
+	UserName          string  `json:"user_name,omitempty"`
+	FileSizeMB        float64 `json:"file_size_mb,omitempty"`
+	DurationFormatted string  `json:"duration_formatted,omitempty"`
 }
 
 // RecordingPolicy represents a recording policy
 type RecordingPolicy struct {
-	ID                 int64                  `json:"id"`
-	Name               string                 `json:"name"`
-	Description        *string                `json:"description"`
-	AutoRecord         bool                   `json:"auto_record"`
-	RecordingFormat    string                 `json:"recording_format"`
-	RetentionDays      int                    `json:"retention_days"`
-	ApplyToUsers       map[string]interface{} `json:"apply_to_users"`
-	ApplyToTeams       map[string]interface{} `json:"apply_to_teams"`
-	ApplyToTemplates   map[string]interface{} `json:"apply_to_templates"`
-	RequireReason      bool                   `json:"require_reason"`
-	AllowUserPlayback  bool                   `json:"allow_user_playback"`
-	AllowUserDownload  bool                   `json:"allow_user_download"`
-	RequireApproval    bool                   `json:"require_approval"`
-	NotifyOnRecording  bool                   `json:"notify_on_recording"`
-	Metadata           map[string]interface{} `json:"metadata"`
-	Enabled            bool                   `json:"enabled"`
-	Priority           int                    `json:"priority"`
-	CreatedAt          time.Time              `json:"created_at"`
-	UpdatedAt          time.Time              `json:"updated_at"`
+	ID                int64                  `json:"id"`
+	Name              string                 `json:"name"`
+	Description       *string                `json:"description"`
+	AutoRecord        bool                   `json:"auto_record"`
+	RecordingFormat   string                 `json:"recording_format"`
+	RetentionDays     int                    `json:"retention_days"`
+	ApplyToUsers      map[string]interface{} `json:"apply_to_users"`
+	ApplyToTeams      map[string]interface{} `json:"apply_to_teams"`
+	ApplyToTemplates  map[string]interface{} `json:"apply_to_templates"`
+	RequireReason     bool                   `json:"require_reason"`
+	AllowUserPlayback bool                   `json:"allow_user_playback"`
+	AllowUserDownload bool                   `json:"allow_user_download"`
+	RequireApproval   bool                   `json:"require_approval"`
+	NotifyOnRecording bool                   `json:"notify_on_recording"`
+	Metadata          map[string]interface{} `json:"metadata"`
+	Enabled           bool                   `json:"enabled"`
+	Priority          int                    `json:"priority"`
+	CreatedAt         time.Time              `json:"created_at"`
+	UpdatedAt         time.Time              `json:"updated_at"`
 }
 
 // AccessLog represents a recording access log entry
 type AccessLog struct {
-	ID          int64      `json:"id"`
-	RecordingID int64      `json:"recording_id"`
-	UserID      *string    `json:"user_id"`
-	Action      string     `json:"action"`
-	AccessedAt  time.Time  `json:"accessed_at"`
-	IPAddress   *string    `json:"ip_address"`
-	UserAgent   *string    `json:"user_agent"`
+	ID          int64     `json:"id"`
+	RecordingID int64     `json:"recording_id"`
+	UserID      *string   `json:"user_id"`
+	Action      string    `json:"action"`
+	AccessedAt  time.Time `json:"accessed_at"`
+	IPAddress   *string   `json:"ip_address"`
+	UserAgent   *string   `json:"user_agent"`
 
 	// Computed fields
-	UserName    string     `json:"user_name,omitempty"`
-}
-
-// ErrorResponse represents an error response
-type ErrorResponse struct {
-	Error   string `json:"error"`
-	Message string `json:"message,omitempty"`
+	UserName string `json:"user_name,omitempty"`
 }
 
 // RegisterRoutes registers recording routes
@@ -278,9 +272,9 @@ func (h *RecordingHandler) ListRecordings(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{
 		"recordings": recordings,
 		"pagination": gin.H{
-			"page":       pageInt,
-			"page_size":  pageSizeInt,
-			"total":      total,
+			"page":        pageInt,
+			"page_size":   pageSizeInt,
+			"total":       total,
 			"total_pages": (total + pageSizeInt - 1) / pageSizeInt,
 		},
 	})
@@ -478,7 +472,7 @@ func (h *RecordingHandler) GetRecordingAccessLog(c *gin.Context) {
 func (h *RecordingHandler) StartRecording(c *gin.Context) {
 	// This would integrate with recording service/plugin
 	c.JSON(http.StatusNotImplemented, ErrorResponse{
-		Error: "Not implemented",
+		Error:   "Not implemented",
 		Message: "Recording start is handled by the recording service",
 	})
 }
@@ -487,7 +481,7 @@ func (h *RecordingHandler) StartRecording(c *gin.Context) {
 func (h *RecordingHandler) StopRecording(c *gin.Context) {
 	// This would integrate with recording service/plugin
 	c.JSON(http.StatusNotImplemented, ErrorResponse{
-		Error: "Not implemented",
+		Error:   "Not implemented",
 		Message: "Recording stop is handled by the recording service",
 	})
 }

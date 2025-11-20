@@ -13,25 +13,25 @@
 // SUPPORTED SCHEDULE TYPES:
 //
 // 1. One-Time (once): Session starts at a specific date/time, runs once
-//    - Example: Demo session on Friday at 2 PM
-//    - Requires: start_time field
+//   - Example: Demo session on Friday at 2 PM
+//   - Requires: start_time field
 //
 // 2. Daily (daily): Session starts every day at a specific time
-//    - Example: Development environment ready at 9 AM every weekday
-//    - Requires: time_of_day field (HH:MM format)
+//   - Example: Development environment ready at 9 AM every weekday
+//   - Requires: time_of_day field (HH:MM format)
 //
 // 3. Weekly (weekly): Session starts on specific days of the week
-//    - Example: Training sessions every Monday and Wednesday at 10 AM
-//    - Requires: days_of_week array (0=Sunday, 6=Saturday), time_of_day
+//   - Example: Training sessions every Monday and Wednesday at 10 AM
+//   - Requires: days_of_week array (0=Sunday, 6=Saturday), time_of_day
 //
 // 4. Monthly (monthly): Session starts on a specific day of each month
-//    - Example: Monthly report review on the 1st at 9 AM
-//    - Requires: day_of_month (1-31), time_of_day
+//   - Example: Monthly report review on the 1st at 9 AM
+//   - Requires: day_of_month (1-31), time_of_day
 //
 // 5. Cron Expression (cron): Advanced scheduling using cron syntax
-//    - Example: "0 9 * * 1-5" for weekdays at 9 AM
-//    - Requires: cron_expr field
-//    - Uses standard cron format: minute hour day month weekday
+//   - Example: "0 9 * * 1-5" for weekdays at 9 AM
+//   - Requires: cron_expr field
+//   - Uses standard cron format: minute hour day month weekday
 //
 // CONFLICT DETECTION:
 //
@@ -53,11 +53,11 @@
 //
 // PRE-WARMING AND AUTO-TERMINATION:
 //
-// - Pre-warming: Start session N minutes before scheduled time
-//   Useful for sessions with slow startup (large container images)
+//   - Pre-warming: Start session N minutes before scheduled time
+//     Useful for sessions with slow startup (large container images)
 //
-// - Auto-termination: Automatically stop session N minutes after start
-//   Prevents runaway sessions and saves resources
+//   - Auto-termination: Automatically stop session N minutes after start
+//     Prevents runaway sessions and saves resources
 //
 // TIMEZONE HANDLING:
 //
@@ -67,14 +67,9 @@
 package handlers
 
 import (
-	"bytes"
 	"database/sql"
-	"encoding/json"
 	"fmt"
-	"io"
 	"net/http"
-	"net/url"
-	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -115,47 +110,47 @@ func NewSchedulingHandler(database *db.Database) *SchedulingHandler {
 // - Weekly demo session every Friday at 2 PM
 // - Training environment that pre-warms 15 minutes before scheduled time
 type ScheduledSession struct {
-	ID               int64           `json:"id"`
-	UserID           string          `json:"user_id"`
-	TemplateID       string          `json:"template_id"`
-	Name             string          `json:"name"`
-	Description      string          `json:"description,omitempty"`
-	Timezone         string          `json:"timezone"`
-	Schedule         ScheduleConfig  `json:"schedule"`
-	Resources        ResourceConfig  `json:"resources"`
-	AutoTerminate    bool            `json:"auto_terminate"`
-	TerminateAfter   int             `json:"terminate_after_minutes,omitempty"` // Minutes after start
-	PreWarm          bool            `json:"pre_warm"`                           // Start before scheduled time
-	PreWarmMinutes   int             `json:"pre_warm_minutes,omitempty"`
-	PostCleanup      bool            `json:"post_cleanup"`                       // Cleanup after termination
-	Enabled          bool            `json:"enabled"`
-	NextRunAt        time.Time       `json:"next_run_at,omitempty"`
-	LastRunAt        time.Time       `json:"last_run_at,omitempty"`
-	LastSessionID    string          `json:"last_session_id,omitempty"`
-	LastRunStatus    string          `json:"last_run_status,omitempty"`
-	Metadata         map[string]interface{} `json:"metadata,omitempty"`
-	CreatedAt        time.Time       `json:"created_at"`
-	UpdatedAt        time.Time       `json:"updated_at"`
+	ID             int64                  `json:"id"`
+	UserID         string                 `json:"user_id"`
+	TemplateID     string                 `json:"template_id"`
+	Name           string                 `json:"name"`
+	Description    string                 `json:"description,omitempty"`
+	Timezone       string                 `json:"timezone"`
+	Schedule       ScheduleConfig         `json:"schedule"`
+	Resources      ResourceConfig         `json:"resources"`
+	AutoTerminate  bool                   `json:"auto_terminate"`
+	TerminateAfter int                    `json:"terminate_after_minutes,omitempty"` // Minutes after start
+	PreWarm        bool                   `json:"pre_warm"`                          // Start before scheduled time
+	PreWarmMinutes int                    `json:"pre_warm_minutes,omitempty"`
+	PostCleanup    bool                   `json:"post_cleanup"` // Cleanup after termination
+	Enabled        bool                   `json:"enabled"`
+	NextRunAt      time.Time              `json:"next_run_at,omitempty"`
+	LastRunAt      time.Time              `json:"last_run_at,omitempty"`
+	LastSessionID  string                 `json:"last_session_id,omitempty"`
+	LastRunStatus  string                 `json:"last_run_status,omitempty"`
+	Metadata       map[string]interface{} `json:"metadata,omitempty"`
+	CreatedAt      time.Time              `json:"created_at"`
+	UpdatedAt      time.Time              `json:"updated_at"`
 }
 
 // ScheduleConfig defines when a session should run
 type ScheduleConfig struct {
-	Type          string    `json:"type"` // "once", "daily", "weekly", "monthly", "cron"
-	StartTime     time.Time `json:"start_time,omitempty"`
-	CronExpr      string    `json:"cron_expr,omitempty"` // For cron type
-	DaysOfWeek    []int     `json:"days_of_week,omitempty"` // 0=Sunday, 1=Monday, etc.
-	DayOfMonth    int       `json:"day_of_month,omitempty"` // 1-31
-	TimeOfDay     string    `json:"time_of_day,omitempty"`  // HH:MM format
-	EndDate       time.Time `json:"end_date,omitempty"`     // When to stop recurring
-	Exceptions    []string  `json:"exceptions,omitempty"`   // Dates to skip (YYYY-MM-DD)
+	Type       string    `json:"type"` // "once", "daily", "weekly", "monthly", "cron"
+	StartTime  time.Time `json:"start_time,omitempty"`
+	CronExpr   string    `json:"cron_expr,omitempty"`    // For cron type
+	DaysOfWeek []int     `json:"days_of_week,omitempty"` // 0=Sunday, 1=Monday, etc.
+	DayOfMonth int       `json:"day_of_month,omitempty"` // 1-31
+	TimeOfDay  string    `json:"time_of_day,omitempty"`  // HH:MM format
+	EndDate    time.Time `json:"end_date,omitempty"`     // When to stop recurring
+	Exceptions []string  `json:"exceptions,omitempty"`   // Dates to skip (YYYY-MM-DD)
 }
 
 // ResourceConfig for scheduled sessions
 type ResourceConfig struct {
-	Memory    string `json:"memory"`
-	CPU       string `json:"cpu"`
-	Storage   string `json:"storage,omitempty"`
-	GPUCount  int    `json:"gpu_count,omitempty"`
+	Memory   string `json:"memory"`
+	CPU      string `json:"cpu"`
+	Storage  string `json:"storage,omitempty"`
+	GPUCount int    `json:"gpu_count,omitempty"`
 }
 
 // CreateScheduledSession creates a new scheduled session.
@@ -167,23 +162,23 @@ type ResourceConfig struct {
 // VALIDATION STEPS:
 //
 // 1. Schedule Validation:
-//    - Ensures required fields are present for the schedule type
-//    - For "daily": requires time_of_day
-//    - For "weekly": requires time_of_day and days_of_week
-//    - For "monthly": requires time_of_day and day_of_month
-//    - For "cron": validates cron expression syntax
-//    - For "once": requires start_time
+//   - Ensures required fields are present for the schedule type
+//   - For "daily": requires time_of_day
+//   - For "weekly": requires time_of_day and days_of_week
+//   - For "monthly": requires time_of_day and day_of_month
+//   - For "cron": validates cron expression syntax
+//   - For "once": requires start_time
 //
 // 2. Next Run Calculation:
-//    - Computes when the schedule will next trigger
-//    - Uses the user's timezone for proper time conversion
-//    - For recurring schedules, calculates first occurrence after current time
+//   - Computes when the schedule will next trigger
+//   - Uses the user's timezone for proper time conversion
+//   - For recurring schedules, calculates first occurrence after current time
 //
 // 3. Conflict Detection:
-//    - Checks if the proposed schedule would overlap with existing schedules
-//    - Prevents double-booking that could violate quotas or confuse users
-//    - Considers session duration (terminate_after) when detecting overlaps
-//    - Returns HTTP 409 Conflict if overlaps are found
+//   - Checks if the proposed schedule would overlap with existing schedules
+//   - Prevents double-booking that could violate quotas or confuse users
+//   - Considers session duration (terminate_after) when detecting overlaps
+//   - Returns HTTP 409 Conflict if overlaps are found
 //
 // CONFLICT DETECTION LOGIC:
 //
@@ -266,9 +261,9 @@ func (h *SchedulingHandler) CreateScheduledSession(c *gin.Context) {
 	if err == nil && len(conflicts) > 0 {
 		// Return HTTP 409 Conflict with details about conflicting schedules
 		c.JSON(http.StatusConflict, gin.H{
-			"error": "scheduling conflict detected",
-			"conflicts": conflicts,  // Array of conflicting schedule IDs
-			"message": "This schedule conflicts with existing scheduled sessions. Please choose a different time.",
+			"error":     "scheduling conflict detected",
+			"conflicts": conflicts, // Array of conflicting schedule IDs
+			"message":   "This schedule conflicts with existing scheduled sessions. Please choose a different time.",
 		})
 		return
 	}
@@ -298,10 +293,10 @@ func (h *SchedulingHandler) CreateScheduledSession(c *gin.Context) {
 	req.ID = id
 
 	c.JSON(http.StatusOK, gin.H{
-		"id":      id,
-		"message": "Scheduled session created",
+		"id":          id,
+		"message":     "Scheduled session created",
 		"next_run_at": nextRun,
-		"schedule": req,
+		"schedule":    req,
 	})
 }
 
@@ -588,7 +583,6 @@ func (h *SchedulingHandler) DisableScheduledSession(c *gin.Context) {
 // CALENDAR INTEGRATION
 // ============================================================================
 
-
 // ============================================================================
 // CALENDAR INTEGRATION - DEPRECATED
 // ============================================================================
@@ -639,36 +633,36 @@ func (h *SchedulingHandler) DisableScheduledSession(c *gin.Context) {
 
 // CalendarIntegration represents a calendar connection (DEPRECATED)
 type CalendarIntegration struct {
-	ID            int64     `json:"id"`
-	UserID        string    `json:"user_id"`
-	Provider      string    `json:"provider"`
-	AccountEmail  string    `json:"account_email"`
-	AccessToken   string    `json:"-"`
-	RefreshToken  string    `json:"-"`
-	TokenExpiry   time.Time `json:"token_expiry,omitempty"`
-	CalendarID    string    `json:"calendar_id,omitempty"`
-	Enabled       bool      `json:"enabled"`
-	SyncEnabled   bool      `json:"sync_enabled"`
-	AutoCreate    bool      `json:"auto_create_events"`
-	CreatedAt     time.Time `json:"created_at"`
-	LastSyncAt    *time.Time `json:"last_sync_at,omitempty"`
+	ID           int64      `json:"id"`
+	UserID       string     `json:"user_id"`
+	Provider     string     `json:"provider"`
+	AccountEmail string     `json:"account_email"`
+	AccessToken  string     `json:"-"`
+	RefreshToken string     `json:"-"`
+	TokenExpiry  time.Time  `json:"token_expiry,omitempty"`
+	CalendarID   string     `json:"calendar_id,omitempty"`
+	Enabled      bool       `json:"enabled"`
+	SyncEnabled  bool       `json:"sync_enabled"`
+	AutoCreate   bool       `json:"auto_create_events"`
+	CreatedAt    time.Time  `json:"created_at"`
+	LastSyncAt   *time.Time `json:"last_sync_at,omitempty"`
 }
 
 // CalendarEvent represents a calendar event for a session (DEPRECATED)
 type CalendarEvent struct {
-	ID           int64     `json:"id"`
-	UserID       string    `json:"user_id"`
-	ScheduleID   int64     `json:"schedule_id"`
-	CalendarID   string    `json:"calendar_id"`
-	EventID      string    `json:"event_id"`
-	Provider     string    `json:"provider"`
-	Title        string    `json:"title"`
-	Description  string    `json:"description,omitempty"`
-	StartTime    time.Time `json:"start_time"`
-	EndTime      time.Time `json:"end_time"`
-	Timezone     string    `json:"timezone,omitempty"`
-	Status       string    `json:"status"`
-	CreatedAt    time.Time `json:"created_at"`
+	ID           int64      `json:"id"`
+	UserID       string     `json:"user_id"`
+	ScheduleID   int64      `json:"schedule_id"`
+	CalendarID   string     `json:"calendar_id"`
+	EventID      string     `json:"event_id"`
+	Provider     string     `json:"provider"`
+	Title        string     `json:"title"`
+	Description  string     `json:"description,omitempty"`
+	StartTime    time.Time  `json:"start_time"`
+	EndTime      time.Time  `json:"end_time"`
+	Timezone     string     `json:"timezone,omitempty"`
+	Status       string     `json:"status"`
+	CreatedAt    time.Time  `json:"created_at"`
 	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
 }
 
@@ -678,8 +672,8 @@ func (h *SchedulingHandler) calendarDeprecationResponse(c *gin.Context) {
 		"error":   "Calendar integration has been moved to a plugin",
 		"message": "This functionality has been extracted into the streamspace-calendar plugin for better modularity",
 		"migration": gin.H{
-			"install": "Admin → Plugins → streamspace-calendar",
-			"api_base": "/api/plugins/streamspace-calendar",
+			"install":       "Admin → Plugins → streamspace-calendar",
+			"api_base":      "/api/plugins/streamspace-calendar",
 			"documentation": "https://docs.streamspace.io/plugins/calendar",
 		},
 		"features": []string{
@@ -689,7 +683,7 @@ func (h *SchedulingHandler) calendarDeprecationResponse(c *gin.Context) {
 			"Automatic session synchronization",
 			"Event reminders and timezone support",
 		},
-		"status": "deprecated",
+		"status":     "deprecated",
 		"removed_in": "v2.0.0",
 	})
 }
@@ -724,48 +718,6 @@ func (h *SchedulingHandler) ExportICalendar(c *gin.Context) {
 	h.calendarDeprecationResponse(c)
 }
 
-	userID := c.GetString("user_id")
-
-	// Get all enabled scheduled sessions
-	rows, err := h.DB.DB().Query(`
-		SELECT id, name, description, schedule, timezone, template_id
-		FROM scheduled_sessions
-		WHERE user_id = $1 AND enabled = true
-	`, userID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to export calendar",
-			"message": fmt.Sprintf("Database query failed for user %s scheduled sessions: %v", userID, err),
-		})
-		return
-	}
-	defer rows.Close()
-
-	// Build iCal file
-	ical := "BEGIN:VCALENDAR\r\nVERSION:2.0\r\nPRODID:-//StreamSpace//Scheduled Sessions//EN\r\n"
-
-	for rows.Next() {
-		var id int64
-		var name, description, timezone, templateID string
-		var schedule ScheduleConfig
-		rows.Scan(&id, &name, &description, &schedule, &timezone, &templateID)
-
-		// Create VEVENT for each occurrence (simplified)
-		ical += "BEGIN:VEVENT\r\n"
-		ical += fmt.Sprintf("UID:streamspace-%d@streamspace.local\r\n", id)
-		ical += fmt.Sprintf("SUMMARY:%s\r\n", name)
-		ical += fmt.Sprintf("DESCRIPTION:%s\r\n", description)
-		ical += "END:VEVENT\r\n"
-	}
-
-	ical += "END:VCALENDAR\r\n"
-
-	c.Header("Content-Type", "text/calendar; charset=utf-8")
-	c.Header("Content-Disposition", "attachment; filename=streamspace-schedule.ics")
-	c.String(http.StatusOK, ical)
-}
-
 // ============================================================================
 // HELPER FUNCTIONS
 // ============================================================================
@@ -776,45 +728,50 @@ func (h *SchedulingHandler) ExportICalendar(c *gin.Context) {
 // specified schedule type. Each schedule type has different requirements:
 //
 // SCHEDULE TYPE: "once"
-//   Purpose: Run a single time at a specific date/time
-//   Required Fields:
-//   - start_time: Exact timestamp when session should start
-//   Example: Start demo session on 2025-12-25 at 10:00 AM
-//   Validation: start_time cannot be zero value
+//
+//	Purpose: Run a single time at a specific date/time
+//	Required Fields:
+//	- start_time: Exact timestamp when session should start
+//	Example: Start demo session on 2025-12-25 at 10:00 AM
+//	Validation: start_time cannot be zero value
 //
 // SCHEDULE TYPE: "daily"
-//   Purpose: Run every day at a specific time
-//   Required Fields:
-//   - time_of_day: Time in HH:MM format (e.g., "09:30")
-//   Example: Start dev environment at 9:30 AM every day
-//   Validation: time_of_day must be non-empty
-//   Note: Time is interpreted in the schedule's timezone
+//
+//	Purpose: Run every day at a specific time
+//	Required Fields:
+//	- time_of_day: Time in HH:MM format (e.g., "09:30")
+//	Example: Start dev environment at 9:30 AM every day
+//	Validation: time_of_day must be non-empty
+//	Note: Time is interpreted in the schedule's timezone
 //
 // SCHEDULE TYPE: "weekly"
-//   Purpose: Run on specific days of the week
-//   Required Fields:
-//   - time_of_day: Time in HH:MM format
-//   - days_of_week: Array of integers (0=Sunday, 1=Monday, ..., 6=Saturday)
-//   Example: Training sessions on Monday (1) and Wednesday (3) at 2 PM
-//   Validation: Both fields must be present, days_of_week cannot be empty
+//
+//	Purpose: Run on specific days of the week
+//	Required Fields:
+//	- time_of_day: Time in HH:MM format
+//	- days_of_week: Array of integers (0=Sunday, 1=Monday, ..., 6=Saturday)
+//	Example: Training sessions on Monday (1) and Wednesday (3) at 2 PM
+//	Validation: Both fields must be present, days_of_week cannot be empty
 //
 // SCHEDULE TYPE: "monthly"
-//   Purpose: Run on a specific day of each month
-//   Required Fields:
-//   - time_of_day: Time in HH:MM format
-//   - day_of_month: Day number (1-31)
-//   Example: Monthly report review on the 15th at 10 AM
-//   Validation: Both fields must be present, day_of_month must be non-zero
-//   Note: If day_of_month > days in month (e.g., 31 in February),
-//         schedule will skip that month
+//
+//	Purpose: Run on a specific day of each month
+//	Required Fields:
+//	- time_of_day: Time in HH:MM format
+//	- day_of_month: Day number (1-31)
+//	Example: Monthly report review on the 15th at 10 AM
+//	Validation: Both fields must be present, day_of_month must be non-zero
+//	Note: If day_of_month > days in month (e.g., 31 in February),
+//	      schedule will skip that month
 //
 // SCHEDULE TYPE: "cron"
-//   Purpose: Advanced scheduling using cron expression
-//   Required Fields:
-//   - cron_expr: Standard cron expression (minute hour day month weekday)
-//   Example: "0 9 * * 1-5" for weekdays at 9 AM
-//   Validation: Expression must parse successfully using cron.ParseStandard
-//   Note: Uses standard cron format (5 fields), not extended format
+//
+//	Purpose: Advanced scheduling using cron expression
+//	Required Fields:
+//	- cron_expr: Standard cron expression (minute hour day month weekday)
+//	Example: "0 9 * * 1-5" for weekdays at 9 AM
+//	Validation: Expression must parse successfully using cron.ParseStandard
+//	Note: Uses standard cron format (5 fields), not extended format
 //
 // SECURITY CONSIDERATIONS:
 //
@@ -897,35 +854,35 @@ func (h *SchedulingHandler) validateSchedule(schedule *ScheduleConfig) error {
 // ALGORITHM BY SCHEDULE TYPE:
 //
 // 1. ONE-TIME ("once"):
-//    - Simply returns the start_time field
-//    - No calculation needed
-//    - Schedule will only run once at that exact time
+//   - Simply returns the start_time field
+//   - No calculation needed
+//   - Schedule will only run once at that exact time
 //
 // 2. DAILY ("daily"):
-//    - Parses time_of_day (e.g., "09:30" -> 9 hours, 30 minutes)
-//    - Creates timestamp for TODAY at that time
-//    - If that time has already passed today, schedules for TOMORROW
-//    - Example: If now is 2 PM and schedule is 9 AM, next run is tomorrow 9 AM
+//   - Parses time_of_day (e.g., "09:30" -> 9 hours, 30 minutes)
+//   - Creates timestamp for TODAY at that time
+//   - If that time has already passed today, schedules for TOMORROW
+//   - Example: If now is 2 PM and schedule is 9 AM, next run is tomorrow 9 AM
 //
 // 3. WEEKLY ("weekly"):
-//    - Iterates through next 7 days
-//    - For each day, checks if weekday matches days_of_week
-//    - If match found and time is in future, returns that timestamp
-//    - Handles case where multiple days match (returns earliest)
-//    - Example: Today is Monday, schedule is Wed/Fri at 2 PM -> returns Wed 2 PM
+//   - Iterates through next 7 days
+//   - For each day, checks if weekday matches days_of_week
+//   - If match found and time is in future, returns that timestamp
+//   - Handles case where multiple days match (returns earliest)
+//   - Example: Today is Monday, schedule is Wed/Fri at 2 PM -> returns Wed 2 PM
 //
 // 4. MONTHLY ("monthly"):
-//    - Creates timestamp for THIS MONTH on the specified day_of_month
-//    - If that day/time has passed, schedules for NEXT MONTH
-//    - NOTE: If day_of_month > days in month (e.g., 31 in February),
-//            Go automatically adjusts to first day of next month
-//    - Example: Now is Feb 15, schedule is 10th -> next run is Mar 10
+//   - Creates timestamp for THIS MONTH on the specified day_of_month
+//   - If that day/time has passed, schedules for NEXT MONTH
+//   - NOTE: If day_of_month > days in month (e.g., 31 in February),
+//     Go automatically adjusts to first day of next month
+//   - Example: Now is Feb 15, schedule is 10th -> next run is Mar 10
 //
 // 5. CRON ("cron"):
-//    - Uses robfig/cron library to parse expression
-//    - Calls cron scheduler's Next() method to get next occurrence
-//    - Supports standard 5-field cron format: minute hour day month weekday
-//    - Example: "0 9 * * 1-5" -> weekdays at 9:00 AM
+//   - Uses robfig/cron library to parse expression
+//   - Calls cron scheduler's Next() method to get next occurrence
+//   - Supports standard 5-field cron format: minute hour day month weekday
+//   - Example: "0 9 * * 1-5" -> weekdays at 9:00 AM
 //
 // EDGE CASES HANDLED:
 //
@@ -959,7 +916,7 @@ func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone 
 	// This allows schedules to still work even with misconfigured timezones
 	loc, err := time.LoadLocation(timezone)
 	if err != nil {
-		loc = time.UTC  // Fallback to UTC if timezone is invalid
+		loc = time.UTC // Fallback to UTC if timezone is invalid
 	}
 
 	// STEP 2: Get current time in the user's timezone
@@ -983,12 +940,12 @@ func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone 
 		// Example: If now is 2025-11-16 14:00 and schedule is "09:00"
 		//   - Today's 9 AM is 2025-11-16 09:00 (already passed)
 		//   - Next run is 2025-11-17 09:00 (tomorrow)
-		t, _ := time.Parse("15:04", schedule.TimeOfDay)  // Parse HH:MM format
+		t, _ := time.Parse("15:04", schedule.TimeOfDay) // Parse HH:MM format
 		next := time.Date(now.Year(), now.Month(), now.Day(), t.Hour(), t.Minute(), 0, 0, loc)
 
 		// If today's time already passed, schedule for tomorrow
 		if next.Before(now) {
-			next = next.AddDate(0, 0, 1)  // Add 1 day
+			next = next.AddDate(0, 0, 1) // Add 1 day
 		}
 		return next, nil
 
@@ -1012,7 +969,7 @@ func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone 
 
 		// Check next 7 days for a matching weekday
 		for i := 0; i < 7; i++ {
-			next := now.AddDate(0, 0, i)  // Add i days to current date
+			next := now.AddDate(0, 0, i) // Add i days to current date
 
 			// Check if this day's weekday is in the schedule's days_of_week array
 			if containsInt(schedule.DaysOfWeek, int(next.Weekday())) {
@@ -1047,7 +1004,7 @@ func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone 
 
 		// If this month's occurrence already passed, schedule for next month
 		if next.Before(now) {
-			next = next.AddDate(0, 1, 0)  // Add 1 month
+			next = next.AddDate(0, 1, 0) // Add 1 month
 		}
 		return next, nil
 
@@ -1096,28 +1053,31 @@ func (h *SchedulingHandler) calculateNextRun(schedule *ScheduleConfig, timezone 
 //
 // Two schedules conflict if their time windows overlap. The algorithm:
 //
-// 1. Calculate when the proposed schedule will next run
-// 2. Calculate the proposed session duration (with default of 8 hours)
-// 3. Query all enabled schedules for this user from database
-// 4. For each existing schedule:
-//    a. Get its next_run_at and duration
-//    b. Check if time windows overlap using interval arithmetic
-// 5. Return list of conflicting schedule IDs
+//  1. Calculate when the proposed schedule will next run
+//  2. Calculate the proposed session duration (with default of 8 hours)
+//  3. Query all enabled schedules for this user from database
+//  4. For each existing schedule:
+//     a. Get its next_run_at and duration
+//     b. Check if time windows overlap using interval arithmetic
+//  5. Return list of conflicting schedule IDs
 //
 // INTERVAL OVERLAP LOGIC:
 //
 // Two intervals [A_start, A_end] and [B_start, B_end] overlap if:
-//   A_start < B_end  AND  B_start < A_end
+//
+//	A_start < B_end  AND  B_start < A_end
 //
 // Example:
-//   Proposed:  [09:00, 17:00]  (9 AM - 5 PM, 8 hours)
-//   Existing:  [14:00, 18:00]  (2 PM - 6 PM, 4 hours)
-//   Check:     09:00 < 18:00  AND  14:00 < 17:00  =  TRUE (conflict!)
+//
+//	Proposed:  [09:00, 17:00]  (9 AM - 5 PM, 8 hours)
+//	Existing:  [14:00, 18:00]  (2 PM - 6 PM, 4 hours)
+//	Check:     09:00 < 18:00  AND  14:00 < 17:00  =  TRUE (conflict!)
 //
 // Non-overlapping example:
-//   Proposed:  [09:00, 12:00]  (9 AM - 12 PM)
-//   Existing:  [14:00, 18:00]  (2 PM - 6 PM)
-//   Check:     09:00 < 18:00  AND  14:00 < 12:00  =  FALSE (no conflict)
+//
+//	Proposed:  [09:00, 12:00]  (9 AM - 12 PM)
+//	Existing:  [14:00, 18:00]  (2 PM - 6 PM)
+//	Check:     09:00 < 18:00  AND  14:00 < 12:00  =  FALSE (no conflict)
 //
 // DEFAULT DURATIONS:
 //
@@ -1213,11 +1173,6 @@ func (h *SchedulingHandler) checkSchedulingConflicts(userID string, schedule Sch
 	}
 
 	return conflicts, nil
-}
-
-// Get Google Calendar OAuth URL
-
-	return eventResponse.ID, nil
 }
 
 // Helper: check if int slice contains value
