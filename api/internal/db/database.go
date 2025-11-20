@@ -2171,6 +2171,85 @@ func (d *Database) Migrate() error {
 			'{"description": "Default Community license - free forever", "auto_generated": true}'
 		)
 		ON CONFLICT (license_key) DO NOTHING`,
+
+		// ========================================================================
+		// v2.0 Architecture: Multi-Platform Control Plane + Agents
+		// ========================================================================
+
+		// Agents table (platform-specific execution agents)
+		// Supports multi-platform deployment (Kubernetes, Docker, VMs, Cloud)
+		`CREATE TABLE IF NOT EXISTS agents (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			agent_id VARCHAR(255) UNIQUE NOT NULL,
+			platform VARCHAR(50) NOT NULL,
+			region VARCHAR(100),
+			status VARCHAR(50) DEFAULT 'offline',
+			capacity JSONB,
+			last_heartbeat TIMESTAMP,
+			websocket_id VARCHAR(255),
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Agent commands table (command queue for agent communication)
+		// Tracks commands sent from Control Plane to Agents
+		`CREATE TABLE IF NOT EXISTS agent_commands (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			command_id VARCHAR(255) UNIQUE NOT NULL,
+			agent_id VARCHAR(255) REFERENCES agents(agent_id) ON DELETE CASCADE,
+			session_id VARCHAR(255),
+			action VARCHAR(50) NOT NULL,
+			payload JSONB,
+			status VARCHAR(50) DEFAULT 'pending',
+			error_message TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			sent_at TIMESTAMP,
+			acknowledged_at TIMESTAMP,
+			completed_at TIMESTAMP
+		)`,
+
+		// Alter sessions table to add v2.0 platform-agnostic fields
+		// NOTE: These columns may already exist from previous runs (IF NOT EXISTS doesn't work on ALTER TABLE)
+		// Using DO $$ block to check if columns exist before adding them
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='agent_id') THEN
+				ALTER TABLE sessions ADD COLUMN agent_id VARCHAR(255) REFERENCES agents(agent_id);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='platform') THEN
+				ALTER TABLE sessions ADD COLUMN platform VARCHAR(50);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='platform_metadata') THEN
+				ALTER TABLE sessions ADD COLUMN platform_metadata JSONB;
+			END IF;
+		END $$`,
+
+		// Indexes for agents table
+		`CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_platform ON agents(platform)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_region ON agents(region)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_last_heartbeat ON agents(last_heartbeat)`,
+
+		// Indexes for agent_commands table
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_command_id ON agent_commands(command_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_id ON agent_commands(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_session_id ON agent_commands(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_status ON agent_commands(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_created_at ON agent_commands(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_action ON agent_commands(action)`,
+
+		// Composite indexes for common queries
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_status ON agent_commands(agent_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_platform_status ON agents(platform, status)`,
+
+		// Index for sessions table agent_id lookup
+		`CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform)`,
 	}
 
 	// Execute migrations
