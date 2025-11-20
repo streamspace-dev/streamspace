@@ -1,8 +1,8 @@
 # StreamSpace
 
-> **Stream any app to your browser** - An open source Kubernetes-native container streaming platform
+> **Stream any app to your browser** - An open source platform-agnostic container streaming platform
 
-StreamSpace is a Kubernetes-native platform that delivers browser-based access to containerized applications with on-demand auto-hibernation, persistent user storage, and enterprise-grade security features.
+StreamSpace is a platform-agnostic platform that delivers browser-based access to containerized applications. It features a central Control Plane (API/WebUI) that manages distributed Controllers across various platforms (Kubernetes, Docker, Hyper-V, vCenter, etc.).
 
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.19+-blue.svg)](https://kubernetes.io/)
@@ -37,6 +37,7 @@ StreamSpace is in active development with the core Kubernetes platform functiona
 ## Features
 
 ### Core Features
+
 - Browser-based access to containerized applications via VNC
 - Multi-user support with isolated sessions
 - Persistent home directories (NFS)
@@ -46,6 +47,7 @@ StreamSpace is in active development with the core Kubernetes platform functiona
 - Monitoring with Prometheus and Grafana
 
 ### Enterprise Features
+
 - Authentication: Local, SAML 2.0 (Okta, Azure AD, Authentik, Keycloak, Auth0), OIDC OAuth2
 - Multi-factor authentication with TOTP
 - IP whitelisting and rate limiting
@@ -113,20 +115,20 @@ kubectl create secret generic streamspace-secrets \
                        │ REST API + WebSocket
                        ↓
 ┌─────────────────────────────────────────────────┐
-│            API Backend (Go/Gin)                 │
-│  Session CRUD, Auth, Plugins, Repository Sync  │
+│            Control Plane (API)                 │
+│  Session CRUD, Auth, Plugins, Controller Mgmt  │
 └──────────────────────┬──────────────────────────┘
-                       │ Kubernetes API
+                       │ Secure Protocol
                        ↓
 ┌─────────────────────────────────────────────────┐
-│        Kubernetes Controller (Go)               │
-│  Session Lifecycle, Auto-Hibernation           │
+│            StreamSpace Controllers              │
+│  (Kubernetes, Docker, Hyper-V, etc.)           │
 └──────────────────────┬──────────────────────────┘
                        │
                        ↓
 ┌─────────────────────────────────────────────────┐
-│           Kubernetes Cluster                    │
-│  Sessions (Pods), PVCs, Services, Ingress      │
+│           Target Infrastructure                 │
+│  Sessions (Pods/Containers/VMs)                │
 └─────────────────────────────────────────────────┘
 ```
 
@@ -176,17 +178,20 @@ Current test coverage is approximately 15-20%. See `tests/reports/TEST_COVERAGE_
 ## Documentation
 
 ### Essential Docs
+
 - [FEATURES.md](FEATURES.md) - Feature list with implementation status
 - [ROADMAP.md](ROADMAP.md) - Development roadmap and next steps
 - [CLAUDE.md](CLAUDE.md) - AI assistant guide for the codebase
 
 ### Technical Guides
+
 - [Architecture](docs/ARCHITECTURE.md) - System architecture
 - [Controller Guide](docs/CONTROLLER_GUIDE.md) - Controller implementation
 - [Plugin Development](PLUGIN_DEVELOPMENT.md) - Building plugins
 - [API Reference](api/API_REFERENCE.md) - REST API documentation
 
 ### Deployment
+
 - [Deployment Guide](DEPLOYMENT.md) - Production deployment
 - [Security](SECURITY.md) - Security policy
 
@@ -237,9 +242,9 @@ StreamSpace is licensed under the MIT License. See [LICENSE](LICENSE) for detail
 
 ## Links
 
-- **GitHub**: https://github.com/JoshuaAFerguson/streamspace
-- **Templates**: https://github.com/JoshuaAFerguson/streamspace-templates
-- **Plugins**: https://github.com/JoshuaAFerguson/streamspace-plugins
+- **GitHub**: <https://github.com/JoshuaAFerguson/streamspace>
+- **Templates**: <https://github.com/JoshuaAFerguson/streamspace-templates>
+- **Plugins**: <https://github.com/JoshuaAFerguson/streamspace-plugins>
 
 ---
 

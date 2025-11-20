@@ -20,93 +20,59 @@ StreamSpace is a Kubernetes-native multi-user platform that streams containerize
                          │ HTTPS
                          ↓
 ┌──────────────────────────────────────────────────────────────┐
-│                   Ingress (Traefik)                           │
-│  - TLS termination                                            │
-│  - ForwardAuth (Authentik SSO)                               │
-│  - Dynamic routing per session                                │
+│                   Ingress / Load Balancer                     │
 └────────────────────────┬─────────────────────────────────────┘
                          │
           ┌──────────────┴─────────────┐
           ↓                            ↓
 ┌─────────────────────┐      ┌──────────────────────┐
-│   Web UI (React)    │      │   API Backend (Go)   │
+│   Web UI (React)    │      │   Control Plane (API)│
 │  - Dashboard        │      │   - REST API         │
 │  - Catalog          │      │   - WebSocket        │
 │  - Session viewer   │      │   - Auth middleware  │
-│  - Admin panel      │      │   - K8s client       │
+│  - Admin panel      │      │   - Controller Mgmt  │
 └─────────────────────┘      └──────────┬───────────┘
-                                        │
+                                        │ Secure Protocol (gRPC/WS)
                          ┌──────────────┴──────────────┐
                          ↓                             ↓
-┌──────────────────────────────────────┐   ┌─────────────────┐
-│    StreamSpace Controller (Go)        │   │  PostgreSQL     │
-│  ┌────────────────────────────────┐  │   │  - Sessions     │
-│  │  Session Reconciler            │  │   │  - Users        │
-│  │  - Create/Update/Delete pods   │  │   │  - Templates    │
-│  │  - Status tracking             │  │   │  - Audit logs   │
-│  └────────────────────────────────┘  │   └─────────────────┘
-│  ┌────────────────────────────────┐  │
-│  │  Hibernation Controller        │  │
-│  │  - Idle detection              │  │
-│  │  - Scale to zero               │  │
-│  │  - Wake on access              │  │
-│  └────────────────────────────────┘  │
-│  ┌────────────────────────────────┐  │
-│  │  User Manager                  │  │
-│  │  - PVC provisioning            │  │
-│  │  - Quota enforcement           │  │
-│  └────────────────────────────────┘  │
-└────────────────┬─────────────────────┘
-                 │ Kubernetes API
-                 ↓
-┌──────────────────────────────────────────────────────────────┐
-│                    Kubernetes Cluster                         │
-│  ┌──────────────┐  ┌──────────────┐  ┌──────────────┐       │
-│  │ Session Pod  │  │ Session Pod  │  │ Session Pod  │       │
-│  │ ┌──────────┐ │  │ ┌──────────┐ │  │ ┌──────────┐ │       │
-│  │ │Container │ │  │ │Container │ │  │ │Container │ │       │
-│  │ │(Firefox) │ │  │ │(VS Code) │ │  │ │(Blender) │ │       │
-│  │ │+ KasmVNC │ │  │ │+ KasmVNC │ │  │ │+ KasmVNC │ │       │
-│  │ └──────────┘ │  │ └──────────┘ │  │ └──────────┘ │       │
-│  │      ↓       │  │      ↓       │  │      ↓       │       │
-│  │ /home/user1  │  │ /home/user2  │  │ /home/user1  │       │
-│  │  (NFS PVC)   │  │  (NFS PVC)   │  │  (NFS PVC)   │       │
-│  └──────────────┘  └──────────────┘  └──────────────┘       │
-└──────────────────────────────────────────────────────────────┘
-                         ↑
-                         │ NFS Protocol
-                         ↓
-┌──────────────────────────────────────────────────────────────┐
-│              NFS Server (Persistent User Homes)               │
-│  /export/home/user1, /export/home/user2, /export/home/user3  │
-└──────────────────────────────────────────────────────────────┘
+┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
+│    Kubernetes Controller (Agent)      │   │      Docker Controller (Agent)       │
+│  - Runs on K8s Cluster               │   │  - Runs on Docker Host               │
+│  - Manages Pods/PVCs                 │   │  - Manages Containers/Volumes        │
+│  - Reports Status                    │   │  - Reports Status                    │
+└────────────────┬─────────────────────┘   └────────────────┬─────────────────────┘
+                 │                                          │
+                 ↓                                          ↓
+┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
+│         Kubernetes Cluster           │   │            Docker Host               │
+│  [Session Pods]                      │   │  [Session Containers]                │
+└──────────────────────────────────────┘   └──────────────────────────────────────┘
 ```
 
 ## Core Components
 
-### 1. StreamSpace Controller
+### 1. StreamSpace Controllers (Agents)
 
-**Language**: Go with Kubebuilder framework
-**Purpose**: Manages session lifecycle and resource provisioning
+**Architecture**: Agent-based model similar to Portainer Agents.
+**Purpose**: Platform-specific implementation of session management.
 
 **Responsibilities**:
-- Watch for Session CRD changes
-- Provision pods, services, PVCs based on templates
-- Update session status (phase, URL, resource usage)
-- Enforce user quotas
-- Handle state transitions (running → hibernated → terminated)
 
-**Key Reconcilers**:
-- `SessionReconciler`: Main reconciliation loop
-- `HibernationReconciler`: Idle detection and scale-to-zero
-- `UserReconciler`: User management and PVC provisioning
+- **Control**: Execute commands from Control Plane (Start, Stop, Hibernate).
+- **Monitor**: Collect metrics (CPU, Memory, Network) and report to Control Plane.
+- **Log**: Stream logs back to Control Plane.
+- **Report**: Periodic status updates (Heartbeat, Session State).
 
-**Metrics Exposed**:
-- `streamspace_active_sessions_total`
-- `streamspace_hibernated_sessions_total`
-- `streamspace_session_starts_total`
-- `streamspace_hibernation_duration_seconds`
-- `streamspace_resource_usage_bytes`
+**Controller Types**:
+
+- **Kubernetes Controller**: Manages Pods, PVCs, Services.
+- **Docker Controller**: Manages Containers, Volumes, Networks.
+- **Hyper-V/vCenter**: Manages VMs (Future).
+
+**Communication**:
+
+- Secure WebSocket or gRPC connection to Control Plane.
+- Pull-based or Push-based command execution.
 
 ### 2. API Backend
 
@@ -114,6 +80,7 @@ StreamSpace is a Kubernetes-native multi-user platform that streams containerize
 **Purpose**: REST/WebSocket API for UI and integrations
 
 **Endpoints**:
+
 - `GET /api/v1/sessions` - List user sessions
 - `POST /api/v1/sessions` - Create session
 - `GET /api/v1/sessions/{id}` - Get session details
@@ -124,11 +91,13 @@ StreamSpace is a Kubernetes-native multi-user platform that streams containerize
 - `WS /api/v1/sessions/{id}/connect` - WebSocket for KasmVNC proxy
 
 **Authentication**:
+
 - OIDC via Authentik
 - JWT tokens (1-hour expiration)
 - Refresh token flow
 
 **Authorization**:
+
 - Users: Own sessions only
 - Admins: All sessions + config
 
@@ -138,6 +107,7 @@ StreamSpace is a Kubernetes-native multi-user platform that streams containerize
 **Purpose**: User-facing dashboard and admin panel
 
 **Pages**:
+
 - `/login` - Authentik SSO login
 - `/dashboard` - My sessions (running, hibernated)
 - `/catalog` - Browse templates by category
@@ -155,6 +125,7 @@ StreamSpace is a Kubernetes-native multi-user platform that streams containerize
 **Structure**: Single-container pod with user-specific labels
 
 **Pod Specification**:
+
 ```yaml
 apiVersion: v1
 kind: Pod
@@ -194,6 +165,7 @@ spec:
 ```
 
 **Networking**:
+
 - Service per session: `ss-user1-firefox-svc`
 - Ingress rule: `user1-firefox.streamspace.local` → Service
 - KasmVNC port: 3000 (default)
@@ -203,6 +175,7 @@ spec:
 **Backend**: NFS with ReadWriteMany support
 
 **PVC per User**:
+
 ```yaml
 apiVersion: v1
 kind: PersistentVolumeClaim
@@ -220,6 +193,7 @@ spec:
 **Mount Path**: `/config` (LinuxServer.io convention) or `/home/kasm-user`
 
 **Benefits**:
+
 - Files persist across sessions
 - Shared across all user's workspaces
 - Backed up independently
@@ -229,6 +203,7 @@ spec:
 **Purpose**: Extensible architecture for adding custom functionality without modifying core code
 
 **Plugin Types**:
+
 - **Extension**: Add new features and UI components
 - **Webhook**: React to system events (session created, user login, etc.)
 - **API Integration**: Connect to external services (Slack, GitHub, Jira)
@@ -236,6 +211,7 @@ spec:
 - **CLI**: Add custom command-line tools
 
 **Database Schema**:
+
 ```sql
 -- Plugin repositories (GitHub, GitLab, custom)
 CREATE TABLE repositories (
@@ -276,6 +252,7 @@ CREATE TABLE installed_plugins (
 ```
 
 **API Endpoints**:
+
 - `GET /api/v1/plugins/catalog` - Browse available plugins
 - `POST /api/v1/plugins/install` - Install plugin
 - `GET /api/v1/plugins/installed` - List installed plugins
@@ -285,6 +262,7 @@ CREATE TABLE installed_plugins (
 - `DELETE /api/v1/plugins/{id}` - Uninstall plugin
 
 **UI Components**:
+
 - **PluginCatalog** (`/plugins/catalog`) - Browse and install plugins with search, filters, ratings
 - **InstalledPlugins** (`/plugins/installed`) - Manage installed plugins with config editor
 - **Admin PluginManagement** (`/admin/plugins`) - System-wide plugin administration
@@ -293,6 +271,7 @@ CREATE TABLE installed_plugins (
 - **PluginConfigForm** - Schema-based form generator for plugin configuration
 
 **Security Features**:
+
 - Permission system with risk levels (low/medium/high)
 - Sandbox execution environment
 - Configuration validation
@@ -300,6 +279,7 @@ CREATE TABLE installed_plugins (
 - User/admin approval workflows
 
 **Event System**:
+
 ```javascript
 // Plugins can register handlers for these events:
 - session.created
@@ -316,6 +296,7 @@ CREATE TABLE installed_plugins (
 ```
 
 **Documentation**:
+
 - `PLUGIN_DEVELOPMENT.md` - Complete developer guide with examples
 - `docs/PLUGIN_API.md` - Comprehensive API reference
 
@@ -324,6 +305,7 @@ CREATE TABLE installed_plugins (
 ### Session Creation Flow
 
 1. **User clicks "Launch" in UI**
+
    ```
    POST /api/v1/sessions
    {
@@ -338,6 +320,7 @@ CREATE TABLE installed_plugins (
    - Generate unique session name
 
 3. **API creates Session CR**
+
    ```yaml
    apiVersion: stream.space/v1alpha1
    kind: Session
@@ -367,6 +350,7 @@ CREATE TABLE installed_plugins (
    - User home directory mounted
 
 7. **Status update**
+
    ```yaml
    status:
      phase: Running
@@ -386,6 +370,7 @@ CREATE TABLE installed_plugins (
    - `time.Now() - lastActivity > idleTimeout` (default 30m)
 
 3. **Updates Session state**
+
    ```yaml
    spec:
      state: hibernated
@@ -399,11 +384,13 @@ CREATE TABLE installed_plugins (
 5. **User returns and clicks session**
 
 6. **API wake endpoint**
+
    ```
    POST /api/v1/sessions/{id}/wake
    ```
 
 7. **Updates Session state**
+
    ```yaml
    spec:
      state: running
@@ -484,6 +471,7 @@ spec:
 ### Authentication
 
 **SSO via Authentik**:
+
 - OIDC provider
 - JWT tokens (access + refresh)
 - MFA support
@@ -492,11 +480,13 @@ spec:
 ### Authorization
 
 **RBAC**:
+
 - Users can only access their own sessions
 - Admins can access all sessions
 - Service accounts for automation
 
 **Network Policies**:
+
 ```yaml
 apiVersion: networking.k8s.io/v1
 kind: NetworkPolicy
@@ -535,11 +525,13 @@ spec:
 ### Memory Allocation
 
 **Cluster**: 64GB total (4 × 16GB nodes)
+
 - System overhead: 8GB
 - StreamSpace platform: 4GB
 - **Available for sessions**: 52GB
 
 **Per-Session Estimates**:
+
 - Browsers: 2GB
 - IDEs: 4GB
 - 3D/Video: 6-8GB
@@ -573,6 +565,7 @@ func (r *SessionReconciler) enforceQuota(user string) error {
 ### Metrics
 
 **Controller Metrics**:
+
 - Active sessions count
 - Hibernated sessions count
 - Session start/end events
@@ -581,6 +574,7 @@ func (r *SessionReconciler) enforceQuota(user string) error {
 - Cluster capacity %
 
 **API Metrics**:
+
 - Request rate
 - Error rate
 - Response time (p50, p95, p99)
@@ -589,6 +583,7 @@ func (r *SessionReconciler) enforceQuota(user string) error {
 ### Dashboards
 
 **Grafana "Session Overview"**:
+
 - Active vs hibernated sessions
 - Memory usage (per session, total)
 - Session lifecycle events
@@ -626,14 +621,17 @@ chart/
 ### High Availability (Phase 5)
 
 **Controller HA**:
+
 - 2+ replicas with leader election
 - Kubernetes lease for coordination
 
 **API HA**:
+
 - 3+ replicas behind Service
 - Horizontal Pod Autoscaler
 
 **Database HA**:
+
 - PostgreSQL with replication
 - Or cloud-managed (RDS, Cloud SQL)
 
@@ -642,6 +640,7 @@ chart/
 ### Session Provisioning
 
 **Target**: < 30 seconds from request to accessible
+
 - Pod scheduling: 5-10s
 - Image pull (cached): 2-5s
 - Container start: 10-15s
@@ -671,6 +670,7 @@ chart/
 ---
 
 For implementation details, see:
+
 - Controller: `docs/CONTROLLER_GUIDE.md`
 - API: `docs/API_REFERENCE.md`
 - Deployment: `docs/GETTING_STARTED.md`

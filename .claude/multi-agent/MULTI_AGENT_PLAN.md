@@ -1,7 +1,7 @@
 # StreamSpace Multi-Agent Orchestration Plan
 
 **Project:** StreamSpace - Kubernetes-native Container Streaming Platform  
-**Repository:** https://github.com/JoshuaAFerguson/streamspace  
+**Repository:** <https://github.com/JoshuaAFerguson/streamspace>  
 **Current Version:** v1.0.0 (Production Ready)  
 **Next Phase:** v2.0.0 - VNC Independence (TigerVNC + noVNC stack)
 
@@ -10,73 +10,90 @@
 ## Agent Roles
 
 ### Agent 1: The Architect (Research & Planning)
+
 - **Responsibility:** System exploration, requirements analysis, architecture planning
 - **Authority:** Final decision maker on design conflicts
-- **Focus:** Phase 6 planning, integration strategies, migration paths
+- **Focus:** Feature gap analysis, system architecture, review of existing codebase, integration strategies, migration paths
 
 ### Agent 2: The Builder (Core Implementation)
+
 - **Responsibility:** Feature development, core implementation work
 - **Authority:** Implementation patterns and code structure
 - **Focus:** Controller logic, API endpoints, UI components
 
 ### Agent 3: The Validator (Testing & Validation)
+
 - **Responsibility:** Test suites, edge cases, quality assurance
 - **Authority:** Quality gates and test coverage requirements
 - **Focus:** Integration tests, E2E tests, security validation
 
 ### Agent 4: The Scribe (Documentation & Refinement)
+
 - **Responsibility:** Documentation, code refinement, developer guides
 - **Authority:** Documentation standards and examples
 - **Focus:** API docs, deployment guides, plugin tutorials
 
 ---
 
-## Current Focus: Implementation Gap Analysis & Remediation
+## Current Focus: Architecture Redesign - Platform Agnostic Controllers
 
-### Reality Check
-**IMPORTANT:** While documentation indicates StreamSpace is "production ready" with extensive features, many features are not yet fully implemented or functional. The documentation represents the vision, not current reality.
+### Strategic Shift
 
-### Primary Objective
-Conduct comprehensive audit of actual vs documented features, then systematically implement missing functionality.
+**Goal**: Transition from a Kubernetes-native architecture to a platform-agnostic "Control Plane + Agent" model.
+**Reason**: To support multiple backends (Docker, Hyper-V, vCenter) and simplify the core API.
 
 ### Success Criteria
-- [ ] Complete audit of codebase vs documentation
-- [ ] Clear list of implemented vs missing features
-- [ ] Prioritized implementation roadmap
-- [ ] Working core features (sessions, templates, basic auth)
-- [ ] Honest documentation reflecting actual state
+
+- [ ] **Phase 1**: Control Plane Decoupling (Database-backed models, Controller API)
+- [ ] **Phase 2**: K8s Agent Adaptation (Refactor k8s-controller to Agent)
+- [ ] **Phase 3**: UI Updates (Terminology, Admin Views)
 
 ---
 
 ## Active Tasks
 
-### Task: Audit Codebase Reality vs Documentation
-- **Assigned To:** Architect
-- **Status:** Not Started
-- **Priority:** CRITICAL
-- **Dependencies:** None
-- **Notes:** 
-  - Compare FEATURES.md claims against actual code
-  - Check which API endpoints actually exist
-  - Verify which database tables are real vs planned
-  - Test which features actually work
-  - Document gaps honestly
-  - Create prioritized implementation plan
-- **Last Updated:** 2024-11-18 - Initial assignment
+### Task: Phase 1 - Control Plane Decoupling
 
-### Task: Identify Quick Wins
-- **Assigned To:** Architect  
-- **Status:** Not Started
-- **Priority:** High
-- **Dependencies:** Audit completion
-- **Notes:** Find features that are 80% done and can be quickly completed
-- **Last Updated:** 2024-11-18 - Initial assignment
+- **Assigned To**: Builder
+- **Status**: Not Started
+- **Priority**: CRITICAL
+- **Dependencies**: None
+- **Notes**:
+  - Create `Session` and `Template` database tables (replace CRD dependency).
+  - Implement `Controller` registration API (WebSocket/gRPC).
+  - Refactor API to use DB instead of K8s client.
+- **Last Updated**: 2025-11-20 - Architecture Redesign
+
+### Task: Phase 2 - K8s Agent Adaptation
+
+- **Assigned To**: Builder
+- **Status**: Not Started
+- **Priority**: High
+- **Dependencies**: Phase 1
+- **Notes**:
+  - Fork `k8s-controller` to `controllers/k8s`.
+  - Implement Agent loop (connect to API, listen for commands).
+  - Replace CRD status updates with API reporting.
+- **Last Updated**: 2025-11-20 - Architecture Redesign
+
+### Task: Phase 3 - UI Updates
+
+- **Assigned To**: Builder / Scribe
+- **Status**: Not Started
+- **Priority**: Medium
+- **Dependencies**: Phase 1
+- **Notes**:
+  - Rename "Pod" to "Instance".
+  - Update "Nodes" view to "Controllers".
+  - Ensure status fields map correctly.
+- **Last Updated**: 2025-11-20 - Architecture Redesign
 
 ---
 
 ## Communication Protocol
 
 ### For Task Updates
+
 ```markdown
 ### Task: [Task Name]
 - **Assigned To:** [Agent Name]
@@ -88,12 +105,14 @@ Conduct comprehensive audit of actual vs documented features, then systematicall
 ```
 
 ### For Agent-to-Agent Messages
+
 ```markdown
 ## [From Agent] → [To Agent] - [Date/Time]
 [Message content]
 ```
 
 ### For Design Decisions
+
 ```markdown
 ## Design Decision: [Topic]
 **Date:** [Date]
@@ -108,6 +127,7 @@ Conduct comprehensive audit of actual vs documented features, then systematicall
 ## StreamSpace Architecture Quick Reference
 
 ### Key Components
+
 1. **API Backend** (Go/Gin) - REST/WebSocket API, NATS event publishing
 2. **Kubernetes Controller** (Go/Kubebuilder) - Session lifecycle, CRDs
 3. **Docker Controller** (Go) - Docker Compose, container management
@@ -117,6 +137,7 @@ Conduct comprehensive audit of actual vs documented features, then systematicall
 7. **VNC Stack** - Current target for Phase 6 migration
 
 ### Critical Files
+
 - `/api/` - Go backend
 - `/k8s-controller/` - Kubernetes controller
 - `/docker-controller/` - Docker controller
@@ -126,6 +147,7 @@ Conduct comprehensive audit of actual vs documented features, then systematicall
 - `/docs/` - Documentation
 
 ### Development Commands
+
 ```bash
 # Kubernetes controller
 cd k8s-controller && make test
@@ -148,24 +170,28 @@ cd tests && ./run-integration-tests.sh
 ## Best Practices for Agents
 
 ### Architect
+
 - Always consult FEATURES.md and ROADMAP.md before planning
 - Document all design decisions in this file
 - Consider backward compatibility
 - Think about migration paths for existing deployments
 
 ### Builder
+
 - Follow existing Go/React patterns in the codebase
 - Check CLAUDE.md for project context
 - Write tests alongside implementation
 - Update relevant documentation stubs
 
 ### Validator
+
 - Reference existing test patterns in tests/ directory
 - Cover edge cases (multi-user, hibernation, resource limits)
 - Test both Kubernetes and Docker controller paths
 - Validate against security requirements in SECURITY.md
 
 ### Scribe
+
 - Follow documentation style in docs/ directory
 - Update CHANGELOG.md for user-facing changes
 - Keep API_REFERENCE.md current
@@ -196,6 +222,7 @@ cd tests && ./run-integration-tests.sh
 ## Audit Methodology for Architect
 
 ### Step 1: Repository Structure Analysis
+
 ```bash
 # Check what actually exists
 ls -la api/
@@ -213,17 +240,20 @@ find . -name "*.jsx" -o -name "*.tsx" | wc -l
 For each feature claimed in FEATURES.md:
 
 **Check Code:**
+
 - Does the API endpoint exist?
 - Is there a database migration for it?
 - Is there controller logic?
 - Is there UI for it?
 
 **Test Functionality:**
+
 - Can you actually use this feature?
 - Does it work end-to-end?
 - Are there tests for it?
 
 **Document Status:**
+
 ```markdown
 ### Feature: Multi-Factor Authentication (MFA)
 - **Claimed:** ✅ TOTP authenticator apps with backup codes
@@ -246,24 +276,28 @@ For each feature claimed in FEATURES.md:
 ### Step 4: Prioritize Implementation
 
 **P0 - Critical Path (Must Work):**
+
 - Core session lifecycle (create, view, delete)
 - Basic template system
 - Simple authentication
 - Database basics
 
 **P1 - Important (Make It Useful):**
+
 - Session persistence
 - Template catalog
 - User management
 - Basic monitoring
 
 **P2 - Nice to Have (Enterprise Features):**
+
 - SSO integrations
 - MFA
 - Advanced compliance
 - Plugin system
 
 **P3 - Future (Phase 6+):**
+
 - VNC migration
 - Advanced features
 - Scaling optimizations
@@ -281,6 +315,7 @@ Focus on making core features actually work before adding new ones.
 StreamSpace is an **ambitious vision** for a Kubernetes-native container streaming platform. The documentation describes a comprehensive feature set, but implementation is ongoing.
 
 **What Documentation Claims:**
+
 - ✅ 82+ database tables
 - ✅ 70+ API handlers  
 - ✅ 50+ UI components
@@ -290,16 +325,18 @@ StreamSpace is an **ambitious vision** for a Kubernetes-native container streami
 - ✅ 200+ templates
 
 **Actual State (To Be Verified):**
+
 - ⚠️ Some features fully implemented
 - ⚠️ Some features partially implemented
 - ⚠️ Some features not yet implemented
 - ⚠️ Documentation ahead of implementation
 
 **Architecture Vision:**
+
 - **API Backend:** Go/Gin with REST and WebSocket endpoints
 - **Controllers:** Kubernetes (CRD-based) and Docker (Compose-based)
 - **Messaging:** NATS JetStream for event-driven coordination
-- **Database:** PostgreSQL 
+- **Database:** PostgreSQL
 - **UI:** React dashboard with real-time WebSocket updates
 - **VNC:** Container streaming technology
 
