@@ -57,6 +57,7 @@ const Compliance = lazy(() => import('./pages/admin/Compliance'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
 const Settings = lazy(() => import('./pages/admin/Settings'));
 const License = lazy(() => import('./pages/admin/License'));
+const APIKeys = lazy(() => import('./pages/admin/APIKeys'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -358,6 +359,14 @@ function App() {
               element={
                 <AdminRoute>
                   <License />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/api-keys"
+              element={
+                <AdminRoute>
+                  <APIKeys />
                 </AdminRoute>
               }
             />

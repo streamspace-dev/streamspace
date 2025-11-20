@@ -877,6 +877,9 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 
 				// License management (admin only)
 				licenseHandler.RegisterRoutes(admin)
+
+				// API keys management (admin only - system-wide view)
+				admin.GET("/apikeys", apiKeyHandler.ListAllAPIKeys)
 			}
 
 			// NOTE: Billing is now handled by the streamspace-billing plugin

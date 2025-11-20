@@ -218,6 +218,56 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	})
 }
 
+// ListAllAPIKeys returns all API keys in the system (admin only)
+func (h *APIKeyHandler) ListAllAPIKeys(c *gin.Context) {
+	ctx := context.Background()
+
+	query := `
+		SELECT id, key_prefix, name, description, user_id, scopes, rate_limit,
+		       expires_at, last_used_at, use_count, is_active, created_at, created_by
+		FROM api_keys
+		ORDER BY created_at DESC
+	`
+
+	rows, err := h.db.DB().QueryContext(ctx, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	keys := []APIKey{}
+	for rows.Next() {
+		var key APIKey
+		var scopes []string
+
+		err := rows.Scan(
+			&key.ID,
+			&key.KeyPrefix,
+			&key.Name,
+			&key.Description,
+			&key.UserID,
+			&scopes,
+			&key.RateLimit,
+			&key.ExpiresAt,
+			&key.LastUsedAt,
+			&key.UseCount,
+			&key.IsActive,
+			&key.CreatedAt,
+			&key.CreatedBy,
+		)
+		if err != nil {
+			continue
+		}
+
+		key.Scopes = scopes
+		keys = append(keys, key)
+	}
+
+	// Return as array for consistency with admin UI expectations
+	c.JSON(http.StatusOK, keys)
+}
+
 // ListAPIKeys returns all API keys for the current user
 func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 	ctx := context.Background()
