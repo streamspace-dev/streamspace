@@ -31,19 +31,7 @@ import (
 )
 
 // setupAuditTest creates a test environment with mocked database
-//
-// NOTE: TESTABILITY ISSUE - The db.Database struct wraps *sql.DB in a private field,
-// making it difficult to inject mocks. This needs to be refactored to either:
-// 1. Accept an interface instead of concrete *db.Database
-// 2. Provide a test constructor that accepts *sql.DB
-// 3. Expose the db field for testing purposes
-//
-// For now, tests are marked as Skip with t.Skip() until this refactoring is complete.
-// See: https://github.com/streamspace/streamspace/issues/XXX
 func setupAuditTest(t *testing.T) (*AuditHandler, sqlmock.Sqlmock, func()) {
-	// SKIP ALL TESTS: db.Database needs refactoring for testability
-	t.Skip("Pending: db.Database refactoring required - see comments below")
-
 	gin.SetMode(gin.TestMode)
 
 	mockDB, mock, err := sqlmock.New()
@@ -51,10 +39,11 @@ func setupAuditTest(t *testing.T) (*AuditHandler, sqlmock.Sqlmock, func()) {
 		t.Fatalf("failed to create sqlmock: %v", err)
 	}
 
-	// TODO: This is a placeholder until db.Database is made testable
-	// The handler needs a real database connection or interface-based dependency injection
+	// Use the new test constructor to inject mock database
+	database := db.NewDatabaseForTesting(mockDB)
+
 	handler := &AuditHandler{
-		database: nil, // Cannot create mock database with current architecture
+		database: database,
 	}
 
 	cleanup := func() {

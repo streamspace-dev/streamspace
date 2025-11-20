@@ -197,6 +197,22 @@ func NewDatabase(config Config) (*Database, error) {
 	return &Database{db: db}, nil
 }
 
+// NewDatabaseForTesting creates a Database from an existing sql.DB connection.
+// This constructor is intended ONLY FOR TESTING to enable dependency injection
+// with mock databases (e.g., sqlmock).
+//
+// DO NOT use this in production code. Use NewDatabase() instead.
+//
+// Example usage in tests:
+//
+//	db, mock, err := sqlmock.New()
+//	database := db.NewDatabaseForTesting(db)
+//	handler := &AuditHandler{database: database}
+//	// ... setup mock expectations and run tests
+func NewDatabaseForTesting(db *sql.DB) *Database {
+	return &Database{db: db}
+}
+
 // Close closes the database connection
 func (d *Database) Close() error {
 	return d.db.Close()

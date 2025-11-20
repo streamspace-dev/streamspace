@@ -14,7 +14,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/yourusername/streamspace/api/internal/db"
+	"github.com/streamspace/streamspace/api/internal/db"
 )
 
 // RecordingHandler handles session recording management
