@@ -588,266 +588,142 @@ func (h *SchedulingHandler) DisableScheduledSession(c *gin.Context) {
 // CALENDAR INTEGRATION
 // ============================================================================
 
-// CalendarIntegration represents a calendar connection
+
+// ============================================================================
+// CALENDAR INTEGRATION - DEPRECATED
+// ============================================================================
+//
+// ⚠️ DEPRECATED: Calendar integration has been moved to the streamspace-calendar plugin.
+//
+// MIGRATION GUIDE:
+//
+// Calendar functionality (Google Calendar, Outlook Calendar, iCal export) has been
+// extracted into a plugin for better modularity and optional installation.
+//
+// To restore calendar integration:
+//
+// 1. Install the streamspace-calendar plugin:
+//    - Via Admin UI: Admin → Plugins → Browse → streamspace-calendar → Install
+//    - Via CLI: kubectl apply -f https://plugins.streamspace.io/calendar/install.yaml
+//
+// 2. API endpoints will be available at:
+//    - /api/plugins/streamspace-calendar/connect
+//    - /api/plugins/streamspace-calendar/oauth/callback
+//    - /api/plugins/streamspace-calendar/integrations
+//    - /api/plugins/streamspace-calendar/integrations/:id
+//    - /api/plugins/streamspace-calendar/integrations/:id/sync
+//    - /api/plugins/streamspace-calendar/export.ics
+//
+// 3. The plugin provides enhanced features:
+//    - Google Calendar integration (OAuth 2.0)
+//    - Microsoft Outlook Calendar integration (OAuth 2.0)
+//    - iCal export for third-party applications
+//    - Automatic session synchronization
+//    - Configurable sync intervals
+//    - Event reminders and notifications
+//    - Timezone support
+//
+// WHY WAS THIS MOVED TO A PLUGIN?
+//
+// - Optional feature: Not all users need calendar integration
+// - External dependencies: Reduces core OAuth complexity
+// - Enhanced features: Plugin can evolve independently
+// - Better modularity: Separates scheduling from calendar sync
+// - Reduced core size: Removes ~500 lines of calendar-specific code
+//
+// BACKWARDS COMPATIBILITY:
+//
+// These stub methods remain in core to provide clear migration messages.
+// They will be removed in v2.0.0.
+// ============================================================================
+
+// CalendarIntegration represents a calendar connection (DEPRECATED)
 type CalendarIntegration struct {
 	ID            int64     `json:"id"`
 	UserID        string    `json:"user_id"`
-	Provider      string    `json:"provider"` // "google", "outlook", "ical"
+	Provider      string    `json:"provider"`
 	AccountEmail  string    `json:"account_email"`
-	AccessToken   string    `json:"access_token,omitempty"`   // Not exposed in API
-	RefreshToken  string    `json:"refresh_token,omitempty"`  // Not exposed in API
+	AccessToken   string    `json:"-"`
+	RefreshToken  string    `json:"-"`
 	TokenExpiry   time.Time `json:"token_expiry,omitempty"`
 	CalendarID    string    `json:"calendar_id,omitempty"`
 	Enabled       bool      `json:"enabled"`
 	SyncEnabled   bool      `json:"sync_enabled"`
-	AutoCreate    bool      `json:"auto_create_events"`       // Auto-create calendar events
-	AutoUpdate    bool      `json:"auto_update_events"`       // Sync updates
-	LastSyncedAt  time.Time `json:"last_synced_at,omitempty"`
+	AutoCreate    bool      `json:"auto_create_events"`
 	CreatedAt     time.Time `json:"created_at"`
+	LastSyncAt    *time.Time `json:"last_sync_at,omitempty"`
 }
 
-// CalendarEvent represents a calendar event for a session
+// CalendarEvent represents a calendar event for a session (DEPRECATED)
 type CalendarEvent struct {
-	ID              int64     `json:"id"`
-	ScheduleID      int64     `json:"schedule_id"`
-	UserID          string    `json:"user_id"`
-	Provider        string    `json:"provider"`
-	ExternalEventID string    `json:"external_event_id"`
-	Title           string    `json:"title"`
-	Description     string    `json:"description,omitempty"`
-	StartTime       time.Time `json:"start_time"`
-	EndTime         time.Time `json:"end_time"`
-	Location        string    `json:"location,omitempty"` // Session URL
-	Attendees       []string  `json:"attendees,omitempty"`
-	Status          string    `json:"status"` // "pending", "created", "updated", "cancelled"
-	CreatedAt       time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	UserID       string    `json:"user_id"`
+	ScheduleID   int64     `json:"schedule_id"`
+	CalendarID   string    `json:"calendar_id"`
+	EventID      string    `json:"event_id"`
+	Provider     string    `json:"provider"`
+	Title        string    `json:"title"`
+	Description  string    `json:"description,omitempty"`
+	StartTime    time.Time `json:"start_time"`
+	EndTime      time.Time `json:"end_time"`
+	Timezone     string    `json:"timezone,omitempty"`
+	Status       string    `json:"status"`
+	CreatedAt    time.Time `json:"created_at"`
+	LastSyncedAt *time.Time `json:"last_synced_at,omitempty"`
 }
 
-// ============================================================================
-// CALENDAR INTEGRATION
-// TODO(plugin-migration): Extract calendar functions to streamspace-calendar plugin
-// Functions to extract: ConnectCalendar, CalendarOAuthCallback, ListCalendarIntegrations,
-// DisconnectCalendar, SyncCalendar, ExportICalendar, and related Google/Outlook helpers
-// ============================================================================
+// calendarDeprecationResponse returns a standardized deprecation message
+func (h *SchedulingHandler) calendarDeprecationResponse(c *gin.Context) {
+	c.JSON(http.StatusGone, gin.H{
+		"error":   "Calendar integration has been moved to a plugin",
+		"message": "This functionality has been extracted into the streamspace-calendar plugin for better modularity",
+		"migration": gin.H{
+			"install": "Admin → Plugins → streamspace-calendar",
+			"api_base": "/api/plugins/streamspace-calendar",
+			"documentation": "https://docs.streamspace.io/plugins/calendar",
+		},
+		"features": []string{
+			"Google Calendar OAuth integration",
+			"Microsoft Outlook Calendar OAuth integration",
+			"iCal export for third-party applications",
+			"Automatic session synchronization",
+			"Event reminders and timezone support",
+		},
+		"status": "deprecated",
+		"removed_in": "v2.0.0",
+	})
+}
 
-// ConnectCalendar initiates calendar OAuth flow
+// ConnectCalendar initiates calendar OAuth flow (DEPRECATED)
 func (h *SchedulingHandler) ConnectCalendar(c *gin.Context) {
-	userID := c.GetString("user_id")
-
-	var req struct {
-		Provider string `json:"provider" binding:"required,oneof=google outlook ical"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Generate OAuth URL
-	var authURL string
-	switch req.Provider {
-	case "google":
-		authURL = h.getGoogleCalendarAuthURL(userID)
-	case "outlook":
-		authURL = h.getOutlookCalendarAuthURL(userID)
-	case "ical":
-		// iCal doesn't need OAuth, just URL
-		authURL = ""
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"provider": req.Provider,
-		"auth_url": authURL,
-		"message":  "Complete OAuth flow in browser",
-	})
+	h.calendarDeprecationResponse(c)
 }
 
-// CalendarOAuthCallback handles OAuth callback
+// CalendarOAuthCallback handles OAuth callback (DEPRECATED)
 func (h *SchedulingHandler) CalendarOAuthCallback(c *gin.Context) {
-	provider := c.Query("provider")
-	code := c.Query("code")
-	state := c.Query("state") // Contains userID
-
-	if code == "" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "no authorization code"})
-		return
-	}
-
-	// Exchange code for tokens (implementation depends on provider)
-	var accessToken, refreshToken, email string
-	var expiry time.Time
-	var err error
-
-	// Implement OAuth token exchange based on provider
-	switch provider {
-	case "google":
-		accessToken, refreshToken, email, expiry, err = h.exchangeGoogleOAuthToken(code)
-	case "outlook":
-		accessToken, refreshToken, email, expiry, err = h.exchangeOutlookOAuthToken(code)
-	default:
-		c.JSON(http.StatusBadRequest, gin.H{"error": "unsupported provider"})
-		return
-	}
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("token exchange failed: %v", err)})
-		return
-	}
-
-	// Store integration
-	var id int64
-	err = h.DB.DB().QueryRow(`
-		INSERT INTO calendar_integrations
-		(user_id, provider, account_email, access_token, refresh_token, token_expiry, enabled, sync_enabled)
-		VALUES ($1, $2, $3, $4, $5, $6, true, true)
-		RETURNING id
-	`, state, provider, email, accessToken, refreshToken, expiry).Scan(&id)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to save calendar integration",
-			"message": fmt.Sprintf("Database insert failed for user %s with provider %s: %v", state, provider, err),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{
-		"id":      id,
-		"message": "Calendar connected successfully",
-	})
+	h.calendarDeprecationResponse(c)
 }
 
-// ListCalendarIntegrations lists user's calendar integrations
+// ListCalendarIntegrations lists user's calendar integrations (DEPRECATED)
 func (h *SchedulingHandler) ListCalendarIntegrations(c *gin.Context) {
-	userID := c.GetString("user_id")
-
-	rows, err := h.DB.DB().Query(`
-		SELECT id, provider, account_email, calendar_id, enabled, sync_enabled,
-		       auto_create_events, auto_update_events, last_synced_at, created_at
-		FROM calendar_integrations
-		WHERE user_id = $1
-		ORDER BY created_at DESC
-	`, userID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to list calendar integrations",
-			"message": fmt.Sprintf("Database query failed for user %s: %v", userID, err),
-		})
-		return
-	}
-	defer rows.Close()
-
-	integrations := []CalendarIntegration{}
-	for rows.Next() {
-		var ci CalendarIntegration
-		var lastSynced sql.NullTime
-		var calendarID sql.NullString
-
-		err := rows.Scan(&ci.ID, &ci.Provider, &ci.AccountEmail, &calendarID,
-			&ci.Enabled, &ci.SyncEnabled, &ci.AutoCreate, &ci.AutoUpdate,
-			&lastSynced, &ci.CreatedAt)
-
-		if err != nil {
-			continue
-		}
-
-		ci.UserID = userID
-		if lastSynced.Valid {
-			ci.LastSyncedAt = lastSynced.Time
-		}
-		if calendarID.Valid {
-			ci.CalendarID = calendarID.String
-		}
-
-		integrations = append(integrations, ci)
-	}
-
-	c.JSON(http.StatusOK, gin.H{"integrations": integrations})
+	h.calendarDeprecationResponse(c)
 }
 
-// DisconnectCalendar removes a calendar integration
+// DisconnectCalendar removes a calendar integration (DEPRECATED)
 func (h *SchedulingHandler) DisconnectCalendar(c *gin.Context) {
-	integrationID := c.Param("integrationId")
-	userID := c.GetString("user_id")
-
-	result, err := h.DB.DB().Exec(`
-		DELETE FROM calendar_integrations
-		WHERE id = $1 AND user_id = $2
-	`, integrationID, userID)
-
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to disconnect calendar",
-			"message": fmt.Sprintf("Database delete failed for integration ID %s, user %s: %v", integrationID, userID, err),
-		})
-		return
-	}
-
-	rowsAffected, _ := result.RowsAffected()
-	if rowsAffected == 0 {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Calendar integration not found",
-			"message": fmt.Sprintf("No integration found with ID %s for user %s", integrationID, userID),
-		})
-		return
-	}
-
-	c.JSON(http.StatusOK, gin.H{"message": "Calendar disconnected"})
+	h.calendarDeprecationResponse(c)
 }
 
-// SyncCalendar manually triggers calendar sync
+// SyncCalendar manually triggers calendar sync (DEPRECATED)
 func (h *SchedulingHandler) SyncCalendar(c *gin.Context) {
-	integrationID := c.Param("integrationId")
-	userID := c.GetString("user_id")
-
-	// Get integration details
-	var ci CalendarIntegration
-	err := h.DB.DB().QueryRow(`
-		SELECT id, provider, access_token, refresh_token, calendar_id
-		FROM calendar_integrations
-		WHERE id = $1 AND user_id = $2
-	`, integrationID, userID).Scan(&ci.ID, &ci.Provider, &ci.AccessToken,
-		&ci.RefreshToken, &ci.CalendarID)
-
-	if err == sql.ErrNoRows {
-		c.JSON(http.StatusNotFound, gin.H{
-			"error":   "Calendar integration not found",
-			"message": fmt.Sprintf("No integration found with ID %s for user %s", integrationID, userID),
-		})
-		return
-	}
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to get calendar integration",
-			"message": fmt.Sprintf("Database query failed for integration ID %s: %v", integrationID, err),
-		})
-		return
-	}
-
-	// Implement calendar sync based on provider
-	eventsCreated, err := h.syncScheduledSessionsToCalendar(userID, &ci)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("sync failed: %v", err)})
-		return
-	}
-
-	// Update last synced timestamp
-	h.DB.DB().Exec(`
-		UPDATE calendar_integrations
-		SET last_synced_at = NOW()
-		WHERE id = $1
-	`, integrationID)
-
-	c.JSON(http.StatusOK, gin.H{
-		"message":        "Calendar sync completed",
-		"synced_at":      time.Now(),
-		"events_created": eventsCreated,
-	})
+	h.calendarDeprecationResponse(c)
 }
 
-// ExportICalendar exports scheduled sessions as iCal format
+// ExportICalendar exports scheduled sessions as iCal format (DEPRECATED)
 func (h *SchedulingHandler) ExportICalendar(c *gin.Context) {
+	h.calendarDeprecationResponse(c)
+}
+
 	userID := c.GetString("user_id")
 
 	// Get all enabled scheduled sessions
@@ -1340,498 +1216,6 @@ func (h *SchedulingHandler) checkSchedulingConflicts(userID string, schedule Sch
 }
 
 // Get Google Calendar OAuth URL
-func (h *SchedulingHandler) getGoogleCalendarAuthURL(userID string) string {
-	// OAuth2 configuration for Google Calendar
-	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
-	if clientID == "" {
-		clientID = "placeholder-client-id.apps.googleusercontent.com"
-	}
-
-	redirectURI := os.Getenv("GOOGLE_OAUTH_REDIRECT_URI")
-	if redirectURI == "" {
-		redirectURI = "http://localhost:3000/api/scheduling/calendar/oauth/callback"
-	}
-
-	// Google Calendar OAuth scopes
-	scopes := "https://www.googleapis.com/auth/calendar.events"
-
-	// Build OAuth URL with proper parameters
-	params := url.Values{}
-	params.Add("client_id", clientID)
-	params.Add("redirect_uri", redirectURI)
-	params.Add("response_type", "code")
-	params.Add("scope", scopes)
-	params.Add("state", userID) // Pass user ID in state for callback
-	params.Add("access_type", "offline") // Request refresh token
-	params.Add("prompt", "consent") // Force consent screen to ensure refresh token
-
-	return "https://accounts.google.com/o/oauth2/v2/auth?" + params.Encode()
-}
-
-// Get Outlook Calendar OAuth URL
-func (h *SchedulingHandler) getOutlookCalendarAuthURL(userID string) string {
-	// OAuth2 configuration for Microsoft Outlook
-	clientID := os.Getenv("MICROSOFT_OAUTH_CLIENT_ID")
-	if clientID == "" {
-		clientID = "placeholder-client-id"
-	}
-
-	redirectURI := os.Getenv("MICROSOFT_OAUTH_REDIRECT_URI")
-	if redirectURI == "" {
-		redirectURI = "http://localhost:3000/api/scheduling/calendar/oauth/callback"
-	}
-
-	// Microsoft Calendar OAuth scopes
-	scopes := "Calendars.ReadWrite offline_access"
-
-	// Build OAuth URL with proper parameters
-	params := url.Values{}
-	params.Add("client_id", clientID)
-	params.Add("redirect_uri", redirectURI)
-	params.Add("response_type", "code")
-	params.Add("scope", scopes)
-	params.Add("state", userID) // Pass user ID in state for callback
-
-	return "https://login.microsoftonline.com/common/oauth2/v2.0/authorize?" + params.Encode()
-}
-
-// exchangeGoogleOAuthToken exchanges authorization code for access/refresh tokens
-func (h *SchedulingHandler) exchangeGoogleOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
-	clientID := os.Getenv("GOOGLE_OAUTH_CLIENT_ID")
-	clientSecret := os.Getenv("GOOGLE_OAUTH_CLIENT_SECRET")
-	redirectURI := os.Getenv("GOOGLE_OAUTH_REDIRECT_URI")
-
-	if clientID == "" || clientSecret == "" {
-		return "", "", "", time.Time{}, fmt.Errorf("Google OAuth not configured - set GOOGLE_OAUTH_CLIENT_ID and GOOGLE_OAUTH_CLIENT_SECRET")
-	}
-
-	if redirectURI == "" {
-		redirectURI = "http://localhost:3000/api/scheduling/calendar/oauth/callback"
-	}
-
-	// Build token request payload
-	data := url.Values{}
-	data.Set("code", code)
-	data.Set("client_id", clientID)
-	data.Set("client_secret", clientSecret)
-	data.Set("redirect_uri", redirectURI)
-	data.Set("grant_type", "authorization_code")
-
-	// Make HTTP POST request to Google OAuth2 token endpoint
-	resp, err := http.Post(
-		"https://oauth2.googleapis.com/token",
-		"application/x-www-form-urlencoded",
-		bytes.NewBufferString(data.Encode()),
-	)
-	if err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to exchange token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for HTTP errors
-	if resp.StatusCode != http.StatusOK {
-		return "", "", "", time.Time{}, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse JSON response
-	var tokenResponse struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-		TokenType    string `json:"token_type"`
-		Scope        string `json:"scope"`
-	}
-
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to parse token response: %w", err)
-	}
-
-	// Get user email from Google userinfo endpoint
-	email, err = h.getGoogleUserEmail(tokenResponse.AccessToken)
-	if err != nil {
-		// If we can't get email, use a placeholder but continue
-		email = "unknown@gmail.com"
-	}
-
-	// Calculate token expiry time
-	expiry = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
-
-	return tokenResponse.AccessToken, tokenResponse.RefreshToken, email, expiry, nil
-}
-
-// getGoogleUserEmail fetches the user's email from Google userinfo API
-func (h *SchedulingHandler) getGoogleUserEmail(accessToken string) (string, error) {
-	req, err := http.NewRequest("GET", "https://www.googleapis.com/oauth2/v2/userinfo", nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("userinfo request failed with status %d", resp.StatusCode)
-	}
-
-	var userInfo struct {
-		Email         string `json:"email"`
-		VerifiedEmail bool   `json:"verified_email"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return "", err
-	}
-
-	return userInfo.Email, nil
-}
-
-// exchangeOutlookOAuthToken exchanges authorization code for access/refresh tokens
-func (h *SchedulingHandler) exchangeOutlookOAuthToken(code string) (accessToken, refreshToken, email string, expiry time.Time, err error) {
-	clientID := os.Getenv("MICROSOFT_OAUTH_CLIENT_ID")
-	clientSecret := os.Getenv("MICROSOFT_OAUTH_CLIENT_SECRET")
-	redirectURI := os.Getenv("MICROSOFT_OAUTH_REDIRECT_URI")
-
-	if clientID == "" || clientSecret == "" {
-		return "", "", "", time.Time{}, fmt.Errorf("Microsoft OAuth not configured - set MICROSOFT_OAUTH_CLIENT_ID and MICROSOFT_OAUTH_CLIENT_SECRET")
-	}
-
-	if redirectURI == "" {
-		redirectURI = "http://localhost:3000/api/scheduling/calendar/oauth/callback"
-	}
-
-	// Build token request payload
-	data := url.Values{}
-	data.Set("code", code)
-	data.Set("client_id", clientID)
-	data.Set("client_secret", clientSecret)
-	data.Set("redirect_uri", redirectURI)
-	data.Set("grant_type", "authorization_code")
-	data.Set("scope", "Calendars.ReadWrite offline_access User.Read")
-
-	// Make HTTP POST request to Microsoft OAuth2 token endpoint
-	resp, err := http.Post(
-		"https://login.microsoftonline.com/common/oauth2/v2.0/token",
-		"application/x-www-form-urlencoded",
-		bytes.NewBufferString(data.Encode()),
-	)
-	if err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to exchange token: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response body
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for HTTP errors
-	if resp.StatusCode != http.StatusOK {
-		return "", "", "", time.Time{}, fmt.Errorf("token exchange failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse JSON response
-	var tokenResponse struct {
-		AccessToken  string `json:"access_token"`
-		RefreshToken string `json:"refresh_token"`
-		ExpiresIn    int    `json:"expires_in"`
-		TokenType    string `json:"token_type"`
-		Scope        string `json:"scope"`
-	}
-
-	if err := json.Unmarshal(body, &tokenResponse); err != nil {
-		return "", "", "", time.Time{}, fmt.Errorf("failed to parse token response: %w", err)
-	}
-
-	// Get user email from Microsoft Graph API
-	email, err = h.getMicrosoftUserEmail(tokenResponse.AccessToken)
-	if err != nil {
-		// If we can't get email, use a placeholder but continue
-		email = "unknown@outlook.com"
-	}
-
-	// Calculate token expiry time
-	expiry = time.Now().Add(time.Duration(tokenResponse.ExpiresIn) * time.Second)
-
-	return tokenResponse.AccessToken, tokenResponse.RefreshToken, email, expiry, nil
-}
-
-// getMicrosoftUserEmail fetches the user's email from Microsoft Graph API
-func (h *SchedulingHandler) getMicrosoftUserEmail(accessToken string) (string, error) {
-	req, err := http.NewRequest("GET", "https://graph.microsoft.com/v1.0/me", nil)
-	if err != nil {
-		return "", err
-	}
-
-	req.Header.Set("Authorization", "Bearer "+accessToken)
-
-	client := &http.Client{Timeout: 10 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", err
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return "", fmt.Errorf("user info request failed with status %d", resp.StatusCode)
-	}
-
-	var userInfo struct {
-		Mail                string `json:"mail"`
-		UserPrincipalName   string `json:"userPrincipalName"`
-	}
-
-	if err := json.NewDecoder(resp.Body).Decode(&userInfo); err != nil {
-		return "", err
-	}
-
-	// Use mail if available, otherwise use userPrincipalName
-	if userInfo.Mail != "" {
-		return userInfo.Mail, nil
-	}
-	return userInfo.UserPrincipalName, nil
-}
-
-// syncScheduledSessionsToCalendar syncs user's scheduled sessions to their calendar
-func (h *SchedulingHandler) syncScheduledSessionsToCalendar(userID string, ci *CalendarIntegration) (int, error) {
-	// Fetch enabled scheduled sessions for the user
-	rows, err := h.DB.DB().Query(`
-		SELECT id, name, template_id, schedule, timezone, next_run_at, terminate_after
-		FROM scheduled_sessions
-		WHERE user_id = $1 AND enabled = true
-	`, userID)
-
-	if err != nil {
-		return 0, fmt.Errorf("failed to fetch scheduled sessions: %w", err)
-	}
-	defer rows.Close()
-
-	eventsCreated := 0
-
-	for rows.Next() {
-		var id int64
-		var name, templateID, scheduleJSON, timezone string
-		var nextRunAt time.Time
-		var terminateAfter sql.NullInt64
-
-		err := rows.Scan(&id, &name, &templateID, &scheduleJSON, &timezone, &nextRunAt, &terminateAfter)
-		if err != nil {
-			continue
-		}
-
-		// Calculate event duration
-		duration := 480 // Default 8 hours in minutes
-		if terminateAfter.Valid && terminateAfter.Int64 > 0 {
-			duration = int(terminateAfter.Int64)
-		}
-
-		// Create calendar event based on provider
-		var eventID string
-		switch ci.Provider {
-		case "google":
-			eventID, err = h.createGoogleCalendarEvent(ci, name, templateID, nextRunAt, duration)
-		case "outlook":
-			eventID, err = h.createOutlookCalendarEvent(ci, name, templateID, nextRunAt, duration)
-		default:
-			continue
-		}
-
-		if err != nil {
-			fmt.Printf("Failed to create calendar event for schedule %d: %v\n", id, err)
-			continue
-		}
-
-		// Store the event ID for future updates/deletion
-		_, err = h.DB.DB().Exec(`
-			UPDATE scheduled_sessions
-			SET calendar_event_id = $1
-			WHERE id = $2
-		`, eventID, id)
-
-		if err == nil {
-			eventsCreated++
-		}
-	}
-
-	return eventsCreated, nil
-}
-
-// createGoogleCalendarEvent creates an event in Google Calendar
-func (h *SchedulingHandler) createGoogleCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
-	if ci.AccessToken == "" {
-		return "", fmt.Errorf("no access token available")
-	}
-
-	// Calculate end time
-	endTime := startTime.Add(time.Duration(durationMinutes) * time.Minute)
-
-	// Build event payload for Google Calendar API
-	eventPayload := map[string]interface{}{
-		"summary":     title,
-		"description": fmt.Sprintf("StreamSpace Session: %s\n\n%s", title, description),
-		"start": map[string]string{
-			"dateTime": startTime.Format(time.RFC3339),
-			"timeZone": "UTC",
-		},
-		"end": map[string]string{
-			"dateTime": endTime.Format(time.RFC3339),
-			"timeZone": "UTC",
-		},
-		"reminders": map[string]interface{}{
-			"useDefault": false,
-			"overrides": []map[string]interface{}{
-				{
-					"method":  "popup",
-					"minutes": 15,
-				},
-			},
-		},
-	}
-
-	// Encode JSON payload
-	payloadBytes, err := json.Marshal(eventPayload)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode event payload: %w", err)
-	}
-
-	// Determine calendar ID (use "primary" if not specified)
-	calendarID := "primary"
-	if ci.CalendarID != "" {
-		calendarID = ci.CalendarID
-	}
-
-	// Create HTTP request
-	apiURL := fmt.Sprintf("https://www.googleapis.com/calendar/v3/calendars/%s/events", calendarID)
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+ci.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Make API request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to create calendar event: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for errors
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("calendar event creation failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response to get event ID
-	var eventResponse struct {
-		ID          string `json:"id"`
-		HtmlLink    string `json:"htmlLink"`
-		Status      string `json:"status"`
-	}
-
-	if err := json.Unmarshal(body, &eventResponse); err != nil {
-		return "", fmt.Errorf("failed to parse event response: %w", err)
-	}
-
-	return eventResponse.ID, nil
-}
-
-// createOutlookCalendarEvent creates an event in Outlook Calendar
-func (h *SchedulingHandler) createOutlookCalendarEvent(ci *CalendarIntegration, title, description string, startTime time.Time, durationMinutes int) (string, error) {
-	if ci.AccessToken == "" {
-		return "", fmt.Errorf("no access token available")
-	}
-
-	// Calculate end time
-	endTime := startTime.Add(time.Duration(durationMinutes) * time.Minute)
-
-	// Build event payload for Microsoft Graph API
-	eventPayload := map[string]interface{}{
-		"subject": title,
-		"body": map[string]string{
-			"contentType": "text",
-			"content":     fmt.Sprintf("StreamSpace Session: %s\n\n%s", title, description),
-		},
-		"start": map[string]string{
-			"dateTime": startTime.Format(time.RFC3339),
-			"timeZone": "UTC",
-		},
-		"end": map[string]string{
-			"dateTime": endTime.Format(time.RFC3339),
-			"timeZone": "UTC",
-		},
-		"isReminderOn": true,
-		"reminderMinutesBeforeStart": 15,
-	}
-
-	// Encode JSON payload
-	payloadBytes, err := json.Marshal(eventPayload)
-	if err != nil {
-		return "", fmt.Errorf("failed to encode event payload: %w", err)
-	}
-
-	// Create HTTP request to Microsoft Graph API
-	apiURL := "https://graph.microsoft.com/v1.0/me/events"
-	if ci.CalendarID != "" {
-		apiURL = fmt.Sprintf("https://graph.microsoft.com/v1.0/me/calendars/%s/events", ci.CalendarID)
-	}
-
-	req, err := http.NewRequest("POST", apiURL, bytes.NewBuffer(payloadBytes))
-	if err != nil {
-		return "", fmt.Errorf("failed to create request: %w", err)
-	}
-
-	req.Header.Set("Authorization", "Bearer "+ci.AccessToken)
-	req.Header.Set("Content-Type", "application/json")
-
-	// Make API request
-	client := &http.Client{Timeout: 30 * time.Second}
-	resp, err := client.Do(req)
-	if err != nil {
-		return "", fmt.Errorf("failed to create calendar event: %w", err)
-	}
-	defer resp.Body.Close()
-
-	// Read response
-	body, err := io.ReadAll(resp.Body)
-	if err != nil {
-		return "", fmt.Errorf("failed to read response: %w", err)
-	}
-
-	// Check for errors
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
-		return "", fmt.Errorf("calendar event creation failed with status %d: %s", resp.StatusCode, string(body))
-	}
-
-	// Parse response to get event ID
-	var eventResponse struct {
-		ID              string `json:"id"`
-		WebLink         string `json:"webLink"`
-		ICalUId         string `json:"iCalUId"`
-	}
-
-	if err := json.Unmarshal(body, &eventResponse); err != nil {
-		return "", fmt.Errorf("failed to parse event response: %w", err)
-	}
 
 	return eventResponse.ID, nil
 }
