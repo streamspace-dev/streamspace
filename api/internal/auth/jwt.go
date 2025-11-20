@@ -31,58 +31,61 @@
 // TOKEN STRUCTURE:
 //
 // Header:
-//   {
-//     "alg": "HS256",       // HMAC-SHA256 signing algorithm
-//     "typ": "JWT"          // Token type
-//   }
+//
+//	{
+//	  "alg": "HS256",       // HMAC-SHA256 signing algorithm
+//	  "typ": "JWT"          // Token type
+//	}
 //
 // Payload (Claims):
-//   {
-//     "user_id": "user123",      // Internal user ID
-//     "username": "john.doe",    // Username for display
-//     "email": "john@example.com", // Email address
-//     "role": "user",            // Role: "admin", "operator", or "user"
-//     "groups": ["team-a"],      // Group memberships
-//     "iss": "streamspace-api",  // Issuer (prevents cross-site reuse)
-//     "sub": "user123",          // Subject (same as user_id)
-//     "iat": 1700000000,         // Issued at timestamp
-//     "exp": 1700086400,         // Expiration timestamp
-//     "nbf": 1700000000          // Not before timestamp
-//   }
+//
+//	{
+//	  "user_id": "user123",      // Internal user ID
+//	  "username": "john.doe",    // Username for display
+//	  "email": "john@example.com", // Email address
+//	  "role": "user",            // Role: "admin", "operator", or "user"
+//	  "groups": ["team-a"],      // Group memberships
+//	  "iss": "streamspace-api",  // Issuer (prevents cross-site reuse)
+//	  "sub": "user123",          // Subject (same as user_id)
+//	  "iat": 1700000000,         // Issued at timestamp
+//	  "exp": 1700086400,         // Expiration timestamp
+//	  "nbf": 1700000000          // Not before timestamp
+//	}
 //
 // Signature:
-//   HMACSHA256(
-//     base64UrlEncode(header) + "." + base64UrlEncode(payload),
-//     secret_key
-//   )
+//
+//	HMACSHA256(
+//	  base64UrlEncode(header) + "." + base64UrlEncode(payload),
+//	  secret_key
+//	)
 //
 // SECURITY BEST PRACTICES:
 //
 // 1. Secret Key Management:
-//    - NEVER hardcode secret keys in source code
-//    - Load from environment variables or secret management systems
-//    - Use cryptographically random keys (at least 256 bits)
-//    - Rotate keys periodically (requires token invalidation strategy)
+//   - NEVER hardcode secret keys in source code
+//   - Load from environment variables or secret management systems
+//   - Use cryptographically random keys (at least 256 bits)
+//   - Rotate keys periodically (requires token invalidation strategy)
 //
 // 2. Token Storage (Client-Side):
-//    - Prefer httpOnly cookies over localStorage (prevents XSS attacks)
-//    - Use SameSite=Strict cookie attribute (prevents CSRF)
-//    - Set Secure flag for HTTPS-only transmission
-//    - Consider short-lived tokens with refresh token strategy
+//   - Prefer httpOnly cookies over localStorage (prevents XSS attacks)
+//   - Use SameSite=Strict cookie attribute (prevents CSRF)
+//   - Set Secure flag for HTTPS-only transmission
+//   - Consider short-lived tokens with refresh token strategy
 //
 // 3. Token Validation:
-//    - Always verify signature before trusting claims
-//    - Check expiration time (exp claim)
-//    - Verify issuer matches expected value (iss claim)
-//    - Validate algorithm to prevent algorithm substitution attacks
-//    - Consider implementing token revocation list for compromised tokens
+//   - Always verify signature before trusting claims
+//   - Check expiration time (exp claim)
+//   - Verify issuer matches expected value (iss claim)
+//   - Validate algorithm to prevent algorithm substitution attacks
+//   - Consider implementing token revocation list for compromised tokens
 //
 // 4. Attack Prevention:
-//    - Algorithm substitution: Verify signing method is HMAC (not "none")
-//    - Token replay: Use short expiration times and refresh mechanism
-//    - XSS: Store tokens in httpOnly cookies, not localStorage
-//    - CSRF: Include CSRF tokens or use SameSite cookies
-//    - Token theft: Use HTTPS only, short-lived tokens, rotation
+//   - Algorithm substitution: Verify signing method is HMAC (not "none")
+//   - Token replay: Use short expiration times and refresh mechanism
+//   - XSS: Store tokens in httpOnly cookies, not localStorage
+//   - CSRF: Include CSRF tokens or use SameSite cookies
+//   - Token theft: Use HTTPS only, short-lived tokens, rotation
 //
 // COMMON VULNERABILITIES TO AVOID:
 //
@@ -233,38 +236,38 @@ func (m *JWTManager) GetSessionStore() *SessionStore {
 // TOKEN GENERATION PROCESS:
 //
 // 1. Create Claims:
-//    - User identity: UserID, Username, Email
-//    - Permissions: Role (admin/operator/user), Groups
-//    - Standard claims: Issuer, Subject, IssuedAt, ExpiresAt, NotBefore
+//   - User identity: UserID, Username, Email
+//   - Permissions: Role (admin/operator/user), Groups
+//   - Standard claims: Issuer, Subject, IssuedAt, ExpiresAt, NotBefore
 //
 // 2. Create Token:
-//    - Header: {"alg": "HS256", "typ": "JWT"}
-//    - Payload: Base64URL(claims JSON)
-//    - Signature: HMACSHA256(header + payload, secret_key)
+//   - Header: {"alg": "HS256", "typ": "JWT"}
+//   - Payload: Base64URL(claims JSON)
+//   - Signature: HMACSHA256(header + payload, secret_key)
 //
 // 3. Return Token:
-//    - Format: "header.payload.signature" (base64url-encoded)
-//    - Example: "eyJhbGc...header.eyJ1c2VyX2lk...payload.SflKxwRJ...signature"
+//   - Format: "header.payload.signature" (base64url-encoded)
+//   - Example: "eyJhbGc...header.eyJ1c2VyX2lk...payload.SflKxwRJ...signature"
 //
 // SECURITY CONSIDERATIONS:
 //
 // - Uses HS256 (HMAC-SHA256) signing algorithm
-//   * Symmetric key (same key for signing and verification)
-//   * 256-bit security strength
-//   * Fast and secure for server-to-server authentication
+//   - Symmetric key (same key for signing and verification)
+//   - 256-bit security strength
+//   - Fast and secure for server-to-server authentication
 //
 // - Includes expiration time (exp claim)
-//   * Tokens automatically become invalid after TokenDuration
-//   * Default: 24 hours
-//   * Limits damage from stolen tokens
+//   - Tokens automatically become invalid after TokenDuration
+//   - Default: 24 hours
+//   - Limits damage from stolen tokens
 //
 // - Includes "not before" time (nbf claim)
-//   * Token cannot be used before creation time
-//   * Prevents premature token usage
+//   - Token cannot be used before creation time
+//   - Prevents premature token usage
 //
 // - Includes issuer (iss claim)
-//   * Identifies the token creator
-//   * Prevents tokens from other systems being accepted
+//   - Identifies the token creator
+//   - Prevents tokens from other systems being accepted
 //
 // USAGE EXAMPLE:
 //
@@ -443,31 +446,31 @@ func (m *JWTManager) ClearAllSessions(ctx context.Context) error {
 // VALIDATION PROCESS:
 //
 // 1. Parse Token:
-//    - Split token into header, payload, signature
-//    - Base64URL-decode header and payload
-//    - Parse claims into Claims struct
+//   - Split token into header, payload, signature
+//   - Base64URL-decode header and payload
+//   - Parse claims into Claims struct
 //
 // 2. Verify Algorithm:
-//    - SECURITY: Check that algorithm is HMAC (not "none" or asymmetric)
-//    - Prevent algorithm substitution attacks
-//    - Reject tokens using unexpected signing methods
+//   - SECURITY: Check that algorithm is HMAC (not "none" or asymmetric)
+//   - Prevent algorithm substitution attacks
+//   - Reject tokens using unexpected signing methods
 //
 // 3. Verify Signature:
-//    - Compute HMACSHA256(header + payload, secret_key)
-//    - Compare with signature in token
-//    - Reject if signatures don't match (token was tampered with)
+//   - Compute HMACSHA256(header + payload, secret_key)
+//   - Compare with signature in token
+//   - Reject if signatures don't match (token was tampered with)
 //
 // 4. Verify Expiration:
-//    - Check exp claim against current time
-//    - Reject if token has expired
+//   - Check exp claim against current time
+//   - Reject if token has expired
 //
 // 5. Verify Not Before:
-//    - Check nbf claim against current time
-//    - Reject if token is being used too early
+//   - Check nbf claim against current time
+//   - Reject if token is being used too early
 //
 // 6. Return Claims:
-//    - Extract user information from validated token
-//    - Safe to trust claims after validation succeeds
+//   - Extract user information from validated token
+//   - Safe to trust claims after validation succeeds
 //
 // SECURITY: ALGORITHM SUBSTITUTION ATTACK PREVENTION
 //
@@ -593,79 +596,84 @@ func (m *JWTManager) ValidateToken(tokenString string) (*Claims, error) {
 //
 // Tokens can only be refreshed when they have between 0 and 7 days remaining:
 //
-//   Token Age          | Remaining Time | Refresh Allowed?
-//   -------------------|----------------|------------------
-//   Fresh (< 17 days)  | > 7 days       | ❌ No (too early)
-//   Middle (17-24 days)| 0-7 days       | ✅ Yes (refresh window)
-//   Expired (> 24 days)| < 0 days       | ❌ No (expired)
+//	Token Age          | Remaining Time | Refresh Allowed?
+//	-------------------|----------------|------------------
+//	Fresh (< 17 days)  | > 7 days       | ❌ No (too early)
+//	Middle (17-24 days)| 0-7 days       | ✅ Yes (refresh window)
+//	Expired (> 24 days)| < 0 days       | ❌ No (expired)
 //
 // WHY 7-DAY WINDOW?
 //
 // 1. Prevents Infinite Token Life:
-//    - Without a window, users could refresh tokens forever
-//    - A stolen token could be refreshed indefinitely by an attacker
-//    - 7-day window limits exposure: max token age = 24 days (17 + 7)
+//   - Without a window, users could refresh tokens forever
+//   - A stolen token could be refreshed indefinitely by an attacker
+//   - 7-day window limits exposure: max token age = 24 days (17 + 7)
 //
 // 2. Balances Security vs UX:
-//    - Too short (e.g., 1 day): Frequent re-authentication annoys users
-//    - Too long (e.g., 30 days): Compromised tokens live too long
-//    - 7 days: Provides flexibility while limiting risk
+//   - Too short (e.g., 1 day): Frequent re-authentication annoys users
+//   - Too long (e.g., 30 days): Compromised tokens live too long
+//   - 7 days: Provides flexibility while limiting risk
 //
 // 3. Forces Periodic Re-Authentication:
-//    - Every 24 days (at most), users must provide credentials again
-//    - Ensures disabled accounts eventually lose access
-//    - Gives time to detect and respond to account compromises
+//   - Every 24 days (at most), users must provide credentials again
+//   - Ensures disabled accounts eventually lose access
+//   - Gives time to detect and respond to account compromises
 //
 // TOKEN REFRESH FLOW:
 //
 // Day 0:  User logs in, gets token (expires Day 24)
 // Day 10: User tries to refresh -> "too early" (14 days remaining)
 // Day 18: User tries to refresh -> Success! (6 days remaining)
-//         New token issued (expires Day 42)
+//
+//	New token issued (expires Day 42)
+//
 // Day 25: User tries to refresh old token -> "expired"
-//         New token still valid until Day 42
+//
+//	New token still valid until Day 42
+//
 // Day 36: User tries to refresh -> Success! (6 days remaining)
-//         New token issued (expires Day 60)
+//
+//	New token issued (expires Day 60)
 //
 // SECURITY CONSIDERATIONS:
 //
 // 1. Refresh Uses Validation:
-//    - Old token is fully validated before refresh (signature, expiration)
-//    - Cannot refresh invalid or tampered tokens
-//    - Cannot refresh tokens with wrong algorithm
+//   - Old token is fully validated before refresh (signature, expiration)
+//   - Cannot refresh invalid or tampered tokens
+//   - Cannot refresh tokens with wrong algorithm
 //
 // 2. Window Prevents Infinite Refresh:
-//    - Tokens > 7 days from expiration cannot be refreshed
-//    - Limits max token age even with continuous refresh
-//    - Forces re-authentication every ~24-30 days
+//   - Tokens > 7 days from expiration cannot be refreshed
+//   - Limits max token age even with continuous refresh
+//   - Forces re-authentication every ~24-30 days
 //
 // 3. Expired Tokens Rejected:
-//    - Cannot refresh tokens that have already expired
-//    - Expired tokens must go through full authentication
+//   - Cannot refresh tokens that have already expired
+//   - Expired tokens must go through full authentication
 //
 // 4. New Token Has Same Claims:
-//    - User ID, role, groups copied from old token
-//    - Cannot escalate privileges by refreshing
-//    - Only timestamps are updated (iat, exp, nbf)
+//   - User ID, role, groups copied from old token
+//   - Cannot escalate privileges by refreshing
+//   - Only timestamps are updated (iat, exp, nbf)
 //
 // ALTERNATIVE APPROACHES:
 //
 // Other common refresh strategies (for comparison):
 //
 // 1. Separate Refresh Tokens:
-//    - Short-lived access tokens (15 min) + long-lived refresh tokens (30 days)
-//    - More complex: requires two token types
-//    - Better security: compromised access token expires quickly
+//   - Short-lived access tokens (15 min) + long-lived refresh tokens (30 days)
+//   - More complex: requires two token types
+//   - Better security: compromised access token expires quickly
 //
 // 2. Sliding Expiration:
-//    - Each API call extends token expiration
-//    - Simple implementation
-//    - Risk: Stolen tokens never expire if used regularly
+//   - Each API call extends token expiration
+//   - Simple implementation
+//   - Risk: Stolen tokens never expire if used regularly
 //
 // 3. No Refresh:
-//    - Tokens expire and user must re-authenticate
-//    - Maximum security
-//    - Poor UX: frequent logins annoy users
+//   - Tokens expire and user must re-authenticate
+//   - Maximum security
+//   - Poor UX: frequent logins annoy users
 //
 // StreamSpace uses the 7-day window approach as a balance between these extremes.
 //
@@ -759,4 +767,9 @@ func (m *JWTManager) ExtractUserID(tokenString string) (string, error) {
 		return "", err
 	}
 	return claims.UserID, nil
+}
+
+// GetTokenDuration returns the configured token duration
+func (m *JWTManager) GetTokenDuration() time.Duration {
+	return m.config.TokenDuration
 }

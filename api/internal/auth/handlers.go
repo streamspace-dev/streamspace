@@ -12,28 +12,28 @@
 // SUPPORTED AUTHENTICATION FLOWS:
 //
 // 1. Local Authentication (POST /auth/login):
-//    - User submits username and password
-//    - System verifies credentials against database
-//    - Returns JWT token for subsequent requests
-//    - Supports account status validation (active/disabled)
+//   - User submits username and password
+//   - System verifies credentials against database
+//   - Returns JWT token for subsequent requests
+//   - Supports account status validation (active/disabled)
 //
 // 2. SAML SSO Authentication (GET /auth/saml/login):
-//    - User initiates SSO flow
-//    - Redirects to enterprise IdP (Okta, Azure AD, etc.)
-//    - IdP sends SAML assertion after authentication
-//    - System validates assertion and creates local session
-//    - Returns JWT token for API access
+//   - User initiates SSO flow
+//   - Redirects to enterprise IdP (Okta, Azure AD, etc.)
+//   - IdP sends SAML assertion after authentication
+//   - System validates assertion and creates local session
+//   - Returns JWT token for API access
 //
 // 3. Token Refresh (POST /auth/refresh):
-//    - Client submits existing JWT token
-//    - System validates token is within refresh window
-//    - Issues new token with extended expiration
-//    - Prevents indefinite token refresh (7-day window)
+//   - Client submits existing JWT token
+//   - System validates token is within refresh window
+//   - Issues new token with extended expiration
+//   - Prevents indefinite token refresh (7-day window)
 //
 // 4. Password Change (POST /auth/password):
-//    - Local users can change their password
-//    - Requires current password verification
-//    - Not available for SSO users (SAML/OIDC)
+//   - Local users can change their password
+//   - Requires current password verification
+//   - Not available for SSO users (SAML/OIDC)
 //
 // SECURITY FEATURES:
 //
@@ -56,43 +56,43 @@
 // SECURITY CONSIDERATIONS:
 //
 // 1. Password Security:
-//    - Passwords hashed with bcrypt (cost factor 10+)
-//    - Never return password hashes in API responses
-//    - Minimum password length enforced (8 characters)
+//   - Passwords hashed with bcrypt (cost factor 10+)
+//   - Never return password hashes in API responses
+//   - Minimum password length enforced (8 characters)
 //
 // 2. Account Lockout:
-//    - Disabled accounts cannot authenticate
-//    - Returns 403 Forbidden for disabled accounts
-//    - Prevents unauthorized access to suspended accounts
+//   - Disabled accounts cannot authenticate
+//   - Returns 403 Forbidden for disabled accounts
+//   - Prevents unauthorized access to suspended accounts
 //
 // 3. Token Security:
-//    - JWT tokens include user ID, role, and groups
-//    - Tokens expire after configured duration (default: 24 hours)
-//    - Refresh tokens only valid within 7-day window
-//    - See jwt.go for detailed token security
+//   - JWT tokens include user ID, role, and groups
+//   - Tokens expire after configured duration (default: 24 hours)
+//   - Refresh tokens only valid within 7-day window
+//   - See jwt.go for detailed token security
 //
 // 4. SAML Security:
-//    - Assertion signatures validated by middleware
-//    - Return URLs stored in secure cookies
-//    - SAML groups synced on every login
-//    - See saml.go for detailed SAML security
+//   - Assertion signatures validated by middleware
+//   - Return URLs stored in secure cookies
+//   - SAML groups synced on every login
+//   - See saml.go for detailed SAML security
 //
 // EXAMPLE USAGE:
 //
-//   // Initialize handler with dependencies
-//   handler := NewAuthHandler(userDB, jwtManager, samlAuth)
+//	// Initialize handler with dependencies
+//	handler := NewAuthHandler(userDB, jwtManager, samlAuth)
 //
-//   // Register routes
-//   router := gin.Default()
-//   handler.RegisterRoutes(router.Group("/api/v1"))
+//	// Register routes
+//	router := gin.Default()
+//	handler.RegisterRoutes(router.Group("/api/v1"))
 //
-//   // Routes will be available at:
-//   // - POST /api/v1/auth/login (local authentication)
-//   // - POST /api/v1/auth/refresh (token refresh)
-//   // - POST /api/v1/auth/logout (logout)
-//   // - GET  /api/v1/auth/saml/login (initiate SAML SSO)
-//   // - POST /api/v1/auth/saml/acs (SAML callback)
-//   // - GET  /api/v1/auth/saml/metadata (SAML SP metadata)
+//	// Routes will be available at:
+//	// - POST /api/v1/auth/login (local authentication)
+//	// - POST /api/v1/auth/refresh (token refresh)
+//	// - POST /api/v1/auth/logout (logout)
+//	// - GET  /api/v1/auth/saml/login (initiate SAML SSO)
+//	// - POST /api/v1/auth/saml/acs (SAML callback)
+//	// - GET  /api/v1/auth/saml/metadata (SAML SP metadata)
 //
 // THREAD SAFETY:
 //
@@ -102,6 +102,7 @@ package auth
 
 import (
 	"context"
+	"database/sql"
 	"encoding/xml"
 	"fmt"
 	"log"
@@ -110,8 +111,8 @@ import (
 	"time"
 
 	"github.com/crewjam/saml"
+	"github.com/crewjam/saml/samlsp"
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
 	"github.com/streamspace/streamspace/api/internal/models"
 )
 
@@ -162,15 +163,44 @@ func validateReturnURL(returnURL string) string {
 	return returnURL
 }
 
+// UserStore defines the interface for user database operations
+type UserStore interface {
+	VerifyPassword(ctx context.Context, username, password string) (*models.User, error)
+	GetUser(ctx context.Context, id string) (*models.User, error)
+	GetUserGroups(ctx context.Context, userID string) ([]string, error)
+	GetUserByEmail(ctx context.Context, email string) (*models.User, error)
+	CreateUser(ctx context.Context, req *models.CreateUserRequest) (*models.User, error)
+	UpdateUser(ctx context.Context, userID string, req *models.UpdateUserRequest) error
+	UpdatePassword(ctx context.Context, userID, password string) error
+	AddUserToGroup(ctx context.Context, userID, groupName string) error
+	DB() *sql.DB // Kept for backward compatibility if needed, but ideally should be removed
+}
+
+// TokenManager defines the interface for JWT operations
+type TokenManager interface {
+	GenerateTokenWithContext(ctx context.Context, userID, username, email, role string, groups []string, ipAddress, userAgent string) (string, error)
+	RefreshToken(token string) (string, error)
+	ValidateToken(token string) (*Claims, error)
+	InvalidateSession(ctx context.Context, sessionID string) error
+	GetTokenDuration() time.Duration
+}
+
+// SAMLService defines the interface for SAML operations
+type SAMLService interface {
+	GetMiddleware() *samlsp.Middleware
+	GetServiceProvider() *saml.ServiceProvider
+	ExtractUserFromAssertion(assertion *saml.Assertion) (*UserInfo, error)
+}
+
 // AuthHandler handles authentication requests
 type AuthHandler struct {
-	userDB     *db.UserDB
-	jwtManager *JWTManager
-	samlAuth   *SAMLAuthenticator
+	userDB     UserStore
+	jwtManager TokenManager
+	samlAuth   SAMLService
 }
 
 // NewAuthHandler creates a new auth handler
-func NewAuthHandler(userDB *db.UserDB, jwtManager *JWTManager, samlAuth *SAMLAuthenticator) *AuthHandler {
+func NewAuthHandler(userDB UserStore, jwtManager TokenManager, samlAuth SAMLService) *AuthHandler {
 	return &AuthHandler{
 		userDB:     userDB,
 		jwtManager: jwtManager,
@@ -202,29 +232,20 @@ type LoginResponse struct {
 	User      *models.User `json:"user"`
 }
 
-// Login handles local authentication
+// Login handles user login
 func (h *AuthHandler) Login(c *gin.Context) {
-	var req LoginRequest
+	var req models.LoginRequest
 	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"message": err.Error(),
-		})
+		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request body"})
 		return
 	}
 
-	ctx := c.Request.Context()
-
-	// Verify password
-	user, err := h.userDB.VerifyPassword(ctx, req.Username, req.Password)
+	user, err := h.userDB.VerifyPassword(c.Request.Context(), req.Username, req.Password)
 	if err != nil {
-		c.JSON(http.StatusUnauthorized, gin.H{
-			"error": "Invalid username or password",
-		})
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Invalid credentials"})
 		return
 	}
 
-	// Check if user is active
 	if !user.Active {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error": "Account is disabled",
@@ -233,7 +254,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Get user groups
-	groupIDs, err := h.userDB.GetUserGroups(ctx, user.ID)
+	groupIDs, err := h.userDB.GetUserGroups(c.Request.Context(), user.ID)
 	if err != nil {
 		groupIDs = []string{} // Continue without groups if error
 	}
@@ -243,7 +264,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	userAgent := c.Request.UserAgent()
 
 	// Generate JWT token with session tracking
-	token, err := h.jwtManager.GenerateTokenWithContext(ctx, user.ID, user.Username, user.Email, user.Role, groupIDs, ipAddress, userAgent)
+	token, err := h.jwtManager.GenerateTokenWithContext(c.Request.Context(), user.ID, user.Username, user.Email, user.Role, groupIDs, ipAddress, userAgent)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to generate token",
@@ -253,7 +274,7 @@ func (h *AuthHandler) Login(c *gin.Context) {
 	}
 
 	// Calculate expiration
-	expiresAt := time.Now().Add(h.jwtManager.config.TokenDuration)
+	expiresAt := time.Now().Add(h.jwtManager.GetTokenDuration())
 
 	// Remove sensitive data
 	user.PasswordHash = ""
@@ -311,7 +332,7 @@ func (h *AuthHandler) RefreshToken(c *gin.Context) {
 
 	user.PasswordHash = ""
 
-	expiresAt := time.Now().Add(h.jwtManager.config.TokenDuration)
+	expiresAt := time.Now().Add(h.jwtManager.GetTokenDuration())
 
 	c.JSON(http.StatusOK, LoginResponse{
 		Token:     newToken,
@@ -493,7 +514,7 @@ func (h *AuthHandler) SAMLCallback(c *gin.Context) {
 	}
 
 	// Calculate expiration
-	expiresAt := time.Now().Add(h.jwtManager.config.TokenDuration)
+	expiresAt := time.Now().Add(h.jwtManager.GetTokenDuration())
 
 	// Remove sensitive data
 	user.PasswordHash = ""
@@ -622,90 +643,17 @@ func (h *AuthHandler) ChangePassword(c *gin.Context) {
 
 // syncSAMLGroups synchronizes user's group memberships based on SAML assertion
 func (h *AuthHandler) syncSAMLGroups(ctx context.Context, userID string, samlGroups []string) error {
-	// Get direct database connection for group operations
-	dbConn := h.userDB.DB()
-
-	// Get existing groups user is a member of
-	existingGroups, err := h.userDB.GetUserGroups(ctx, userID)
-	if err != nil {
-		return err
-	}
-
-	// Create maps for efficient lookup
-	existingGroupMap := make(map[string]bool)
-	for _, groupID := range existingGroups {
-		existingGroupMap[groupID] = true
-	}
-
-	samlGroupMap := make(map[string]bool)
-	for _, groupName := range samlGroups {
-		samlGroupMap[groupName] = true
-	}
-
 	// For each SAML group, find matching local group and ensure membership
 	for _, samlGroupName := range samlGroups {
-		// Look up group by name
-		var groupID string
-		err := dbConn.QueryRowContext(ctx, `
-			SELECT id FROM groups WHERE name = $1
-		`, samlGroupName).Scan(&groupID)
-
+		err := h.userDB.AddUserToGroup(ctx, userID, samlGroupName)
 		if err != nil {
-			// Group doesn't exist in local database, skip
-			log.Printf("SAML group '%s' not found in local groups, skipping", samlGroupName)
-			continue
-		}
-
-		// Check if user is already a member
-		if !existingGroupMap[groupID] {
-			// Add user to group
-			_, err = dbConn.ExecContext(ctx, `
-				INSERT INTO group_memberships (group_id, user_id, role, added_at)
-				VALUES ($1, $2, 'member', NOW())
-				ON CONFLICT (group_id, user_id) DO NOTHING
-			`, groupID, userID)
-
-			if err != nil {
-				log.Printf("Failed to add user %s to group %s: %v", userID, groupID, err)
-			} else {
-				log.Printf("Added user %s to group %s (from SAML)", userID, groupID)
-			}
+			// Log error but continue with other groups
+			// We don't fail the whole sync if one group fails (e.g. group doesn't exist)
+			log.Printf("Warning: Failed to add user %s to group %s: %v", userID, samlGroupName, err)
+		} else {
+			log.Printf("Added user %s to group %s (from SAML)", userID, samlGroupName)
 		}
 	}
-
-	// Optional: Remove user from groups they're no longer in via SAML
-	// This is commented out by default to prevent accidental removals
-	// Uncomment if you want strict SAML group synchronization
-	/*
-		for _, groupID := range existingGroups {
-			// Get group name to check if it came from SAML
-			var groupName string
-			var isSAMLManaged bool
-			err := dbConn.QueryRowContext(ctx, `
-				SELECT name, COALESCE((metadata->>'saml_managed')::boolean, false)
-				FROM groups WHERE id = $1
-			`, groupID).Scan(&groupName, &isSAMLManaged)
-
-			if err != nil || !isSAMLManaged {
-				// Skip groups that aren't SAML-managed
-				continue
-			}
-
-			// If group is SAML-managed but not in current SAML assertion, remove membership
-			if !samlGroupMap[groupName] {
-				_, err = dbConn.ExecContext(ctx, `
-					DELETE FROM group_memberships
-					WHERE group_id = $1 AND user_id = $2
-				`, groupID, userID)
-
-				if err != nil {
-					log.Printf("Failed to remove user %s from group %s: %v", userID, groupID, err)
-				} else {
-					log.Printf("Removed user %s from group %s (no longer in SAML)", userID, groupID)
-				}
-			}
-		}
-	*/
 
 	return nil
 }

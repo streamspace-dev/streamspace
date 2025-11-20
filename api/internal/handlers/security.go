@@ -188,7 +188,7 @@ type MFASetupResponse struct {
 type BackupCode struct {
 	ID        int64     `json:"id"`
 	UserID    string    `json:"user_id"`
-	Code      string    `json:"code"`      // Hashed in DB
+	Code      string    `json:"code"` // Hashed in DB
 	Used      bool      `json:"used"`
 	UsedAt    time.Time `json:"used_at,omitempty"`
 	CreatedAt time.Time `json:"created_at"`
@@ -196,15 +196,15 @@ type BackupCode struct {
 
 // TrustedDevice represents a device trusted for MFA bypass
 type TrustedDevice struct {
-	ID             int64     `json:"id"`
-	UserID         string    `json:"user_id"`
-	DeviceID       string    `json:"device_id"`       // Browser fingerprint
-	DeviceName     string    `json:"device_name"`
-	UserAgent      string    `json:"user_agent"`
-	IPAddress      string    `json:"ip_address"`
-	TrustedUntil   time.Time `json:"trusted_until"`
-	LastSeenAt     time.Time `json:"last_seen_at"`
-	CreatedAt      time.Time `json:"created_at"`
+	ID           int64     `json:"id"`
+	UserID       string    `json:"user_id"`
+	DeviceID     string    `json:"device_id"` // Browser fingerprint
+	DeviceName   string    `json:"device_name"`
+	UserAgent    string    `json:"user_agent"`
+	IPAddress    string    `json:"ip_address"`
+	TrustedUntil time.Time `json:"trusted_until"`
+	LastSeenAt   time.Time `json:"last_seen_at"`
+	CreatedAt    time.Time `json:"created_at"`
 }
 
 // SetupMFA initializes Multi-Factor Authentication for a user (Step 1 of 2-step setup).
@@ -272,12 +272,12 @@ type TrustedDevice struct {
 
 // SecurityHandler handles security-related endpoints (MFA, IP whitelisting, etc.)
 type SecurityHandler struct {
-	DB *db.Database
+	DB *sql.DB
 }
 
 // NewSecurityHandler creates a new SecurityHandler instance
 func NewSecurityHandler(database *db.Database) *SecurityHandler {
-	return &SecurityHandler{DB: database}
+	return &SecurityHandler{DB: database.DB()}
 }
 
 func (h *SecurityHandler) SetupMFA(c *gin.Context) {
@@ -307,8 +307,8 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 	// They would always return "valid=true" which bypasses security
 	if req.Type == "sms" || req.Type == "email" {
 		c.JSON(http.StatusNotImplemented, gin.H{
-			"error":   "MFA type not implemented",
-			"message": "SMS and Email MFA are not yet available. Please use TOTP (authenticator app) for multi-factor authentication.",
+			"error":           "MFA type not implemented",
+			"message":         "SMS and Email MFA are not yet available. Please use TOTP (authenticator app) for multi-factor authentication.",
 			"supported_types": []string{"totp"},
 		})
 		return
@@ -316,7 +316,7 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 
 	// Check if MFA already exists
 	var existingID int64
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		SELECT id FROM mfa_methods
 		WHERE user_id = $1 AND type = $2
 	`, userID, req.Type).Scan(&existingID)
@@ -356,7 +356,7 @@ func (h *SecurityHandler) SetupMFA(c *gin.Context) {
 
 	// Insert MFA method (not yet verified/enabled)
 	var mfaID int64
-	err = h.DB.DB().QueryRow(`
+	err = h.DB.QueryRow(`
 		INSERT INTO mfa_methods (user_id, type, secret, phone_number, email, enabled, verified)
 		VALUES ($1, $2, $3, $4, $5, false, false)
 		RETURNING id
@@ -401,7 +401,7 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 
 	// Get MFA method (before transaction to verify code)
 	var mfaMethod MFAMethod
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		SELECT id, user_id, type, secret, phone_number, email
 		FROM mfa_methods
 		WHERE id = $1 AND user_id = $2
@@ -433,7 +433,7 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 
 	// SECURITY: Use transaction to ensure atomicity
 	// Either both MFA enable AND backup codes succeed, or neither
-	tx, err := h.DB.DB().Begin()
+	tx, err := h.DB.Begin()
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to start database transaction",
@@ -538,9 +538,9 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req struct {
-		Code       string `json:"code" binding:"required"`
-		MethodType string `json:"method_type,omitempty"` // "totp", "sms", "email", "backup_code"
-		TrustDevice bool  `json:"trust_device,omitempty"`
+		Code        string `json:"code" binding:"required"`
+		MethodType  string `json:"method_type,omitempty"` // "totp", "sms", "email", "backup_code"
+		TrustDevice bool   `json:"trust_device,omitempty"`
 	}
 
 	if err := c.ShouldBindJSON(&req); err != nil {
@@ -583,7 +583,7 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 	} else {
 		// Get MFA method
 		var secret string
-		err := h.DB.DB().QueryRow(`
+		err := h.DB.QueryRow(`
 			SELECT secret FROM mfa_methods
 			WHERE user_id = $1 AND type = $2 AND enabled = true
 		`, userID, req.MethodType).Scan(&secret)
@@ -607,7 +607,7 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 
 		// Update last used timestamp
 		if valid {
-			h.DB.DB().Exec(`UPDATE mfa_methods SET last_used_at = NOW() WHERE user_id = $1 AND type = $2`,
+			h.DB.Exec(`UPDATE mfa_methods SET last_used_at = NOW() WHERE user_id = $1 AND type = $2`,
 				userID, req.MethodType)
 		}
 	}
@@ -627,7 +627,7 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"message": "MFA verification successful",
+		"message":  "MFA verification successful",
 		"verified": true,
 	})
 }
@@ -636,7 +636,7 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 func (h *SecurityHandler) ListMFAMethods(c *gin.Context) {
 	userID := c.GetString("user_id")
 
-	rows, err := h.DB.DB().Query(`
+	rows, err := h.DB.Query(`
 		SELECT id, type, enabled, verified, is_primary, phone_number, email, created_at, last_used_at
 		FROM mfa_methods
 		WHERE user_id = $1
@@ -683,8 +683,9 @@ func (h *SecurityHandler) DisableMFA(c *gin.Context) {
 	userID := c.GetString("user_id")
 	mfaID := c.Param("mfaId")
 
-	result, err := h.DB.DB().Exec(`
-		UPDATE mfa_methods SET enabled = false
+	result, err := h.DB.Exec(`
+		UPDATE mfa_methods
+		SET enabled = false
 		WHERE id = $1 AND user_id = $2
 	`, mfaID, userID)
 
@@ -709,15 +710,17 @@ func (h *SecurityHandler) DisableMFA(c *gin.Context) {
 func (h *SecurityHandler) GenerateBackupCodes(c *gin.Context) {
 	userID := c.GetString("user_id")
 
-	// Invalidate old backup codes
-	h.DB.DB().Exec(`DELETE FROM backup_codes WHERE user_id = $1`, userID)
+	// Clean up expired trusted devices
+	go func() {
+		h.DB.Exec(`DELETE FROM trusted_devices WHERE trusted_until < NOW()`)
+	}()
 
 	// Generate new codes
 	codes := h.generateBackupCodes(userID, BackupCodesCount)
 
 	c.JSON(http.StatusOK, gin.H{
 		"backup_codes": codes,
-		"message": "Store these codes in a safe place. Each code can only be used once.",
+		"message":      "Store these codes in a safe place. Each code can only be used once.",
 	})
 }
 
@@ -733,7 +736,7 @@ func (h *SecurityHandler) generateBackupCodes(userID string, count int) []string
 		hash := sha256.Sum256([]byte(code))
 		hashStr := hex.EncodeToString(hash[:])
 
-		h.DB.DB().Exec(`
+		h.DB.Exec(`
 			INSERT INTO backup_codes (user_id, code)
 			VALUES ($1, $2)
 		`, userID, hashStr)
@@ -748,7 +751,7 @@ func (h *SecurityHandler) verifyBackupCode(userID, code string) bool {
 	hashStr := hex.EncodeToString(hash[:])
 
 	var codeID int64
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		SELECT id FROM backup_codes
 		WHERE user_id = $1 AND code = $2 AND used = false
 	`, userID, hashStr).Scan(&codeID)
@@ -758,7 +761,7 @@ func (h *SecurityHandler) verifyBackupCode(userID, code string) bool {
 	}
 
 	// Mark as used
-	h.DB.DB().Exec(`UPDATE backup_codes SET used = true, used_at = NOW() WHERE id = $1`, codeID)
+	h.DB.Exec(`UPDATE backup_codes SET used = true, used_at = NOW() WHERE id = $1`, codeID)
 	return true
 }
 
@@ -769,8 +772,8 @@ func (h *SecurityHandler) verifyBackupCode(userID, code string) bool {
 // IPWhitelist represents IP access control rules
 type IPWhitelist struct {
 	ID          int64     `json:"id"`
-	UserID      string    `json:"user_id,omitempty"`      // Empty for org-wide rules
-	IPAddress   string    `json:"ip_address"`              // Single IP or CIDR
+	UserID      string    `json:"user_id,omitempty"` // Empty for org-wide rules
+	IPAddress   string    `json:"ip_address"`        // Single IP or CIDR
 	Description string    `json:"description,omitempty"`
 	Enabled     bool      `json:"enabled"`
 	CreatedBy   string    `json:"created_by"`
@@ -782,8 +785,8 @@ type IPWhitelist struct {
 type GeoRestriction struct {
 	ID          int64    `json:"id"`
 	UserID      string   `json:"user_id,omitempty"` // Empty for org-wide
-	Countries   []string `json:"countries"`          // ISO country codes
-	Action      string   `json:"action"`             // "allow" or "deny"
+	Countries   []string `json:"countries"`         // ISO country codes
+	Action      string   `json:"action"`            // "allow" or "deny"
 	Enabled     bool     `json:"enabled"`
 	Description string   `json:"description,omitempty"`
 }
@@ -827,7 +830,7 @@ func (h *SecurityHandler) CreateIPWhitelist(c *gin.Context) {
 	}
 
 	var id int64
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		INSERT INTO ip_whitelist (user_id, ip_address, description, enabled, created_by, expires_at)
 		VALUES ($1, $2, $3, true, $4, $5)
 		RETURNING id
@@ -873,7 +876,7 @@ func (h *SecurityHandler) isIPAllowed(userID, ipAddress string) bool {
 	}
 
 	// Check user-specific rules
-	rows, err := h.DB.DB().Query(`
+	rows, err := h.DB.Query(`
 		SELECT ip_address FROM ip_whitelist
 		WHERE (user_id = $1 OR user_id IS NULL)
 		AND enabled = true
@@ -928,7 +931,7 @@ func (h *SecurityHandler) ListIPWhitelist(c *gin.Context) {
 		ORDER BY created_at DESC
 	`
 
-	rows, err := h.DB.DB().Query(query, userID, role)
+	rows, err := h.DB.Query(query, userID, role)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to list IP whitelist entries",
@@ -1005,10 +1008,10 @@ func (h *SecurityHandler) DeleteIPWhitelist(c *gin.Context) {
 
 	if role == "admin" {
 		// Admins can delete any entry
-		result, err = h.DB.DB().Exec(`DELETE FROM ip_whitelist WHERE id = $1`, entryID)
+		result, err = h.DB.Exec(`DELETE FROM ip_whitelist WHERE id = $1`, entryID)
 	} else {
 		// Non-admins can only delete their own entries or org-wide entries (NULL user_id)
-		result, err = h.DB.DB().Exec(`
+		result, err = h.DB.Exec(`
 			DELETE FROM ip_whitelist
 			WHERE id = $1 AND (user_id = $2 OR user_id IS NULL)
 		`, entryID, userID)
@@ -1045,8 +1048,8 @@ type SessionVerification struct {
 	DeviceID       string    `json:"device_id"`
 	IPAddress      string    `json:"ip_address"`
 	Location       string    `json:"location,omitempty"`
-	RiskScore      int       `json:"risk_score"`      // 0-100
-	RiskLevel      string    `json:"risk_level"`      // "low", "medium", "high", "critical"
+	RiskScore      int       `json:"risk_score"` // 0-100
+	RiskLevel      string    `json:"risk_level"` // "low", "medium", "high", "critical"
 	Verified       bool      `json:"verified"`
 	LastVerifiedAt time.Time `json:"last_verified_at"`
 	CreatedAt      time.Time `json:"created_at"`
@@ -1054,20 +1057,20 @@ type SessionVerification struct {
 
 // DevicePosture represents device security posture
 type DevicePosture struct {
-	DeviceID          string                 `json:"device_id"`
-	OSVersion         string                 `json:"os_version"`
-	BrowserVersion    string                 `json:"browser_version"`
-	ScreenResolution  string                 `json:"screen_resolution"`
-	Timezone          string                 `json:"timezone"`
-	Language          string                 `json:"language"`
-	Plugins           []string               `json:"plugins"`
-	Extensions        []string               `json:"extensions"`
-	AntivirusEnabled  bool                   `json:"antivirus_enabled"`
-	FirewallEnabled   bool                   `json:"firewall_enabled"`
-	EncryptionEnabled bool                   `json:"encryption_enabled"`
-	LastChecked       time.Time              `json:"last_checked"`
-	Compliant         bool                   `json:"compliant"`
-	Issues            []string               `json:"issues,omitempty"`
+	DeviceID          string    `json:"device_id"`
+	OSVersion         string    `json:"os_version"`
+	BrowserVersion    string    `json:"browser_version"`
+	ScreenResolution  string    `json:"screen_resolution"`
+	Timezone          string    `json:"timezone"`
+	Language          string    `json:"language"`
+	Plugins           []string  `json:"plugins"`
+	Extensions        []string  `json:"extensions"`
+	AntivirusEnabled  bool      `json:"antivirus_enabled"`
+	FirewallEnabled   bool      `json:"firewall_enabled"`
+	EncryptionEnabled bool      `json:"encryption_enabled"`
+	LastChecked       time.Time `json:"last_checked"`
+	Compliant         bool      `json:"compliant"`
+	Issues            []string  `json:"issues,omitempty"`
 }
 
 // VerifySession performs continuous session verification
@@ -1094,7 +1097,7 @@ func (h *SecurityHandler) VerifySession(c *gin.Context) {
 
 	// Record verification
 	var verificationID int64
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		INSERT INTO session_verifications (session_id, user_id, device_id, ip_address, risk_score, risk_level, verified)
 		VALUES ($1, $2, $3, $4, $5, $6, $7)
 		RETURNING id
@@ -1150,7 +1153,7 @@ func (h *SecurityHandler) CheckDevicePosture(c *gin.Context) {
 	req.LastChecked = time.Now()
 
 	// Store posture check result
-	h.DB.DB().Exec(`
+	h.DB.Exec(`
 		INSERT INTO device_posture_checks (device_id, compliant, issues, checked_at)
 		VALUES ($1, $2, $3, $4)
 	`, req.DeviceID, req.Compliant, strings.Join(issues, ","), time.Now())
@@ -1162,7 +1165,7 @@ func (h *SecurityHandler) CheckDevicePosture(c *gin.Context) {
 func (h *SecurityHandler) GetSecurityAlerts(c *gin.Context) {
 	userID := c.GetString("user_id")
 
-	rows, err := h.DB.DB().Query(`
+	rows, err := h.DB.Query(`
 		SELECT type, severity, message, details, created_at
 		FROM security_alerts
 		WHERE user_id = $1 AND acknowledged = false
@@ -1214,7 +1217,7 @@ func (h *SecurityHandler) trustDevice(userID, deviceID, userAgent, ipAddress str
 	trustedUntil := time.Now().Add(duration)
 	deviceName := fmt.Sprintf("%s from %s", userAgent, ipAddress)
 
-	h.DB.DB().Exec(`
+	h.DB.Exec(`
 		INSERT INTO trusted_devices (user_id, device_id, device_name, user_agent, ip_address, trusted_until)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (user_id, device_id) DO UPDATE SET
@@ -1229,7 +1232,7 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 
 	// Check if device is trusted
 	var trusted bool
-	err := h.DB.DB().QueryRow(`
+	err := h.DB.QueryRow(`
 		SELECT EXISTS(
 			SELECT 1 FROM trusted_devices
 			WHERE user_id = $1 AND device_id = $2 AND trusted_until > NOW()
@@ -1249,7 +1252,7 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 
 	// Check for recent failed login attempts
 	var failedAttempts int
-	h.DB.DB().QueryRow(`
+	h.DB.QueryRow(`
 		SELECT COUNT(*) FROM audit_log
 		WHERE user_id = $1 AND action = 'login_failed'
 		AND created_at > NOW() - INTERVAL '1 hour'
@@ -1259,7 +1262,7 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 
 	// Check for location change
 	var lastIP string
-	h.DB.DB().QueryRow(`
+	h.DB.QueryRow(`
 		SELECT ip_address FROM session_verifications
 		WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1
 	`, userID).Scan(&lastIP)

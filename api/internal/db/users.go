@@ -20,21 +20,34 @@
 // - Last login tracking for auditing
 //
 // Database Schema:
+//
 //   - users table: Core user account data
-//     - id (varchar): Primary key (UUID)
-//     - username (varchar): Unique username
-//     - email (varchar): Unique email address
-//     - password_hash (varchar): bcrypt hashed password (local auth only)
-//     - role (varchar): User role (user, admin, superadmin)
-//     - provider (varchar): Auth provider (local, saml, oidc)
-//     - active (boolean): Account active status
-//     - created_at, updated_at: Timestamps
-//     - last_login: Last successful authentication
+//
+//   - id (varchar): Primary key (UUID)
+//
+//   - username (varchar): Unique username
+//
+//   - email (varchar): Unique email address
+//
+//   - password_hash (varchar): bcrypt hashed password (local auth only)
+//
+//   - role (varchar): User role (user, admin, superadmin)
+//
+//   - provider (varchar): Auth provider (local, saml, oidc)
+//
+//   - active (boolean): Account active status
+//
+//   - created_at, updated_at: Timestamps
+//
+//   - last_login: Last successful authentication
 //
 //   - user_quotas table: Resource limits per user
-//     - user_id: Foreign key to users
-//     - max_sessions, max_cpu, max_memory, max_storage: Limits
-//     - used_sessions, used_cpu, used_memory, used_storage: Current usage
+//
+//   - user_id: Foreign key to users
+//
+//   - max_sessions, max_cpu, max_memory, max_storage: Limits
+//
+//   - used_sessions, used_cpu, used_memory, used_storage: Current usage
 //
 // Implementation Details:
 // - Passwords never stored in plaintext (bcrypt with cost 10)
@@ -91,6 +104,9 @@ import (
 	"github.com/streamspace/streamspace/api/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
+
+// ErrUserNotFound is returned when a user is not found
+var ErrUserNotFound = fmt.Errorf("user not found")
 
 // UserDB handles database operations for users
 type UserDB struct {
@@ -182,7 +198,7 @@ func (u *UserDB) GetUser(ctx context.Context, userID string) (*models.User, erro
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found")
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -220,7 +236,7 @@ func (u *UserDB) GetUserByUsername(ctx context.Context, username string) (*model
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found")
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -246,7 +262,7 @@ func (u *UserDB) GetUserByEmail(ctx context.Context, email string) (*models.User
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("user not found")
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -496,7 +512,7 @@ func (u *UserDB) GetUserQuota(ctx context.Context, userID string) (*models.UserQ
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
-			return nil, fmt.Errorf("quota not found")
+			return nil, ErrUserNotFound
 		}
 		return nil, err
 	}
@@ -572,7 +588,7 @@ func (u *UserDB) createDefaultQuota(ctx context.Context, userID string) error {
 
 	_, err := u.db.ExecContext(ctx, query,
 		userID,
-		5,      // Default: 5 sessions
+		5,       // Default: 5 sessions
 		"4000m", // Default: 4 CPU cores
 		"16Gi",  // Default: 16GB memory
 		"100Gi", // Default: 100GB storage
@@ -726,4 +742,24 @@ func join(strs []string, sep string) string {
 		result += sep + strs[i]
 	}
 	return result
+}
+
+// AddUserToGroup adds a user to a group by group name
+func (u *UserDB) AddUserToGroup(ctx context.Context, userID, groupName string) error {
+	var groupID string
+	err := u.db.QueryRowContext(ctx, `SELECT id FROM groups WHERE name = $1`, groupName).Scan(&groupID)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return fmt.Errorf("group not found")
+		}
+		return err
+	}
+
+	_, err = u.db.ExecContext(ctx, `
+		INSERT INTO group_memberships (group_id, user_id, role, added_at)
+		VALUES ($1, $2, 'member', NOW())
+		ON CONFLICT (group_id, user_id) DO NOTHING
+	`, groupID, userID)
+
+	return err
 }

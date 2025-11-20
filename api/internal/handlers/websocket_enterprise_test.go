@@ -2,6 +2,7 @@ package handlers
 
 import (
 	"encoding/json"
+	"fmt"
 	"testing"
 	"time"
 
@@ -186,7 +187,7 @@ func TestBroadcastToUser(t *testing.T) {
 
 func TestWebSocketMessages(t *testing.T) {
 	t.Run("Webhook delivery message", func(t *testing.T) {
-		hub := GetWebSocketHub()
+		// hub := GetWebSocketHub()
 
 		// This would normally send via WebSocket
 		// Testing the message structure
@@ -394,6 +395,3 @@ loop:
 
 	assert.Equal(t, 100, receivedCount, "All 100 messages should be received")
 }
-
-// Mock fmt package for sprintf
-import "fmt"

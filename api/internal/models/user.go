@@ -500,3 +500,9 @@ type SetQuotaRequest struct {
 	MaxMemory   *string `json:"maxMemory,omitempty"`
 	MaxStorage  *string `json:"maxStorage,omitempty"`
 }
+
+// LoginRequest represents a user login request.
+type LoginRequest struct {
+	Username string `json:"username" binding:"required"`
+	Password string `json:"password" binding:"required"`
+}
