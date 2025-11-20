@@ -2100,6 +2100,61 @@ func (d *Database) Migrate() error {
 
 		// Create index for idle session queries
 		`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity)`,
+
+		// License Management
+		// Licenses table - manages platform licensing and feature enforcement
+		`CREATE TABLE IF NOT EXISTS licenses (
+			id SERIAL PRIMARY KEY,
+			license_key VARCHAR(255) UNIQUE NOT NULL,
+			tier VARCHAR(50) NOT NULL,
+			features JSONB,
+			max_users INT,
+			max_sessions INT,
+			max_nodes INT,
+			issued_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			activated_at TIMESTAMP,
+			status VARCHAR(50) DEFAULT 'active',
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// License usage tracking - daily snapshots of resource usage
+		`CREATE TABLE IF NOT EXISTS license_usage (
+			id SERIAL PRIMARY KEY,
+			license_id INT REFERENCES licenses(id) ON DELETE CASCADE,
+			snapshot_date DATE NOT NULL,
+			active_users INT DEFAULT 0,
+			active_sessions INT DEFAULT 0,
+			active_nodes INT DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(license_id, snapshot_date)
+		)`,
+
+		// License indexes for efficient querying
+		`CREATE INDEX IF NOT EXISTS idx_licenses_tier ON licenses(tier)`,
+		`CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_licenses_expires_at ON licenses(expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_license_usage_license_id ON license_usage(license_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_license_usage_snapshot_date ON license_usage(snapshot_date)`,
+
+		// Insert default Community license for initial setup
+		`INSERT INTO licenses (license_key, tier, features, max_users, max_sessions, max_nodes, issued_at, expires_at, activated_at, status, metadata)
+		VALUES (
+			'COMMUNITY-DEFAULT',
+			'community',
+			'{"basic_auth": true, "saml": false, "oidc": false, "mfa": false, "recordings": false, "advanced_compliance": false, "priority_support": false}',
+			10,
+			20,
+			3,
+			CURRENT_TIMESTAMP,
+			CURRENT_TIMESTAMP + INTERVAL '100 years',
+			CURRENT_TIMESTAMP,
+			'active',
+			'{"description": "Default Community license - free forever", "auto_generated": true}'
+		)
+		ON CONFLICT (license_key) DO NOTHING`,
 	}
 
 	// Execute migrations
