@@ -85,6 +85,7 @@ func (h *ApplicationHandler) RegisterRoutes(router *gin.RouterGroup) {
 		apps.POST("", h.InstallApplication)
 		apps.GET("/user", h.GetUserApplications)
 		apps.GET("/:id", h.GetApplication)
+		apps.GET("/:id/icon", h.GetApplicationIcon)
 		apps.PUT("/:id", h.UpdateApplication)
 		apps.DELETE("/:id", h.DeleteApplication)
 		apps.PUT("/:id/enabled", h.SetApplicationEnabled)
@@ -325,6 +326,42 @@ func (h *ApplicationHandler) GetApplication(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusOK, app)
+}
+
+// GetApplicationIcon godoc
+// @Summary Get application icon
+// @Description Get the icon image for an installed application
+// @Tags applications
+// @Produce image/png,image/svg+xml,image/jpeg
+// @Param id path string true "Application ID"
+// @Success 200 {file} binary
+// @Failure 404 {object} ErrorResponse
+// @Router /api/v1/applications/{id}/icon [get]
+func (h *ApplicationHandler) GetApplicationIcon(c *gin.Context) {
+	appID := c.Param("id")
+	ctx := c.Request.Context()
+
+	// Get icon data from database
+	var iconData []byte
+	var iconMediaType string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT icon_data, COALESCE(icon_media_type, 'image/png')
+		FROM installed_applications
+		WHERE id = $1 AND icon_data IS NOT NULL
+	`, appID).Scan(&iconData, &iconMediaType)
+
+	if err != nil {
+		c.JSON(http.StatusNotFound, ErrorResponse{
+			Error:   "Icon not found",
+			Message: "Application icon not available",
+		})
+		return
+	}
+
+	// Set appropriate headers
+	c.Header("Content-Type", iconMediaType)
+	c.Header("Cache-Control", "public, max-age=86400") // Cache for 24 hours
+	c.Data(http.StatusOK, iconMediaType, iconData)
 }
 
 // UpdateApplication godoc

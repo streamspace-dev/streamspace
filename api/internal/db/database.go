@@ -498,9 +498,15 @@ func (d *Database) Migrate() error {
 			catalog_template_id INT REFERENCES catalog_templates(id) ON DELETE SET NULL,
 			name VARCHAR(255) NOT NULL,
 			display_name VARCHAR(255) NOT NULL,
+			description TEXT,
+			category VARCHAR(100),
 			folder_path VARCHAR(255),
 			enabled BOOLEAN DEFAULT true,
 			configuration JSONB DEFAULT '{}',
+			icon_url TEXT,
+			icon_data BYTEA,
+			icon_media_type VARCHAR(100),
+			manifest JSONB,
 			created_by VARCHAR(255) REFERENCES users(id) ON DELETE SET NULL,
 			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
 			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
@@ -2061,9 +2067,19 @@ func (d *Database) Migrate() error {
 		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS install_message TEXT`,
 		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS platform VARCHAR(50) DEFAULT 'kubernetes'`,
 
+		// Add icon and metadata columns to installed_applications for persistence
+		// Icons are downloaded when app is installed, enabling offline/air-gapped deployments
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS description TEXT`,
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS category VARCHAR(100)`,
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS icon_url TEXT`,
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS icon_data BYTEA`,
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS icon_media_type VARCHAR(100)`,
+		`ALTER TABLE installed_applications ADD COLUMN IF NOT EXISTS manifest JSONB`,
+
 		// Create index for install status
 		`CREATE INDEX IF NOT EXISTS idx_installed_applications_status ON installed_applications(install_status)`,
 		`CREATE INDEX IF NOT EXISTS idx_installed_applications_platform ON installed_applications(platform)`,
+		`CREATE INDEX IF NOT EXISTS idx_installed_applications_category ON installed_applications(category)`,
 
 		// Add platform fields to sessions for multi-platform support
 		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS platform VARCHAR(50) DEFAULT 'kubernetes'`,

@@ -92,12 +92,12 @@ spec:
             status:
               type: object
               properties:
-                phase:
-                  type: string
-                  description: Current phase (Ready, Invalid, etc.)
+                valid:
+                  type: boolean
+                  description: Whether the template has passed validation
                 message:
                   type: string
-                  description: Additional status information
+                  description: Validation result message
       subresources:
         status: {}
       additionalPrinterColumns:
@@ -113,6 +113,9 @@ spec:
         - name: Memory
           type: string
           jsonPath: .spec.defaultResources.memory
+        - name: Valid
+          type: boolean
+          jsonPath: .status.valid
         - name: Age
           type: date
           jsonPath: .metadata.creationTimestamp

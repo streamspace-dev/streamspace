@@ -157,10 +157,13 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"os"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
 	networkingv1 "k8s.io/api/networking/v1"
@@ -220,8 +223,10 @@ import (
 // - Kubernetes optimistic concurrency prevents conflicts
 // - Status updates use separate client with retry
 type SessionReconciler struct {
-	client.Client  // Kubernetes API client
-	Scheme *runtime.Scheme  // Type information for objects
+	client.Client                // Kubernetes API client
+	Scheme       *runtime.Scheme // Type information for objects
+	NATSConn     *nats.Conn      // NATS connection for publishing status events
+	ControllerID string          // Unique identifier for this controller instance
 }
 
 // setCondition sets or updates a condition on the Session's status.
@@ -261,6 +266,51 @@ func (r *SessionReconciler) setCondition(ctx context.Context, session *streamv1a
 		log.Error(err, "Failed to update Session condition",
 			"conditionType", conditionType,
 			"reason", reason)
+	}
+}
+
+// SessionStatusEvent represents a session status update published to NATS.
+// This struct matches the event type expected by the API backend.
+type SessionStatusEvent struct {
+	EventID      string    `json:"event_id"`
+	Timestamp    time.Time `json:"timestamp"`
+	SessionID    string    `json:"session_id"`
+	Status       string    `json:"status"`
+	Phase        string    `json:"phase"`
+	URL          string    `json:"url,omitempty"`
+	PodName      string    `json:"pod_name,omitempty"`
+	Message      string    `json:"message,omitempty"`
+	ControllerID string    `json:"controller_id"`
+}
+
+// publishSessionStatus publishes a session status update to NATS so the API can update its database.
+// This is critical for the UI to show the correct session state and enable the Connect button.
+func (r *SessionReconciler) publishSessionStatus(sessionID, status, phase, url, podName, message string) {
+	if r.NATSConn == nil {
+		return // NATS not configured, skip publishing
+	}
+
+	event := SessionStatusEvent{
+		EventID:      uuid.New().String(),
+		Timestamp:    time.Now(),
+		SessionID:    sessionID,
+		Status:       status,
+		Phase:        phase,
+		URL:          url,
+		PodName:      podName,
+		Message:      message,
+		ControllerID: r.ControllerID,
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		// Log but don't fail - the CRD status is already updated
+		return
+	}
+
+	if err := r.NATSConn.Publish("streamspace.session.status", data); err != nil {
+		// Log but don't fail - the CRD status is already updated
+		return
 	}
 }
 
@@ -454,6 +504,16 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
 		}
 
+		// BUG FIX: Handle race condition where Valid field is stale but Message shows success
+		// This can happen when the session controller's cache hasn't been updated yet after
+		// the template controller set Valid=true. If Message indicates success, wait for
+		// the Valid field to be updated rather than treating it as an error.
+		if template.Status.Message == "Template is valid and ready to use" {
+			log.Info("Template validation status inconsistent (Valid=false but success message present), waiting for cache sync", "template", template.Name)
+			// Requeue after a short delay to allow cache to sync
+			return ctrl.Result{RequeueAfter: 2 * time.Second}, nil
+		}
+
 		// Template was validated but is invalid - this is a real error
 		err := fmt.Errorf("template %s is not valid: %s", template.Name, template.Status.Message)
 		log.Error(err, "Cannot create session from invalid template")
@@ -596,6 +656,10 @@ func (r *SessionReconciler) handleRunning(ctx context.Context, session *streamv1
 		return ctrl.Result{}, err
 	}
 
+	// Publish status to NATS so the API can update its database
+	// This enables the Connect button in the UI
+	r.publishSessionStatus(session.Name, "running", "Running", session.Status.URL, session.Status.PodName, "Session is running")
+
 	// Record session state in Prometheus for monitoring
 	metrics.RecordSessionState("running", session.Namespace, 1)
 
@@ -698,6 +762,9 @@ func (r *SessionReconciler) handleHibernated(ctx context.Context, session *strea
 		return ctrl.Result{}, err
 	}
 
+	// Publish status to NATS so the API can update its database
+	r.publishSessionStatus(session.Name, "hibernated", "Hibernated", "", "", "Session is hibernated")
+
 	// Record session state in Prometheus for dashboards
 	metrics.RecordSessionState("hibernated", session.Namespace, 1)
 
@@ -793,6 +860,9 @@ func (r *SessionReconciler) handleTerminated(ctx context.Context, session *strea
 		log.Error(err, "Failed to update Session status")
 		return ctrl.Result{}, err
 	}
+
+	// Publish status to NATS so the API can update its database
+	r.publishSessionStatus(session.Name, "terminated", "Terminated", "", "", "Session is terminated")
 
 	// Record session state in Prometheus
 	metrics.RecordSessionState("terminated", session.Namespace, 1)

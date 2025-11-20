@@ -59,13 +59,69 @@ import (
 	"database/sql"
 	"encoding/json"
 	"fmt"
+	"io"
+	"net/http"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
 	"github.com/streamspace/streamspace/api/internal/models"
 )
+
+// downloadIcon downloads an icon from a URL and returns the binary data and media type.
+// Returns empty values if download fails (non-fatal - app can still be installed without icon).
+func downloadIcon(iconURL string) ([]byte, string) {
+	if iconURL == "" {
+		return nil, ""
+	}
+
+	// Create HTTP client with timeout
+	client := &http.Client{
+		Timeout: 30 * time.Second,
+	}
+
+	resp, err := client.Get(iconURL)
+	if err != nil {
+		fmt.Printf("Warning: failed to download icon from %s: %v\n", iconURL, err)
+		return nil, ""
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		fmt.Printf("Warning: failed to download icon from %s: status %d\n", iconURL, resp.StatusCode)
+		return nil, ""
+	}
+
+	// Read the icon data
+	data, err := io.ReadAll(resp.Body)
+	if err != nil {
+		fmt.Printf("Warning: failed to read icon data from %s: %v\n", iconURL, err)
+		return nil, ""
+	}
+
+	// Determine media type from Content-Type header or file extension
+	mediaType := resp.Header.Get("Content-Type")
+	if mediaType == "" || mediaType == "application/octet-stream" {
+		// Guess from URL extension
+		if strings.HasSuffix(strings.ToLower(iconURL), ".svg") {
+			mediaType = "image/svg+xml"
+		} else if strings.HasSuffix(strings.ToLower(iconURL), ".png") {
+			mediaType = "image/png"
+		} else if strings.HasSuffix(strings.ToLower(iconURL), ".jpg") || strings.HasSuffix(strings.ToLower(iconURL), ".jpeg") {
+			mediaType = "image/jpeg"
+		} else if strings.HasSuffix(strings.ToLower(iconURL), ".gif") {
+			mediaType = "image/gif"
+		} else if strings.HasSuffix(strings.ToLower(iconURL), ".webp") {
+			mediaType = "image/webp"
+		} else {
+			mediaType = "image/png" // Default assumption
+		}
+	}
+
+	return data, mediaType
+}
 
 // ApplicationDB handles database operations for installed applications
 type ApplicationDB struct {
@@ -77,16 +133,31 @@ func NewApplicationDB(db *sql.DB) *ApplicationDB {
 	return &ApplicationDB{db: db}
 }
 
+// InstallApplicationParams contains all data needed to install an application
+type InstallApplicationParams struct {
+	CatalogTemplateID int
+	DisplayName       string
+	Description       string
+	Category          string
+	IconURL           string
+	IconData          []byte
+	IconMediaType     string
+	Manifest          string
+	Configuration     map[string]interface{}
+}
+
 // InstallApplication installs a new application from the catalog
 func (a *ApplicationDB) InstallApplication(ctx context.Context, req *models.InstallApplicationRequest, userID string) (*models.InstalledApplication, error) {
 	appID := uuid.New().String()
 	guidSuffix := uuid.New().String()[:8]
 
-	// Get template info for default name
-	var templateName, templateDisplayName string
+	// Get full template info including manifest
+	var templateName, templateDisplayName, description, category, iconURL, manifest string
 	err := a.db.QueryRowContext(ctx, `
-		SELECT name, display_name FROM catalog_templates WHERE id = $1
-	`, req.CatalogTemplateID).Scan(&templateName, &templateDisplayName)
+		SELECT name, display_name, COALESCE(description, ''), COALESCE(category, ''),
+		       COALESCE(icon_url, ''), COALESCE(manifest::text, '{}')
+		FROM catalog_templates WHERE id = $1
+	`, req.CatalogTemplateID).Scan(&templateName, &templateDisplayName, &description, &category, &iconURL, &manifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to get template: %w", err)
 	}
@@ -110,11 +181,24 @@ func (a *ApplicationDB) InstallApplication(ctx context.Context, req *models.Inst
 		}
 	}
 
+	// Download icon if URL is provided
+	var iconData []byte
+	var iconMediaType string
+	if iconURL != "" {
+		iconData, iconMediaType = downloadIcon(iconURL)
+	}
+
 	app := &models.InstalledApplication{
 		ID:                appID,
 		CatalogTemplateID: req.CatalogTemplateID,
 		Name:              name,
 		DisplayName:       displayName,
+		Description:       description,
+		Category:          category,
+		IconURL:           iconURL,
+		IconData:          iconData,
+		IconMediaType:     iconMediaType,
+		Manifest:          manifest,
 		FolderPath:        folderPath,
 		Enabled:           true,
 		Configuration:     req.Configuration,
@@ -125,14 +209,16 @@ func (a *ApplicationDB) InstallApplication(ctx context.Context, req *models.Inst
 
 	query := `
 		INSERT INTO installed_applications (
-			id, catalog_template_id, name, display_name, folder_path,
+			id, catalog_template_id, name, display_name, description, category,
+			icon_url, icon_data, icon_media_type, manifest, folder_path,
 			enabled, configuration, created_by, created_at, updated_at
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16)
 	`
 
 	_, err = a.db.ExecContext(ctx, query,
-		app.ID, app.CatalogTemplateID, app.Name, app.DisplayName, app.FolderPath,
+		app.ID, app.CatalogTemplateID, app.Name, app.DisplayName, app.Description, app.Category,
+		app.IconURL, app.IconData, app.IconMediaType, app.Manifest, app.FolderPath,
 		app.Enabled, string(configJSON), app.CreatedBy, app.CreatedAt, app.UpdatedAt,
 	)
 	if err != nil {
@@ -230,12 +316,6 @@ func (a *ApplicationDB) ListApplications(ctx context.Context, enabledOnly bool) 
 	}
 	defer rows.Close()
 
-	// Get base path for folder checks
-	basePath := os.Getenv("APPS_BASE_PATH")
-	if basePath == "" {
-		basePath = "/app"
-	}
-
 	apps := []*models.InstalledApplication{}
 	for rows.Next() {
 		app := &models.InstalledApplication{}
@@ -264,20 +344,10 @@ func (a *ApplicationDB) ListApplications(ctx context.Context, enabledOnly bool) 
 			json.Unmarshal(configJSON, &app.Configuration)
 		}
 
-		// Check if folder exists - if not and app is enabled, auto-disable it
-		if app.Enabled && app.FolderPath != "" {
-			fullPath := filepath.Join(basePath, app.FolderPath)
-			if _, err := os.Stat(fullPath); os.IsNotExist(err) {
-				// Folder doesn't exist, disable the application
-				_, updateErr := a.db.ExecContext(ctx,
-					"UPDATE installed_applications SET enabled = false, updated_at = $1 WHERE id = $2",
-					time.Now(), app.ID)
-				if updateErr == nil {
-					app.Enabled = false
-					fmt.Printf("Auto-disabled application %s: folder %s does not exist\n", app.DisplayName, fullPath)
-				}
-			}
-		}
+		// Note: We no longer auto-disable applications when folders are missing.
+		// Instead, the controller sync mechanism will recreate missing resources.
+		// Applications remain enabled in the database and the controller will
+		// receive AppInstallEvents during sync to recreate any missing templates.
 
 		apps = append(apps, app)
 	}

@@ -243,12 +243,17 @@ func (m *Manager) broadcastSessionUpdates() {
 			}
 
 			sessionData := map[string]interface{}{
-				"name":              session.Name,
-				"namespace":         session.Namespace,
-				"user":              session.User,
-				"template":          session.Template,
-				"state":             session.State,
-				"status":            session.Status,
+				"name":      session.Name,
+				"namespace": session.Namespace,
+				"user":      session.User,
+				"template":  session.Template,
+				"state":     session.State,
+				// Convert status to proper JSON format with lowercase keys
+				"status": map[string]interface{}{
+					"phase":   session.Status.Phase,
+					"podName": session.Status.PodName,
+					"url":     session.Status.URL,
+				},
 				"createdAt":         session.CreatedAt,
 				"activeConnections": activeConns,
 			}

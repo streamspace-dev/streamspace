@@ -499,14 +499,74 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	// Without a valid template, the session cannot be created
 	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateName)
 	if err != nil {
-		// Provide a more helpful error message
-		errorMsg := fmt.Sprintf("Template not found: %s.", templateName)
+		// Template is missing - trigger reinstallation if applicationId was provided
 		if req.ApplicationId != "" {
-			errorMsg += " The application may still be installing or the Kubernetes controller may not be running."
-		} else {
-			errorMsg += " Please ensure the application is properly installed."
+			// Query application details for reinstall
+			var (
+				installID         string
+				catalogTemplateID int
+				displayName       string
+				description       string
+				category          string
+				iconURL           string
+				manifest          string
+				installedBy       string
+			)
+			reinstallErr := h.db.DB().QueryRowContext(ctx, `
+				SELECT
+					ia.id,
+					ia.catalog_template_id,
+					ia.display_name,
+					COALESCE(ct.description, ''),
+					COALESCE(ct.category, ''),
+					COALESCE(ct.icon_url, ''),
+					COALESCE(ct.manifest, '{}'),
+					ia.created_by
+				FROM installed_applications ia
+				LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
+				WHERE ia.id = $1
+			`, req.ApplicationId).Scan(
+				&installID, &catalogTemplateID, &displayName, &description,
+				&category, &iconURL, &manifest, &installedBy,
+			)
+
+			if reinstallErr == nil {
+				// Publish AppInstallEvent to trigger controller to create template
+				if err := h.publisher.PublishAppInstall(ctx, &events.AppInstallEvent{
+					InstallID:         installID,
+					CatalogTemplateID: catalogTemplateID,
+					TemplateName:      templateName,
+					DisplayName:       displayName,
+					Description:       description,
+					Category:          category,
+					IconURL:           iconURL,
+					Manifest:          manifest,
+					InstalledBy:       installedBy,
+					Platform:          h.platform,
+				}); err != nil {
+					log.Printf("Failed to publish app reinstall event for %s: %v", templateName, err)
+				} else {
+					log.Printf("Triggered reinstall for missing template %s (app: %s)", templateName, installID)
+					// Update status to creating
+					h.db.DB().ExecContext(ctx, `
+						UPDATE installed_applications
+						SET install_status = 'creating', install_message = 'Reinstalling missing template', updated_at = NOW()
+						WHERE id = $1
+					`, installID)
+				}
+			}
+
+			c.JSON(http.StatusServiceUnavailable, gin.H{
+				"error":   "Template reinstalling",
+				"message": fmt.Sprintf("The template for '%s' was missing and is being reinstalled. Please try again in a few seconds.", displayName),
+			})
+			return
 		}
-		c.JSON(http.StatusBadRequest, gin.H{"error": errorMsg})
+
+		// No applicationId provided - provide generic error
+		c.JSON(http.StatusBadRequest, gin.H{
+			"error": fmt.Sprintf("Template not found: %s. Please ensure the application is properly installed.", templateName),
+		})
 		return
 	}
 
@@ -643,6 +703,25 @@ func (h *Handler) CreateSession(c *gin.Context) {
 			"message": fmt.Sprintf("Failed to publish session create event: %v", err),
 		})
 		return
+	}
+
+	// Cache session in database so status updates can be applied
+	// This is best-effort - failure doesn't block session creation
+	dbSession := &db.Session{
+		ID:                 sessionName,
+		UserID:             req.User,
+		TemplateName:       templateName,
+		State:              "pending",
+		Namespace:          h.namespace,
+		Platform:           h.platform,
+		Memory:             memory,
+		CPU:                cpu,
+		PersistentHome:     session.PersistentHome,
+		IdleTimeout:        session.IdleTimeout,
+		MaxSessionDuration: session.MaxSessionDuration,
+	}
+	if err := h.sessionDB.CreateSession(ctx, dbSession); err != nil {
+		log.Printf("Failed to cache session %s in database (non-fatal): %v", sessionName, err)
 	}
 
 	// Return the session info immediately
@@ -1934,7 +2013,43 @@ func (h *Handler) convertDBSessionsToResponse(sessions []*db.Session) []map[stri
 }
 
 // convertDBSessionToResponse converts a database session to API response format.
+// If the database doesn't have the session URL, it fetches the status from Kubernetes.
 func (h *Handler) convertDBSessionToResponse(session *db.Session) map[string]interface{} {
+	// Fetch Kubernetes status if database is missing URL or phase is empty
+	// This handles the case where the controller hasn't yet communicated status back to API
+	url := session.URL
+	podName := session.PodName
+	phase := session.State
+
+	if (url == "" || phase == "") && h.k8sClient != nil {
+		ctx := context.Background()
+		k8sSession, err := h.k8sClient.GetSession(ctx, h.namespace, session.ID)
+		if err == nil && k8sSession != nil {
+			if k8sSession.Status.URL != "" {
+				url = k8sSession.Status.URL
+			}
+			if k8sSession.Status.PodName != "" {
+				podName = k8sSession.Status.PodName
+			}
+			if k8sSession.Status.Phase != "" {
+				phase = k8sSession.Status.Phase
+			}
+			// Also update resources from Kubernetes if missing
+			if session.Memory == "" && k8sSession.Resources.Memory != "" {
+				session.Memory = k8sSession.Resources.Memory
+			}
+			if session.CPU == "" && k8sSession.Resources.CPU != "" {
+				session.CPU = k8sSession.Resources.CPU
+			}
+		}
+	}
+
+	// Capitalize phase for status.phase (UI expects "Running" not "running")
+	capitalizedPhase := phase
+	if len(phase) > 0 {
+		capitalizedPhase = strings.ToUpper(phase[:1]) + phase[1:]
+	}
+
 	result := map[string]interface{}{
 		"name":               session.ID,
 		"namespace":          session.Namespace,
@@ -1948,9 +2063,9 @@ func (h *Handler) convertDBSessionToResponse(session *db.Session) map[string]int
 		"platform":           session.Platform,
 		"activeConnections":  session.ActiveConnections,
 		"status": map[string]interface{}{
-			"phase":   session.State,
-			"url":     session.URL,
-			"podName": session.PodName,
+			"phase":   capitalizedPhase,
+			"url":     url,
+			"podName": podName,
 		},
 	}
 

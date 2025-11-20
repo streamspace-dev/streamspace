@@ -6,9 +6,12 @@ package controllers
 
 import (
 	"context"
+	"encoding/json"
 	"fmt"
 	"time"
 
+	"github.com/google/uuid"
+	"github.com/nats-io/nats.go"
 	"gopkg.in/yaml.v3"
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/errors"
@@ -33,7 +36,9 @@ import (
 // This provides automatic retry on failure and clear status reporting.
 type ApplicationInstallReconciler struct {
 	client.Client
-	Scheme *runtime.Scheme
+	Scheme       *runtime.Scheme
+	NATSConn     *nats.Conn
+	ControllerID string
 }
 
 // +kubebuilder:rbac:groups=stream.space,resources=applicationinstalls,verbs=get;list;watch;create;update;patch;delete
@@ -112,6 +117,8 @@ func (r *ApplicationInstallReconciler) Reconcile(ctx context.Context, req ctrl.R
 				logger.Error(updateErr, "Failed to update status")
 				return ctrl.Result{}, updateErr
 			}
+			// Publish status event to notify API
+			r.publishAppStatus(appInstall.Name, "installed", appInstall.Spec.TemplateName, "Template already exists")
 			return ctrl.Result{}, nil
 		}
 
@@ -119,6 +126,8 @@ func (r *ApplicationInstallReconciler) Reconcile(ctx context.Context, req ctrl.R
 		if updateErr := r.updateStatus(ctx, &appInstall, "Failed", fmt.Sprintf("Failed to create Template: %v", err)); updateErr != nil {
 			logger.Error(updateErr, "Failed to update status")
 		}
+		// Publish failure status
+		r.publishAppStatus(appInstall.Name, "failed", appInstall.Spec.TemplateName, fmt.Sprintf("Failed to create Template: %v", err))
 		// Retry after delay
 		return ctrl.Result{RequeueAfter: 30 * time.Second}, err
 	}
@@ -132,6 +141,9 @@ func (r *ApplicationInstallReconciler) Reconcile(ctx context.Context, req ctrl.R
 		logger.Error(err, "Failed to update status to Ready")
 		return ctrl.Result{}, err
 	}
+
+	// Publish status event to notify API
+	r.publishAppStatus(appInstall.Name, "installed", appInstall.Spec.TemplateName, "Template created successfully")
 
 	return ctrl.Result{}, nil
 }
@@ -320,6 +332,41 @@ func (r *ApplicationInstallReconciler) updateStatus(ctx context.Context, appInst
 	}
 
 	return r.Status().Update(ctx, latest)
+}
+
+// publishAppStatus publishes an app installation status event via NATS.
+func (r *ApplicationInstallReconciler) publishAppStatus(installID, status, templateName, message string) {
+	if r.NATSConn == nil {
+		return
+	}
+
+	event := struct {
+		EventID      string    `json:"event_id"`
+		Timestamp    time.Time `json:"timestamp"`
+		InstallID    string    `json:"install_id"`
+		Status       string    `json:"status"`
+		TemplateName string    `json:"template_name"`
+		Message      string    `json:"message"`
+		ControllerID string    `json:"controller_id"`
+	}{
+		EventID:      uuid.New().String(),
+		Timestamp:    time.Now(),
+		InstallID:    installID,
+		Status:       status,
+		TemplateName: templateName,
+		Message:      message,
+		ControllerID: r.ControllerID,
+	}
+
+	data, err := json.Marshal(event)
+	if err != nil {
+		return
+	}
+
+	if err := r.NATSConn.Publish("streamspace.app.status", data); err != nil {
+		// Log but don't fail - status update is best-effort
+		fmt.Printf("Failed to publish app status event: %v\n", err)
+	}
 }
 
 // SetupWithManager sets up the controller with the Manager.

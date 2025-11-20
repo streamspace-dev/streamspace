@@ -45,7 +45,9 @@ import (
 	"context"
 	"flag"
 	"os"
+	"time"
 
+	"github.com/nats-io/nats.go"
 	"k8s.io/apimachinery/pkg/runtime"
 	utilruntime "k8s.io/apimachinery/pkg/util/runtime"
 	clientgoscheme "k8s.io/client-go/kubernetes/scheme"
@@ -145,14 +147,35 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create NATS connection for SessionReconciler to publish status events
+	var sessionNATSConn *nats.Conn
+	if natsURL != "" {
+		opts := []nats.Option{
+			nats.Name("streamspace-session-reconciler"),
+			nats.ReconnectWait(2 * time.Second),
+			nats.MaxReconnects(10),
+		}
+		if natsUser != "" {
+			opts = append(opts, nats.UserInfo(natsUser, natsPassword))
+		}
+		sessionNATSConn, err = nats.Connect(natsURL, opts...)
+		if err != nil {
+			setupLog.Info("SessionReconciler NATS connection failed, status events will not be published", "error", err)
+		} else {
+			setupLog.Info("SessionReconciler connected to NATS for status publishing")
+		}
+	}
+
 	// Register SessionReconciler
 	// Manages the lifecycle of Session resources:
 	//   - Creates Deployments, Services, and PVCs for user sessions
 	//   - Handles state transitions (running, hibernated, terminated)
 	//   - Updates status with pod information and resource usage
 	if err = (&controllers.SessionReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		NATSConn:     sessionNATSConn,
+		ControllerID: controllerID,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "Session")
 		os.Exit(1)
@@ -185,6 +208,25 @@ func main() {
 		os.Exit(1)
 	}
 
+	// Create NATS connection for ApplicationInstallReconciler to publish status events
+	var appInstallNATSConn *nats.Conn
+	if natsURL != "" {
+		opts := []nats.Option{
+			nats.Name("streamspace-app-install-reconciler"),
+			nats.ReconnectWait(2 * time.Second),
+			nats.MaxReconnects(10),
+		}
+		if natsUser != "" {
+			opts = append(opts, nats.UserInfo(natsUser, natsPassword))
+		}
+		appInstallNATSConn, err = nats.Connect(natsURL, opts...)
+		if err != nil {
+			setupLog.Info("ApplicationInstallReconciler NATS connection failed, status events will not be published", "error", err)
+		} else {
+			setupLog.Info("ApplicationInstallReconciler connected to NATS for status publishing")
+		}
+	}
+
 	// Register ApplicationInstallReconciler
 	// Handles application installation from the catalog:
 	//   - Watches ApplicationInstall CRDs created by the API
@@ -192,8 +234,10 @@ func main() {
 	//   - Sets owner references for cascading deletion
 	//   - Updates status with creation progress (Pending → Creating → Ready/Failed)
 	if err = (&controllers.ApplicationInstallReconciler{
-		Client: mgr.GetClient(),
-		Scheme: mgr.GetScheme(),
+		Client:       mgr.GetClient(),
+		Scheme:       mgr.GetScheme(),
+		NATSConn:     appInstallNATSConn,
+		ControllerID: controllerID,
 	}).SetupWithManager(mgr); err != nil {
 		setupLog.Error(err, "unable to create controller", "controller", "ApplicationInstall")
 		os.Exit(1)

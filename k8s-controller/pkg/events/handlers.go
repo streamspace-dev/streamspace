@@ -439,12 +439,19 @@ func (s *Subscriber) handleNodeDrain(ctx context.Context, data []byte) error {
 
 // publishSessionStatus publishes a session status update.
 func (s *Subscriber) publishSessionStatus(sessionID, status, phase, message string) {
+	s.publishSessionStatusWithURL(sessionID, status, phase, "", "", message)
+}
+
+// publishSessionStatusWithURL publishes a session status update including URL and pod name.
+func (s *Subscriber) publishSessionStatusWithURL(sessionID, status, phase, url, podName, message string) {
 	event := SessionStatusEvent{
 		EventID:      uuid.New().String(),
 		Timestamp:    time.Now(),
 		SessionID:    sessionID,
 		Status:       status,
 		Phase:        phase,
+		URL:          url,
+		PodName:      podName,
 		Message:      message,
 		ControllerID: s.controllerID,
 	}

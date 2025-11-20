@@ -34,19 +34,26 @@ spec:
                   description: Desired state of the session
                 resources:
                   type: object
+                  description: CPU and memory resource requirements
                   properties:
-                    memory:
-                      type: string
-                      description: Memory limit (e.g., 2Gi, 4Gi)
-                      pattern: '^[0-9]+(Mi|Gi|Ti)$'
-                      minLength: 2
-                      maxLength: 10
-                    cpu:
-                      type: string
-                      description: CPU limit (e.g., 1000m, 2000m)
-                      pattern: '^[0-9]+(m)?$'
-                      minLength: 1
-                      maxLength: 10
+                    limits:
+                      type: object
+                      description: Maximum resources allowed
+                      additionalProperties:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: '^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$'
+                        x-kubernetes-int-or-string: true
+                    requests:
+                      type: object
+                      description: Minimum resources required
+                      additionalProperties:
+                        anyOf:
+                          - type: integer
+                          - type: string
+                        pattern: '^(\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))(([KMGTPE]i)|[numkMGTPE]|([eE](\+|-)?(([0-9]+(\.[0-9]*)?)|(\.[0-9]+))))?$'
+                        x-kubernetes-int-or-string: true
                 persistentHome:
                   type: boolean
                   default: true

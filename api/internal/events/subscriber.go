@@ -10,6 +10,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/nats-io/nats.go"
@@ -160,14 +161,18 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 	ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
 	defer cancel()
 
-	// Update the session state and URL
+	// Update the session state (using Phase which is the Kubernetes phase like "Running", "Pending"),
+	// URL, and pod_name
 	query := `
 		UPDATE sessions
-		SET state = $1, url = $2, updated_at = $3
-		WHERE id = $4
+		SET state = $1, url = $2, pod_name = $3, updated_at = $4
+		WHERE id = $5
 	`
 
-	result, err := s.db.ExecContext(ctx, query, event.Status, event.URL, time.Now(), event.SessionID)
+	// Convert Phase to lowercase for state field (running, hibernated, pending, failed)
+	// The UI expects lowercase state values for session lifecycle checks
+	state := strings.ToLower(event.Phase)
+	result, err := s.db.ExecContext(ctx, query, state, event.URL, event.PodName, time.Now(), event.SessionID)
 	if err != nil {
 		log.Printf("Failed to update session %s status: %v", event.SessionID, err)
 		return
@@ -177,7 +182,7 @@ func (s *Subscriber) handleSessionStatus(data []byte) {
 	if rows == 0 {
 		log.Printf("Session %s not found in database (may not be created yet)", event.SessionID)
 	} else {
-		log.Printf("Updated session %s to status=%s", event.SessionID, event.Status)
+		log.Printf("Updated session %s to state=%s url=%s", event.SessionID, state, event.URL)
 	}
 }
 

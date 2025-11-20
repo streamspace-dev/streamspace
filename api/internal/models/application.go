@@ -68,14 +68,16 @@ type InstalledApplication struct {
 	// UpdatedAt is when the application was last modified.
 	UpdatedAt time.Time `json:"updatedAt" db:"updated_at"`
 
-	// Template information (populated from JOIN)
+	// Template information (stored in installed_applications for persistence)
 	TemplateName        string `json:"templateName,omitempty"`
 	TemplateDisplayName string `json:"templateDisplayName,omitempty"`
-	Description         string `json:"description,omitempty"`
-	Category            string `json:"category,omitempty"`
+	Description         string `json:"description,omitempty" db:"description"`
+	Category            string `json:"category,omitempty" db:"category"`
 	AppType             string `json:"appType,omitempty"`
-	IconURL             string `json:"icon,omitempty"`
-	Manifest            string `json:"manifest,omitempty"`
+	IconURL             string `json:"icon,omitempty" db:"icon_url"`
+	IconData            []byte `json:"-" db:"icon_data"`           // Binary icon data (not sent in JSON)
+	IconMediaType       string `json:"-" db:"icon_media_type"`     // MIME type of icon
+	Manifest            string `json:"manifest,omitempty" db:"manifest"`
 
 	// InstallStatus tracks the installation state (pending, creating, installed, failed)
 	InstallStatus string `json:"installStatus,omitempty" db:"install_status"`

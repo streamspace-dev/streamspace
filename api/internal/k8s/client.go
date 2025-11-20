@@ -579,11 +579,25 @@ func parseSession(obj *unstructured.Unstructured) (*Session, error) {
 	}
 
 	if resources, ok := spec["resources"].(map[string]interface{}); ok {
-		if memory, ok := resources["memory"].(string); ok {
-			session.Resources.Memory = memory
+		// Try new nested structure first (requests/limits)
+		if requests, ok := resources["requests"].(map[string]interface{}); ok {
+			if memory, ok := requests["memory"].(string); ok {
+				session.Resources.Memory = memory
+			}
+			if cpu, ok := requests["cpu"].(string); ok {
+				session.Resources.CPU = cpu
+			}
 		}
-		if cpu, ok := resources["cpu"].(string); ok {
-			session.Resources.CPU = cpu
+		// Fall back to flat structure for backwards compatibility
+		if session.Resources.Memory == "" {
+			if memory, ok := resources["memory"].(string); ok {
+				session.Resources.Memory = memory
+			}
+		}
+		if session.Resources.CPU == "" {
+			if cpu, ok := resources["cpu"].(string); ok {
+				session.Resources.CPU = cpu
+			}
 		}
 	}
 
