@@ -8,9 +8,11 @@ import (
 	. "github.com/onsi/gomega"
 	appsv1 "k8s.io/api/apps/v1"
 	corev1 "k8s.io/api/core/v1"
+	"k8s.io/apimachinery/pkg/api/errors"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/types"
+	"sigs.k8s.io/controller-runtime/pkg/client"
 
 	streamv1alpha1 "github.com/streamspace/streamspace/api/v1alpha1"
 )
@@ -670,7 +672,6 @@ var _ = Describe("Session Controller Concurrent Operations", func() {
 
 			// Verify all deployments are created (note: deployment naming may include session number)
 			// The actual deployment name depends on controller implementation
-			deployment := &appsv1.Deployment{}
 			Eventually(func() bool {
 				deployments := &appsv1.DeploymentList{}
 				err := k8sClient.List(ctx, deployments, client.InNamespace("default"))
