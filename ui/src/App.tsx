@@ -55,6 +55,7 @@ const Integrations = lazy(() => import('./pages/admin/Integrations'));
 const Scaling = lazy(() => import('./pages/admin/Scaling'));
 const Compliance = lazy(() => import('./pages/admin/Compliance'));
 const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
+const Settings = lazy(() => import('./pages/admin/Settings'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -340,6 +341,14 @@ function App() {
               element={
                 <AdminRoute>
                   <AuditLogs />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <AdminRoute>
+                  <Settings />
                 </AdminRoute>
               }
             />
