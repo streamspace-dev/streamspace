@@ -281,7 +281,7 @@ func main() {
 	}
 
 	// Initialize API handlers
-	apiHandler := api.NewHandler(database, k8sClient, eventPublisher, connTracker, syncService, wsManager, quotaEnforcer, platform)
+	apiHandler := api.NewHandler(database, k8sClient, eventPublisher, commandDispatcher, connTracker, syncService, wsManager, quotaEnforcer, platform)
 	userHandler := handlers.NewUserHandler(userDB, groupDB)
 	groupHandler := handlers.NewGroupHandler(groupDB, userDB)
 	authHandler := auth.NewAuthHandler(userDB, jwtManager, samlAuth)

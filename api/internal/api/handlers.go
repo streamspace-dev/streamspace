@@ -108,6 +108,7 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/events"
 	"github.com/streamspace-dev/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"github.com/streamspace-dev/streamspace/api/internal/quota"
 	"github.com/streamspace-dev/streamspace/api/internal/sync"
 	"github.com/streamspace-dev/streamspace/api/internal/tracker"
@@ -157,13 +158,19 @@ type Handler struct {
 	db             *db.Database                 // Database for caching and metadata
 	sessionDB      *db.SessionDB                // Session database operations
 	k8sClient      *k8s.Client                  // Kubernetes client for CRD operations
-	publisher      *events.Publisher            // NATS event publisher
+	publisher      *events.Publisher            // DEPRECATED: NATS event publisher (stub, no-op)
+	dispatcher     CommandDispatcher            // Command dispatcher for agent WebSocket commands
 	connTracker    *tracker.ConnectionTracker   // Active connection tracking
 	syncService    *sync.SyncService            // Repository synchronization
 	wsManager      *websocket.Manager           // WebSocket connection manager
 	quotaEnforcer  *quota.Enforcer              // Resource quota enforcement
 	namespace      string                       // Kubernetes namespace for resources
 	platform       string                       // Target platform (kubernetes, docker, etc.)
+}
+
+// CommandDispatcher interface for dispatching commands to agents
+type CommandDispatcher interface {
+	DispatchCommand(command interface{}) error
 }
 
 // NewHandler creates a new API handler with injected dependencies.
@@ -190,7 +197,7 @@ type Handler struct {
 //   router := gin.Default()
 //   router.GET("/api/sessions", handler.ListSessions)
 //   router.POST("/api/sessions", handler.CreateSession)
-func NewHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.Publisher, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer, platform string) *Handler {
+func NewHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.Publisher, dispatcher CommandDispatcher, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer, platform string) *Handler {
 	// Read namespace from environment variable for deployment flexibility
 	namespace := os.Getenv("NAMESPACE")
 	if namespace == "" {
@@ -204,6 +211,7 @@ func NewHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.
 		sessionDB:     db.NewSessionDB(database.DB()),
 		k8sClient:     k8sClient,
 		publisher:     publisher,
+		dispatcher:    dispatcher,
 		connTracker:   connTracker,
 		syncService:   syncService,
 		wsManager:     wsManager,
@@ -664,45 +672,116 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		session.Tags = req.Tags
 	}
 
-	// Publish session create event for controller to handle
-	// The controller will create the Session CRD in Kubernetes
-	createEvent := &events.SessionCreateEvent{
-		SessionID:      sessionName,
-		UserID:         req.User,
-		TemplateID:     templateName,
-		Platform:       h.platform,
-		Resources:      events.ResourceSpec{Memory: memory, CPU: cpu},
-		PersistentHome: session.PersistentHome,
-		IdleTimeout:    session.IdleTimeout,
+	// v2.0-beta Architecture: Create Session CRD directly and dispatch command to agent
+	// 1. Create Session CRD in Kubernetes
+	createdSession, err := h.k8sClient.CreateSession(ctx, session)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create session CRD",
+			"message": fmt.Sprintf("Failed to create Session CRD in Kubernetes: %v", err),
+		})
+		return
 	}
+	log.Printf("Created Session CRD: %s in namespace %s", createdSession.Name, createdSession.Namespace)
 
-	// Add template configuration for controller
-	if template != nil {
-		vncPort := 3000 // Default VNC port
-		if template.VNC != nil && template.VNC.Port > 0 {
-			vncPort = int(template.VNC.Port)
+	// 2. Select an agent to handle this session
+	// Query for an online agent (simple strategy: first available)
+	var agentID string
+	err = h.db.DB().QueryRowContext(ctx, `
+		SELECT agent_id FROM agents
+		WHERE status = 'online' AND platform = $1
+		ORDER BY active_sessions ASC
+		LIMIT 1
+	`, h.platform).Scan(&agentID)
+
+	if err != nil {
+		// No agents available - update Session status to reflect this
+		session.Status.Phase = "Failed"
+		if updateErr := h.k8sClient.UpdateSessionStatus(ctx, session); updateErr != nil {
+			log.Printf("Failed to update Session status after agent selection failure: %v", updateErr)
 		}
 
-		// Convert env vars to map
-		envMap := make(map[string]string)
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "No agents available",
+			"message": "No online agents are currently available to handle this session. Please try again later.",
+		})
+		return
+	}
+	log.Printf("Selected agent %s for session %s", agentID, sessionName)
+
+	// 3. Build command payload with session and template details
+	vncPort := 3000 // Default VNC port
+	if template != nil && template.VNC != nil && template.VNC.Port > 0 {
+		vncPort = int(template.VNC.Port)
+	}
+
+	envMap := make(map[string]string)
+	if template != nil {
 		for _, env := range template.Env {
 			envMap[env.Name] = env.Value
 		}
-
-		createEvent.TemplateConfig = &events.TemplateConfig{
-			Image:       template.BaseImage,
-			VNCPort:     vncPort,
-			DisplayName: template.DisplayName,
-			Env:         envMap,
-		}
 	}
 
-	if err := h.publisher.PublishSessionCreate(ctx, createEvent); err != nil {
+	payload := models.CommandPayload{
+		"sessionId":      sessionName,
+		"user":           req.User,
+		"template":       templateName,
+		"namespace":      h.namespace,
+		"image":          template.BaseImage,
+		"vncPort":        vncPort,
+		"memory":         memory,
+		"cpu":            cpu,
+		"persistentHome": session.PersistentHome,
+		"idleTimeout":    session.IdleTimeout,
+		"env":            envMap,
+	}
+
+	// 4. Create command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	var command models.AgentCommand
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, agentID, sessionName, "start_session", payload, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&command.ErrorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if err != nil {
+		log.Printf("Failed to create agent command: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to create session",
-			"message": fmt.Sprintf("Failed to publish session create event: %v", err),
+			"error":   "Failed to create agent command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
 		})
 		return
+	}
+	log.Printf("Created agent command %s for session %s", commandID, sessionName)
+
+	// 5. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch command to agent",
+				"message": fmt.Sprintf("Failed to dispatch command: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched command %s to agent %s for session %s", commandID, agentID, sessionName)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, command %s not dispatched", commandID)
 	}
 
 	// Cache session in database so status updates can be applied
@@ -725,7 +804,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 
 	// Return the session info immediately
-	// The controller will create the actual Kubernetes resources
+	// The agent will provision the pod and update the Session CRD status
 	response := map[string]interface{}{
 		"name":               sessionName,
 		"namespace":          h.namespace,
@@ -741,11 +820,11 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		},
 		"status": map[string]string{
 			"phase":   "Pending",
-			"message": "Session creation requested, waiting for controller",
+			"message": fmt.Sprintf("Session provisioning in progress (agent: %s, command: %s)", agentID, commandID),
 		},
 	}
 
-	log.Printf("Published session create event for %s (controller will create resources)", sessionName)
+	log.Printf("Session %s created successfully - CRD created, command %s dispatched to agent %s", sessionName, commandID, agentID)
 	c.JSON(http.StatusAccepted, response)
 }
 

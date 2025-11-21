@@ -12,10 +12,11 @@ global:
   storageClass: ""
 
 ## StreamSpace Kubernetes Controller
-## This is the Kubernetes-specific platform controller for the multi-platform architecture.
-## For Docker environments, use the Docker controller (docker-controller/).
+## DEPRECATED: Controller is not needed in v2.0-beta architecture.
+## In v2.0-beta, the API creates Session CRDs directly and dispatches commands to agents via WebSocket.
+## The controller-based architecture was replaced by the agent-based architecture.
 controller:
-  enabled: true
+  enabled: false  # Disabled for v2.0-beta (agent-based architecture)
 
   image:
     registry: ghcr.io
