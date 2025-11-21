@@ -67,7 +67,11 @@ This guide covers deploying StreamSpace v2.0 with the new Control Plane + Agent 
 ### Software Requirements
 
 - kubectl (for K8s deployments)
-- Helm 3+ (recommended for Control Plane)
+- **Helm 3.12.0 - 3.18.x** (recommended for Control Plane)
+  - ⚠️ **NOT SUPPORTED**: Helm v3.19.x (has chart loading bugs)
+  - ⚠️ **NOT SUPPORTED**: Helm v4.0.x (broken chart loading - upstream regression)
+  - ✅ **Recommended**: Helm v3.18.0 (stable, tested)
+  - To downgrade if needed: `brew uninstall helm && brew install helm@3.18.0`
 - Docker (for building custom images)
 - PostgreSQL client (for database setup)
 
