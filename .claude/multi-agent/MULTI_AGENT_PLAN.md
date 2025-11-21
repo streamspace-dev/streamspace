@@ -1260,6 +1260,43 @@ UI Browser → /vnc-viewer/{sessionId} → noVNC Client (static HTML)
 
 ---
 
+## Builder → Architect - 2025-11-20 20:01 UTC
+
+**Bug Fix Complete**: VNC Proxy Handler Build Error
+
+**Issue Found:**
+Docker build was failing with:
+- `cmd/main.go:355:2: declared and not used: vncProxyHandler`
+- `cmd/main.go:509:3: undefined: vncProxyHandler`
+
+**Root Cause:**
+The `vncProxyHandler` was declared at line 355 but not passed as a parameter to the `setupRoutes()` function, causing it to be out of scope when referenced at line 509.
+
+**Changes Made:**
+1. Added `vncProxyHandler *handlers.VNCProxyHandler` parameter to setupRoutes function signature (line 446)
+2. Passed `vncProxyHandler` to setupRoutes call at line 365
+
+**Files Modified:**
+- `api/cmd/main.go` (2 lines changed)
+
+**Tests:**
+- ✅ Go build successful (`go build cmd/main.go`)
+- ✅ Binary created (93 MB)
+- ✅ No compilation errors
+
+**Commit:** 82d014e
+**Branch:** claude/v2-builder
+**Status:** Pushed to remote
+
+**Ready For:**
+- Docker build retry
+- Integration with Architect branch
+- Testing phase
+
+**Blockers:** None
+
+---
+
 ## StreamSpace Architecture Quick Reference
 
 ### Key Components
