@@ -26,6 +26,7 @@ BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 KUBERNETES_CONTROLLER_IMAGE="streamspace/streamspace-kubernetes-controller"
 API_IMAGE="streamspace/streamspace-api"
 UI_IMAGE="streamspace/streamspace-ui"
+K8S_AGENT_IMAGE="streamspace/streamspace-k8s-agent"
 DOCKER_CONTROLLER_IMAGE="streamspace/streamspace-docker-controller"
 
 # Build arguments
@@ -114,6 +115,27 @@ build_ui() {
     log_success "UI image built successfully"
 }
 
+# Build K8s Agent image (v2.0)
+build_k8s_agent() {
+    log "Building K8s Agent image (v2.0)..."
+    log_info "Image: ${K8S_AGENT_IMAGE}:${VERSION}"
+    log_info "Context: ${PROJECT_ROOT}/agents/k8s-agent"
+
+    # Check if k8s-agent directory exists
+    if [ ! -d "${PROJECT_ROOT}/agents/k8s-agent" ]; then
+        log_warning "K8s Agent directory not found, skipping"
+        return 0
+    fi
+
+    docker build ${BUILD_ARGS} \
+        -t "${K8S_AGENT_IMAGE}:${VERSION}" \
+        -t "${K8S_AGENT_IMAGE}:latest" \
+        -f "${PROJECT_ROOT}/agents/k8s-agent/Dockerfile" \
+        "${PROJECT_ROOT}/agents/k8s-agent/"
+
+    log_success "K8s Agent image built successfully"
+}
+
 # Build Docker controller image
 build_docker_controller() {
     log "Building Docker controller image..."
@@ -122,7 +144,7 @@ build_docker_controller() {
 
     # Check if docker-controller directory exists
     if [ ! -d "${PROJECT_ROOT}/docker-controller" ]; then
-        log_warning "Docker controller directory not found, skipping"
+        log_warning "Docker controller directory not found, skipping (deferred to v2.1)"
         return 0
     fi
 
@@ -140,7 +162,7 @@ list_images() {
     log "Built images:"
     echo ""
     docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}" | \
-        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|docker-controller)" || true
+        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|k8s-agent|docker-controller)" || true
     echo ""
 }
 
@@ -159,10 +181,11 @@ main() {
 
     # Allow building individual components
     if [ $# -eq 0 ]; then
-        # Build all components
+        # Build all components (v2.0: includes K8s Agent)
         build_kubernetes_controller
         build_api
         build_ui
+        build_k8s_agent
         build_docker_controller
     else
         # Build specific components
@@ -177,12 +200,15 @@ main() {
                 ui)
                     build_ui
                     ;;
+                k8s-agent|agent)
+                    build_k8s_agent
+                    ;;
                 docker-controller)
                     build_docker_controller
                     ;;
                 *)
                     log_error "Unknown component: $component"
-                    log_info "Valid components: controller, kubernetes-controller, api, ui, docker-controller"
+                    log_info "Valid components: controller, api, ui, k8s-agent, docker-controller"
                     exit 1
                     ;;
             esac
