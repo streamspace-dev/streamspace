@@ -63,3 +63,6 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Claude settings
+.claude/settings.local.json
