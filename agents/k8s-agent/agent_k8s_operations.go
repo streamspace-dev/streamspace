@@ -10,27 +10,286 @@ import (
 	corev1 "k8s.io/api/core/v1"
 	"k8s.io/apimachinery/pkg/api/resource"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
+	"k8s.io/apimachinery/pkg/apis/meta/v1/unstructured"
+	"k8s.io/apimachinery/pkg/runtime/schema"
 	"k8s.io/apimachinery/pkg/util/intstr"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
+
+// templateGVR is the GroupVersionResource for Template CRDs
+var templateGVR = schema.GroupVersionResource{
+	Group:    "stream.space",
+	Version:  "v1alpha1",
+	Resource: "templates",
+}
+
+// Template represents a StreamSpace Template CRD
+type Template struct {
+	Name         string
+	Namespace    string
+	DisplayName  string
+	Description  string
+	BaseImage    string
+	AppType      string // desktop, webapp
+	DefaultResources struct {
+		Memory string
+		CPU    string
+	}
+	Ports []struct {
+		Name          string
+		ContainerPort int32
+		Protocol      string
+	}
+	Env          []corev1.EnvVar
+	VolumeMounts []corev1.VolumeMount
+	VNC          *VNCConfig
+}
+
+// VNCConfig represents VNC configuration for desktop apps
+type VNCConfig struct {
+	Enabled  bool
+	Port     int32
+	Protocol string
+}
+
+// fetchTemplateCRD fetches a Template CRD from Kubernetes.
+//
+// This replaces the hardcoded getTemplateImage() function with dynamic template fetching.
+func fetchTemplateCRD(dynamicClient dynamic.Interface, namespace, templateName string) (*Template, error) {
+	ctx := context.Background()
+
+	// Fetch the Template CRD
+	obj, err := dynamicClient.Resource(templateGVR).Namespace(namespace).Get(ctx, templateName, metav1.GetOptions{})
+	if err != nil {
+		return nil, fmt.Errorf("failed to get template %s: %w", templateName, err)
+	}
+
+	// Parse the unstructured object into Template struct
+	template, err := parseTemplateCRD(obj)
+	if err != nil {
+		return nil, fmt.Errorf("failed to parse template %s: %w", templateName, err)
+	}
+
+	log.Printf("[K8sOps] Fetched template: %s (image: %s, ports: %d)", template.Name, template.BaseImage, len(template.Ports))
+	return template, nil
+}
+
+// parseTemplateCRD parses an unstructured Template CRD into a Template struct.
+func parseTemplateCRD(obj *unstructured.Unstructured) (*Template, error) {
+	template := &Template{
+		Name:      obj.GetName(),
+		Namespace: obj.GetNamespace(),
+	}
+
+	spec, ok := obj.Object["spec"].(map[string]interface{})
+	if !ok {
+		return nil, fmt.Errorf("invalid template spec")
+	}
+
+	// Parse basic fields
+	if displayName, ok := spec["displayName"].(string); ok {
+		template.DisplayName = displayName
+	}
+
+	if description, ok := spec["description"].(string); ok {
+		template.Description = description
+	}
+
+	if baseImage, ok := spec["baseImage"].(string); ok {
+		template.BaseImage = baseImage
+	} else {
+		return nil, fmt.Errorf("template missing baseImage")
+	}
+
+	if appType, ok := spec["appType"].(string); ok {
+		template.AppType = appType
+	}
+
+	// Parse default resources
+	if resources, ok := spec["defaultResources"].(map[string]interface{}); ok {
+		if memory, ok := resources["memory"].(string); ok {
+			template.DefaultResources.Memory = memory
+		}
+		if cpu, ok := resources["cpu"].(string); ok {
+			template.DefaultResources.CPU = cpu
+		}
+	}
+
+	// Parse ports
+	if ports, ok := spec["ports"].([]interface{}); ok {
+		template.Ports = make([]struct {
+			Name          string
+			ContainerPort int32
+			Protocol      string
+		}, 0, len(ports))
+
+		for _, portInterface := range ports {
+			portMap, ok := portInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			port := struct {
+				Name          string
+				ContainerPort int32
+				Protocol      string
+			}{}
+
+			if name, ok := portMap["name"].(string); ok {
+				port.Name = name
+			}
+
+			if containerPort, ok := portMap["containerPort"].(float64); ok {
+				port.ContainerPort = int32(containerPort)
+			}
+
+			if protocol, ok := portMap["protocol"].(string); ok {
+				port.Protocol = protocol
+			} else {
+				port.Protocol = "TCP"
+			}
+
+			template.Ports = append(template.Ports, port)
+		}
+	}
+
+	// Parse environment variables
+	if env, ok := spec["env"].([]interface{}); ok {
+		template.Env = make([]corev1.EnvVar, 0, len(env))
+
+		for _, envInterface := range env {
+			envMap, ok := envInterface.(map[string]interface{})
+			if !ok {
+				continue
+			}
+
+			envVar := corev1.EnvVar{}
+			if name, ok := envMap["name"].(string); ok {
+				envVar.Name = name
+			}
+			if value, ok := envMap["value"].(string); ok {
+				envVar.Value = value
+			}
+
+			template.Env = append(template.Env, envVar)
+		}
+	}
+
+	// Parse VNC configuration
+	if vnc, ok := spec["vnc"].(map[string]interface{}); ok {
+		vncConfig := &VNCConfig{}
+
+		if enabled, ok := vnc["enabled"].(bool); ok {
+			vncConfig.Enabled = enabled
+		}
+
+		if port, ok := vnc["port"].(float64); ok {
+			vncConfig.Port = int32(port)
+		}
+
+		if protocol, ok := vnc["protocol"].(string); ok {
+			vncConfig.Protocol = protocol
+		}
+
+		template.VNC = vncConfig
+	}
+
+	return template, nil
+}
 
 // createSessionDeployment creates a Kubernetes Deployment for a session.
 //
 // The deployment is created based on the session spec and template.
 // It includes resource limits, environment variables, and volume mounts.
-func createSessionDeployment(client *kubernetes.Clientset, namespace string, spec *SessionSpec) (*appsv1.Deployment, error) {
-	// Parse resource requirements
-	memoryLimit, err := resource.ParseQuantity(spec.Memory)
+func createSessionDeployment(client *kubernetes.Clientset, namespace string, spec *SessionSpec, template *Template) (*appsv1.Deployment, error) {
+	// Parse resource requirements (use session spec or template defaults)
+	memory := spec.Memory
+	if memory == "" && template.DefaultResources.Memory != "" {
+		memory = template.DefaultResources.Memory
+	}
+	if memory == "" {
+		memory = "2Gi" // Fallback default
+	}
+
+	cpu := spec.CPU
+	if cpu == "" && template.DefaultResources.CPU != "" {
+		cpu = template.DefaultResources.CPU
+	}
+	if cpu == "" {
+		cpu = "1000m" // Fallback default
+	}
+
+	memoryLimit, err := resource.ParseQuantity(memory)
 	if err != nil {
 		return nil, fmt.Errorf("invalid memory value: %w", err)
 	}
 
-	cpuLimit, err := resource.ParseQuantity(spec.CPU)
+	cpuLimit, err := resource.ParseQuantity(cpu)
 	if err != nil {
 		return nil, fmt.Errorf("invalid CPU value: %w", err)
 	}
 
 	replicas := int32(1)
+
+	// Build container ports from template
+	containerPorts := make([]corev1.ContainerPort, 0)
+	if len(template.Ports) > 0 {
+		for _, port := range template.Ports {
+			protocol := corev1.ProtocolTCP
+			if port.Protocol == "UDP" {
+				protocol = corev1.ProtocolUDP
+			}
+			containerPorts = append(containerPorts, corev1.ContainerPort{
+				Name:          port.Name,
+				ContainerPort: port.ContainerPort,
+				Protocol:      protocol,
+			})
+		}
+	} else if template.VNC != nil && template.VNC.Enabled {
+		// Fallback: Use VNC port if no ports defined
+		containerPorts = append(containerPorts, corev1.ContainerPort{
+			Name:          "vnc",
+			ContainerPort: template.VNC.Port,
+			Protocol:      corev1.ProtocolTCP,
+		})
+	} else {
+		// Fallback: Default VNC port
+		containerPorts = append(containerPorts, corev1.ContainerPort{
+			Name:          "vnc",
+			ContainerPort: 3000,
+			Protocol:      corev1.ProtocolTCP,
+		})
+	}
+
+	// Build environment variables (merge template env + session-specific env)
+	envVars := make([]corev1.EnvVar, 0)
+
+	// Add template-defined env vars first
+	envVars = append(envVars, template.Env...)
+
+	// Add session-specific env vars (these override template env if name conflicts)
+	sessionEnv := []corev1.EnvVar{
+		{Name: "USER", Value: spec.User},
+		{Name: "SESSION_ID", Value: spec.SessionID},
+		{Name: "PUID", Value: "1000"},
+		{Name: "PGID", Value: "1000"},
+		{Name: "TZ", Value: "UTC"},
+	}
+
+	// Merge env vars (session env overrides template env)
+	envMap := make(map[string]string)
+	for _, env := range envVars {
+		envMap[env.Name] = env.Value
+	}
+	for _, env := range sessionEnv {
+		envMap[env.Name] = env.Value
+	}
+
+	finalEnv := make([]corev1.EnvVar, 0, len(envMap))
+	for k, v := range envMap {
+		finalEnv = append(finalEnv, corev1.EnvVar{Name: k, Value: v})
+	}
 
 	// Create deployment manifest
 	deployment := &appsv1.Deployment{
@@ -63,37 +322,10 @@ func createSessionDeployment(client *kubernetes.Clientset, namespace string, spe
 				Spec: corev1.PodSpec{
 					Containers: []corev1.Container{
 						{
-							Name:  "session",
-							Image: getTemplateImage(spec.Template), // TODO: Fetch from template
-							Ports: []corev1.ContainerPort{
-								{
-									Name:          "vnc",
-									ContainerPort: 3000,
-									Protocol:      corev1.ProtocolTCP,
-								},
-							},
-							Env: []corev1.EnvVar{
-								{
-									Name:  "USER",
-									Value: spec.User,
-								},
-								{
-									Name:  "SESSION_ID",
-									Value: spec.SessionID,
-								},
-								{
-									Name:  "PUID",
-									Value: "1000",
-								},
-								{
-									Name:  "PGID",
-									Value: "1000",
-								},
-								{
-									Name:  "TZ",
-									Value: "UTC",
-								},
-							},
+							Name:      "session",
+							Image:     template.BaseImage,
+							Ports:     containerPorts,
+							Env:       finalEnv,
 							Resources: corev1.ResourceRequirements{
 								Limits: corev1.ResourceList{
 									corev1.ResourceMemory: memoryLimit,

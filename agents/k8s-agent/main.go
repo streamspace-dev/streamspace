@@ -46,6 +46,7 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
@@ -64,6 +65,9 @@ type K8sAgent struct {
 
 	// kubeClient is the Kubernetes API client
 	kubeClient *kubernetes.Clientset
+
+	// dynamicClient is for accessing Custom Resources (Templates, Sessions)
+	dynamicClient dynamic.Interface
 
 	// restConfig is the REST config for Kubernetes API (needed for port-forward)
 	restConfig *rest.Config
@@ -97,12 +101,19 @@ func NewK8sAgent(config *config.AgentConfig) (*K8sAgent, error) {
 		return nil, err
 	}
 
+	// Create dynamic client for CRD access
+	dynamicClient, err := dynamic.NewForConfig(restConfig)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create dynamic client: %w", err)
+	}
+
 	agent := &K8sAgent{
-		config:     config,
-		kubeClient: kubeClient,
-		restConfig: restConfig,
-		stopChan:   make(chan struct{}),
-		doneChan:   make(chan struct{}),
+		config:        config,
+		kubeClient:    kubeClient,
+		dynamicClient: dynamicClient,
+		restConfig:    restConfig,
+		stopChan:      make(chan struct{}),
+		doneChan:      make(chan struct{}),
 	}
 
 	// Initialize VNC tunnel manager
@@ -147,7 +158,7 @@ func createKubernetesClient(kubeConfigPath string) (*kubernetes.Clientset, *rest
 // initCommandHandlers initializes the command handler registry.
 func (a *K8sAgent) initCommandHandlers() {
 	a.commandHandlers = map[string]CommandHandler{
-		"start_session":     NewStartSessionHandler(a.kubeClient, a.config, a),
+		"start_session":     NewStartSessionHandler(a.kubeClient, a.dynamicClient, a.config, a),
 		"stop_session":      NewStopSessionHandler(a.kubeClient, a.config, a),
 		"hibernate_session": NewHibernateSessionHandler(a.kubeClient, a.config),
 		"wake_session":      NewWakeSessionHandler(a.kubeClient, a.config),
