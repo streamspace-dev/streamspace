@@ -352,6 +352,7 @@ func main() {
 	recordingHandler := handlers.NewRecordingHandler(database)
 	agentHandler := handlers.NewAgentHandler(database, agentHub, commandDispatcher)
 	agentWebSocketHandler := handlers.NewAgentWebSocketHandler(agentHub, database)
+	vncProxyHandler := handlers.NewVNCProxyHandler(database, agentHub)
 
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
@@ -502,6 +503,11 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				// Install it via: Admin → Plugins → streamspace-recording
 
 		}
+
+		// VNC Proxy (v2.0 multi-platform architecture - authenticated users)
+		// Provides VNC WebSocket connections from UI to session desktops via agents
+		vncProxyHandler.RegisterRoutes(protected)
+
 		// NOTE: Data Loss Prevention (DLP) is now handled by the streamspace-dlp plugin
 		// Install it via: Admin → Plugins → streamspace-dlp
 

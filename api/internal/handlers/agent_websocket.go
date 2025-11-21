@@ -271,6 +271,15 @@ func (h *AgentWebSocketHandler) readPump(conn *wsocket.AgentConnection) {
 		case models.MessageTypeStatus:
 			h.handleStatus(conn, agentMsg)
 
+		case models.MessageTypeVNCReady, models.MessageTypeVNCData, models.MessageTypeVNCError:
+			// Forward VNC messages to Receive channel for VNC proxy
+			select {
+			case conn.Receive <- messageBytes:
+				// Message forwarded to VNC proxy
+			default:
+				log.Printf("[AgentWebSocket] VNC receive buffer full for agent %s", conn.AgentID)
+			}
+
 		default:
 			log.Printf("[AgentWebSocket] Unknown message type from agent %s: %s", conn.AgentID, agentMsg.Type)
 		}
