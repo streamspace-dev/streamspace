@@ -181,13 +181,14 @@ main() {
 
     # Allow building individual components
     if [ $# -eq 0 ]; then
-        # Build all v2.0-beta components (Docker controller deferred to v2.1)
-        build_kubernetes_controller
+        # Build all v2.0-beta components
+        # Note: k8s-controller REPLACED by k8s-agent in v2.0
         build_api
         build_ui
         build_k8s_agent
-        # Note: docker-controller intentionally excluded (deferred to v2.1)
-        # Build manually with: ./scripts/local-build.sh docker-controller
+        # Excluded (deferred to v2.1): docker-controller
+        # Excluded (replaced in v2.0): kubernetes-controller
+        # Build v1.0 controller manually: ./scripts/local-build.sh kubernetes-controller
     else
         # Build specific components
         for component in "$@"; do
@@ -224,13 +225,15 @@ main() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     echo ""
     log_info "v2.0-beta Components Built:"
-    echo "  ✓ Kubernetes Controller (CRD management)"
-    echo "  ✓ API Server (Control Plane)"
+    echo "  ✓ API Server (Control Plane with VNC proxy)"
     echo "  ✓ UI (Web interface)"
-    echo "  ✓ K8s Agent (Session management via agent protocol)"
+    echo "  ✓ K8s Agent (Session management via WebSocket) ← REPLACES k8s-controller"
+    echo ""
+    log_info "Replaced in v2.0:"
+    echo "  • Kubernetes Controller → K8s Agent (agent connects TO Control Plane)"
     echo ""
     log_info "Deferred to v2.1:"
-    echo "  • Docker Controller (build manually if needed)"
+    echo "  • Docker Agent (multi-platform support)"
     echo ""
     log_info "Next steps:"
     echo "  1. Deploy to local cluster: ./scripts/local-deploy.sh"

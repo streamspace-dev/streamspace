@@ -76,12 +76,12 @@ check_prerequisites() {
 
 # Check if images exist locally
 check_images() {
-    log "Checking for locally built images (v2.0)..."
+    log "Checking for locally built images (v2.0-beta)..."
 
     local missing_images=0
 
-    # v2.0: Added K8s Agent image
-    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui" "streamspace/streamspace-k8s-agent"; do
+    # v2.0: K8s Agent REPLACES kubernetes-controller
+    for image in "streamspace/streamspace-api" "streamspace/streamspace-ui" "streamspace/streamspace-k8s-agent"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"
         else
@@ -188,8 +188,7 @@ deploy_helm() {
         log_info "Running: helm upgrade ${RELEASE_NAME} ${chart_ref}"
         helm upgrade "${RELEASE_NAME}" "${chart_ref}" \
             --namespace "${NAMESPACE}" \
-            --set controller.image.tag="${VERSION}" \
-            --set controller.image.pullPolicy=Never \
+            --set controller.enabled=false \
             --set api.image.tag="${VERSION}" \
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
@@ -202,13 +201,12 @@ deploy_helm() {
             --wait \
             --timeout 5m
     else
-        log_info "Installing fresh release (v2.0 with K8s Agent)..."
+        log_info "Installing fresh release (v2.0-beta: Agent replaces Controller)..."
         log_info "Running: helm install ${RELEASE_NAME} ${chart_ref}"
         helm install "${RELEASE_NAME}" "${chart_ref}" \
             --namespace "${NAMESPACE}" \
             --create-namespace \
-            --set controller.image.tag="${VERSION}" \
-            --set controller.image.pullPolicy=Never \
+            --set controller.enabled=false \
             --set api.image.tag="${VERSION}" \
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
@@ -312,10 +310,9 @@ show_access_info() {
     echo ""
 
     log_info "View logs:"
-    echo "  Controller: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=controller -f"
     echo "  API:        kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=api -f"
     echo "  UI:         kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=ui -f"
-    echo "  K8s Agent:  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=k8s-agent -f  # v2.0"
+    echo "  K8s Agent:  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=k8s-agent -f  # v2.0 (replaces controller)"
     echo ""
 
     log_info "When finished testing:"
