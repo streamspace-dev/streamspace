@@ -1,4 +1,6 @@
-package main
+package config
+
+import "github.com/streamspace/streamspace/agents/k8s-agent/internal/errors"
 
 // AgentConfig holds the configuration for the K8s Agent.
 //
@@ -6,7 +8,7 @@ package main
 //   - Command-line flags
 //   - Environment variables
 //   - ConfigMap (when running in Kubernetes)
-type AgentConfig struct {
+type AgentConfig struct{
 	// AgentID is the unique identifier for this agent
 	// Format: k8s-{environment}-{region} (e.g., k8s-prod-us-east-1)
 	AgentID string
@@ -61,11 +63,11 @@ type AgentCapacity struct {
 // Validate validates the agent configuration.
 func (c *AgentConfig) Validate() error {
 	if c.AgentID == "" {
-		return ErrMissingAgentID
+		return errors.ErrMissingAgentID
 	}
 
 	if c.ControlPlaneURL == "" {
-		return ErrMissingControlPlaneURL
+		return errors.ErrMissingControlPlaneURL
 	}
 
 	if c.Platform == "" {

@@ -1,4 +1,5 @@
 package main
+import "github.com/streamspace/streamspace/agents/k8s-agent/internal/config"
 
 import (
 	"fmt"
@@ -32,12 +33,12 @@ type SessionSpec struct {
 // StartSessionHandler handles start_session commands.
 type StartSessionHandler struct {
 	kubeClient *kubernetes.Clientset
-	config     *AgentConfig
+	config     *config.AgentConfig
 	agent      *K8sAgent
 }
 
 // NewStartSessionHandler creates a new start session handler.
-func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig, agent *K8sAgent) *StartSessionHandler {
+func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig, agent *K8sAgent) *StartSessionHandler {
 	return &StartSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
@@ -140,12 +141,12 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 // StopSessionHandler handles stop_session commands.
 type StopSessionHandler struct {
 	kubeClient *kubernetes.Clientset
-	config     *AgentConfig
+	config     *config.AgentConfig
 	agent      *K8sAgent
 }
 
 // NewStopSessionHandler creates a new stop session handler.
-func NewStopSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig, agent *K8sAgent) *StopSessionHandler {
+func NewStopSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig, agent *K8sAgent) *StopSessionHandler {
 	return &StopSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
@@ -212,11 +213,11 @@ func (h *StopSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 // HibernateSessionHandler handles hibernate_session commands.
 type HibernateSessionHandler struct {
 	kubeClient *kubernetes.Clientset
-	config     *AgentConfig
+	config     *config.AgentConfig
 }
 
 // NewHibernateSessionHandler creates a new hibernate session handler.
-func NewHibernateSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig) *HibernateSessionHandler {
+func NewHibernateSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig) *HibernateSessionHandler {
 	return &HibernateSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
@@ -259,11 +260,11 @@ func (h *HibernateSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, e
 // WakeSessionHandler handles wake_session commands.
 type WakeSessionHandler struct {
 	kubeClient *kubernetes.Clientset
-	config     *AgentConfig
+	config     *config.AgentConfig
 }
 
 // NewWakeSessionHandler creates a new wake session handler.
-func NewWakeSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig) *WakeSessionHandler {
+func NewWakeSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig) *WakeSessionHandler {
 	return &WakeSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
