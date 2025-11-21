@@ -1,8 +1,9 @@
 # StreamSpace Multi-Agent Orchestration Plan
 
-**Project:** StreamSpace - Kubernetes-native Container Streaming Platform  
-**Repository:** <https://github.com/JoshuaAFerguson/streamspace>  
-**Current Version:** v1.0.0 (Production Ready)  
+**Project:** StreamSpace - Kubernetes-native Container Streaming Platform
+**Repository:** <https://github.com/streamspace-dev/streamspace>
+**Website:** <https://streamspace.dev>
+**Current Version:** v1.0.0 (Production Ready)
 **Next Phase:** v2.0.0 - VNC Independence (TigerVNC + noVNC stack)
 
 ---

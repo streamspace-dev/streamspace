@@ -441,7 +441,8 @@ kubectl get pods -n kube-system | grep nfs
 
 ## 📞 Key References
 
-- **GitHub**: https://github.com/JoshuaAFerguson/streamspace
+- **GitHub**: https://github.com/streamspace-dev/streamspace
+- **Website**: https://streamspace.dev
 - **Kubebuilder**: https://book.kubebuilder.io/
 - **Kubernetes CRDs**: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
 - **LinuxServer.io**: https://docs.linuxserver.io/ (temporary, migrating away)

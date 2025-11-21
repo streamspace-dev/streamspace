@@ -81,7 +81,7 @@ StreamSpace has completed a major architectural transformation to a multi-platfo
 
 ```bash
 # Clone repository
-git clone https://github.com/JoshuaAFerguson/streamspace.git
+git clone https://github.com/streamspace-dev/streamspace.git
 cd streamspace
 
 # Deploy CRDs
