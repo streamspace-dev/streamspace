@@ -1061,6 +1061,276 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	})
 }
 
+// HibernateSession handles hibernating a running session (scales to 0 replicas)
+func (h *Handler) HibernateSession(c *gin.Context) {
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
+	sessionID := c.Param("id")
+
+	// 1. Verify session exists in DATABASE and get agent managing it
+	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
+	var agentID sql.NullString // Use sql.NullString for nullable column
+	var currentState string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT agent_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&agentID, &currentState)
+
+	if err == sql.ErrNoRows {
+		log.Printf("Session %s not found in database", sessionID)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": "The specified session does not exist",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Failed to query session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to query session",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session has an agent assigned
+	if !agentID.Valid || agentID.String == "" {
+		log.Printf("Session %s has no agent assigned (agent_id is NULL or empty)", sessionID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session not ready",
+			"message": "Session has no agent assigned - cannot hibernate. Session may still be pending or failed to start.",
+		})
+		return
+	}
+
+	// Check if session is in a state that can be hibernated
+	if currentState != "running" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Invalid session state",
+			"message": fmt.Sprintf("Session must be in 'running' state to hibernate, currently: %s", currentState),
+		})
+		return
+	}
+
+	// 2. Create hibernate_session command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	payload := map[string]interface{}{
+		"sessionId": sessionID,
+		"namespace": h.namespace,
+	}
+
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal hibernate command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create hibernate command",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
+	var command models.AgentCommand
+	var errorMessage sql.NullString
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, agentID.String, sessionID, "hibernate_session", payloadJSON, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&errorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if errorMessage.Valid {
+		command.ErrorMessage = errorMessage.String
+	}
+
+	if err != nil {
+		log.Printf("Failed to create hibernate_session command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create hibernate command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
+		})
+		return
+	}
+	log.Printf("Created hibernate_session command %s for session %s", commandID, sessionID)
+
+	// 3. Update database session state to hibernating
+	// Agent will update CRD when it processes the command
+	if err := h.sessionDB.UpdateSessionState(ctx, sessionID, "hibernating"); err != nil {
+		log.Printf("Failed to update database session state (non-fatal): %v", err)
+	}
+
+	// 4. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch hibernate command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch hibernate command",
+				"message": fmt.Sprintf("Failed to dispatch command to agent: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched hibernate_session command %s to agent %s for session %s", commandID, agentID.String, sessionID)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, hibernate command %s not dispatched", commandID)
+	}
+
+	// Return accepted response
+	// Agent will handle ALL Kubernetes operations (scale deployment to 0)
+	c.JSON(http.StatusAccepted, gin.H{
+		"name":      sessionID,
+		"commandId": commandID,
+		"message":   "Session hibernation requested, agent will scale down resources",
+	})
+}
+
+// WakeSession handles waking a hibernated session (scales to 1 replica)
+func (h *Handler) WakeSession(c *gin.Context) {
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
+	sessionID := c.Param("id")
+
+	// 1. Verify session exists in DATABASE and get agent managing it
+	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
+	var agentID sql.NullString // Use sql.NullString for nullable column
+	var currentState string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT agent_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&agentID, &currentState)
+
+	if err == sql.ErrNoRows {
+		log.Printf("Session %s not found in database", sessionID)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": "The specified session does not exist",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Failed to query session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to query session",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session has an agent assigned
+	if !agentID.Valid || agentID.String == "" {
+		log.Printf("Session %s has no agent assigned (agent_id is NULL or empty)", sessionID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session not ready",
+			"message": "Session has no agent assigned - cannot wake. Session may have been terminated.",
+		})
+		return
+	}
+
+	// Check if session is in a state that can be woken
+	if currentState != "hibernated" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Invalid session state",
+			"message": fmt.Sprintf("Session must be in 'hibernated' state to wake, currently: %s", currentState),
+		})
+		return
+	}
+
+	// 2. Create wake_session command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	payload := map[string]interface{}{
+		"sessionId": sessionID,
+		"namespace": h.namespace,
+	}
+
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal wake command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create wake command",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
+	var command models.AgentCommand
+	var errorMessage sql.NullString
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, agentID.String, sessionID, "wake_session", payloadJSON, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&errorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if errorMessage.Valid {
+		command.ErrorMessage = errorMessage.String
+	}
+
+	if err != nil {
+		log.Printf("Failed to create wake_session command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create wake command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
+		})
+		return
+	}
+	log.Printf("Created wake_session command %s for session %s", commandID, sessionID)
+
+	// 3. Update database session state to waking
+	// Agent will update CRD when it processes the command
+	if err := h.sessionDB.UpdateSessionState(ctx, sessionID, "waking"); err != nil {
+		log.Printf("Failed to update database session state (non-fatal): %v", err)
+	}
+
+	// 4. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch wake command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch wake command",
+				"message": fmt.Sprintf("Failed to dispatch command to agent: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched wake_session command %s to agent %s for session %s", commandID, agentID.String, sessionID)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, wake command %s not dispatched", commandID)
+	}
+
+	// Return accepted response
+	// Agent will handle ALL Kubernetes operations (scale deployment to 1, wait for pod ready)
+	c.JSON(http.StatusAccepted, gin.H{
+		"name":      sessionID,
+		"commandId": commandID,
+		"message":   "Session wake requested, agent will scale up resources",
+	})
+}
+
 // ConnectSession handles a user connecting to a session
 func (h *Handler) ConnectSession(c *gin.Context) {
 	// SECURITY FIX: Use request context for proper cancellation and timeout handling

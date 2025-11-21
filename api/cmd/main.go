@@ -467,6 +467,10 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				sessions.GET("/:id/connect", h.ConnectSession)
 				sessions.POST("/:id/disconnect", h.DisconnectSession)
 
+				// Session lifecycle management (v2.0-beta)
+				sessions.PUT("/:id/hibernate", cache.InvalidateCacheMiddleware(redisCache, cache.SessionPattern()), h.HibernateSession)
+				sessions.PUT("/:id/wake", cache.InvalidateCacheMiddleware(redisCache, cache.SessionPattern()), h.WakeSession)
+
 				// NOTE: Session heartbeat is registered by ActivityHandler.RegisterRoutes()
 				// NOTE: Session recording is now handled by the streamspace-recording plugin
 				// Install it via: Admin → Plugins → streamspace-recording
