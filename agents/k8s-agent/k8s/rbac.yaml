@@ -1,0 +1,72 @@
+# ServiceAccount for the K8s Agent
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: streamspace-agent
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: k8s-agent
+---
+# Role with permissions to manage session resources
+apiVersion: rbac.authorization.k8s.io/v1
+kind: Role
+metadata:
+  name: streamspace-agent
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: k8s-agent
+rules:
+# Deployments - for session containers
+- apiGroups: ["apps"]
+  resources: ["deployments"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Services - for session networking
+- apiGroups: [""]
+  resources: ["services"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Pods - for monitoring session status
+- apiGroups: [""]
+  resources: ["pods"]
+  verbs: ["get", "list", "watch"]
+
+# Pod logs - for debugging
+- apiGroups: [""]
+  resources: ["pods/log"]
+  verbs: ["get", "list"]
+
+# PersistentVolumeClaims - for persistent user storage
+- apiGroups: [""]
+  resources: ["persistentvolumeclaims"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# ConfigMaps - for session configuration
+- apiGroups: [""]
+  resources: ["configmaps"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+
+# Secrets - for session credentials
+- apiGroups: [""]
+  resources: ["secrets"]
+  verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
+---
+# RoleBinding to grant permissions to the ServiceAccount
+apiVersion: rbac.authorization.k8s.io/v1
+kind: RoleBinding
+metadata:
+  name: streamspace-agent
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: k8s-agent
+roleRef:
+  apiGroup: rbac.authorization.k8s.io
+  kind: Role
+  name: streamspace-agent
+subjects:
+- kind: ServiceAccount
+  name: streamspace-agent
+  namespace: streamspace

@@ -1,0 +1,89 @@
+# Deployment for the K8s Agent
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamspace-k8s-agent
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: k8s-agent
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamspace
+      component: k8s-agent
+  template:
+    metadata:
+      labels:
+        app: streamspace
+        component: k8s-agent
+    spec:
+      serviceAccountName: streamspace-agent
+      containers:
+      - name: agent
+        image: streamspace/k8s-agent:v2.0
+        imagePullPolicy: IfNotPresent
+        env:
+        # Required: Agent identifier
+        - name: AGENT_ID
+          value: "k8s-prod-us-east-1"
+
+        # Required: Control Plane WebSocket URL
+        - name: CONTROL_PLANE_URL
+          value: "wss://control.example.com"
+
+        # Optional: Platform type (default: kubernetes)
+        - name: PLATFORM
+          value: "kubernetes"
+
+        # Optional: Deployment region
+        - name: REGION
+          value: "us-east-1"
+
+        # Optional: Session namespace (default: streamspace)
+        - name: NAMESPACE
+          value: "streamspace"
+
+        # Optional: Capacity limits
+        - name: MAX_CPU
+          value: "100"  # 100 cores
+
+        - name: MAX_MEMORY
+          value: "256"  # 256 GB
+
+        - name: MAX_SESSIONS
+          value: "100"  # 100 concurrent sessions
+
+        resources:
+          requests:
+            memory: "128Mi"
+            cpu: "100m"
+          limits:
+            memory: "512Mi"
+            cpu: "500m"
+
+        # Health checks
+        livenessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pgrep -x k8s-agent
+          initialDelaySeconds: 30
+          periodSeconds: 30
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+        readinessProbe:
+          exec:
+            command:
+            - sh
+            - -c
+            - pgrep -x k8s-agent
+          initialDelaySeconds: 5
+          periodSeconds: 10
+          timeoutSeconds: 5
+          failureThreshold: 3
+
+      restartPolicy: Always
