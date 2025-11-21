@@ -918,31 +918,111 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
-	// Verify session exists before deletion and get user info for event
-	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
-		return
-	}
+	// 1. Verify session exists in DATABASE and get agent managing it
+	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
+	var controllerID string
+	var currentState string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT controller_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&controllerID, &currentState)
 
-	// Publish session delete event for controller to handle
-	deleteEvent := &events.SessionDeleteEvent{
-		SessionID: sessionID,
-		UserID:    session.User,
-		Platform:  h.platform,
-	}
-	if err := h.publisher.PublishSessionDelete(ctx, deleteEvent); err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to delete session",
-			"message": fmt.Sprintf("Failed to publish delete event: %v", err),
+	if err == sql.ErrNoRows {
+		log.Printf("Session %s not found in database", sessionID)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": "The specified session does not exist",
 		})
 		return
 	}
 
-	log.Printf("Published session delete event for %s (controller will delete resources)", sessionID)
+	if err != nil {
+		log.Printf("Failed to query session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to query session",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session is already terminating or terminated
+	if currentState == "terminating" || currentState == "terminated" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session already terminating",
+			"message": fmt.Sprintf("Session is already in %s state", currentState),
+		})
+		return
+	}
+
+	// 2. Create stop_session command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	payload := map[string]interface{}{
+		"sessionId": sessionID,
+		"namespace": h.namespace,
+	}
+
+	var command models.AgentCommand
+	var errorMessage sql.NullString
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, controllerID, sessionID, "stop_session", payload, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&errorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if errorMessage.Valid {
+		command.ErrorMessage = errorMessage.String
+	}
+
+	if err != nil {
+		log.Printf("Failed to create stop_session command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create stop command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
+		})
+		return
+	}
+	log.Printf("Created stop_session command %s for session %s", commandID, sessionID)
+
+	// 3. Update database session state to terminating
+	// Agent will update CRD when it processes the command
+	if err := h.sessionDB.UpdateSessionState(ctx, sessionID, "terminating"); err != nil {
+		log.Printf("Failed to update database session state (non-fatal): %v", err)
+	}
+
+	// 4. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch stop command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch stop command",
+				"message": fmt.Sprintf("Failed to dispatch command to agent: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched stop_session command %s to agent %s for session %s", commandID, controllerID, sessionID)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, stop command %s not dispatched", commandID)
+	}
+
+	// Return accepted response
+	// Agent will handle ALL Kubernetes operations (delete Deployment, Service, update CRD)
 	c.JSON(http.StatusAccepted, gin.H{
-		"name":    sessionID,
-		"message": "Session deletion requested, waiting for controller",
+		"name":      sessionID,
+		"commandId": commandID,
+		"message":   "Session termination requested, agent will delete resources",
 	})
 }
 
