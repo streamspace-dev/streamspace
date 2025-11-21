@@ -3823,15 +3823,15 @@ You can start your refactor work right now. The codebase is well-tested, well-do
 
 **Phase Order:**
 1. ✅ Phase 1: Design & Documentation
-2. ✅ Phase 9: Database Schema  
-3. 🔄 Phase 2: Agent Registration (IN PROGRESS)
-4. Phase 3: WebSocket Command Channel
-5. Phase 5: K8s Agent Conversion
-6. Phase 4: VNC Proxy/Tunnel
-7. Phase 6: K8s Agent VNC Tunneling
-8. Phase 8: UI Updates
-9. Phase 7: Docker Agent
-10. Phase 10: Testing & Migration
+2. ✅ Phase 9: Database Schema
+3. ✅ Phase 2: Agent Registration (COMPLETE 2025-11-21)
+4. 🔄 Phase 3: WebSocket Command Channel (IN PROGRESS)
+5. ⏳ Phase 5: K8s Agent Conversion
+6. ⏳ Phase 4: VNC Proxy/Tunnel
+7. ⏳ Phase 6: K8s Agent VNC Tunneling
+8. ⏳ Phase 8: UI Updates
+9. ⏳ Phase 7: Docker Agent
+10. ⏳ Phase 10: Testing & Migration
 
 ---
 
@@ -3882,12 +3882,30 @@ You can start your refactor work right now. The codebase is well-tested, well-do
 
 ---
 
-### Phase 2: Control Plane - Agent Registration & Management 🔄
+### Phase 2: Control Plane - Agent Registration & Management ✅
 
-**Status:** IN PROGRESS  
-**Assigned To:** Builder  
-**Priority:** HIGH  
-**Duration:** 3-5 days (estimated)
+**Status:** COMPLETE
+**Assigned To:** Builder
+**Completed:** 2025-11-21
+**Priority:** HIGH
+**Actual Duration:** ~1 day (estimated 3-5 days)
+
+**Deliverables:**
+- ✅ `api/internal/handlers/agents.go` (461 lines)
+  - All 5 HTTP endpoints implemented
+  - Input validation for platforms (kubernetes, docker, vm, cloud)
+  - Proper error handling (400, 404, 500)
+  - Database operations with prepared statements
+- ✅ `api/internal/handlers/agents_test.go` (461 lines)
+  - 13 comprehensive unit tests
+  - All CRUD operations tested
+  - sqlmock for database mocking
+  - Follows existing test patterns
+- ✅ Routes registered in `api/cmd/main.go`
+- ✅ All tests passing
+- ✅ Code quality excellent
+
+**Builder Performance:** Exceeded expectations - completed in ~1 day vs 3-5 day estimate
 
 **Objective:**
 Implement HTTP API endpoints for agent registration and management.
@@ -4022,13 +4040,257 @@ Implement HTTP API endpoints for agent registration and management.
 
 ---
 
-### Phase 3: Control Plane - WebSocket Command Channel
+### Phase 3: Control Plane - WebSocket Command Channel 🔄
 
-**Status:** PENDING
+**Status:** IN PROGRESS
 **Assigned To:** Builder
-**Dependencies:** Phase 2 (Agent Registration)
+**Started:** 2025-11-21
+**Priority:** HIGH
+**Duration:** 5-7 days (estimated)
+**Dependencies:** Phase 2 (Agent Registration) ✅ COMPLETE
 
-**Tasks:** (Will be detailed when Phase 2 is complete)
+**Objective:**
+Implement WebSocket hub for bidirectional agent communication. Agents connect TO Control Plane and receive commands over persistent WebSocket connections.
+
+**Tasks for Builder:**
+
+1. **Create WebSocket Hub:** `api/internal/websocket/agent_hub.go`
+
+   **Purpose:** Central hub managing all agent WebSocket connections
+
+   **Structure:**
+   ```go
+   type AgentConnection struct {
+       AgentID     string
+       Conn        *websocket.Conn
+       Platform    string
+       LastPing    time.Time
+       Send        chan []byte
+       Receive     chan []byte
+       Mutex       sync.RWMutex
+   }
+
+   type AgentHub struct {
+       // Map of agent_id -> AgentConnection
+       connections map[string]*AgentConnection
+       mutex       sync.RWMutex
+
+       // Channels for hub operations
+       register    chan *AgentConnection
+       unregister  chan *AgentConnection
+       broadcast   chan BroadcastMessage
+
+       // Database for persisting agent state
+       database    *db.Database
+   }
+
+   func NewAgentHub(database *db.Database) *AgentHub { ... }
+   func (h *AgentHub) Run() { ... }  // Main hub event loop
+   func (h *AgentHub) RegisterAgent(agentID string, conn *websocket.Conn) error { ... }
+   func (h *AgentHub) UnregisterAgent(agentID string) { ... }
+   func (h *AgentHub) SendCommandToAgent(agentID string, command *models.AgentCommand) error { ... }
+   func (h *AgentHub) BroadcastToAllAgents(message []byte) { ... }
+   func (h *AgentHub) GetConnectedAgents() []string { ... }
+   func (h *AgentHub) IsAgentConnected(agentID string) bool { ... }
+   ```
+
+   **Hub Event Loop (h.Run()):**
+   - Listen on register/unregister/broadcast channels
+   - Update agent status in database when connected/disconnected
+   - Handle agent heartbeats (update last_heartbeat timestamp)
+   - Detect stale connections (no heartbeat for 30 seconds)
+   - Clean up disconnected agents
+
+2. **Create WebSocket Handler:** `api/internal/handlers/agent_websocket.go`
+
+   **Purpose:** HTTP handler for agent WebSocket upgrade
+
+   **Endpoints:**
+   ```go
+   GET /api/v1/agents/connect?agent_id=xxx  // Agent connects here
+   ```
+
+   **Implementation:**
+   ```go
+   type AgentWebSocketHandler struct {
+       hub      *websocket.AgentHub
+       upgrader websocket.Upgrader
+       database *db.Database
+   }
+
+   func NewAgentWebSocketHandler(hub *websocket.AgentHub, database *db.Database) *AgentWebSocketHandler { ... }
+   func (h *AgentWebSocketHandler) HandleAgentConnection(c *gin.Context) { ... }
+   func (h *AgentWebSocketHandler) readPump(conn *AgentConnection) { ... }
+   func (h *AgentWebSocketHandler) writePump(conn *AgentConnection) { ... }
+   ```
+
+   **HandleAgentConnection Flow:**
+   - Validate agent_id query parameter
+   - Verify agent exists in database
+   - Upgrade HTTP connection to WebSocket
+   - Register connection with hub
+   - Start read/write pumps (goroutines)
+   - Handle connection lifecycle
+
+3. **Create Command Dispatcher:** `api/internal/services/command_dispatcher.go`
+
+   **Purpose:** Queue and dispatch commands to agents
+
+   **Structure:**
+   ```go
+   type CommandDispatcher struct {
+       database *db.Database
+       hub      *websocket.AgentHub
+       queue    chan *models.AgentCommand
+       workers  int
+   }
+
+   func NewCommandDispatcher(database *db.Database, hub *websocket.AgentHub) *CommandDispatcher { ... }
+   func (d *CommandDispatcher) Start() { ... }  // Start worker pool
+   func (d *CommandDispatcher) DispatchCommand(command *models.AgentCommand) error { ... }
+   func (d *CommandDispatcher) worker() { ... }  // Worker goroutine
+   func (d *CommandDispatcher) sendToAgent(command *models.AgentCommand) error { ... }
+   func (d *CommandDispatcher) handleCommandResponse(response CommandResponse) error { ... }
+   ```
+
+   **Command Lifecycle:**
+   - Create command with status="pending"
+   - Queue command for dispatch
+   - Worker picks up command
+   - Send to agent over WebSocket
+   - Update status="sent", set sent_at timestamp
+   - Wait for agent acknowledgment
+   - Update status="ack", set acknowledged_at timestamp
+   - Wait for completion response
+   - Update status="completed", set completed_at timestamp
+   - Handle errors (status="failed", set error_message)
+
+4. **Define WebSocket Protocol:** `api/internal/models/agent_protocol.go`
+
+   **Purpose:** Message types for agent communication
+
+   **Message Types:**
+   ```go
+   type AgentMessage struct {
+       Type      string          `json:"type"`
+       Timestamp time.Time       `json:"timestamp"`
+       Payload   json.RawMessage `json:"payload"`
+   }
+
+   // Message types from Control Plane → Agent
+   const (
+       MessageTypeCommand    = "command"      // Execute a command
+       MessageTypePing       = "ping"         // Keep-alive ping
+       MessageTypeShutdown   = "shutdown"     // Graceful shutdown
+   )
+
+   // Message types from Agent → Control Plane
+   const (
+       MessageTypeHeartbeat  = "heartbeat"    // Regular heartbeat
+       MessageTypeAck        = "ack"          // Command acknowledged
+       MessageTypeComplete   = "complete"     // Command completed
+       MessageTypeFailed     = "failed"       // Command failed
+       MessageTypeStatus     = "status"       // Session status update
+   )
+
+   type CommandMessage struct {
+       CommandID string                 `json:"commandId"`
+       Action    string                 `json:"action"`
+       Payload   map[string]interface{} `json:"payload"`
+   }
+
+   type HeartbeatMessage struct {
+       Status         string               `json:"status"`
+       ActiveSessions int                  `json:"activeSessions"`
+       Capacity       *models.AgentCapacity `json:"capacity,omitempty"`
+   }
+
+   type AckMessage struct {
+       CommandID string `json:"commandId"`
+   }
+
+   type CompleteMessage struct {
+       CommandID string                 `json:"commandId"`
+       Result    map[string]interface{} `json:"result,omitempty"`
+   }
+
+   type FailedMessage struct {
+       CommandID string `json:"commandId"`
+       Error     string `json:"error"`
+   }
+   ```
+
+5. **Update Agent Handler:** `api/internal/handlers/agents.go`
+
+   **Additions:**
+   - Integrate with AgentHub for real-time status
+   - Add endpoint: `POST /api/v1/agents/:agent_id/command` - Send command to agent
+   - Check if agent is connected before allowing commands
+
+6. **Update main.go:** `api/cmd/main.go`
+
+   **Initialize WebSocket components:**
+   ```go
+   // Create agent WebSocket hub
+   agentHub := websocket.NewAgentHub(database)
+   go agentHub.Run()  // Start hub event loop
+
+   // Create command dispatcher
+   dispatcher := services.NewCommandDispatcher(database, agentHub)
+   go dispatcher.Start()  // Start dispatcher workers
+
+   // Create WebSocket handler
+   agentWSHandler := handlers.NewAgentWebSocketHandler(agentHub, database)
+
+   // Register WebSocket route
+   router.GET("/api/v1/agents/connect", agentWSHandler.HandleAgentConnection)
+
+   // Pass dispatcher to agent handler for command sending
+   agentHandler := handlers.NewAgentHandler(database, dispatcher)
+   agentHandler.RegisterRoutes(v1)
+   ```
+
+7. **Write Unit Tests:**
+   - `api/internal/websocket/agent_hub_test.go` - Hub functionality
+   - `api/internal/handlers/agent_websocket_test.go` - WebSocket handler
+   - `api/internal/services/command_dispatcher_test.go` - Command dispatch
+
+   **Test Coverage:**
+   - Agent connection/disconnection
+   - Message routing (hub → agent, agent → hub)
+   - Command queuing and dispatch
+   - Heartbeat handling and timeout detection
+   - Multiple concurrent agents
+   - Error scenarios (disconnects, invalid messages)
+
+**Reference Files:**
+- Existing WebSocket: `api/internal/websocket/manager.go` (VNC WebSocket patterns)
+- Agent Models: `api/internal/models/agent.go` (AgentCommand model)
+- Command Queue: Database migrations in `api/internal/db/database.go`
+
+**Acceptance Criteria:**
+- ✅ Agent can connect via WebSocket (/api/v1/agents/connect)
+- ✅ Hub manages multiple concurrent agent connections
+- ✅ Commands can be queued and dispatched to agents
+- ✅ Command lifecycle tracked (pending → sent → ack → completed)
+- ✅ Agents send heartbeats, hub updates database
+- ✅ Stale connections detected and cleaned up (>30s no heartbeat)
+- ✅ Unit tests with >70% coverage
+- ✅ All tests passing
+- ✅ WebSocket protocol documented
+
+**Notes for Builder:**
+- Use `github.com/gorilla/websocket` library (already in project)
+- Follow patterns from existing WebSocket manager for VNC
+- Implement graceful connection handling (reconnection support)
+- Use channels for goroutine communication (Go best practices)
+- DO NOT implement VNC tunneling yet (that's Phase 4)
+- DO NOT implement actual agent clients yet (that's Phase 5-7)
+
+**After Completion:**
+- Notify Architect for integration review
+- Notify Validator for testing
+- Notify Scribe for documentation
 
 ---
 
