@@ -95,6 +95,7 @@ package api
 import (
 	"context"
 	"database/sql"
+	"encoding/json"
 	"fmt"
 	"log"
 	"net/http"
@@ -747,13 +748,25 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	// 4. Create command in database
 	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
 	now := time.Now()
+
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create command payload",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
 	var command models.AgentCommand
 	var errorMessage sql.NullString // Handle NULL error_message column
 	err = h.db.DB().QueryRowContext(ctx, `
 		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
 		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
 		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
-	`, commandID, agentID, sessionName, "start_session", payload, now).Scan(
+	`, commandID, agentID, sessionName, "start_session", payloadJSON, now).Scan(
 		&command.ID,
 		&command.CommandID,
 		&command.AgentID,
@@ -972,13 +985,24 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		"namespace": h.namespace,
 	}
 
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal stop command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create stop command",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
 	var command models.AgentCommand
 	var errorMessage sql.NullString
 	err = h.db.DB().QueryRowContext(ctx, `
 		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
 		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
 		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
-	`, commandID, agentID.String, sessionID, "stop_session", payload, now).Scan(
+	`, commandID, agentID.String, sessionID, "stop_session", payloadJSON, now).Scan(
 		&command.ID,
 		&command.CommandID,
 		&command.AgentID,
