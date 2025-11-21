@@ -3,8 +3,8 @@
 <head>
   <meta charset="UTF-8">
   <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta name="description" content="StreamSpace - Kubernetes-native platform for streaming containerized applications to web browsers. Open source, self-hosted, and fully extensible.">
-  <meta name="keywords" content="kubernetes, containers, streaming, vnc, browser, open source, docker, remote desktop">
+  <meta name="description" content="StreamSpace - Multi-platform container streaming with Control Plane + Agent architecture. Deploy sessions to Kubernetes, Docker, VMs, and cloud. Open source, self-hosted, fully extensible.">
+  <meta name="keywords" content="kubernetes, containers, streaming, vnc, browser, open source, docker, remote desktop, multi-platform, agent, control plane">
   <title>StreamSpace - Stream Any App to Your Browser</title>
   <link rel="stylesheet" href="css/style.css">
   <link rel="preconnect" href="https://fonts.googleapis.com">
@@ -26,7 +26,7 @@
         <li><a href="plugins.html">Plugins</a></li>
         <li><a href="getting-started.html">Get Started</a></li>
       </ul>
-      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <a href="https://github.com/streamspace-dev/streamspace" class="cta-button">GitHub</a>
       <button class="menu-toggle" aria-label="Toggle menu">
         <span></span>
         <span></span>
@@ -39,13 +39,13 @@
   <section class="hero">
     <div class="hero-content">
       <h1>Stream Any App to Your Browser</h1>
-      <p>Kubernetes-native platform for delivering containerized applications with browser-based access, auto-hibernation, and enterprise security features.</p>
+      <p>Multi-platform Control Plane + Agent architecture for delivering containerized applications with browser-based access, auto-hibernation, and enterprise security features.</p>
       <p class="mt-2" style="font-size: 1.1rem; opacity: 0.9; background: rgba(255,255,255,0.1); padding: 0.75rem 1rem; border-radius: 8px; display: inline-block;">
-        <strong>v1.0.0-beta</strong> - Core Kubernetes platform functional. <a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md" style="color: #a5b4fc;">See roadmap</a>
+        <strong>🎉 v2.0-beta</strong> - Multi-platform agent architecture complete! Kubernetes agent ready, Docker/VM/Cloud coming soon. <a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_BETA_RELEASE_NOTES.md" style="color: #a5b4fc;">See release notes</a>
       </p>
       <div class="hero-buttons">
         <a href="getting-started.html" class="button button-primary">Get Started</a>
-        <a href="https://github.com/JoshuaAFerguson/streamspace" class="button button-secondary">View on GitHub</a>
+        <a href="https://github.com/streamspace-dev/streamspace" class="button button-secondary">View on GitHub</a>
       </div>
     </div>
   </section>
@@ -64,9 +64,9 @@
           <p>No client installation required. Access any application directly from your web browser using VNC streaming technology.</p>
         </div>
         <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>Kubernetes-Native</h3>
-          <p>Built for Kubernetes with CRDs, auto-scaling, and native resource management. Docker support planned.</p>
+          <div class="feature-icon">🌐</div>
+          <h3>Multi-Platform</h3>
+          <p>Control Plane + Agent architecture supports Kubernetes (ready), Docker, VMs, and cloud platforms. Deploy sessions anywhere.</p>
         </div>
         <div class="feature-card">
           <div class="feature-icon">⚡</div>
@@ -145,32 +145,42 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
   <section class="code-section">
     <div class="container">
       <div class="section-header">
-        <h2>Architecture</h2>
-        <p>Modern cloud-native stack built on Kubernetes</p>
+        <h2>Architecture (v2.0-beta)</h2>
+        <p>Modern Control Plane + Agent architecture for multi-platform deployments</p>
       </div>
       <div class="code-block">
-        <pre><code>┌─────────────┐         ┌─────────────┐         ┌──────────────┐
-│   Web UI    │────────▶│ API Backend │────────▶│     NATS     │
-│  (React)    │  REST/WS│  (Go/Gin)   │  Events │  JetStream   │
-└─────────────┘         └──────┬──────┘         └──────┬───────┘
-                               │                   ┌───┴───┐
-                        ┌──────┴────────┐    ┌─────┴───┐   └───────┐
-                        │  PostgreSQL   │    │ K8s     │   │Docker │
-                        │   Database    │    │ Ctrl    │   │ Ctrl  │
-                        └───────────────┘    └─────────┘   └───────┘</code></pre>
+        <pre><code>┌─────────────┐         ┌──────────────────────────────────┐
+│   Web UI    │────────▶│       Control Plane (API)        │
+│  (React)    │  REST/WS│  • Agent Hub (WebSocket)         │
+└─────────────┘         │  • Command Dispatcher            │
+                        │  • VNC Proxy (end-to-end)        │
+                        │  • PostgreSQL (87 tables)        │
+                        └────────────┬─────────────────────┘
+                                     │ WebSocket (wss://)
+                        ┌────────────┴────────────┐
+                        │                         │
+                   ┌────▼─────┐             ┌────▼─────┐
+                   │ K8s Agent│             │Docker Agt│
+                   │ (Ready)  │             │ (v2.1)   │
+                   └────┬─────┘             └────┬─────┘
+                        │                        │
+                   ┌────▼────┐              ┌───▼────┐
+                   │   K8s   │              │ Docker │
+                   │ Cluster │              │  Host  │
+                   └─────────┘              └────────┘</code></pre>
       </div>
       <div class="features-grid mt-4">
         <div class="feature-card">
-          <h3>Kubernetes Controller</h3>
-          <p>Production-ready controller for session lifecycle, auto-hibernation, and resource management.</p>
+          <h3>Control Plane</h3>
+          <p>Centralized management with Agent Hub, Command Dispatcher, and VNC Proxy. Agents connect via WebSocket (firewall-friendly).</p>
         </div>
         <div class="feature-card">
-          <h3>Go API Backend</h3>
-          <p>70+ handlers, 87 database tables, WebSocket support, and comprehensive authentication.</p>
+          <h3>K8s Agent (Ready)</h3>
+          <p>Fully functional Kubernetes agent with session lifecycle, VNC tunneling, and health monitoring. Deploys via Helm.</p>
         </div>
         <div class="feature-card">
-          <h3>React UI</h3>
-          <p>50+ components with Material-UI, real-time updates, and full admin dashboard.</p>
+          <h3>Platform Agnostic</h3>
+          <p>Same UI and API for all platforms. Docker agent (v2.1), VM agent (v2.2), Cloud agent (v2.3) coming soon.</p>
         </div>
       </div>
     </div>
@@ -201,23 +211,23 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
           <li><a href="getting-started.html">Getting Started</a></li>
           <li><a href="docs.html">Documentation</a></li>
           <li><a href="plugins.html">Plugin Development</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">GitHub</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Resources</h3>
         <ul>
           <li><a href="features.html">Features</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/issues">Issues</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Community</h3>
         <ul>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">Star on GitHub</a></li>
         </ul>
       </div>
     </div>

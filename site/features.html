@@ -25,7 +25,7 @@
         <li><a href="plugins.html">Plugins</a></li>
         <li><a href="getting-started.html">Get Started</a></li>
       </ul>
-      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <a href="https://github.com/streamspace-dev/streamspace" class="cta-button">GitHub</a>
       <button class="menu-toggle" aria-label="Toggle menu">
         <span></span>
         <span></span>
@@ -75,14 +75,14 @@
         </div>
 
         <div class="feature-card">
-          <div class="feature-icon">🖥️</div>
-          <h3>Kubernetes-Native Platform</h3>
-          <p>Built for Kubernetes with Custom Resource Definitions (CRDs), native auto-scaling, and Helm chart deployment. Docker support is planned for future releases.</p>
+          <div class="feature-icon">🌐</div>
+          <h3>Multi-Platform Architecture (v2.0-beta)</h3>
+          <p>Control Plane + Agent architecture supports multiple platforms. K8s Agent is production-ready, with Docker, VM, and Cloud agents coming soon.</p>
           <ul style="margin-top: 1rem; color: var(--text-secondary);">
-            <li>Production-ready K8s controller</li>
-            <li>Session and Template CRDs</li>
-            <li>Helm chart for deployment</li>
-            <li>Docker support (planned)</li>
+            <li>K8s Agent (ready for production)</li>
+            <li>WebSocket-based agent communication</li>
+            <li>End-to-end VNC proxy tunneling</li>
+            <li>Docker/VM/Cloud agents (roadmap)</li>
           </ul>
         </div>
 
@@ -263,16 +263,30 @@
       </div>
       <div class="features-grid">
         <div class="feature-card">
-          <h3>Platform Controllers (Go)</h3>
+          <h3>Control Plane (Go) - v2.0</h3>
           <ul style="color: var(--text-secondary);">
-            <li>Kubernetes controller (Kubebuilder)</li>
-            <li>Docker controller (standalone)</li>
-            <li>NATS JetStream event handling</li>
+            <li>Agent Hub (WebSocket server)</li>
+            <li>Command Dispatcher (agent commands)</li>
+            <li>VNC Proxy (end-to-end tunneling)</li>
             <li>Session lifecycle management</li>
-            <li>Automatic resource provisioning</li>
-            <li>State machine (running/hibernated)</li>
+            <li>Real-time agent health monitoring</li>
+            <li>Multi-agent orchestration</li>
             <li>Prometheus metrics export</li>
-            <li>Leader election for HA</li>
+            <li>PostgreSQL database (87 tables)</li>
+          </ul>
+        </div>
+
+        <div class="feature-card">
+          <h3>Platform Agents (Go) - v2.0</h3>
+          <ul style="color: var(--text-secondary);">
+            <li>K8s Agent (production-ready)</li>
+            <li>WebSocket client (wss://)</li>
+            <li>VNC tunnel management</li>
+            <li>Session pod provisioning</li>
+            <li>Health checks and reconnection</li>
+            <li>Command execution framework</li>
+            <li>Automatic registration</li>
+            <li>Docker/VM/Cloud agents (roadmap)</li>
           </ul>
         </div>
 
@@ -280,13 +294,13 @@
           <h3>API Backend (Go + Gin)</h3>
           <ul style="color: var(--text-secondary);">
             <li>REST + WebSocket APIs</li>
-            <li>PostgreSQL caching layer</li>
+            <li>Agent management endpoints</li>
+            <li>PostgreSQL database layer</li>
             <li>Connection tracking</li>
-            <li>Repository sync service</li>
             <li>Plugin management system</li>
             <li>JWT authentication</li>
-            <li>Kubernetes client integration</li>
-            <li>Audit logging</li>
+            <li>License enforcement</li>
+            <li>Comprehensive audit logging</li>
           </ul>
         </div>
 
@@ -323,8 +337,8 @@
 
         <div class="feature-card">
           <div class="feature-icon">🐳</div>
-          <h3>Docker Standalone</h3>
-          <p>Deploy on a single Docker host with Docker Compose. Great for development, testing, or small teams.</p>
+          <h3>Docker Agent (Coming Soon)</h3>
+          <p>Docker agent planned for v2.1 release. Will support standalone Docker hosts and Docker Compose deployments for development and small teams.</p>
         </div>
 
         <div class="feature-card">
@@ -367,23 +381,23 @@
           <li><a href="getting-started.html">Getting Started</a></li>
           <li><a href="docs.html">Documentation</a></li>
           <li><a href="plugins.html">Plugin Development</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">GitHub</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Resources</h3>
         <ul>
           <li><a href="features.html">Features</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/issues">Issues</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Community</h3>
         <ul>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">Star on GitHub</a></li>
         </ul>
       </div>
     </div>

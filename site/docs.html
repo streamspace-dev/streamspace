@@ -24,7 +24,7 @@
         <li><a href="plugins.html">Plugins</a></li>
         <li><a href="getting-started.html">Get Started</a></li>
       </ul>
-      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <a href="https://github.com/streamspace-dev/streamspace" class="cta-button">GitHub</a>
       <button class="menu-toggle"><span></span><span></span><span></span></button>
     </nav>
   </header>
@@ -45,55 +45,61 @@
 
     <main class="doc-content">
       <h1>Documentation</h1>
-      <p>Comprehensive guides and references for StreamSpace</p>
+      <p>Comprehensive guides and references for StreamSpace v2.0-beta</p>
 
       <h2 id="overview">Overview</h2>
-      <p>StreamSpace is a Kubernetes-native multi-user platform that streams containerized applications to web browsers using VNC technology. It provides on-demand provisioning with auto-hibernation for resource efficiency.</p>
+      <p>StreamSpace is a multi-platform container streaming platform that delivers GUI applications to web browsers using VNC technology. v2.0-beta introduces a Control Plane + Agent architecture supporting Kubernetes (production-ready) with Docker, VM, and cloud platforms coming soon.</p>
 
-      <h3>Key Concepts</h3>
+      <h3>Key Concepts (v2.0)</h3>
       <ul>
+        <li><strong>Control Plane</strong> - Centralized API/UI that manages agents via WebSocket</li>
+        <li><strong>Agent</strong> - Platform-specific component (K8s, Docker, VM) that provisions sessions</li>
         <li><strong>Session</strong> - A running instance of an application for a user</li>
         <li><strong>Template</strong> - An application definition that can be launched as a Session</li>
+        <li><strong>VNC Proxy</strong> - End-to-end VNC tunnel through Control Plane to agent</li>
         <li><strong>Hibernation</strong> - Automatic scale-to-zero when sessions are idle</li>
         <li><strong>Plugin</strong> - Extension that adds functionality to StreamSpace</li>
-        <li><strong>Repository</strong> - Git repository containing templates or plugins</li>
       </ul>
 
-      <h2 id="architecture">Architecture</h2>
-      <p>StreamSpace uses a multi-platform event-driven architecture with NATS messaging:</p>
+      <h2 id="architecture">Architecture (v2.0-beta)</h2>
+      <p>StreamSpace v2.0 uses a Control Plane + Agent architecture with WebSocket communication:</p>
 
-      <h3>1. Platform Controllers</h3>
-      <p>Platform-specific controllers that manage sessions on their respective infrastructure via NATS events.</p>
+      <h3>1. Control Plane</h3>
+      <p>Centralized management API and Web UI that orchestrates agents across multiple platforms.</p>
       <ul>
-        <li><strong>Kubernetes Controller</strong> (k8s-controller/) - Kubebuilder-based, manages CRDs</li>
-        <li><strong>Docker Controller</strong> (docker-controller/) - Manages Docker containers</li>
-        <li>NATS JetStream for durable event delivery</li>
-        <li>Prometheus metrics export</li>
+        <li><strong>Agent Hub</strong> - WebSocket server managing agent connections</li>
+        <li><strong>Command Dispatcher</strong> - Routes commands to appropriate agents</li>
+        <li><strong>VNC Proxy</strong> - End-to-end VNC tunneling (firewall-friendly)</li>
+        <li><strong>PostgreSQL</strong> - Database with 87 tables for state management</li>
+        <li><strong>Web UI</strong> - React-based admin and user portal</li>
+        <li><strong>REST + WebSocket API</strong> - Comprehensive API for automation</li>
       </ul>
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/ARCHITECTURE.md">View detailed architecture →</a></p>
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_ARCHITECTURE.md">View v2.0 architecture guide →</a></p>
 
-      <h3>2. API Backend</h3>
-      <p>Go-based REST + WebSocket API using Gin framework.</p>
+      <h3>2. Platform Agents</h3>
+      <p>Agents connect to the Control Plane via WebSocket and manage sessions on their platform.</p>
       <ul>
-        <li>Session management endpoints</li>
-        <li>Template catalog and repository sync</li>
-        <li>Plugin management system</li>
-        <li>PostgreSQL caching layer</li>
-        <li>Connection tracking</li>
-        <li>Real-time WebSocket updates</li>
+        <li><strong>K8s Agent</strong> (agents/k8s-agent/) - Production-ready Kubernetes agent</li>
+        <li><strong>Docker Agent</strong> - Standalone Docker support (v2.1, in development)</li>
+        <li><strong>VM Agent</strong> - Hyper-V/VMware support (v2.2, planned)</li>
+        <li><strong>Cloud Agent</strong> - AWS/GCP/Azure support (v2.3, planned)</li>
+        <li>WebSocket client (wss://) for bidirectional communication</li>
+        <li>VNC tunnel management and health checks</li>
+        <li>Automatic registration and reconnection</li>
       </ul>
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/api/README.md">API Backend documentation →</a></p>
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_AGENT_GUIDE.md">K8s Agent operations guide →</a></p>
 
       <h3>3. Web UI</h3>
-      <p>React + TypeScript web interface with Material-UI.</p>
+      <p>React + TypeScript web interface with Material-UI and real-time agent monitoring.</p>
       <ul>
         <li>User dashboard and session management</li>
-        <li>Template catalog browser</li>
-        <li>Plugin catalog and management</li>
+        <li>Template catalog browser (200+ apps)</li>
+        <li>Agent management and monitoring</li>
         <li>Admin panel for users, groups, quotas</li>
         <li>Real-time updates via WebSocket</li>
+        <li>Integrated VNC viewer (noVNC)</li>
       </ul>
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ui/README.md">UI documentation →</a></p>
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/ui/README.md">UI documentation →</a></p>
 
       <h2 id="installation">Installation</h2>
       <p>See the <a href="getting-started.html">Getting Started guide</a> for detailed installation instructions.</p>
@@ -105,7 +111,7 @@
           <button class="copy-button">Copy</button>
         </div>
         <pre><code># Clone repository
-git clone https://github.com/JoshuaAFerguson/streamspace.git
+git clone https://github.com/streamspace-dev/streamspace.git
 cd streamspace
 
 # Install with Helm
@@ -114,52 +120,39 @@ helm install streamspace ./chart \\
   --create-namespace</code></pre>
       </div>
 
-      <h2 id="usage">Usage</h2>
+      <h2 id="usage">Usage (v2.0-beta)</h2>
 
       <h3>Creating Sessions</h3>
-      <p>Sessions can be created via the Web UI, kubectl, or API.</p>
+      <p>Sessions are created via the Web UI or REST API. The Control Plane routes session requests to the appropriate agent.</p>
 
-      <h4>Using kubectl</h4>
+      <h4>Using the Web UI</h4>
+      <ol>
+        <li>Navigate to <strong>Sessions</strong> in the sidebar</li>
+        <li>Click <strong>Create Session</strong></li>
+        <li>Select an application template (e.g., Firefox Browser)</li>
+        <li>Choose your target agent (K8s, Docker, etc.)</li>
+        <li>Configure resources (2Gi memory recommended)</li>
+        <li>Click <strong>Create</strong> and wait for session to start</li>
+        <li>Click <strong>Connect</strong> to open the VNC viewer</li>
+      </ol>
+
+      <h4>Using the REST API</h4>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>kubectl apply -f - <<EOF
-apiVersion: stream.space/v1alpha1
-kind: Session
-metadata:
-  name: user1-firefox
-  namespace: streamspace
-spec:
-  user: user1
-  template: firefox-browser
-  state: running
-  resources:
-    memory: 2Gi
-    cpu: 1000m
-  persistentHome: true
-  idleTimeout: 30m
-EOF</code></pre>
-      </div>
-
-      <h4>Using the API</h4>
-      <div class="code-block">
-        <div class="code-header">
-          <span class="code-lang">BASH</span>
-          <button class="copy-button">Copy</button>
-        </div>
-        <pre><code>curl -X POST http://api.streamspace.local/api/v1/sessions \\
+        <pre><code>curl -X POST https://streamspace.example.com/api/v1/sessions \\
   -H "Authorization: Bearer $TOKEN" \\
   -H "Content-Type: application/json" \\
   -d '{
-    "user": "user1",
-    "template": "firefox-browser",
-    "state": "running",
+    "template_id": "firefox-browser",
+    "agent_id": "k8s-prod-cluster",
     "resources": {
       "memory": "2Gi",
       "cpu": "1000m"
-    }
+    },
+    "idle_timeout": "30m"
   }'</code></pre>
       </div>
 
@@ -169,40 +162,60 @@ EOF</code></pre>
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code># List sessions
-kubectl get sessions -n streamspace
+        <pre><code># List all sessions
+curl https://streamspace.example.com/api/v1/sessions \\
+  -H "Authorization: Bearer $TOKEN"
 
 # Get session details
-kubectl describe session user1-firefox -n streamspace
+curl https://streamspace.example.com/api/v1/sessions/{session_id} \\
+  -H "Authorization: Bearer $TOKEN"
 
 # Hibernate a session
-kubectl patch session user1-firefox -n streamspace \\
-  --type merge -p '{"spec":{"state":"hibernated"}}'
+curl -X PUT https://streamspace.example.com/api/v1/sessions/{session_id} \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"state": "hibernated"}'
 
-# Wake a session
-kubectl patch session user1-firefox -n streamspace \\
-  --type merge -p '{"spec":{"state":"running"}}'
+# Resume a session
+curl -X PUT https://streamspace.example.com/api/v1/sessions/{session_id} \\
+  -H "Authorization: Bearer $TOKEN" \\
+  -H "Content-Type: application/json" \\
+  -d '{"state": "running"}'
 
 # Delete a session
-kubectl delete session user1-firefox -n streamspace</code></pre>
+curl -X DELETE https://streamspace.example.com/api/v1/sessions/{session_id} \\
+  -H "Authorization: Bearer $TOKEN"
+
+# Check session pods on K8s cluster (if using K8s Agent)
+kubectl get pods -n streamspace -l app=session</code></pre>
       </div>
 
-      <h2 id="api">API Reference</h2>
+      <h2 id="api">API Reference (v2.0)</h2>
 
       <h3>Session Endpoints</h3>
       <ul>
         <li><code>GET /api/v1/sessions</code> - List all sessions</li>
         <li><code>POST /api/v1/sessions</code> - Create a session</li>
         <li><code>GET /api/v1/sessions/:id</code> - Get session details</li>
-        <li><code>PUT /api/v1/sessions/:id</code> - Update session</li>
+        <li><code>PUT /api/v1/sessions/:id</code> - Update session (state, resources)</li>
         <li><code>DELETE /api/v1/sessions/:id</code> - Delete session</li>
+        <li><code>GET /api/v1/sessions/:id/vnc</code> - Get VNC proxy URL</li>
+      </ul>
+
+      <h3>Agent Endpoints (v2.0)</h3>
+      <ul>
+        <li><code>GET /api/v1/agents</code> - List all registered agents</li>
+        <li><code>GET /api/v1/agents/:id</code> - Get agent details</li>
+        <li><code>GET /api/v1/agents/:id/health</code> - Agent health status</li>
+        <li><code>POST /api/v1/agents/:id/commands</code> - Send command to agent</li>
+        <li><code>WS /api/v1/agents/hub</code> - Agent Hub WebSocket endpoint</li>
       </ul>
 
       <h3>Template Endpoints</h3>
       <ul>
         <li><code>GET /api/v1/templates</code> - List templates</li>
         <li><code>GET /api/v1/templates/:id</code> - Get template details</li>
-        <li><code>GET /api/v1/catalog/templates</code> - Browse catalog</li>
+        <li><code>GET /api/v1/catalog/templates</code> - Browse catalog (200+ apps)</li>
       </ul>
 
       <h3>Plugin Endpoints</h3>
@@ -212,47 +225,32 @@ kubectl delete session user1-firefox -n streamspace</code></pre>
         <li><code>GET /api/v1/plugins/installed</code> - List installed plugins</li>
       </ul>
 
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/api/README.md">Full API documentation →</a></p>
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/api/README.md">Full API documentation →</a></p>
 
-      <h2 id="development">Development</h2>
+      <h2 id="development">Development (v2.0)</h2>
 
-      <h3>Kubernetes Controller Development</h3>
+      <h3>K8s Agent Development</h3>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>cd k8s-controller
-
-# Run locally
-make run
-
-# Run tests
-make test
-
-# Build Docker image
-make docker-build IMG=myregistry/streamspace-kubernetes-controller:dev</code></pre>
-      </div>
-
-      <p><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/k8s-controller/README.md">Kubernetes controller development guide →</a></p>
-
-      <h3>Docker Controller Development</h3>
-      <div class="code-block">
-        <div class="code-header">
-          <span class="code-lang">BASH</span>
-          <button class="copy-button">Copy</button>
-        </div>
-        <pre><code>cd docker-controller
+        <pre><code>cd agents/k8s-agent
 
 # Build locally
-go build -o streamspace-docker-controller
+go build -o k8s-agent .
 
-# Run with Docker Compose
-./scripts/docker-dev.sh
+# Run tests
+go test ./... -v
 
-# Test NATS connectivity
-./scripts/test-nats.sh</code></pre>
+# Build Docker image
+docker build -t streamspace/k8s-agent:dev .
+
+# Deploy to K8s
+kubectl apply -f deployments/</code></pre>
       </div>
+
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_AGENT_GUIDE.md">K8s Agent development guide →</a></p>
 
       <h3>API Development</h3>
       <div class="code-block">
@@ -287,52 +285,73 @@ npm run dev
 npm run build</code></pre>
       </div>
 
-      <h2 id="deployment">Deployment</h2>
+      <h2 id="deployment">Deployment (v2.0-beta)</h2>
 
       <h3>Production Deployment</h3>
-      <p>Create a production values file:</p>
+      <p>Create a production values file for Control Plane + K8s Agent:</p>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">YAML</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>controller:
-  replicaCount: 3
-  leaderElection:
-    enabled: true
-  resources:
-    requests:
-      memory: 512Mi
-      cpu: 500m
-
+        <pre><code># Control Plane
 api:
   replicaCount: 3
   autoscaling:
     enabled: true
     minReplicas: 3
     maxReplicas: 10
+  resources:
+    requests:
+      memory: 1Gi
+      cpu: 1000m
 
 ui:
   replicaCount: 2
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
 
+# K8s Agent
+k8sAgent:
+  enabled: true
+  agentId: "k8s-prod-cluster"
+  replicas: 1
+  resources:
+    requests:
+      memory: 512Mi
+      cpu: 500m
+
+# Database
 postgresql:
   enabled: false
   external:
     enabled: true
     host: "postgres.example.com"
 
+# Ingress
 ingress:
   enabled: true
+  host: "streamspace.example.com"
   className: "nginx"
   tls:
     enabled: true
     secretName: "streamspace-tls"
 
+# Monitoring
 monitoring:
-  enabled: true</code></pre>
+  enabled: true
+  prometheus:
+    enabled: true
+  grafana:
+    enabled: true</code></pre>
       </div>
 
-      <h3>Resource Requirements</h3>
+      <p>Deploy with: <code>helm install streamspace ./chart -f production-values.yaml</code></p>
+      <p><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_DEPLOYMENT_GUIDE.md">Full v2.0 deployment guide →</a></p>
+
+      <h3>Resource Requirements (v2.0)</h3>
       <table style="width: 100%; margin: 2rem 0;">
         <thead>
           <tr>
@@ -343,14 +362,14 @@ monitoring:
         </thead>
         <tbody>
           <tr>
-            <td style="padding: 0.75rem;">Controller</td>
-            <td style="padding: 0.75rem;">500m</td>
-            <td style="padding: 0.75rem;">512Mi</td>
-          </tr>
-          <tr>
-            <td style="padding: 0.75rem;">API Backend</td>
+            <td style="padding: 0.75rem;">API (Control Plane)</td>
             <td style="padding: 0.75rem;">1000m</td>
             <td style="padding: 0.75rem;">1Gi</td>
+          </tr>
+          <tr>
+            <td style="padding: 0.75rem;">K8s Agent</td>
+            <td style="padding: 0.75rem;">500m</td>
+            <td style="padding: 0.75rem;">512Mi</td>
           </tr>
           <tr>
             <td style="padding: 0.75rem;">Web UI</td>
@@ -367,18 +386,22 @@ monitoring:
 
       <h3>Further Reading</h3>
       <ul>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/QUICKSTART.md">Quick Start Guide</a> - Get up and running in 10 minutes</li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/FEATURES.md">Complete Feature List</a> - All implemented features</li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Project Roadmap</a> - Phases 1-5 complete, Phase 6 planned</li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CLAUDE.md">AI Assistant Guide</a></li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing Guide</a></li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/docs/ARCHITECTURE.md">Architecture Deep Dive</a></li>
+        <li><a href="getting-started.html">Getting Started Guide</a> - Get up and running with v2.0-beta</li>
+        <li><strong>v2.0-beta Documentation:</strong></li>
+        <li>&nbsp;&nbsp;<a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_DEPLOYMENT_GUIDE.md">v2.0 Deployment Guide</a> - Production deployment (952 lines)</li>
+        <li>&nbsp;&nbsp;<a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_AGENT_GUIDE.md">K8s Agent Operations</a> - Agent deployment and operations (1,296 lines)</li>
+        <li>&nbsp;&nbsp;<a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_ARCHITECTURE.md">v2.0 Architecture Guide</a> - Control Plane + Agent architecture (1,130 lines)</li>
+        <li>&nbsp;&nbsp;<a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_MIGRATION_GUIDE.md">v1.x to v2.0 Migration</a> - Upgrade guide (1,049 lines)</li>
+        <li>&nbsp;&nbsp;<a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_BETA_RELEASE_NOTES.md">v2.0-beta Release Notes</a> - What's new (1,295 lines)</li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/FEATURES.md">Complete Feature List</a> - All implemented features</li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Project Roadmap</a> - v2.0-beta complete, v2.1+ planned</li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/CONTRIBUTING.md">Contributing Guide</a></li>
         <li><a href="plugins.html">Plugin Development Guide</a></li>
       </ul>
 
       <div class="mt-4">
         <a href="getting-started.html" class="button button-primary">Getting Started</a>
-        <a href="https://github.com/JoshuaAFerguson/streamspace" class="button button-secondary">GitHub Repository</a>
+        <a href="https://github.com/streamspace-dev/streamspace" class="button button-secondary">GitHub Repository</a>
       </div>
     </main>
   </div>
@@ -395,23 +418,23 @@ monitoring:
           <li><a href="getting-started.html">Getting Started</a></li>
           <li><a href="docs.html">Documentation</a></li>
           <li><a href="plugins.html">Plugin Development</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">GitHub</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Resources</h3>
         <ul>
           <li><a href="features.html">Features</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/issues">Issues</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Community</h3>
         <ul>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">Star on GitHub</a></li>
         </ul>
       </div>
     </div>

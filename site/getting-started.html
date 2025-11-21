@@ -24,7 +24,7 @@
         <li><a href="plugins.html">Plugins</a></li>
         <li><a href="getting-started.html">Get Started</a></li>
       </ul>
-      <a href="https://github.com/JoshuaAFerguson/streamspace" class="cta-button">GitHub</a>
+      <a href="https://github.com/streamspace-dev/streamspace" class="cta-button">GitHub</a>
       <button class="menu-toggle"><span></span><span></span><span></span></button>
     </nav>
   </header>
@@ -43,16 +43,21 @@
     </aside>
 
     <main class="doc-content">
-      <h1>Getting Started</h1>
-      <p>This guide will help you install StreamSpace on your Kubernetes cluster and create your first session.</p>
+      <h1>Getting Started with v2.0-beta</h1>
+      <p>This guide will help you install StreamSpace v2.0-beta (Control Plane + K8s Agent) and create your first session.</p>
+
+      <div class="alert" style="background: rgba(79, 70, 229, 0.1); border-left: 4px solid #4f46e5; padding: 1rem; margin: 2rem 0;">
+        <strong>v2.0-beta Architecture:</strong> StreamSpace now uses a Control Plane + Agent model. The Control Plane (API/UI) manages agents via WebSocket, and the K8s Agent deploys sessions to your Kubernetes cluster.
+      </div>
 
       <h2 id="prerequisites">Prerequisites</h2>
       <ul>
         <li><strong>Kubernetes 1.19+</strong> - Any Kubernetes cluster (k3s recommended)</li>
         <li><strong>Helm 3.x</strong> - For installation</li>
-        <li><strong>NFS Storage</strong> - For persistent user home directories</li>
-        <li><strong>Ingress Controller</strong> - Traefik, nginx, or similar</li>
+        <li><strong>NFS Storage</strong> - For persistent user home directories (ReadWriteMany)</li>
+        <li><strong>Ingress Controller</strong> - Traefik, nginx, or similar with TLS support</li>
         <li><strong>kubectl</strong> - Configured to access your cluster</li>
+        <li><strong>PostgreSQL</strong> - Database for Control Plane (can be deployed via Helm)</li>
       </ul>
 
       <h2 id="installation">Installation</h2>
@@ -63,11 +68,12 @@
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>git clone https://github.com/JoshuaAFerguson/streamspace.git
+        <pre><code>git clone https://github.com/streamspace-dev/streamspace.git
 cd streamspace</code></pre>
       </div>
 
-      <h3>Step 2: Install with Helm</h3>
+      <h3>Step 2: Install Control Plane</h3>
+      <p>Deploy the Control Plane (API + Web UI + PostgreSQL):</p>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">BASH</span>
@@ -75,20 +81,44 @@ cd streamspace</code></pre>
         </div>
         <pre><code>helm install streamspace ./chart \\
   --namespace streamspace \\
-  --create-namespace</code></pre>
+  --create-namespace \\
+  --set ingress.enabled=true \\
+  --set ingress.host=streamspace.example.com</code></pre>
       </div>
 
-      <h3>Step 3: Custom Configuration (Optional)</h3>
+      <h3>Step 3: Install K8s Agent</h3>
+      <p>Deploy the K8s Agent to your cluster (connects to Control Plane via WebSocket):</p>
+      <div class="code-block">
+        <div class="code-header">
+          <span class="code-lang">BASH</span>
+          <button class="copy-button">Copy</button>
+        </div>
+        <pre><code># Create RBAC resources
+kubectl apply -f agents/k8s-agent/deployments/rbac.yaml
+
+# Deploy agent
+kubectl apply -f agents/k8s-agent/deployments/deployment.yaml
+
+# Configure agent to connect to Control Plane
+kubectl set env deployment/streamspace-k8s-agent \\
+  AGENT_ID=k8s-prod-cluster \\
+  CONTROL_PLANE_URL=wss://streamspace.example.com \\
+  -n streamspace</code></pre>
+      </div>
+
+      <h3>Custom Configuration (Optional)</h3>
       <p>Create a <code>custom-values.yaml</code> file to customize your deployment:</p>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">YAML</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>controller:
-  config:
-    ingressDomain: "streamspace.example.com"
-    ingressClass: "traefik"
+        <pre><code>ingress:
+  enabled: true
+  host: "streamspace.example.com"
+  tls:
+    enabled: true
+    secretName: "streamspace-tls"
 
 postgresql:
   enabled: true
@@ -99,7 +129,12 @@ api:
   replicaCount: 2
 
 ui:
-  replicaCount: 2</code></pre>
+  replicaCount: 2
+
+k8sAgent:
+  enabled: true
+  agentId: "k8s-prod-cluster"
+  replicas: 1</code></pre>
       </div>
 
       <p>Install with custom values:</p>
@@ -124,11 +159,14 @@ ui:
         <pre><code># Check all pods are running
 kubectl get pods -n streamspace
 
-# Expected output:
-# streamspace-controller-xxx    1/1     Running
+# Expected output (v2.0-beta):
 # streamspace-api-xxx           1/1     Running
 # streamspace-ui-xxx            1/1     Running
-# postgresql-xxx                1/1     Running</code></pre>
+# streamspace-k8s-agent-xxx     1/1     Running
+# postgresql-xxx                1/1     Running
+
+# Verify agent registered with Control Plane
+kubectl logs -n streamspace deploy/streamspace-k8s-agent | grep "Connected to Control Plane"</code></pre>
       </div>
 
       <h2 id="first-session">Create Your First Session</h2>
@@ -146,28 +184,35 @@ kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
 open http://localhost:3000</code></pre>
       </div>
 
-      <h3>Or Create Session with kubectl</h3>
+      <h3>Create Session via Web UI</h3>
+      <ol>
+        <li>Navigate to <strong>Sessions</strong> in the sidebar</li>
+        <li>Click <strong>Create Session</strong></li>
+        <li>Select an application template (e.g., Firefox Browser)</li>
+        <li>Choose your K8s agent from the platform dropdown</li>
+        <li>Configure resources (2Gi memory recommended)</li>
+        <li>Click <strong>Create</strong></li>
+        <li>Wait for session to become <strong>Running</strong></li>
+        <li>Click <strong>Connect</strong> to open VNC viewer</li>
+      </ol>
+
+      <h3>Or Create Session via API</h3>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>kubectl apply -f - <<EOF
-apiVersion: stream.space/v1alpha1
-kind: Session
-metadata:
-  name: my-firefox
-  namespace: streamspace
-spec:
-  user: myuser
-  template: firefox-browser
-  state: running
-  resources:
-    memory: 2Gi
-    cpu: 1000m
-  persistentHome: true
-  idleTimeout: 30m
-EOF</code></pre>
+        <pre><code>curl -X POST https://streamspace.example.com/api/v1/sessions \\
+  -H "Authorization: Bearer YOUR_API_KEY" \\
+  -H "Content-Type: application/json" \\
+  -d '{
+    "template_id": "firefox-browser",
+    "agent_id": "k8s-prod-cluster",
+    "resources": {
+      "memory": "2Gi",
+      "cpu": "1000m"
+    }
+  }'</code></pre>
       </div>
 
       <h3>Check Session Status</h3>
@@ -176,29 +221,35 @@ EOF</code></pre>
           <span class="code-lang">BASH</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code># Get session details
-kubectl get session my-firefox -n streamspace
+        <pre><code># List all sessions via API
+curl https://streamspace.example.com/api/v1/sessions \\
+  -H "Authorization: Bearer YOUR_API_KEY"
 
-# Watch session become ready
-kubectl get session my-firefox -n streamspace -w
+# Check session pod on K8s cluster
+kubectl get pods -n streamspace -l app=session
 
-# Get session URL
-kubectl get session my-firefox -n streamspace -o jsonpath='{.status.url}'</code></pre>
+# View session logs
+kubectl logs -n streamspace -l app=session --tail=100</code></pre>
       </div>
 
       <h2 id="configuration">Configuration</h2>
 
-      <h3>Set Ingress Domain</h3>
-      <p>Configure the domain for session ingresses:</p>
+      <h3>Configure Agent Settings</h3>
+      <p>Customize K8s Agent behavior via environment variables:</p>
       <div class="code-block">
         <div class="code-header">
           <span class="code-lang">YAML</span>
           <button class="copy-button">Copy</button>
         </div>
-        <pre><code>controller:
+        <pre><code>k8sAgent:
+  enabled: true
+  agentId: "k8s-prod-cluster"
   config:
-    ingressDomain: "apps.example.com"
-    ingressClass: "traefik"</code></pre>
+    sessionNamespace: "streamspace-sessions"
+    defaultResources:
+      memory: "2Gi"
+      cpu: "1000m"
+    healthCheckInterval: "30s"</code></pre>
       </div>
 
       <h3>Configure Storage</h3>
@@ -210,7 +261,8 @@ kubectl get session my-firefox -n streamspace -o jsonpath='{.status.url}'</code>
         </div>
         <pre><code>storage:
   className: "nfs-client"
-  defaultSize: "50Gi"</code></pre>
+  defaultSize: "50Gi"
+  accessMode: "ReadWriteMany"</code></pre>
       </div>
 
       <h3>Enable Monitoring</h3>
@@ -223,6 +275,7 @@ kubectl get session my-firefox -n streamspace -o jsonpath='{.status.url}'</code>
   enabled: true
   prometheus:
     enabled: true
+    port: 9090
   grafana:
     enabled: true</code></pre>
       </div>
@@ -232,29 +285,21 @@ kubectl get session my-firefox -n streamspace -o jsonpath='{.status.url}'</code>
         <li><a href="docs.html">Read the full documentation</a></li>
         <li><a href="features.html">Explore all features</a></li>
         <li><a href="plugins.html">Learn about the plugin system</a></li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Check the roadmap</a></li>
-        <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contribute to the project</a></li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_DEPLOYMENT_GUIDE.md">v2.0 Deployment Guide</a></li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/docs/V2_AGENT_GUIDE.md">K8s Agent Operations</a></li>
+        <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Check the roadmap</a></li>
       </ul>
 
-      <h3>Add Template Repositories</h3>
-      <p>Add more application templates from Git repositories:</p>
-      <div class="code-block">
-        <div class="code-header">
-          <span class="code-lang">BASH</span>
-          <button class="copy-button">Copy</button>
-        </div>
-        <pre><code>kubectl apply -f - <<EOF
-apiVersion: stream.space/v1alpha1
-kind: Repository
-metadata:
-  name: my-templates
-  namespace: streamspace
-spec:
-  url: https://github.com/myorg/streamspace-templates
-  branch: main
-  syncInterval: 1h
-EOF</code></pre>
-      </div>
+      <h3>Add Application Templates</h3>
+      <p>Add templates via the Web UI Admin Portal:</p>
+      <ol>
+        <li>Navigate to <strong>Admin</strong> → <strong>Templates</strong></li>
+        <li>Click <strong>Add Template</strong></li>
+        <li>Enter template details (name, category, base image)</li>
+        <li>Configure default resources and VNC settings</li>
+        <li>Click <strong>Save</strong></li>
+      </ol>
+      <p>Or sync from a Git repository via API (200+ templates available in <a href="https://github.com/streamspace-dev/streamspace-templates">streamspace-templates</a>).</p>
 
       <h3>Configure User Quotas</h3>
       <p>Set resource limits per user via the Web UI or API:</p>
@@ -267,7 +312,7 @@ EOF</code></pre>
 
       <div class="mt-4">
         <a href="docs.html" class="button button-primary">Full Documentation</a>
-        <a href="https://github.com/JoshuaAFerguson/streamspace/issues" class="button button-secondary">Get Help</a>
+        <a href="https://github.com/streamspace-dev/streamspace/issues" class="button button-secondary">Get Help</a>
       </div>
     </main>
   </div>
@@ -284,23 +329,23 @@ EOF</code></pre>
           <li><a href="getting-started.html">Getting Started</a></li>
           <li><a href="docs.html">Documentation</a></li>
           <li><a href="plugins.html">Plugin Development</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">GitHub</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Resources</h3>
         <ul>
           <li><a href="features.html">Features</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/issues">Issues</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/ROADMAP.md">Roadmap</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/blob/main/CONTRIBUTING.md">Contributing</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/issues">Issues</a></li>
         </ul>
       </div>
       <div class="footer-section">
         <h3>Community</h3>
         <ul>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace/discussions">Discussions</a></li>
-          <li><a href="https://github.com/JoshuaAFerguson/streamspace">Star on GitHub</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace/discussions">Discussions</a></li>
+          <li><a href="https://github.com/streamspace-dev/streamspace">Star on GitHub</a></li>
         </ul>
       </div>
     </div>
