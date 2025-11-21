@@ -33,13 +33,15 @@ type SessionSpec struct {
 type StartSessionHandler struct {
 	kubeClient *kubernetes.Clientset
 	config     *AgentConfig
+	agent      *K8sAgent
 }
 
 // NewStartSessionHandler creates a new start session handler.
-func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig) *StartSessionHandler {
+func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig, agent *K8sAgent) *StartSessionHandler {
 	return &StartSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
+		agent:      agent,
 	}
 }
 
@@ -112,6 +114,14 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 
 	log.Printf("[StartSessionHandler] Session %s started successfully (pod IP: %s)", sessionID, podIP)
 
+	// Initialize VNC tunnel for this session
+	if h.agent != nil {
+		if err := h.agent.initVNCTunnelForSession(sessionID); err != nil {
+			log.Printf("[StartSessionHandler] Warning: Failed to init VNC tunnel: %v", err)
+			// Don't fail the command - VNC can be established later
+		}
+	}
+
 	// Return success result
 	return &CommandResult{
 		Success: true,
@@ -131,13 +141,15 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 type StopSessionHandler struct {
 	kubeClient *kubernetes.Clientset
 	config     *AgentConfig
+	agent      *K8sAgent
 }
 
 // NewStopSessionHandler creates a new stop session handler.
-func NewStopSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig) *StopSessionHandler {
+func NewStopSessionHandler(kubeClient *kubernetes.Clientset, config *AgentConfig, agent *K8sAgent) *StopSessionHandler {
 	return &StopSessionHandler{
 		kubeClient: kubeClient,
 		config:     config,
+		agent:      agent,
 	}
 }
 
@@ -158,9 +170,16 @@ func (h *StopSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 		return nil, fmt.Errorf("missing or invalid sessionId")
 	}
 
-	deletePVC := getBoolOrDefault(cmd.Payload, "deletePVC", false)
+	shouldDeletePVC := getBoolOrDefault(cmd.Payload, "deletePVC", false)
 
-	log.Printf("[StopSessionHandler] Deleting resources for session %s (deletePVC: %v)", sessionID, deletePVC)
+	log.Printf("[StopSessionHandler] Deleting resources for session %s (deletePVC: %v)", sessionID, shouldDeletePVC)
+
+	// Close VNC tunnel for this session
+	if h.agent != nil && h.agent.vncManager != nil {
+		if err := h.agent.vncManager.CloseTunnel(sessionID); err != nil {
+			log.Printf("[StopSessionHandler] Warning: Failed to close VNC tunnel: %v", err)
+		}
+	}
 
 	// Delete Deployment
 	if err := deleteDeployment(h.kubeClient, h.config.Namespace, sessionID); err != nil {
@@ -173,7 +192,7 @@ func (h *StopSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 	}
 
 	// Delete PVC if requested
-	if deletePVC {
+	if shouldDeletePVC {
 		if err := deletePVC(h.kubeClient, h.config.Namespace, sessionID); err != nil {
 			log.Printf("[StopSessionHandler] Warning: Failed to delete PVC: %v", err)
 		}

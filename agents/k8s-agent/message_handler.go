@@ -52,6 +52,12 @@ func (a *K8sAgent) handleMessage(messageBytes []byte) error {
 	case "shutdown":
 		return a.handleShutdownMessage(msg.Payload)
 
+	case "vnc_data":
+		return a.handleVNCDataMessage(msg.Payload)
+
+	case "vnc_close":
+		return a.handleVNCCloseMessage(msg.Payload)
+
 	default:
 		log.Printf("[K8sAgent] Unknown message type: %s", msg.Type)
 		return nil

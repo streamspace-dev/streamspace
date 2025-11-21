@@ -86,6 +86,12 @@ const (
 
 	// MessageTypeShutdown requests graceful agent shutdown
 	MessageTypeShutdown = "shutdown"
+
+	// MessageTypeVNCData carries VNC traffic from Control Plane to Agent
+	MessageTypeVNCData = "vnc_data"
+
+	// MessageTypeVNCClose closes a VNC tunnel
+	MessageTypeVNCClose = "vnc_close"
 )
 
 // Message types sent from Agent → Control Plane
@@ -104,6 +110,15 @@ const (
 
 	// MessageTypeStatus reports session state changes
 	MessageTypeStatus = "status"
+
+	// MessageTypeVNCReady indicates VNC tunnel is ready
+	MessageTypeVNCReady = "vnc_ready"
+
+	// MessageTypeVNCData carries VNC traffic from Agent to Control Plane
+	// (same name, direction determined by message flow)
+
+	// MessageTypeVNCError reports VNC tunnel error
+	MessageTypeVNCError = "vnc_error"
 )
 
 // CommandMessage is sent from Control Plane to Agent to execute a command.
@@ -284,4 +299,81 @@ type PongMessage struct {
 type ShutdownMessage struct {
 	// Reason for the shutdown request
 	Reason string `json:"reason,omitempty"`
+}
+
+// VNCDataMessage carries binary VNC traffic between Control Plane and Agent.
+//
+// VNC traffic is base64-encoded for transport over JSON WebSocket.
+// The tunnelId identifies which VNC session this data belongs to.
+//
+// Example:
+//
+//	{
+//	  "sessionId": "sess-456",
+//	  "data": "UkZCIDAwMy4wMDgK..." (base64-encoded VNC data)
+//	}
+type VNCDataMessage struct {
+	// SessionID identifies which session this VNC data is for
+	SessionID string `json:"sessionId"`
+
+	// Data is the base64-encoded VNC binary data
+	Data string `json:"data"`
+}
+
+// VNCReadyMessage indicates a VNC tunnel is ready for connections.
+//
+// Sent from Agent to Control Plane when port-forward tunnel is established.
+//
+// Example:
+//
+//	{
+//	  "sessionId": "sess-456",
+//	  "vncPort": 5900,
+//	  "podName": "sess-456-abc123"
+//	}
+type VNCReadyMessage struct {
+	// SessionID identifies which session has VNC ready
+	SessionID string `json:"sessionId"`
+
+	// VNCPort is the local VNC port on the agent (typically 5900 or 3000)
+	VNCPort int `json:"vncPort"`
+
+	// PodName is the name of the pod (K8s-specific metadata)
+	PodName string `json:"podName,omitempty"`
+}
+
+// VNCCloseMessage requests closing a VNC tunnel.
+//
+// Sent from Control Plane to Agent when client disconnects.
+//
+// Example:
+//
+//	{
+//	  "sessionId": "sess-456",
+//	  "reason": "client_disconnect"
+//	}
+type VNCCloseMessage struct {
+	// SessionID identifies which session's VNC tunnel to close
+	SessionID string `json:"sessionId"`
+
+	// Reason explains why the tunnel is being closed (optional)
+	Reason string `json:"reason,omitempty"`
+}
+
+// VNCErrorMessage reports a VNC tunnel error.
+//
+// Sent from Agent to Control Plane when VNC tunnel fails.
+//
+// Example:
+//
+//	{
+//	  "sessionId": "sess-456",
+//	  "error": "Port-forward failed: pod not found"
+//	}
+type VNCErrorMessage struct {
+	// SessionID identifies which session had the error
+	SessionID string `json:"sessionId"`
+
+	// Error describes what went wrong
+	Error string `json:"error"`
 }

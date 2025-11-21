@@ -36,7 +36,6 @@ import (
 	"os/signal"
 	"sync"
 	"syscall"
-	"time"
 
 	"github.com/gorilla/websocket"
 	"k8s.io/client-go/kubernetes"
@@ -54,6 +53,12 @@ type K8sAgent struct {
 
 	// kubeClient is the Kubernetes API client
 	kubeClient *kubernetes.Clientset
+
+	// restConfig is the REST config for Kubernetes API (needed for port-forward)
+	restConfig *rest.Config
+
+	// vncManager manages VNC tunnels for sessions
+	vncManager *VNCTunnelManager
 
 	// wsConn is the WebSocket connection to Control Plane
 	wsConn *websocket.Conn
@@ -75,8 +80,8 @@ type K8sAgent struct {
 //
 // It initializes the Kubernetes client and prepares command handlers.
 func NewK8sAgent(config *AgentConfig) (*K8sAgent, error) {
-	// Create Kubernetes client
-	kubeClient, err := createKubernetesClient(config.KubeConfig)
+	// Create Kubernetes client and REST config
+	kubeClient, restConfig, err := createKubernetesClient(config.KubeConfig)
 	if err != nil {
 		return nil, err
 	}
@@ -84,9 +89,13 @@ func NewK8sAgent(config *AgentConfig) (*K8sAgent, error) {
 	agent := &K8sAgent{
 		config:     config,
 		kubeClient: kubeClient,
+		restConfig: restConfig,
 		stopChan:   make(chan struct{}),
 		doneChan:   make(chan struct{}),
 	}
+
+	// Initialize VNC tunnel manager
+	agent.vncManager = NewVNCTunnelManager(kubeClient, restConfig, config.Namespace, agent)
 
 	// Initialize command handlers
 	agent.initCommandHandlers()
@@ -97,7 +106,8 @@ func NewK8sAgent(config *AgentConfig) (*K8sAgent, error) {
 // createKubernetesClient creates a Kubernetes client from config.
 //
 // If kubeConfigPath is empty, it uses in-cluster config.
-func createKubernetesClient(kubeConfigPath string) (*kubernetes.Clientset, error) {
+// Returns both the clientset and REST config (needed for port-forward).
+func createKubernetesClient(kubeConfigPath string) (*kubernetes.Clientset, *rest.Config, error) {
 	var config *rest.Config
 	var err error
 
@@ -112,22 +122,22 @@ func createKubernetesClient(kubeConfigPath string) (*kubernetes.Clientset, error
 	}
 
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
 	clientset, err := kubernetes.NewForConfig(config)
 	if err != nil {
-		return nil, err
+		return nil, nil, err
 	}
 
-	return clientset, nil
+	return clientset, config, nil
 }
 
 // initCommandHandlers initializes the command handler registry.
 func (a *K8sAgent) initCommandHandlers() {
 	a.commandHandlers = map[string]CommandHandler{
-		"start_session":     NewStartSessionHandler(a.kubeClient, a.config),
-		"stop_session":      NewStopSessionHandler(a.kubeClient, a.config),
+		"start_session":     NewStartSessionHandler(a.kubeClient, a.config, a),
+		"stop_session":      NewStopSessionHandler(a.kubeClient, a.config, a),
 		"hibernate_session": NewHibernateSessionHandler(a.kubeClient, a.config),
 		"wake_session":      NewWakeSessionHandler(a.kubeClient, a.config),
 	}
@@ -176,6 +186,12 @@ func (a *K8sAgent) WaitForShutdown() {
 
 // shutdown performs graceful shutdown of the agent.
 func (a *K8sAgent) shutdown() {
+	// Close all VNC tunnels
+	if a.vncManager != nil {
+		log.Println("[K8sAgent] Closing all VNC tunnels...")
+		a.vncManager.CloseAll()
+	}
+
 	a.connMutex.Lock()
 	defer a.connMutex.Unlock()
 
