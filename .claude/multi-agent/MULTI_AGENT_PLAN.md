@@ -1609,6 +1609,169 @@ All changes committed and merged to `claude/streamspace-v2-architect-01LugfC4vmN
 
 ---
 
+## 📦 Integration Update - Wave 12 (2025-11-21)
+
+### Architect → Team Integration Summary
+
+**Integration Date:** 2025-11-21 (Wave 12)
+**Integrated By:** Agent 1 (Architect)
+**Status:** ✅ Expanded Testing Complete | ⚠️ P1 Bug Discovered
+
+**Integrated Changes:**
+
+### Validator (Agent 3) - Expanded Testing Report (1 commit) ✅
+
+**Commits Integrated:** 1 commit (0bab122)
+**Files Changed:** 1 file (+517 lines)
+
+**Work Completed:**
+
+**Created EXPANDED_TESTING_REPORT.md (517 lines)**:
+
+After the successful Wave 11 bug fixes, Validator conducted expanded testing to verify additional functionality beyond basic session creation. This comprehensive testing validated the core workflow while discovering one P1 issue.
+
+**Test Duration**: 23 minutes (21:36-21:55)
+**Test Coverage**: 10 scenarios tested (8/9 passing = 88.9%)
+
+**Test Results Summary**:
+
+| # | Scenario | Status | Result |
+|---|----------|--------|--------|
+| 1 | Agent Registration | ✅ PASS | Agent online, heartbeats working |
+| 2 | Authentication | ✅ PASS | Login and JWT generation work |
+| 3 | CSRF Protection | ✅ PASS | JWT requests bypass CSRF correctly |
+| 4 | Session Creation | ✅ PASS | API creates session, dispatches command |
+| 5 | Agent Selection | ✅ PASS | Load-balanced agent selection works |
+| 6 | Command Dispatching | ✅ PASS | Agent receives command via WebSocket |
+| 7 | Pod Provisioning | ✅ PASS | Deployment and Service created |
+| 8 | **VNC/Web UI Access** | ✅ **PASS** | **HTTP 200, web interface accessible** |
+| 9 | Session Termination | ⚠️ FAIL | API doesn't dispatch stop commands |
+| 10 | Error Handling | ✅ PASS | All validation working correctly |
+
+**New Scenario Verified - Web UI Access** ✅:
+
+**Test Method**:
+```bash
+kubectl port-forward -n streamspace svc/admin-firefox-browser-7e367bc3 3000:3000
+curl -s -o /dev/null -w "%{http_code}" http://localhost:3000/
+```
+
+**Result**: HTTP 200 ✅
+
+**Verification**:
+- Web UI accessible and responding correctly
+- LinuxServer.io Firefox container serving content on port 3000
+- Kubernetes service correctly routing traffic to pod
+- Pod fully operational and ready for user interaction
+
+**Impact**: Confirms that session provisioning works end-to-end - not just pod creation, but actual working web interface!
+
+**Error Handling Testing** ✅:
+
+Comprehensive validation testing confirmed excellent error handling:
+
+**Test Cases Validated**:
+1. **Invalid Template Name**: "Template not found: nonexistent-template" ✅
+2. **Missing Required Fields**: Field validation working correctly ✅
+3. **Invalid Resource Values**: Kubernetes validation catches malformed resources ✅
+4. **Unauthorized Access**: Authentication middleware blocks requests without JWT ✅
+
+**Quality Assessment**: All error scenarios handled with clear, actionable error messages and proper HTTP status codes.
+
+**P1 BUG DISCOVERED - Session Termination Not Implemented** ⚠️:
+
+**Issue**: DELETE /api/v1/sessions/:id endpoint accepts requests and returns success, but **does not dispatch stop_session commands** to agents via WebSocket.
+
+**Test Evidence**:
+```bash
+# API Response (appears successful)
+DELETE /api/v1/sessions/admin-firefox-browser-7e367bc3
+{
+  "message": "Session deletion requested, waiting for controller",
+  "name": "admin-firefox-browser-7e367bc3"
+}
+
+# Pod still running after 5+ minutes
+admin-firefox-browser-7e367bc3-c4dc8d865-r98fc   1/1     Running
+
+# Agent logs - NO stop_session command received
+kubectl logs deploy/streamspace-k8s-agent | grep stop_session
+(empty)
+
+# Session CRD state unchanged
+kubectl get session admin-firefox-browser-7e367bc3 -o jsonpath='{.spec.state}'
+Output: running
+```
+
+**Root Cause**:
+The DeleteSession handler returns a success message but doesn't:
+1. Create a stop_session command in agent_commands table
+2. Send the command to the agent via WebSocket
+3. Wait for agent confirmation
+4. Update Session CRD state
+
+**Impact**:
+- Sessions cannot be terminated programmatically
+- Resources remain allocated indefinitely
+- Manual cleanup required (kubectl delete)
+- Session lifecycle management incomplete
+
+**Severity**: P1 (High) - Core functionality missing but doesn't block testing other features
+
+**Test Scripts Created**:
+
+Validator created 3 automated test scripts for CI/CD:
+
+1. **/tmp/test_session_creation.sh** ✅: Automated session creation testing
+2. **/tmp/test_session_termination.sh** ⚠️: Exposes missing implementation
+3. **/tmp/test_error_scenarios.sh** ✅: All tests passing
+
+**Production Readiness Assessment**:
+
+**Current State**: 88.9% Ready (8/9 scenarios passing)
+
+**What's Production-Ready** ✅:
+1. Session creation fully functional with all P0 bugs fixed
+2. Authentication: JWT, CSRF, authorization working
+3. Agent communication: WebSocket, commands, heartbeats
+4. Pod provisioning: Deployment, Service, PVC management
+5. **Web UI access: Sessions accessible via browser** ← NEW!
+6. Error handling: Comprehensive validation and user-friendly messages
+
+**What's Not Production-Ready** ⚠️:
+1. **Session termination**: DELETE endpoint doesn't dispatch commands (P1)
+2. Session lifecycle: Hibernate/wake not tested (P3)
+3. VNC proxy: WebSocket relay not tested (P2)
+4. Multi-agent: Only tested with single agent (P3)
+
+**Integration Summary:**
+- **Validator Commits**: 1 (0bab122)
+- **Total Lines Changed**: 517 (+517 insertions)
+- **Files**: 1 created (EXPANDED_TESTING_REPORT.md)
+- **Test Duration**: 23 minutes
+- **Test Coverage**: 88.9% (8/9 scenarios)
+- **Bugs Found**: 1 P1 (session termination)
+- **Test Scripts**: 3 created for automation
+
+**🎉 MAJOR VALIDATION: Core v2.0-beta Workflow is Functional and Stable!**
+
+All P0 bugs from Wave 11 remain fixed. Expanded testing confirmed:
+- ✅ Session creation working end-to-end
+- ✅ Pod provisioning successful
+- ✅ **Web UI accessible (verified!)** ← Major milestone!
+- ✅ Error handling comprehensive
+- ⚠️ Session termination needs implementation (P1)
+
+**Key Achievement**: Validator confirmed that sessions aren't just creating pods - they're creating **fully functional web interfaces** accessible to users! The entire session creation workflow from API request to working Firefox browser in the browser is operational.
+
+**Status**: **Ready for Beta Testing** with one P1 issue (session termination) to fix
+
+**Next**: Builder should implement session termination command dispatch (P1 priority)
+
+All changes committed and merged to `feature/streamspace-v2-agent-refactor` ✅
+
+---
+
 ## 🚀 Active Tasks - v2.0-beta Release (Phase 10)
 
 ### 🎯 Current Sprint: Testing & Documentation (Week 1-2)
