@@ -110,7 +110,7 @@ spec:
               secretKeyRef:
                 name: {{ if .Values.auth.admin.existingSecret }}{{ .Values.auth.admin.existingSecret }}{{ else }}{{ include "streamspace.fullname" . }}-admin-credentials{{ end }}
                 key: password
-                optional: true  # Don't fail if secret doesn't exist
+                optional: false  # REQUIRED: Fail fast if secret doesn't exist
           # Admin password reset (Priority 3: Manual override)
           # Set this to reset the admin password, then remove after restart
           # - name: ADMIN_PASSWORD_RESET
