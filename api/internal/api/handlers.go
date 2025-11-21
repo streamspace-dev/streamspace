@@ -686,17 +686,17 @@ func (h *Handler) CreateSession(c *gin.Context) {
 
 	// 2. Select an agent to handle this session (load-balanced by active sessions)
 	// Calculate active sessions dynamically from sessions table for accurate load balancing
-	// Note: sessions.controller_id maps to agents.agent_id in v2.0-beta architecture
+	// v2.0-beta: Use agent_id column (not controller_id which is legacy v1.x)
 	var agentID string
 	err = h.db.DB().QueryRowContext(ctx, `
 		SELECT a.agent_id
 		FROM agents a
 		LEFT JOIN (
-			SELECT controller_id, COUNT(*) as active_sessions
+			SELECT agent_id, COUNT(*) as active_sessions
 			FROM sessions
 			WHERE state IN ('running', 'starting')
-			GROUP BY controller_id
-		) s ON a.agent_id = s.controller_id
+			GROUP BY agent_id
+		) s ON a.agent_id = s.agent_id
 		WHERE a.status = 'online' AND a.platform = $1
 		ORDER BY COALESCE(s.active_sessions, 0) ASC
 		LIMIT 1
@@ -807,6 +807,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		State:              "pending",
 		Namespace:          h.namespace,
 		Platform:           h.platform,
+		AgentID:            agentID, // v2.0-beta: Track which agent is managing this session
 		Memory:             memory,
 		CPU:                cpu,
 		PersistentHome:     session.PersistentHome,
@@ -920,11 +921,11 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 
 	// 1. Verify session exists in DATABASE and get agent managing it
 	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
-	var controllerID string
+	var agentID sql.NullString // Use sql.NullString for nullable column
 	var currentState string
 	err := h.db.DB().QueryRowContext(ctx, `
-		SELECT controller_id, state FROM sessions WHERE id = $1
-	`, sessionID).Scan(&controllerID, &currentState)
+		SELECT agent_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&agentID, &currentState)
 
 	if err == sql.ErrNoRows {
 		log.Printf("Session %s not found in database", sessionID)
@@ -940,6 +941,16 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to query session",
 			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session has an agent assigned
+	if !agentID.Valid || agentID.String == "" {
+		log.Printf("Session %s has no agent assigned (agent_id is NULL or empty)", sessionID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session not ready",
+			"message": "Session has no agent assigned - cannot terminate. Session may still be pending or failed to start.",
 		})
 		return
 	}
@@ -967,7 +978,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
 		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
 		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
-	`, commandID, controllerID, sessionID, "stop_session", payload, now).Scan(
+	`, commandID, agentID.String, sessionID, "stop_session", payload, now).Scan(
 		&command.ID,
 		&command.CommandID,
 		&command.AgentID,
@@ -1012,7 +1023,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 			})
 			return
 		}
-		log.Printf("Dispatched stop_session command %s to agent %s for session %s", commandID, controllerID, sessionID)
+		log.Printf("Dispatched stop_session command %s to agent %s for session %s", commandID, agentID.String, sessionID)
 	} else {
 		log.Printf("Warning: CommandDispatcher is nil, stop command %s not dispatched", commandID)
 	}

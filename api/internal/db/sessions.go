@@ -26,6 +26,7 @@ type Session struct {
 	URL                string     `json:"url,omitempty"`
 	Namespace          string     `json:"namespace"`
 	Platform           string     `json:"platform"`
+	AgentID            string     `json:"agent_id,omitempty"` // v2.0-beta: Agent managing this session
 	PodName            string     `json:"pod_name,omitempty"`
 	Memory             string     `json:"memory,omitempty"`
 	CPU                string     `json:"cpu,omitempty"`
@@ -62,21 +63,22 @@ func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 	query := `
 		INSERT INTO sessions (
 			id, user_id, team_id, template_name, state, app_type,
-			active_connections, url, namespace, platform, pod_name,
+			active_connections, url, namespace, platform, agent_id, pod_name,
 			memory, cpu, persistent_home, idle_timeout, max_session_duration,
 			created_at, updated_at, last_connection, last_disconnect, last_activity
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22)
 		ON CONFLICT (id) DO UPDATE SET
 			state = EXCLUDED.state,
 			url = EXCLUDED.url,
+			agent_id = EXCLUDED.agent_id,
 			pod_name = EXCLUDED.pod_name,
 			updated_at = EXCLUDED.updated_at
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
 		session.ID, session.UserID, nullString(session.TeamID), session.TemplateName, session.State, session.AppType,
-		session.ActiveConnections, session.URL, session.Namespace, session.Platform, session.PodName,
+		session.ActiveConnections, session.URL, session.Namespace, session.Platform, nullString(session.AgentID), session.PodName,
 		session.Memory, session.CPU, session.PersistentHome, session.IdleTimeout, session.MaxSessionDuration,
 		session.CreatedAt, session.UpdatedAt, session.LastConnection, session.LastDisconnect, session.LastActivity,
 	)
