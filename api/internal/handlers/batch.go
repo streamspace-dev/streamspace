@@ -139,7 +139,11 @@ func (h *BatchHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // TerminateSessions terminates multiple sessions
 func (h *BatchHandler) TerminateSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -148,6 +152,11 @@ func (h *BatchHandler) TerminateSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -181,7 +190,11 @@ func (h *BatchHandler) TerminateSessions(c *gin.Context) {
 
 // HibernateSessions hibernates multiple sessions
 func (h *BatchHandler) HibernateSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -190,6 +203,11 @@ func (h *BatchHandler) HibernateSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -221,7 +239,11 @@ func (h *BatchHandler) HibernateSessions(c *gin.Context) {
 
 // WakeSessions wakes multiple hibernated sessions
 func (h *BatchHandler) WakeSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -230,6 +252,11 @@ func (h *BatchHandler) WakeSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -261,7 +288,11 @@ func (h *BatchHandler) WakeSessions(c *gin.Context) {
 
 // DeleteSessions deletes multiple sessions
 func (h *BatchHandler) DeleteSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -270,6 +301,11 @@ func (h *BatchHandler) DeleteSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -301,7 +337,11 @@ func (h *BatchHandler) DeleteSessions(c *gin.Context) {
 
 // UpdateSessionTags updates tags for multiple sessions
 func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -315,8 +355,24 @@ func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
 		return
 	}
 
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
+		return
+	}
+
+	if len(req.Tags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tags cannot be empty"})
+		return
+	}
+
 	if req.Operation == "" {
 		req.Operation = "replace"
+	}
+
+	validOperations := map[string]bool{"add": true, "remove": true, "replace": true}
+	if !validOperations[req.Operation] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "operation must be one of: add, remove, replace"})
+		return
 	}
 
 	ctx := context.Background()
@@ -347,7 +403,11 @@ func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
 
 // UpdateSessionResources updates resources for multiple sessions
 func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -357,6 +417,16 @@ func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
+		return
+	}
+
+	if len(req.Resources) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "resources cannot be empty"})
 		return
 	}
 
@@ -386,7 +456,11 @@ func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
 
 // DeleteSnapshots deletes multiple snapshots
 func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -395,6 +469,11 @@ func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SnapshotIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "snapshotIds cannot be empty"})
 		return
 	}
 
@@ -426,7 +505,11 @@ func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
 
 // CreateSnapshots creates snapshots for multiple sessions
 func (h *BatchHandler) CreateSnapshots(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -436,6 +519,11 @@ func (h *BatchHandler) CreateSnapshots(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -499,7 +587,11 @@ func (h *BatchHandler) DeleteTemplates(c *gin.Context) {
 
 // ListBatchJobs lists user's batch jobs
 func (h *BatchHandler) ListBatchJobs(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -557,7 +649,11 @@ func (h *BatchHandler) ListBatchJobs(c *gin.Context) {
 // GetBatchJob retrieves a specific batch job
 func (h *BatchHandler) GetBatchJob(c *gin.Context) {
 	jobID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -604,7 +700,11 @@ func (h *BatchHandler) GetBatchJob(c *gin.Context) {
 // CancelBatchJob cancels a running batch job
 func (h *BatchHandler) CancelBatchJob(c *gin.Context) {
 	jobID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()

@@ -394,8 +394,6 @@ func TestGetFeaturedTemplates_Success(t *testing.T) {
 
 // TestAddRating_Success tests adding a template rating
 func TestAddRating_Success(t *testing.T) {
-	t.Skip("Skipped: Handler bug at catalog.go:470,630 - updateTemplateRating expects *gin.Context but receives context.Context")
-
 	handler, mock, cleanup := setupCatalogTest(t)
 	defer cleanup()
 
@@ -532,8 +530,6 @@ func TestGetRatings_Success(t *testing.T) {
 
 // TestDeleteRating_Success tests deleting a rating
 func TestDeleteRating_Success(t *testing.T) {
-	t.Skip("Skipped: Handler bug at catalog.go:575,630 - updateTemplateRating expects *gin.Context but receives context.Context")
-
 	handler, mock, cleanup := setupCatalogTest(t)
 	defer cleanup()
 

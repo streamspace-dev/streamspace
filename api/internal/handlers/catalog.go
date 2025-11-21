@@ -467,7 +467,7 @@ func (h *CatalogHandler) AddRating(c *gin.Context) {
 	}
 
 	// Update template aggregated rating
-	h.updateTemplateRating(c.Request.Context(), templateID)
+	h.updateTemplateRating(c, templateID)
 
 	c.JSON(http.StatusCreated, gin.H{
 		"message": "Rating submitted successfully",
@@ -572,7 +572,7 @@ func (h *CatalogHandler) DeleteRating(c *gin.Context) {
 	}
 
 	// Update template aggregated rating
-	h.updateTemplateRating(c.Request.Context(), templateID)
+	h.updateTemplateRating(c, templateID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"message": "Rating deleted successfully",
@@ -626,8 +626,8 @@ func (h *CatalogHandler) RecordInstall(c *gin.Context) {
 }
 
 // updateTemplateRating updates the aggregated rating for a template
-func (h *CatalogHandler) updateTemplateRating(ctx interface{}, templateID string) {
-	h.db.DB().ExecContext(ctx.(*gin.Context).Request.Context(), `
+func (h *CatalogHandler) updateTemplateRating(c *gin.Context, templateID string) {
+	h.db.DB().ExecContext(c.Request.Context(), `
 		UPDATE catalog_templates ct
 		SET
 			avg_rating = COALESCE((
