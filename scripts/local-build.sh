@@ -181,12 +181,13 @@ main() {
 
     # Allow building individual components
     if [ $# -eq 0 ]; then
-        # Build all components (v2.0: includes K8s Agent)
+        # Build all v2.0-beta components (Docker controller deferred to v2.1)
         build_kubernetes_controller
         build_api
         build_ui
         build_k8s_agent
-        build_docker_controller
+        # Note: docker-controller intentionally excluded (deferred to v2.1)
+        # Build manually with: ./scripts/local-build.sh docker-controller
     else
         # Build specific components
         for component in "$@"; do
@@ -221,6 +222,15 @@ main() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     log_success "All images built successfully!"
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
+    echo ""
+    log_info "v2.0-beta Components Built:"
+    echo "  ✓ Kubernetes Controller (CRD management)"
+    echo "  ✓ API Server (Control Plane)"
+    echo "  ✓ UI (Web interface)"
+    echo "  ✓ K8s Agent (Session management via agent protocol)"
+    echo ""
+    log_info "Deferred to v2.1:"
+    echo "  • Docker Controller (build manually if needed)"
     echo ""
     log_info "Next steps:"
     echo "  1. Deploy to local cluster: ./scripts/local-deploy.sh"
