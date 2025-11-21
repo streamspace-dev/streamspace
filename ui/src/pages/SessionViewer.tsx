@@ -555,6 +555,38 @@ export default function SessionViewer() {
               </Box>
             )}
 
+            {/* v2.0 Platform/Agent information */}
+            {session.platform && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Platform
+                </Typography>
+                <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                  {session.platform}
+                </Typography>
+              </Box>
+            )}
+
+            {session.agent_id && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Agent ID
+                </Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                  {session.agent_id}
+                </Typography>
+              </Box>
+            )}
+
+            {session.region && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Region
+                </Typography>
+                <Typography variant="body2">{session.region}</Typography>
+              </Box>
+            )}
+
             <Box>
               <Typography variant="caption" color="text.secondary">
                 Active Connections
