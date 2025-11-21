@@ -28,7 +28,7 @@ controller:
 
   # Leader election for high availability
   leaderElection:
-    enabled: false  # Enable when replicaCount > 1
+    enabled: false # Enable when replicaCount > 1
 
   resources:
     requests:
@@ -119,7 +119,7 @@ api:
     ginMode: release
 
     # CORS settings
-    corsOrigins: "*"  # Restrict in production
+    corsOrigins: "*" # Restrict in production
 
     # Repository sync (deprecated - use repositories section below)
     syncInterval: "1h"
@@ -127,10 +127,10 @@ api:
 
     # Default user quota settings (applied to new users)
     quota:
-      defaultMaxSessions: 5        # Maximum concurrent sessions per user
-      defaultMaxCPU: "4000m"        # Maximum CPU allocation (4 cores)
-      defaultMaxMemory: "16Gi"      # Maximum memory allocation
-      defaultMaxStorage: "100Gi"    # Maximum persistent storage
+      defaultMaxSessions: 5 # Maximum concurrent sessions per user
+      defaultMaxCPU: "4000m" # Maximum CPU allocation (4 cores)
+      defaultMaxMemory: "16Gi" # Maximum memory allocation
+      defaultMaxStorage: "100Gi" # Maximum persistent storage
 
   # Authentication configuration
   auth:
@@ -139,92 +139,8 @@ api:
 
     # JWT configuration
     jwt:
-      secret: ""  # Set via existingSecret or auto-generate
+      secret: "" # Set via existingSecret or auto-generate
       expiration: 24h
-
-## Admin User Configuration
-# Configure the initial admin user credentials
-auth:
-  admin:
-    # Admin password (leave empty for auto-generation)
-    # ⚠️ SECURITY: For production, provide a secure password or use existingSecret
-    password: ""  # Empty = auto-generate 32-character random password
-
-    # Admin email
-    email: "admin@streamspace.local"
-
-    # Use existing secret for admin credentials (optional)
-    # If set, password and email above will be ignored
-    existingSecret: ""
-    # Keys in the existing secret:
-    # - username: Admin username (default: admin)
-    # - password: Admin password
-    # - email: Admin email
-
-    # SAML SSO configuration
-    saml:
-      enabled: false
-
-      # SAML provider: okta, azuread, google, auth0, keycloak, authentik, generic
-      provider: generic
-
-      # Entity ID (SP identifier)
-      entityID: ""  # e.g., https://streamspace.example.com
-
-      # IdP Metadata (choose one)
-      metadataURL: ""  # URL to fetch IdP metadata
-      metadataXML: ""  # Or provide XML directly
-
-      # Assertion Consumer Service URL
-      acsURL: ""  # e.g., https://streamspace.example.com/saml/acs
-
-      # Single Logout URL
-      sloURL: ""  # e.g., https://streamspace.example.com/saml/slo
-
-      # Certificate and private key (for signing requests)
-      certificate: ""  # Path to certificate file or PEM content
-      privateKey: ""   # Path to private key file or PEM content
-
-      # Or use existing secret
-      existingSecret: ""
-      existingSecretCertKey: "saml-cert"
-      existingSecretKeyKey: "saml-key"
-
-      # SAML options
-      allowIDPInitiated: true
-      signRequest: true
-      forceAuthn: false
-
-      # Attribute mapping (maps SAML attributes to user fields)
-      attributeMapping:
-        email: ""      # Leave empty to use provider defaults
-        username: ""
-        firstName: ""
-        lastName: ""
-        groups: ""
-
-      # Provider-specific configuration (optional overrides)
-      okta:
-        domain: ""     # e.g., mycompany.okta.com
-        appID: ""
-
-      azuread:
-        tenantID: ""   # Azure AD tenant ID
-
-      google:
-        idpID: ""      # Google Workspace IdP ID
-
-      auth0:
-        domain: ""
-        clientID: ""
-
-      keycloak:
-        domain: ""
-        realm: ""
-
-      authentik:
-        domain: ""
-        slug: ""
 
   # Service
   service:
@@ -254,7 +170,7 @@ auth:
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: false  # Needs to write to /tmp for repo clones
+    readOnlyRootFilesystem: false # Needs to write to /tmp for repo clones
 
   # Autoscaling
   autoscaling:
@@ -303,7 +219,7 @@ ui:
   podSecurityContext:
     fsGroup: 101
     runAsNonRoot: true
-    runAsUser: 101  # nginx user
+    runAsUser: 101 # nginx user
 
   securityContext:
     allowPrivilegeEscalation: false
@@ -390,12 +306,12 @@ postgresql:
 
 ## NATS Message Broker (Required for multi-platform support)
 nats:
-  enabled: true  # Required for event communication between API and controllers
+  enabled: true # Required for event communication between API and controllers
 
   # Use external NATS
   external:
     enabled: false
-    url: ""  # e.g., "nats://nats.example.com:4222"
+    url: "" # e.g., "nats://nats.example.com:4222"
     user: ""
     password: ""
     existingSecret: ""
@@ -451,7 +367,7 @@ nats:
 
 ## Redis Cache (Optional)
 redis:
-  enabled: false  # Set to true to enable caching
+  enabled: false # Set to true to enable caching
 
   # Use external Redis
   external:
@@ -482,7 +398,7 @@ redis:
 
     # Persistent volume (optional for cache)
     persistence:
-      enabled: false  # Usually not needed for cache
+      enabled: false # Usually not needed for cache
       storageClass: ""
       size: 5Gi
       accessMode: ReadWriteOnce
@@ -502,16 +418,16 @@ redis:
     # Redis configuration
     config:
       maxMemory: "200mb"
-      maxMemoryPolicy: "allkeys-lru"  # Evict least recently used keys
-      appendOnly: "no"  # Don't persist to disk for cache
+      maxMemoryPolicy: "allkeys-lru" # Evict least recently used keys
+      appendOnly: "no" # Don't persist to disk for cache
 
   # Cache TTL configuration (used by API)
   ttl:
-    sessions: 30s        # Session lists
-    templates: 5m        # Template catalog
-    catalog: 10m         # External catalog data
-    config: 5m           # Configuration values
-    cluster: 1m          # Kubernetes cluster resources
+    sessions: 30s # Session lists
+    templates: 5m # Template catalog
+    catalog: 10m # External catalog data
+    config: 5m # Configuration values
+    cluster: 1m # Kubernetes cluster resources
 
 ## Ingress
 ingress:
@@ -555,7 +471,7 @@ secrets:
   # ⚠️ SECURITY WARNING: Change this password before deploying to production!
   # Generate a secure password with: openssl rand -base64 32
   # Or use existingSecret below with a properly managed secret
-  postgresPassword: "changeme"  # DEFAULT - CHANGE FOR PRODUCTION!
+  postgresPassword: "changeme" # DEFAULT - CHANGE FOR PRODUCTION!
 
   # Or use existing secret
   existingSecret: ""
@@ -570,13 +486,13 @@ templates:
 
   # Categories to deploy from bundled templates
   categories:
-    browsers: true      # Firefox only (minimal default)
-    development: false  # Use external repository
+    browsers: true # Firefox only (minimal default)
+    development: false # Use external repository
     productivity: false # Use external repository
-    design: false       # Use external repository
-    media: false        # Use external repository
-    gaming: false       # Use external repository
-    webtop: false       # Use external repository
+    design: false # Use external repository
+    media: false # Use external repository
+    gaming: false # Use external repository
+    webtop: false # Use external repository
 
 ## External Repositories
 # StreamSpace can sync templates and plugins from external Git repositories
@@ -586,17 +502,17 @@ repositories:
     enabled: true
     url: https://github.com/JoshuaAFerguson/streamspace-templates
     branch: main
-    syncInterval: 1h  # How often to sync (e.g., 15m, 1h, 24h)
+    syncInterval: 1h # How often to sync (e.g., 15m, 1h, 24h)
 
     # Categories to sync from external repository
     categories:
-      browsers: true      # Firefox, Chromium, Brave, LibreWolf
-      development: true   # VS Code, GitHub Desktop
-      productivity: true  # LibreOffice, Calligra
-      design: true        # GIMP, Krita, Inkscape, Blender
-      media: true         # Audacity, Kdenlive
-      gaming: true        # DuckStation, Dolphin
-      webtop: true        # Desktop environments
+      browsers: true # Firefox, Chromium, Brave, LibreWolf
+      development: true # VS Code, GitHub Desktop
+      productivity: true # LibreOffice, Calligra
+      design: true # GIMP, Krita, Inkscape, Blender
+      media: true # Audacity, Kdenlive
+      gaming: true # DuckStation, Dolphin
+      webtop: true # Desktop environments
 
   # Plugin repository
   plugins:
@@ -607,12 +523,11 @@ repositories:
 
     # Auto-install official plugins
     autoInstall:
-      official: false  # Set to true to auto-install all official plugins
+      official: false # Set to true to auto-install all official plugins
       community: false # Set to true to auto-install all community plugins (not recommended)
 
     # Specific plugins to auto-install
-    install:
-      []
+    install: []
       # - session-recorder
       # - audit-logger
       # - slack-integration
@@ -698,3 +613,86 @@ commonLabels: {}
 
 ## Common annotations
 commonAnnotations: {}
+## Admin User Configuration
+# Configure the initial admin user credentials
+auth:
+  admin:
+    # Admin password (leave empty for auto-generation)
+    # ⚠️ SECURITY: For production, provide a secure password or use existingSecret
+    password: "" # Empty = auto-generate 32-character random password
+
+    # Admin email
+    email: "admin@streamspace.local"
+
+    # Use existing secret for admin credentials (optional)
+    # If set, password and email above will be ignored
+    existingSecret: ""
+    # Keys in the existing secret:
+    # - username: Admin username (default: admin)
+    # - password: Admin password
+    # - email: Admin email
+
+  # SAML SSO configuration
+  saml:
+    enabled: false
+
+    # SAML provider: okta, azuread, google, auth0, keycloak, authentik, generic
+    provider: generic
+
+    # Entity ID (SP identifier)
+    entityID: "" # e.g., https://streamspace.example.com
+
+    # IdP Metadata (choose one)
+    metadataURL: "" # URL to fetch IdP metadata
+    metadataXML: "" # Or provide XML directly
+
+    # Assertion Consumer Service URL
+    acsURL: "" # e.g., https://streamspace.example.com/saml/acs
+
+    # Single Logout URL
+    sloURL: "" # e.g., https://streamspace.example.com/saml/slo
+
+    # Certificate and private key (for signing requests)
+    certificate: "" # Path to certificate file or PEM content
+    privateKey: "" # Path to private key file or PEM content
+
+    # Or use existing secret
+    existingSecret: ""
+    existingSecretCertKey: "saml-cert"
+    existingSecretKeyKey: "saml-key"
+
+    # SAML options
+    allowIDPInitiated: true
+    signRequest: true
+    forceAuthn: false
+
+    # Attribute mapping (maps SAML attributes to user fields)
+    attributeMapping:
+      email: "" # Leave empty to use provider defaults
+      username: ""
+      firstName: ""
+      lastName: ""
+      groups: ""
+
+    # Provider-specific configuration (optional overrides)
+    okta:
+      domain: "" # e.g., mycompany.okta.com
+      appID: ""
+
+    azuread:
+      tenantID: "" # Azure AD tenant ID
+
+    google:
+      idpID: "" # Google Workspace IdP ID
+
+    auth0:
+      domain: ""
+      clientID: ""
+
+    keycloak:
+      domain: ""
+      realm: ""
+
+    authentik:
+      domain: ""
+      slug: ""

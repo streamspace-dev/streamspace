@@ -146,7 +146,7 @@ kubectl create secret generic streamspace-secrets \
 
 ## Available Applications
 
-Templates available via [streamspace-templates](https://github.com/JoshuaAFerguson/streamspace-templates):
+Templates available via [streamspace-templates](https://github.com/StreamSpace-dev/streamspace-templates):
 
 - **Browsers**: Firefox, Chromium, Brave, LibreWolf
 - **Development**: VS Code, GitHub Desktop
@@ -254,9 +254,9 @@ StreamSpace is licensed under the MIT License. See [LICENSE](LICENSE) for detail
 
 ## Links
 
-- **GitHub**: <https://github.com/JoshuaAFerguson/streamspace>
-- **Templates**: <https://github.com/JoshuaAFerguson/streamspace-templates>
-- **Plugins**: <https://github.com/JoshuaAFerguson/streamspace-plugins>
+- **GitHub**: <https://github.com/StreamSpace-dev/streamspace>
+- **Templates**: <https://github.com/StreamSpace-dev/streamspace-templates>
+- **Plugins**: <https://github.com/StreamSpace-dev/streamspace-plugins>
 
 ---
 
