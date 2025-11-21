@@ -2185,6 +2185,95 @@ All changes committed and merged to `feature/streamspace-v2-agent-refactor` ✅
 
 ---
 
+### Task: Docker Agent Implementation 🐳 ACTIVE - P1
+
+- **Assigned To**: Builder (Agent 2)
+- **Status**: ✅ **READY TO START** - Assigned by user
+- **Priority**: P1 - HIGH (enables Docker Compose deployment)
+- **Dependencies**: K8s Agent complete ✅, Session termination implemented ✅
+- **Estimated Effort**: 5-7 days
+- **Target**: Week 2-3 of sprint
+- **Location**: `streamspace-builder/` workspace
+- **Description**:
+  - Implement Docker agent following K8s agent pattern
+  - Support Docker Compose-based session deployment
+  - Enable VNC tunneling for Docker containers
+  - Session lifecycle management (start, stop)
+  - Agent registration and heartbeat with Control Plane
+  - Command reception via WebSocket
+- **Architecture**:
+  - **Language**: Go (follow K8s agent structure)
+  - **Location**: `agents/docker-agent/`
+  - **Platform**: Docker Compose (docker-compose.yml templates)
+  - **Communication**: WebSocket to Control Plane API
+  - **Commands**: start_session, stop_session (initial scope)
+- **Implementation Tasks**:
+  1. **Agent Core** (2-3 days):
+     - Agent registration with platform="docker"
+     - WebSocket connection to Control Plane
+     - Heartbeat mechanism (capacity reporting)
+     - Command handler framework
+  2. **Session Management** (2-3 days):
+     - start_session handler (Docker Compose deployment)
+     - Container creation with VNC port mapping
+     - Container lifecycle management
+     - stop_session handler (container cleanup)
+  3. **VNC Integration** (1-2 days):
+     - VNC port detection and tracking
+     - Tunnel initialization to Control Plane
+     - Network configuration for VNC access
+  4. **Testing & Documentation** (1 day):
+     - Basic unit tests
+     - Integration with Control Plane
+     - README with deployment instructions
+- **Reference Implementation**:
+  - Use `agents/k8s-agent/` as template (1,904 lines)
+  - Follow same WebSocket protocol and command structure
+  - Adapt Kubernetes operations to Docker Compose operations
+- **Docker Compose Template Structure**:
+  ```yaml
+  # templates/firefox-browser.yml
+  version: '3.8'
+  services:
+    session:
+      image: lscr.io/linuxserver/firefox:latest
+      container_name: ${SESSION_NAME}
+      environment:
+        - PUID=1000
+        - PGID=1000
+      ports:
+        - "${VNC_PORT}:3000"
+      volumes:
+        - ${HOME_DIR}:/config
+  ```
+- **Acceptance Criteria**:
+  - [ ] Docker agent registers with Control Plane (platform="docker")
+  - [ ] Agent receives start_session commands via WebSocket
+  - [ ] Agent creates Docker containers using Compose templates
+  - [ ] VNC ports mapped and accessible
+  - [ ] Agent receives stop_session commands
+  - [ ] Agent cleans up containers properly
+  - [ ] Heartbeat reporting active container count
+  - [ ] Basic error handling and logging
+- **Deliverables**:
+  - `agents/docker-agent/` complete implementation
+  - Docker Compose templates for common applications
+  - Unit tests for core functionality
+  - README with setup and deployment instructions
+  - Integration with existing Control Plane API
+
+**Scope for v2.0-beta**:
+- ✅ Basic session start/stop
+- ✅ VNC port mapping
+- ✅ Agent registration and heartbeat
+- ⏳ Session hibernation (defer to v2.1)
+- ⏳ Persistent home directories (defer to v2.1)
+- ⏳ Resource limits enforcement (defer to v2.1)
+
+**Note**: Docker agent enables users to deploy StreamSpace without Kubernetes, making it accessible for development, testing, and small-scale production deployments.
+
+---
+
 ### Task: Bug Fixes & Refinements 🐛 STANDBY
 
 - **Assigned To**: Builder (Agent 2)
