@@ -3825,8 +3825,8 @@ You can start your refactor work right now. The codebase is well-tested, well-do
 1. ✅ Phase 1: Design & Documentation
 2. ✅ Phase 9: Database Schema
 3. ✅ Phase 2: Agent Registration (COMPLETE 2025-11-21)
-4. 🔄 Phase 3: WebSocket Command Channel (IN PROGRESS)
-5. ⏳ Phase 5: K8s Agent Conversion
+4. ✅ Phase 3: WebSocket Command Channel (COMPLETE 2025-11-21)
+5. 🔄 Phase 5: K8s Agent Conversion (IN PROGRESS)
 6. ⏳ Phase 4: VNC Proxy/Tunnel
 7. ⏳ Phase 6: K8s Agent VNC Tunneling
 8. ⏳ Phase 8: UI Updates
@@ -4305,6 +4305,328 @@ Implement WebSocket hub for bidirectional agent communication. Agents connect TO
 - Notify Architect for integration review
 - Notify Validator for testing
 - Notify Scribe for documentation
+
+---
+
+### Phase 5: K8s Agent - Convert Controller to Agent 🔄
+
+**Status:** IN PROGRESS
+**Assigned To:** Builder
+**Started:** 2025-11-21
+**Priority:** CRITICAL
+**Duration:** 7-10 days (estimated)
+**Dependencies:** Phase 2 (Agent Registration) ✅, Phase 3 (WebSocket) ✅
+
+**Objective:**
+Convert the existing Kubernetes controller (`k8s-controller/`) to a Kubernetes Agent that connects TO the Control Plane via WebSocket, receives commands, and manages sessions on the local Kubernetes cluster.
+
+**Key Architectural Change:**
+- **Old (v1.0):** Controller runs inside cluster, watches CRDs, creates pods directly
+- **New (v2.0):** Agent runs inside cluster, connects TO Control Plane WebSocket, receives commands, creates pods
+
+**Tasks for Builder:**
+
+1. **Create K8s Agent Client:** `agents/k8s-agent/main.go`
+
+   **Purpose:** Standalone binary that runs in Kubernetes, connects to Control Plane
+
+   **Structure:**
+   ```go
+   package main
+
+   import (
+       "flag"
+       "log"
+       "os"
+       "os/signal"
+       "syscall"
+       "time"
+
+       "github.com/gorilla/websocket"
+       "k8s.io/client-go/kubernetes"
+       "k8s.io/client-go/rest"
+   )
+
+   type K8sAgent struct {
+       agentID         string
+       controlPlaneURL string
+       kubeClient      *kubernetes.Clientset
+       wsConn          *websocket.Conn
+       stopChan        chan struct{}
+   }
+
+   func main() {
+       agentID := flag.String("agent-id", "", "Agent ID (e.g., k8s-prod-us-east-1)")
+       controlPlaneURL := flag.String("control-plane-url", "", "Control Plane WebSocket URL")
+       flag.Parse()
+
+       agent, err := NewK8sAgent(*agentID, *controlPlaneURL)
+       if err != nil {
+           log.Fatalf("Failed to create agent: %v", err)
+       }
+
+       // Connect to Control Plane
+       if err := agent.Connect(); err != nil {
+           log.Fatalf("Failed to connect to Control Plane: %v", err)
+       }
+
+       // Start command processing
+       go agent.ProcessCommands()
+
+       // Start heartbeat sender
+       go agent.SendHeartbeats()
+
+       // Wait for shutdown signal
+       agent.WaitForShutdown()
+   }
+   ```
+
+2. **Implement Agent Connection Logic:** `agents/k8s-agent/connection.go`
+
+   **Functions:**
+   ```go
+   func (a *K8sAgent) Connect() error {
+       // 1. Register agent with Control Plane (POST /api/v1/agents/register)
+       // 2. Connect to WebSocket (/api/v1/agents/connect?agent_id=xxx)
+       // 3. Start read/write pumps
+   }
+
+   func (a *K8sAgent) Reconnect() error {
+       // Handle reconnection with exponential backoff
+       // 2s, 4s, 8s, 16s, 32s (max)
+   }
+
+   func (a *K8sAgent) SendHeartbeats() {
+       // Send heartbeat every 10 seconds
+       // Include: status, activeSessions, capacity
+   }
+
+   func (a *K8sAgent) readPump() {
+       // Read messages from Control Plane
+       // Parse AgentMessage
+       // Route to command handlers
+   }
+
+   func (a *K8sAgent) writePump() {
+       // Send messages to Control Plane
+       // Handle acks, completions, failures
+   }
+   ```
+
+3. **Implement Command Handlers:** `agents/k8s-agent/handlers.go`
+
+   **Command Types:**
+   - `start_session`: Create Kubernetes resources for new session
+   - `stop_session`: Delete session resources
+   - `hibernate_session`: Scale deployment to 0 replicas
+   - `wake_session`: Scale deployment back to 1 replica
+
+   **Implementation:**
+   ```go
+   type CommandHandler interface {
+       Handle(command *models.AgentCommand) (*CommandResult, error)
+   }
+
+   type StartSessionHandler struct {
+       kubeClient *kubernetes.Clientset
+   }
+
+   func (h *StartSessionHandler) Handle(cmd *models.AgentCommand) (*CommandResult, error) {
+       // 1. Parse session spec from command payload
+       // 2. Create Deployment (from template)
+       // 3. Create Service (ClusterIP)
+       // 4. Create PVC (if persistentHome enabled)
+       // 5. Wait for pod to be Running
+       // 6. Get pod IP
+       // 7. Return result with session metadata
+   }
+
+   type StopSessionHandler struct {
+       kubeClient *kubernetes.Clientset
+   }
+
+   func (h *StopSessionHandler) Handle(cmd *models.AgentCommand) (*CommandResult, error) {
+       // 1. Parse session ID from command payload
+       // 2. Delete Deployment
+       // 3. Delete Service
+       // 4. Optionally delete PVC (if not persistent)
+       // 5. Return success result
+   }
+
+   type HibernateSessionHandler struct {
+       kubeClient *kubernetes.Clientset
+   }
+
+   func (h *HibernateSessionHandler) Handle(cmd *models.AgentCommand) (*CommandResult, error) {
+       // 1. Parse session ID
+       // 2. Scale deployment to 0 replicas
+       // 3. Update session state to "hibernated"
+       // 4. Return success result
+   }
+
+   type WakeSessionHandler struct {
+       kubeClient *kubernetes.Clientset
+   }
+
+   func (h *WakeSessionHandler) Handle(cmd *models.AgentCommand) (*CommandResult, error) {
+       // 1. Parse session ID
+       // 2. Scale deployment to 1 replica
+       // 3. Wait for pod to be Running
+       // 4. Get new pod IP
+       // 5. Return result with updated metadata
+   }
+   ```
+
+4. **Reuse Controller Logic:** `agents/k8s-agent/k8s_operations.go`
+
+   **Purpose:** Extract and reuse session creation logic from existing controller
+
+   **Functions to Port:**
+   ```go
+   // From k8s-controller/controllers/session_controller.go
+   func CreateSessionDeployment(session *Session, template *Template) (*appsv1.Deployment, error)
+   func CreateSessionService(session *Session) (*corev1.Service, error)
+   func CreateSessionPVC(session *Session) (*corev1.PersistentVolumeClaim, error)
+   func GetPodIP(deployment *appsv1.Deployment) (string, error)
+   func ScaleDeployment(deployment *appsv1.Deployment, replicas int32) error
+   ```
+
+5. **Agent Configuration:** `agents/k8s-agent/config.go`
+
+   **Configuration Sources:**
+   - Environment variables
+   - Command-line flags
+   - ConfigMap (when running in cluster)
+
+   **Configuration Fields:**
+   ```go
+   type AgentConfig struct {
+       AgentID         string // k8s-prod-us-east-1
+       ControlPlaneURL string // https://control.example.com
+       Platform        string // kubernetes
+       Region          string // us-east-1
+       Namespace       string // streamspace (default namespace for sessions)
+       Capacity        AgentCapacity
+   }
+   ```
+
+6. **Dockerfile and Deployment:** `agents/k8s-agent/Dockerfile` + `agents/k8s-agent/k8s/deployment.yaml`
+
+   **Dockerfile:**
+   ```dockerfile
+   FROM golang:1.21-alpine AS builder
+   WORKDIR /app
+   COPY go.mod go.sum ./
+   RUN go mod download
+   COPY . .
+   RUN CGO_ENABLED=0 go build -o k8s-agent ./agents/k8s-agent
+
+   FROM alpine:latest
+   RUN apk add --no-cache ca-certificates
+   COPY --from=builder /app/k8s-agent /usr/local/bin/
+   ENTRYPOINT ["k8s-agent"]
+   ```
+
+   **Deployment Manifest:**
+   ```yaml
+   apiVersion: apps/v1
+   kind: Deployment
+   metadata:
+     name: streamspace-k8s-agent
+     namespace: streamspace
+   spec:
+     replicas: 1
+     template:
+       spec:
+         serviceAccountName: streamspace-agent
+         containers:
+         - name: agent
+           image: streamspace/k8s-agent:v2.0
+           env:
+           - name: AGENT_ID
+             value: "k8s-prod-us-east-1"
+           - name: CONTROL_PLANE_URL
+             value: "wss://control.example.com"
+           - name: PLATFORM
+             value: "kubernetes"
+           - name: REGION
+             value: "us-east-1"
+   ```
+
+7. **RBAC Permissions:** `agents/k8s-agent/k8s/rbac.yaml`
+
+   **ServiceAccount, Role, RoleBinding:**
+   ```yaml
+   apiVersion: v1
+   kind: ServiceAccount
+   metadata:
+     name: streamspace-agent
+     namespace: streamspace
+   ---
+   apiVersion: rbac.authorization.k8s.io/v1
+   kind: Role
+   metadata:
+     name: streamspace-agent
+     namespace: streamspace
+   rules:
+   - apiGroups: ["apps"]
+     resources: ["deployments"]
+     verbs: ["get", "list", "create", "update", "delete", "patch"]
+   - apiGroups: [""]
+     resources: ["services", "pods", "persistentvolumeclaims"]
+     verbs: ["get", "list", "create", "update", "delete"]
+   - apiGroups: [""]
+     resources: ["pods/log"]
+     verbs: ["get"]
+   ```
+
+8. **Testing:** `agents/k8s-agent/agent_test.go`
+
+   **Test Coverage:**
+   - Connection and reconnection logic
+   - Command handling (start, stop, hibernate, wake)
+   - Heartbeat sending
+   - Error scenarios (Control Plane unavailable, Kubernetes API errors)
+
+**Migration from Controller:**
+- **Keep CRDs:** Session and Template CRDs remain for compatibility
+- **Controller → Agent:** Replace controller with agent deployment
+- **Sessions Table:** Agent updates sessions via Control Plane API (not direct DB)
+- **Backward Compatibility:** Existing sessions continue to work
+
+**Reference Files:**
+- Existing Controller: `k8s-controller/controllers/session_controller.go`
+- Template Handling: `k8s-controller/controllers/template_controller.go`
+- Hibernation Logic: `k8s-controller/controllers/hibernation_controller.go`
+- WebSocket Protocol: `api/internal/models/agent_protocol.go`
+
+**Acceptance Criteria:**
+- ✅ K8s Agent binary builds successfully
+- ✅ Agent registers with Control Plane on startup
+- ✅ Agent connects to Control Plane WebSocket
+- ✅ Agent sends heartbeats every 10 seconds
+- ✅ Agent handles start_session command (creates deployment, service, PVC)
+- ✅ Agent handles stop_session command (deletes resources)
+- ✅ Agent handles hibernate_session command (scales to 0)
+- ✅ Agent handles wake_session command (scales to 1)
+- ✅ Agent reconnects automatically on disconnect
+- ✅ Agent runs in Kubernetes with proper RBAC
+- ✅ Unit tests with >70% coverage
+- ✅ Integration test with Control Plane
+
+**Notes for Builder:**
+- Reuse existing controller logic where possible (CreateDeployment, CreateService, etc.)
+- Focus on WebSocket communication first, then session operations
+- Use k8s.io/client-go for Kubernetes operations (already in project)
+- Implement graceful shutdown (drain mode before stopping)
+- DO NOT implement VNC tunneling yet (that's Phase 6)
+- Test locally first (can connect to local Control Plane)
+
+**After Completion:**
+- Notify Architect for integration review
+- Notify Validator for testing
+- Notify Scribe for documentation
+- Prepare for Phase 6 (VNC Tunneling)
 
 ---
 
