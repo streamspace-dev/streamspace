@@ -13,7 +13,7 @@
 //	// In plugin file: plugins/my-plugin/main.go
 //	package main
 //
-//	import "github.com/streamspace/streamspace/api/internal/plugins"
+//	import "github.com/streamspace-dev/streamspace/api/internal/plugins"
 //
 //	func init() {
 //	    plugins.Register("my-plugin", func() plugins.PluginHandler {

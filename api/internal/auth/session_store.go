@@ -44,7 +44,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/cache"
+	"github.com/streamspace-dev/streamspace/api/internal/cache"
 )
 
 // SessionStore manages server-side session tracking in Redis

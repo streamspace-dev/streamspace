@@ -108,7 +108,7 @@ import (
 	"time"
 
 	"github.com/golang-jwt/jwt/v5"
-	"github.com/streamspace/streamspace/api/internal/cache"
+	"github.com/streamspace-dev/streamspace/api/internal/cache"
 )
 
 // JWTConfig holds JWT configuration.

@@ -81,7 +81,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // SharingHandler handles session sharing and collaboration

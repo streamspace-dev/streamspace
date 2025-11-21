@@ -143,14 +143,12 @@ clean_docker_images() {
 
     # Remove StreamSpace images
     local images=(
-        "streamspace/streamspace-kubernetes-controller:${VERSION}"
-        "streamspace/streamspace-kubernetes-controller:latest"
+        "streamspace/streamspace-k8s-agent:${VERSION}"
+        "streamspace/streamspace-k8s-agent:latest"
         "streamspace/streamspace-api:${VERSION}"
         "streamspace/streamspace-api:latest"
         "streamspace/streamspace-ui:${VERSION}"
         "streamspace/streamspace-ui:latest"
-        "streamspace/streamspace-docker-controller:${VERSION}"
-        "streamspace/streamspace-docker-controller:latest"
     )
 
     local removed=0

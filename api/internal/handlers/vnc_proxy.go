@@ -37,9 +37,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
-	ws "github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	ws "github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 // VNCProxyHandler manages VNC WebSocket connections from UI clients.

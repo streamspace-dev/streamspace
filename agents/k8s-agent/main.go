@@ -49,8 +49,8 @@ import (
 	"k8s.io/client-go/rest"
 	"k8s.io/client-go/tools/clientcmd"
 
-	"github.com/streamspace/streamspace/agents/k8s-agent/internal/config"
-	"github.com/streamspace/streamspace/agents/k8s-agent/internal/errors"
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/errors"
 )
 
 // K8sAgent represents a Kubernetes agent instance.

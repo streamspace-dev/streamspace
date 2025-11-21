@@ -22,7 +22,7 @@ NAMESPACE="${NAMESPACE:-streamspace}"
 VERSION="${VERSION:-local}"
 
 # Image configuration
-CONTROLLER_IMAGE="${CONTROLLER_IMAGE:-streamspace/streamspace-kubernetes-controller:${VERSION}}"
+K8S_AGENT_IMAGE="${K8S_AGENT_IMAGE:-streamspace/streamspace-k8s-agent:${VERSION}}"
 API_IMAGE="${API_IMAGE:-streamspace/streamspace-api:${VERSION}}"
 UI_IMAGE="${UI_IMAGE:-streamspace/streamspace-ui:${VERSION}}"
 POSTGRES_IMAGE="${POSTGRES_IMAGE:-postgres:15-alpine}"
@@ -107,9 +107,11 @@ check_images() {
 
     local missing_images=0
 
-    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
-        if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
-            log_success "Found ${image}:${VERSION}"
+    for image in "${K8S_AGENT_IMAGE}" "${API_IMAGE}" "${UI_IMAGE}"; do
+        # Extract repo and tag for checking
+        local repo_tag="${image}"
+        if docker images "${repo_tag}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${repo_tag}"; then
+            log_success "Found ${repo_tag}"
         else
             log_error "Missing ${image}:${VERSION}"
             missing_images=$((missing_images + 1))
@@ -278,96 +280,97 @@ EOF
     log_success "PostgreSQL deployed"
 }
 
-# Deploy NATS message broker
-deploy_nats() {
-    log "Deploying NATS..."
+# NATS MESSAGE BROKER REMOVED
+# Agents now communicate via WebSocket instead of NATS pub/sub
+# deploy_nats() {
+#     log "Deploying NATS..."
 
-    cat <<EOF | kubectl apply -f -
-apiVersion: v1
-kind: Service
-metadata:
-  name: streamspace-nats
-  namespace: ${NAMESPACE}
-  labels:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: nats
-spec:
-  type: ClusterIP
-  ports:
-    - port: 4222
-      targetPort: 4222
-      protocol: TCP
-      name: client
-    - port: 8222
-      targetPort: 8222
-      protocol: TCP
-      name: monitoring
-  selector:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: nats
----
-apiVersion: apps/v1
-kind: Deployment
-metadata:
-  name: streamspace-nats
-  namespace: ${NAMESPACE}
-  labels:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: nats
-spec:
-  replicas: 1
-  selector:
-    matchLabels:
-      app.kubernetes.io/name: streamspace
-      app.kubernetes.io/component: nats
-  template:
-    metadata:
-      labels:
-        app.kubernetes.io/name: streamspace
-        app.kubernetes.io/component: nats
-    spec:
-      containers:
-      - name: nats
-        image: nats:2.10-alpine
-        imagePullPolicy: IfNotPresent
-        args:
-          - "--jetstream"
-          - "--store_dir=/data"
-          - "--http_port=8222"
-        ports:
-        - containerPort: 4222
-          name: client
-        - containerPort: 8222
-          name: monitoring
-        resources:
-          requests:
-            memory: 64Mi
-            cpu: 50m
-          limits:
-            memory: 256Mi
-            cpu: 200m
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: monitoring
-          initialDelaySeconds: 10
-          periodSeconds: 10
-        readinessProbe:
-          httpGet:
-            path: /healthz
-            port: monitoring
-          initialDelaySeconds: 5
-          periodSeconds: 5
-        volumeMounts:
-        - name: data
-          mountPath: /data
-      volumes:
-      - name: data
-        emptyDir: {}
-EOF
+#     cat <<EOF | kubectl apply -f -
+# apiVersion: v1
+# kind: Service
+# metadata:
+#   name: streamspace-nats
+#   namespace: ${NAMESPACE}
+#   labels:
+#     app.kubernetes.io/name: streamspace
+#     app.kubernetes.io/component: nats
+# spec:
+#   type: ClusterIP
+#   ports:
+#     - port: 4222
+#       targetPort: 4222
+#       protocol: TCP
+#       name: client
+#     - port: 8222
+#       targetPort: 8222
+#       protocol: TCP
+#       name: monitoring
+#   selector:
+#     app.kubernetes.io/name: streamspace
+#     app.kubernetes.io/component: nats
+# ---
+# apiVersion: apps/v1
+# kind: Deployment
+# metadata:
+#   name: streamspace-nats
+#   namespace: ${NAMESPACE}
+#   labels:
+#     app.kubernetes.io/name: streamspace
+#     app.kubernetes.io/component: nats
+# spec:
+#   replicas: 1
+#   selector:
+#     matchLabels:
+#       app.kubernetes.io/name: streamspace
+#       app.kubernetes.io/component: nats
+#   template:
+#     metadata:
+#       labels:
+#         app.kubernetes.io/name: streamspace
+#         app.kubernetes.io/component: nats
+#     spec:
+#       containers:
+#       - name: nats
+#         image: nats:2.10-alpine
+#         imagePullPolicy: IfNotPresent
+#         args:
+#           - "--jetstream"
+#           - "--store_dir=/data"
+#           - "--http_port=8222"
+#         ports:
+#         - containerPort: 4222
+#           name: client
+#         - containerPort: 8222
+#           name: monitoring
+#         resources:
+#           requests:
+#             memory: 64Mi
+#             cpu: 50m
+#           limits:
+#             memory: 256Mi
+#             cpu: 200m
+#         livenessProbe:
+#           httpGet:
+#             path: /healthz
+#             port: monitoring
+#           initialDelaySeconds: 10
+#           periodSeconds: 10
+#         readinessProbe:
+#           httpGet:
+#             path: /healthz
+#             port: monitoring
+#           initialDelaySeconds: 5
+#           periodSeconds: 5
+#         volumeMounts:
+#         - name: data
+#           mountPath: /data
+#       volumes:
+#       - name: data
+#         emptyDir: {}
+# EOF
 
-    log_success "NATS deployed"
-}
+#     log_success "NATS deployed"
+# }
 
 # Deploy Redis (optional)
 deploy_redis() {
@@ -457,101 +460,55 @@ EOF
     log_success "Redis deployed"
 }
 
-# Deploy Controller
-deploy_controller() {
-    log "Deploying Controller..."
+# Deploy K8s Agent
+deploy_agent() {
+    log "Deploying K8s Agent..."
 
     # Create ServiceAccount and RBAC
     kubectl apply -f "${PROJECT_ROOT}/manifests/kubectl/rbac.yaml"
 
-    # Create Controller Deployment
+    # Create Agent Deployment
     cat <<EOF | kubectl apply -f -
 apiVersion: apps/v1
 kind: Deployment
 metadata:
-  name: streamspace-controller
+  name: streamspace-k8s-agent
   namespace: ${NAMESPACE}
   labels:
     app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: controller
+    app.kubernetes.io/component: k8s-agent
 spec:
   replicas: 1
   selector:
     matchLabels:
       app.kubernetes.io/name: streamspace
-      app.kubernetes.io/component: controller
+      app.kubernetes.io/component: k8s-agent
   template:
     metadata:
       labels:
         app.kubernetes.io/name: streamspace
-        app.kubernetes.io/component: controller
+        app.kubernetes.io/component: k8s-agent
     spec:
-      serviceAccountName: streamspace-controller
+      serviceAccountName: streamspace-k8s-agent
       containers:
-      - name: controller
-        image: ${CONTROLLER_IMAGE}
+      - name: k8s-agent
+        image: ${K8S_AGENT_IMAGE}
         imagePullPolicy: Never
-        command:
-          - /manager
         args:
-          - --leader-elect
-        env:
-        - name: NAMESPACE
-          valueFrom:
-            fieldRef:
-              fieldPath: metadata.namespace
-        - name: NATS_URL
-          value: nats://streamspace-nats:4222
-        - name: CONTROLLER_ID
-          value: streamspace-kubernetes-controller-1
+          - --agent-id=k8s-agent-local
+          - --control-plane-url=http://streamspace-api:8000
+          - --platform=kubernetes
+          - --namespace=${NAMESPACE}
         resources:
           requests:
-            memory: 128Mi
-            cpu: 100m
+            memory: 64Mi
+            cpu: 50m
           limits:
-            memory: 512Mi
-            cpu: 500m
-        ports:
-        - containerPort: 8080
-          name: metrics
-          protocol: TCP
-        - containerPort: 9443
-          name: webhook-server
-          protocol: TCP
-        livenessProbe:
-          httpGet:
-            path: /healthz
-            port: 8081
-          initialDelaySeconds: 15
-          periodSeconds: 20
-        readinessProbe:
-          httpGet:
-            path: /readyz
-            port: 8081
-          initialDelaySeconds: 5
-          periodSeconds: 10
----
-apiVersion: v1
-kind: Service
-metadata:
-  name: streamspace-controller
-  namespace: ${NAMESPACE}
-  labels:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: controller
-spec:
-  type: ClusterIP
-  ports:
-    - port: 8080
-      targetPort: metrics
-      protocol: TCP
-      name: metrics
-  selector:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/component: controller
+            memory: 256Mi
+            cpu: 200m
 EOF
 
-    log_success "Controller deployed"
+    log_success "K8s Agent deployed"
 }
 
 # Deploy API
@@ -621,8 +578,8 @@ spec:
           valueFrom:
             fieldRef:
               fieldPath: metadata.namespace
-        - name: NATS_URL
-          value: nats://streamspace-nats:4222
+        # - name: NATS_URL
+        #   value: nats://streamspace-nats:4222  # NATS REMOVED
         - name: PLATFORM
           value: kubernetes
         - name: CACHE_ENABLED
@@ -827,7 +784,7 @@ show_access_info() {
     log_info "Or manually port-forward (in separate terminals):"
     echo "  kubectl port-forward -n ${NAMESPACE} svc/streamspace-ui 3000:80"
     echo "  kubectl port-forward -n ${NAMESPACE} svc/streamspace-api 8000:8000"
-    echo "  kubectl port-forward -n ${NAMESPACE} svc/streamspace-nats 4222:4222"
+    # echo "  kubectl port-forward -n ${NAMESPACE} svc/streamspace-nats 4222:4222"  # NATS REMOVED
     if [ "${ENABLE_REDIS}" = "true" ]; then
         echo "  kubectl port-forward -n ${NAMESPACE} svc/streamspace-redis 6379:6379"
     fi
@@ -836,18 +793,18 @@ show_access_info() {
     log_info "Service URLs (after port-forward):"
     echo "  UI:   http://localhost:3000"
     echo "  API:  http://localhost:8000"
-    echo "  NATS: nats://localhost:4222 (monitor: http://localhost:8222)"
+    # echo "  NATS: nats://localhost:4222 (monitor: http://localhost:8222)"  # NATS REMOVED
     if [ "${ENABLE_REDIS}" = "true" ]; then
         echo "  Redis: localhost:6379"
     fi
     echo ""
 
     log_info "View logs:"
-    echo "  Controller: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=controller -f"
+    echo "  K8s Agent:  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=k8s-agent -f"
     echo "  API:        kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=api -f"
     echo "  UI:         kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=ui -f"
     echo "  Database:   kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=database -f"
-    echo "  NATS:       kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=nats -f"
+    # echo "  NATS:       kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=nats -f"  # NATS REMOVED
     echo ""
 
     log_info "When finished testing:"
@@ -874,9 +831,9 @@ main() {
     apply_crds
     create_secrets
     deploy_postgresql
-    deploy_nats
+    # deploy_nats  # NATS REMOVED - agents use WebSocket
     deploy_redis
-    deploy_controller
+    deploy_agent
     deploy_api
     deploy_ui
     wait_for_pods

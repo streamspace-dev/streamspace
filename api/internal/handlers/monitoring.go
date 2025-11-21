@@ -78,11 +78,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // Version information - can be set at build time with linker flags:
-// go build -ldflags "-X github.com/streamspace/streamspace/api/internal/handlers.Version=v1.2.3"
+// go build -ldflags "-X github.com/streamspace-dev/streamspace/api/internal/handlers.Version=v1.2.3"
 var (
 	Version   = "dev"
 	GitCommit = "unknown"

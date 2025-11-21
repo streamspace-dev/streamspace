@@ -59,7 +59,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // CatalogHandler handles template catalog-related endpoints

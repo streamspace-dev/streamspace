@@ -32,8 +32,8 @@ import (
 	"time"
 
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // AgentConnection represents a single agent's WebSocket connection.

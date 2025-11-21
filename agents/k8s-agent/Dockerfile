@@ -15,6 +15,7 @@ RUN go mod download
 
 # Copy source code
 COPY *.go ./
+COPY internal/ ./internal/
 
 # Build the binary
 RUN CGO_ENABLED=0 GOOS=linux go build -a -installsuffix cgo -o k8s-agent .

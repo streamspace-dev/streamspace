@@ -49,8 +49,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/activity"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/activity"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // ActivityHandler handles session activity-related endpoints

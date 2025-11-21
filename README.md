@@ -159,8 +159,8 @@ Templates available via [streamspace-templates](https://github.com/StreamSpace-d
 ### Build Components
 
 ```bash
-# Controller
-cd k8s-controller && make docker-build IMG=your-registry/controller:latest
+# K8s Agent
+cd agents/k8s-agent && go build -o k8s-agent .
 
 # API
 cd api && go build -o streamspace-api
@@ -172,8 +172,8 @@ cd ui && npm install && npm run build
 ### Run Tests
 
 ```bash
-# Controller tests (requires envtest)
-cd k8s-controller && make test
+# K8s Agent tests
+cd agents/k8s-agent && go test ./... -v
 
 # API tests
 cd api && go test ./... -v
@@ -232,7 +232,7 @@ Contributions welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
 ### Sessions not starting
 
 ```bash
-kubectl logs -n streamspace deploy/streamspace-controller
+kubectl logs -n streamspace -l app.kubernetes.io/component=api
 kubectl describe session <session-name> -n streamspace
 ```
 

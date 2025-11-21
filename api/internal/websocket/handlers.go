@@ -72,8 +72,8 @@ import (
 
 	"github.com/google/uuid"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 	corev1 "k8s.io/api/core/v1"
 )
 

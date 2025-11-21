@@ -7,7 +7,7 @@ import (
 	"net/http"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // SlackPlugin implements Slack notification integration

@@ -76,8 +76,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // PluginMarketplaceHandler handles plugin marketplace HTTP requests.

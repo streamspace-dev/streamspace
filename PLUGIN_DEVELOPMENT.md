@@ -114,12 +114,14 @@ tar -czf my-plugin.tar.gz manifest.json index.js
 Add new features and extend existing functionality.
 
 **Use Cases**:
+
 - Custom dashboard widgets
 - New session management features
 - Enhanced user profiles
 - Custom reports
 
 **Example**:
+
 ```javascript
 module.exports = {
   async onLoad() {
@@ -137,6 +139,7 @@ module.exports = {
 React to system events in real-time.
 
 **Available Events**:
+
 - `session.created`
 - `session.started`
 - `session.stopped`
@@ -150,6 +153,7 @@ React to system events in real-time.
 - `user.logout`
 
 **Example**:
+
 ```javascript
 module.exports = {
   async onSessionCreated(session) {
@@ -173,6 +177,7 @@ module.exports = {
 Connect StreamSpace to external services.
 
 **Use Cases**:
+
 - Slack notifications
 - GitHub integration
 - Jira ticket creation
@@ -180,6 +185,7 @@ Connect StreamSpace to external services.
 - Backup automation
 
 **Example**:
+
 ```javascript
 const axios = require('axios');
 
@@ -220,6 +226,7 @@ module.exports = {
 Customize the web interface appearance.
 
 **Example**:
+
 ```javascript
 module.exports = {
   theme: {
@@ -1970,10 +1977,10 @@ export default function AnalyticsDashboard() {
 
 ## Support
 
-- **Documentation**: https://docs.streamspace.io/plugins
-- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
-- **Discord**: https://discord.gg/streamspace
-- **Email**: plugins@streamspace.io
+- **Documentation**: <https://docs.streamspace.io/plugins>
+- **GitHub Issues**: <https://github.com/streamspace-dev/streamspace/issues>
+- **Discord**: <https://discord.gg/streamspace>
+- **Email**: <plugins@streamspace.io>
 
 ---
 

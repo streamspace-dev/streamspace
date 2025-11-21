@@ -1,7 +1,7 @@
 package multimonitorplugin
 
 import (
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // MultiMonitorPlugin provides multi-monitor configuration support

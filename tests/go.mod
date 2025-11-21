@@ -1,4 +1,4 @@
-module github.com/JoshuaAFerguson/streamspace/tests
+module github.com/streamspace-dev/streamspace/tests
 
 go 1.21
 

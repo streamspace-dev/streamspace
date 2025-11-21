@@ -5,6 +5,7 @@ This guide explains how to configure SAML-based Single Sign-On (SSO) for StreamS
 ## Overview
 
 StreamSpace supports SAML 2.0 authentication with multiple identity providers:
+
 - **Okta**
 - **Azure AD** (Microsoft Entra ID)
 - **Google Workspace**
@@ -26,6 +27,7 @@ StreamSpace supports SAML 2.0 authentication with multiple identity providers:
 ```
 
 **Flow:**
+
 1. User accesses StreamSpace UI
 2. UI redirects to `/saml/login`
 3. API initiates SAML authentication with IdP
@@ -61,6 +63,7 @@ helm upgrade streamspace ./chart \
 ### 3. Configure Your IdP
 
 Add StreamSpace as a SAML application in your IdP with:
+
 - **ACS URL**: `https://streamspace.example.com/saml/acs`
 - **Entity ID**: `https://streamspace.example.com`
 - **Metadata URL**: `https://streamspace.example.com/saml/metadata`
@@ -70,17 +73,20 @@ Add StreamSpace as a SAML application in your IdP with:
 ### Okta
 
 **1. Create SAML App Integration in Okta**
+
 - Navigate to Applications > Create App Integration
 - Select SAML 2.0
 - App name: StreamSpace
 
 **2. Configure SAML Settings**
+
 - **Single sign-on URL**: `https://streamspace.example.com/saml/acs`
 - **Audience URI**: `https://streamspace.example.com`
 - **Name ID format**: EmailAddress
 - **Application username**: Email
 
 **3. Attribute Statements**
+
 ```
 email     -> user.email
 firstName -> user.firstName
@@ -89,10 +95,12 @@ groups    -> user.groups
 ```
 
 **4. Get Metadata URL**
+
 - Go to Sign On tab
 - Copy "Metadata URL"
 
 **5. Helm Configuration**
+
 ```yaml
 api:
   auth:
@@ -111,14 +119,17 @@ api:
 ### Azure AD (Microsoft Entra ID)
 
 **1. Register Enterprise Application**
+
 - Azure Portal > Enterprise Applications > New application
 - Create your own application > SAML-based SSO
 
 **2. Configure SAML**
+
 - **Identifier (Entity ID)**: `https://streamspace.example.com`
 - **Reply URL (ACS)**: `https://streamspace.example.com/saml/acs`
 
 **3. Attributes & Claims**
+
 ```
 http://schemas.xmlsoap.org/ws/2005/05/identity/claims/emailaddress -> user.mail
 http://schemas.xmlsoap.org/ws/2005/05/identity/claims/name -> user.userprincipalname
@@ -128,9 +139,11 @@ http://schemas.microsoft.com/ws/2008/06/identity/claims/groups -> user.groups
 ```
 
 **4. Download Federation Metadata XML**
+
 - Save the XML file
 
 **5. Helm Configuration**
+
 ```yaml
 api:
   auth:
@@ -152,19 +165,23 @@ api:
 ### Google Workspace
 
 **1. Set up SAML App**
+
 - Admin Console > Apps > Web and mobile apps
 - Add custom SAML app
 
 **2. Google IdP Information**
+
 - Download Metadata or copy SSO URL and Certificate
 
 **3. Service Provider Details**
+
 - **ACS URL**: `https://streamspace.example.com/saml/acs`
 - **Entity ID**: `https://streamspace.example.com`
 - **Start URL**: `https://streamspace.example.com`
 - **Name ID format**: EMAIL
 
 **4. Attribute Mapping**
+
 ```
 email     -> Primary email
 firstName -> First name
@@ -172,6 +189,7 @@ lastName  -> Last name
 ```
 
 **5. Helm Configuration**
+
 ```yaml
 api:
   auth:
@@ -189,11 +207,13 @@ api:
 ### Keycloak
 
 **1. Create SAML Client**
+
 - Clients > Create
 - Client Protocol: saml
 - Client ID: `https://streamspace.example.com`
 
 **2. Configure Client**
+
 - **Valid Redirect URIs**: `https://streamspace.example.com/saml/acs`
 - **Base URL**: `https://streamspace.example.com`
 - **IDP Initiated SSO URL Name**: streamspace
@@ -203,10 +223,12 @@ api:
 Add mappers for email, username, firstName, lastName, groups
 
 **4. Get Metadata**
+
 - Installation tab > SAML Metadata IDPSSODescriptor
 - Copy the URL
 
 **5. Helm Configuration**
+
 ```yaml
 api:
   auth:
@@ -225,11 +247,13 @@ api:
 ### Authentik
 
 **1. Create Provider**
+
 - Applications > Providers > Create
 - Type: SAML Provider
 - Name: StreamSpace
 
 **2. Configure Provider**
+
 - **ACS URL**: `https://streamspace.example.com/saml/acs`
 - **Issuer**: `https://streamspace.example.com`
 - **Service Provider Binding**: Post
@@ -238,12 +262,14 @@ api:
 Select default property mappings or create custom ones
 
 **4. Create Application**
+
 - Applications > Create
 - Name: StreamSpace
 - Provider: Select created provider
 - Launch URL: `https://streamspace.example.com`
 
 **5. Helm Configuration**
+
 ```yaml
 api:
   auth:
@@ -281,6 +307,7 @@ api:
 ```
 
 Users can choose:
+
 - **SSO Login**: `/saml/login`
 - **Local Login**: `/api/auth/login` (username/password)
 
@@ -391,6 +418,7 @@ curl -H "Cookie: saml_session=..." \
 **Error**: `Failed to fetch IdP metadata`
 
 **Solution**:
+
 - Verify the metadata URL is correct
 - Check network connectivity from API pod to IdP
 - Try using `metadataXML` instead of `metadataURL`
@@ -400,6 +428,7 @@ curl -H "Cookie: saml_session=..." \
 **Error**: `Signature verification failed`
 
 **Solution**:
+
 - Verify certificate configuration
 - Check that IdP certificate matches the one in metadata
 - Ensure time synchronization (NTP) between SP and IdP
@@ -409,6 +438,7 @@ curl -H "Cookie: saml_session=..." \
 **Error**: `username not found in SAML assertion`
 
 **Solution**:
+
 - Check attribute mapping configuration
 - Verify IdP sends the required attributes
 - Review assertion in logs to see actual attribute names
@@ -418,6 +448,7 @@ curl -H "Cookie: saml_session=..." \
 **Error**: Browser keeps redirecting between StreamSpace and IdP
 
 **Solution**:
+
 - Check `entityID` and `acsURL` match IdP configuration
 - Verify cookie domain settings
 - Check for path mismatches in redirect URLs
@@ -427,6 +458,7 @@ curl -H "Cookie: saml_session=..." \
 **Error**: `Certificate has expired`
 
 **Solution**:
+
 - Generate new certificate and key
 - Update secret: `kubectl create secret generic streamspace-saml ...`
 - Restart API pods
@@ -470,9 +502,10 @@ api:
 ## Support
 
 For issues or questions:
-- **Documentation**: https://docs.streamspace.io
-- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
-- **Community**: https://discord.gg/streamspace
+
+- **Documentation**: <https://docs.streamspace.io>
+- **GitHub Issues**: <https://github.com/streamspace-dev/streamspace/issues>
+- **Community**: <https://discord.gg/streamspace>
 
 ## References
 

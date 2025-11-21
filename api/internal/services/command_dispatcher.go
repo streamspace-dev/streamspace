@@ -43,9 +43,9 @@ import (
 	"log"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
-	"github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 // CommandDispatcher manages the queuing and dispatch of commands to agents.

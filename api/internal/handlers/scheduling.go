@@ -74,7 +74,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // SchedulingHandler handles session scheduling and calendar integration requests.

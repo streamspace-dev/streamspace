@@ -70,20 +70,8 @@ check_prerequisites() {
     log_success "Docker is available and running"
 }
 
-# Build Kubernetes controller image
-build_kubernetes_controller() {
-    log "Building Kubernetes controller image..."
-    log_info "Image: ${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}"
-    log_info "Context: ${PROJECT_ROOT}/k8s-controller"
-
-    docker build ${BUILD_ARGS} \
-        -t "${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}" \
-        -t "${KUBERNETES_CONTROLLER_IMAGE}:latest" \
-        -f "${PROJECT_ROOT}/k8s-controller/Dockerfile" \
-        "${PROJECT_ROOT}/k8s-controller/"
-
-    log_success "Kubernetes controller image built successfully"
-}
+# Kubernetes controller removed in v2.0 (replaced by k8s-agent)
+# Agent-based architecture replaces controller-based CRD approach
 
 # Build API image
 build_api() {
@@ -181,20 +169,18 @@ main() {
 
     # Allow building individual components
     if [ $# -eq 0 ]; then
-        # Build all v2.0-beta components
-        # Note: k8s-controller REPLACED by k8s-agent in v2.0
+        # v2.0-beta components only
         build_api
         build_ui
         build_k8s_agent
-        # Excluded (deferred to v2.1): docker-controller
-        # Excluded (replaced in v2.0): kubernetes-controller
-        # Build v1.0 controller manually: ./scripts/local-build.sh kubernetes-controller
     else
         # Build specific components
         for component in "$@"; do
             case "$component" in
                 controller|kubernetes-controller)
-                    build_kubernetes_controller
+                    log_error "Kubernetes controller has been replaced by k8s-agent in v2.0"
+                    log_info "The controller-based architecture is deprecated"
+                    exit 1
                     ;;
                 api)
                     build_api
@@ -227,11 +213,9 @@ main() {
     log_info "v2.0-beta Components Built:"
     echo "  ✓ API Server (Control Plane with VNC proxy)"
     echo "  ✓ UI (Web interface)"
-    echo "  ✓ K8s Agent (Session management via WebSocket) ← REPLACES k8s-controller"
+    echo "  ✓ K8s Agent (Session management via WebSocket)"
     echo ""
-    log_info "Replaced in v2.0:"
-    echo "  • Kubernetes Controller → K8s Agent (agent connects TO Control Plane)"
-    echo ""
+
     log_info "Deferred to v2.1:"
     echo "  • Docker Agent (multi-platform support)"
     echo ""

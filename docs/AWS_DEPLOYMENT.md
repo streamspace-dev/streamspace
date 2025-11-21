@@ -5,6 +5,7 @@ This guide walks you through deploying StreamSpace on Amazon Web Services (AWS) 
 ## Overview
 
 StreamSpace on AWS provides:
+
 - **Fully managed Kubernetes** with Amazon EKS
 - **Auto-scaling** node groups with Cluster Autoscaler
 - **Persistent storage** with Amazon EFS
@@ -55,6 +56,7 @@ StreamSpace on AWS provides:
 ## Prerequisites
 
 ### 1. AWS Account
+
 - Active AWS account with appropriate permissions
 - IAM user or role with permissions for:
   - EC2, VPC, EKS, EFS, RDS
@@ -62,6 +64,7 @@ StreamSpace on AWS provides:
   - KMS key management
 
 ### 2. Tools Installation
+
 ```bash
 # AWS CLI
 brew install awscli  # macOS
@@ -91,6 +94,7 @@ curl https://raw.githubusercontent.com/helm/helm/main/scripts/get-helm-3 | bash
 ```
 
 ### 3. Configure AWS CLI
+
 ```bash
 aws configure
 # Enter:
@@ -106,12 +110,14 @@ aws sts get-caller-identity
 ## Quick Start
 
 ### 1. Clone Repository
+
 ```bash
-git clone https://github.com/streamspace/streamspace.git
+git clone https://github.com/streamspace-dev/streamspace.git
 cd streamspace/terraform/aws
 ```
 
 ### 2. Configure Variables
+
 Create `terraform.tfvars`:
 
 ```hcl
@@ -155,6 +161,7 @@ db_max_allocated_storage = 200
 ```
 
 ### 3. Deploy Infrastructure
+
 ```bash
 # Initialize Terraform
 terraform init
@@ -176,6 +183,7 @@ terraform apply
 ```
 
 ### 4. Configure kubectl
+
 ```bash
 # Get the command from Terraform output
 aws eks update-kubeconfig --region us-west-2 --name streamspace-prod
@@ -187,6 +195,7 @@ kubectl get nodes
 ### 5. Install Cluster Add-ons
 
 #### a. AWS Load Balancer Controller
+
 ```bash
 # Add Helm repository
 helm repo add eks https://aws.github.io/eks-charts
@@ -201,12 +210,14 @@ helm install aws-load-balancer-controller eks/aws-load-balancer-controller \
 ```
 
 #### b. EFS CSI Driver
+
 ```bash
 # Already installed via Terraform, verify:
 kubectl get pods -n kube-system | grep efs-csi
 ```
 
 #### c. Cluster Autoscaler
+
 ```bash
 kubectl apply -f - <<EOF
 apiVersion: apps/v1
@@ -252,6 +263,7 @@ EOF
 ```
 
 ### 6. Create EFS Storage Class
+
 ```bash
 # Get EFS ID from Terraform output
 EFS_ID=$(terraform output -raw efs_id)
@@ -275,6 +287,7 @@ EOF
 ### 7. Deploy StreamSpace
 
 #### a. Create Database Secret (if using RDS)
+
 ```bash
 # Get RDS credentials from Terraform output
 DB_PASSWORD=$(terraform output -raw db_password)
@@ -285,6 +298,7 @@ kubectl create secret generic streamspace-db-credentials \
 ```
 
 #### b. Create TLS Certificate (optional)
+
 ```bash
 # Request certificate in AWS Certificate Manager
 aws acm request-certificate \
@@ -296,6 +310,7 @@ aws acm request-certificate \
 ```
 
 #### c. Install StreamSpace with Helm
+
 ```bash
 # Get RDS endpoint
 DB_ENDPOINT=$(terraform output -raw db_endpoint)
@@ -395,6 +410,7 @@ helm install streamspace ../../chart \
 ```
 
 ### 8. Verify Deployment
+
 ```bash
 # Check pods
 kubectl get pods -n streamspace
@@ -413,18 +429,24 @@ kubectl get nodes -o wide
 ## Cost Optimization
 
 ### 1. Use Spot Instances
+
 Workload nodes use Spot instances by default (60-90% cost savings):
+
 ```hcl
 workload_capacity_type = "SPOT"
 ```
 
 ### 2. Auto-scaling
+
 Cluster Autoscaler automatically adjusts node count based on demand:
+
 - Scales down idle nodes after 10 minutes
 - Scales up when pods are pending
 
 ### 3. Right-size Resources
+
 Monitor resource usage and adjust node instance types:
+
 ```bash
 # View node resource usage
 kubectl top nodes
@@ -434,10 +456,13 @@ workload_instance_type = "t3.large"  # Start smaller
 ```
 
 ### 4. EFS Lifecycle Policies
+
 Inactive files transition to Infrequent Access (IA) after 30 days (configured in Terraform).
 
 ### 5. RDS Reserved Instances
+
 For production, purchase RDS Reserved Instances for 40-60% savings:
+
 ```bash
 aws rds purchase-reserved-db-instances-offering \
   --reserved-db-instances-offering-id <offering-id> \
@@ -449,10 +474,12 @@ aws rds purchase-reserved-db-instances-offering \
 ### Horizontal Scaling
 
 **Automatic (Cluster Autoscaler)**:
+
 - Node groups scale based on pending pods
 - Min/max configured in Terraform variables
 
 **Manual**:
+
 ```bash
 # Scale workload node group
 aws eks update-nodegroup-config \
@@ -464,6 +491,7 @@ aws eks update-nodegroup-config \
 ### Vertical Scaling
 
 Change instance types:
+
 ```hcl
 # In terraform.tfvars
 workload_instance_type = "t3.2xlarge"  # Upgrade
@@ -475,6 +503,7 @@ terraform apply
 ## Monitoring
 
 ### CloudWatch
+
 ```bash
 # View EKS cluster metrics
 aws cloudwatch get-metric-statistics \
@@ -488,7 +517,9 @@ aws cloudwatch get-metric-statistics \
 ```
 
 ### Prometheus & Grafana
+
 StreamSpace includes built-in monitoring (if enabled):
+
 ```bash
 # Port-forward Grafana
 kubectl port-forward -n streamspace svc/streamspace-grafana 3000:80
@@ -499,6 +530,7 @@ kubectl port-forward -n streamspace svc/streamspace-grafana 3000:80
 ## Backup & Disaster Recovery
 
 ### EFS Backups
+
 ```bash
 # Enable automatic backups
 aws backup create-backup-plan \
@@ -506,10 +538,12 @@ aws backup create-backup-plan \
 ```
 
 ### RDS Automated Backups
+
 - Configured via Terraform (30 days retention for prod)
 - Point-in-time recovery available
 
 ### Database Manual Snapshot
+
 ```bash
 aws rds create-db-snapshot \
   --db-instance-identifier streamspace-prod-db \
@@ -519,21 +553,25 @@ aws rds create-db-snapshot \
 ## Security
 
 ### Network Security
+
 - Private subnets for EKS nodes
 - Security groups restrict traffic
 - NAT gateways for outbound traffic
 
 ### Encryption
+
 - EKS secrets encrypted with KMS
 - EFS encrypted at rest
 - RDS encrypted at rest
 - TLS for ingress traffic
 
 ### IAM Roles
+
 - Pod-level IAM roles via IRSA
 - Principle of least privilege
 
 ### Security Scanning
+
 ```bash
 # Scan images with Trivy
 trivy image ghcr.io/streamspace/streamspace-api:latest
@@ -542,6 +580,7 @@ trivy image ghcr.io/streamspace/streamspace-api:latest
 ## Troubleshooting
 
 ### Pods Not Scheduling
+
 ```bash
 # Check node capacity
 kubectl describe nodes | grep -A 5 "Allocated resources"
@@ -554,6 +593,7 @@ kubectl get pods -n streamspace --field-selector=status.phase=Pending
 ```
 
 ### EFS Mount Issues
+
 ```bash
 # Check EFS CSI driver
 kubectl get pods -n kube-system | grep efs-csi
@@ -563,6 +603,7 @@ kubectl logs -n kube-system -l app=efs-csi-controller
 ```
 
 ### RDS Connection Failed
+
 ```bash
 # Check security group
 aws ec2 describe-security-groups \
@@ -574,6 +615,7 @@ kubectl run -it --rm debug --image=postgres:15 -- \
 ```
 
 ### Load Balancer Not Created
+
 ```bash
 # Check ALB controller
 kubectl logs -n kube-system -l app.kubernetes.io/name=aws-load-balancer-controller
@@ -585,6 +627,7 @@ kubectl describe ingress streamspace -n streamspace
 ## Cleanup
 
 ### Destroy Infrastructure
+
 ```bash
 # Uninstall StreamSpace first
 helm uninstall streamspace -n streamspace
@@ -608,15 +651,16 @@ terraform destroy
 
 ## Support
 
-- **Documentation**: https://docs.streamspace.io/aws
-- **AWS Support**: https://console.aws.amazon.com/support
-- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
+- **Documentation**: <https://docs.streamspace.io/aws>
+- **AWS Support**: <https://console.aws.amazon.com/support>
+- **GitHub Issues**: <https://github.com/streamspace-dev/streamspace/issues>
 
 ## Cost Estimate
 
 Approximate monthly costs for different deployment sizes:
 
 ### Small (Dev/Testing)
+
 - 2x t3.large system nodes: $120
 - 2x t3.xlarge spot workload nodes: $60
 - EFS (100GB): $30
@@ -624,6 +668,7 @@ Approximate monthly costs for different deployment sizes:
 - **Total**: ~$240/month
 
 ### Medium (Production)
+
 - 3x t3.large system nodes: $180
 - 5x t3.xlarge spot workload nodes: $150
 - EFS (500GB): $150
@@ -632,6 +677,7 @@ Approximate monthly costs for different deployment sizes:
 - **Total**: ~$625/month
 
 ### Large (Enterprise)
+
 - 3x t3.2xlarge system nodes: $360
 - 10x t3.2xlarge spot workload nodes: $600
 - 3x g4dn.xlarge GPU nodes: $450

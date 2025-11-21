@@ -6,7 +6,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // BillingPlugin implements comprehensive billing and usage tracking

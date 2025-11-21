@@ -215,7 +215,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // WebSocketHandler handles WebSocket connections for real-time platform updates.

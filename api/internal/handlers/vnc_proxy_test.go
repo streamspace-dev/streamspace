@@ -26,8 +26,8 @@ import (
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	ws "github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	ws "github.com/streamspace-dev/streamspace/api/internal/websocket"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
 )

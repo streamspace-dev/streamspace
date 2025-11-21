@@ -101,7 +101,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
 

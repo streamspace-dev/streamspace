@@ -1,4 +1,4 @@
-module github.com/streamspace/streamspace/agents/k8s-agent
+module github.com/streamspace-dev/streamspace/agents/k8s-agent
 
 go 1.21
 

@@ -48,9 +48,9 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // NodeHandler provides deprecated stub handlers for node management

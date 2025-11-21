@@ -1,5 +1,5 @@
 package main
-import "github.com/streamspace/streamspace/agents/k8s-agent/internal/config"
+import "github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
 
 import (
 	"fmt"

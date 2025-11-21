@@ -45,9 +45,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
-	wsocket "github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	wsocket "github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 const (

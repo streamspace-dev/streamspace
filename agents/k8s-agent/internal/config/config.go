@@ -1,6 +1,6 @@
 package config
 
-import "github.com/streamspace/streamspace/agents/k8s-agent/internal/errors"
+import "github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/errors"
 
 // AgentConfig holds the configuration for the K8s Agent.
 //

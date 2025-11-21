@@ -19,6 +19,7 @@ This document provides a comprehensive guide for migrating StreamSpace from Kasm
 ### Dependencies to Replace
 
 **KasmVNC References** (50+ locations):
+
 ```bash
 # Find all KasmVNC references
 grep -ri "kasm\|Kasm\|KASM" --include="*.{go,yaml,yml,md}" .
@@ -34,6 +35,7 @@ grep -ri "kasm\|Kasm\|KASM" --include="*.{go,yaml,yml,md}" .
 ```
 
 **LinuxServer.io Images** (22 templates):
+
 ```bash
 # All current templates use LinuxServer.io
 ls manifests/templates/*/*.yaml
@@ -123,6 +125,7 @@ ls manifests/templates/*/*.yaml
 ### 1. TigerVNC Server
 
 **Installation in Container**:
+
 ```dockerfile
 FROM ubuntu:22.04
 
@@ -151,6 +154,7 @@ CMD ["/usr/local/bin/vnc-startup.sh"]
 ```
 
 **VNC Startup Script** (`vnc-startup.sh`):
+
 ```bash
 #!/bin/bash
 set -e
@@ -185,6 +189,7 @@ tail -f ~/.vnc/*.log
 ```
 
 **Configuration Options**:
+
 ```bash
 # ~/.vnc/config
 geometry=1920x1080
@@ -199,6 +204,7 @@ AcceptSetDesktopSize=1
 ### 2. noVNC Client
 
 **Integration Approach**:
+
 ```typescript
 // Web UI: components/VNCViewer.tsx
 import React, { useEffect, useRef } from 'react';
@@ -254,6 +260,7 @@ export const VNCViewer: React.FC<VNCViewerProps> = ({ sessionId, wsUrl }) => {
 ```
 
 **Custom Branding**:
+
 ```css
 /* Custom noVNC styling */
 .novnc-canvas {
@@ -269,6 +276,7 @@ export const VNCViewer: React.FC<VNCViewerProps> = ({ sessionId, wsUrl }) => {
 ### 3. WebSocket Proxy
 
 **Go Implementation**:
+
 ```go
 // api/internal/vnc/proxy.go
 package vnc
@@ -463,7 +471,7 @@ USER streamspace
 # Auto-start Firefox
 RUN echo "firefox &" >> ~/.config/autostart.sh
 
-LABEL org.opencontainers.image.source="https://github.com/streamspace/streamspace"
+LABEL org.opencontainers.image.source="https://github.com/streamspace-dev/streamspace"
 LABEL org.opencontainers.image.description="Firefox browser for StreamSpace"
 LABEL org.opencontainers.image.licenses="MIT"
 ```
@@ -471,6 +479,7 @@ LABEL org.opencontainers.image.licenses="MIT"
 ### Build Infrastructure
 
 **GitHub Actions Workflow**:
+
 ```yaml
 # .github/workflows/build-images.yml
 name: Build Container Images
@@ -572,6 +581,7 @@ jobs:
 ### Phase 1: Preparation (Week 1-2)
 
 **Tasks**:
+
 - [ ] Research TigerVNC configuration options
 - [ ] Test noVNC client with TigerVNC server
 - [ ] Build proof-of-concept base image
@@ -579,6 +589,7 @@ jobs:
 - [ ] Performance benchmarking vs KasmVNC
 
 **Deliverables**:
+
 - Working POC: TigerVNC + noVNC
 - Performance comparison report
 - Technical specification document
@@ -586,6 +597,7 @@ jobs:
 ### Phase 2: Base Image Development (Week 3-4)
 
 **Tasks**:
+
 - [ ] Create `base-ubuntu-vnc:22.04`
 - [ ] Create `base-alpine-vnc:3.18`
 - [ ] Create `base-debian-vnc:12`
@@ -594,6 +606,7 @@ jobs:
 - [ ] ARM64 testing
 
 **Deliverables**:
+
 - 3 base images published to ghcr.io
 - Dockerfile templates
 - Build documentation
@@ -601,21 +614,25 @@ jobs:
 ### Phase 3: Application Image Migration (Week 5-8)
 
 **Priority 1** (Week 5-6):
+
 - [ ] Firefox, Chromium, Brave, LibreWolf (browsers)
 - [ ] VS Code, Code Server (development)
 - [ ] GIMP, Inkscape (design - lightweight)
 
 **Priority 2** (Week 7):
+
 - [ ] Blender, Krita, FreeCAD (design - heavyweight)
 - [ ] LibreOffice, Calligra (productivity)
 - [ ] Audacity, Kdenlive (media)
 
 **Priority 3** (Week 8):
+
 - [ ] Gaming emulators
 - [ ] Scientific tools
 - [ ] Specialized applications
 
 **Deliverables**:
+
 - 100+ application images
 - Template YAML updates
 - Testing results
@@ -623,6 +640,7 @@ jobs:
 ### Phase 4: WebSocket Proxy Implementation (Week 9-10)
 
 **Tasks**:
+
 - [ ] Implement proxy in API backend
 - [ ] Add authentication
 - [ ] Add rate limiting
@@ -630,6 +648,7 @@ jobs:
 - [ ] Load testing
 
 **Deliverables**:
+
 - Production-ready WebSocket proxy
 - API documentation
 - Load test results
@@ -637,6 +656,7 @@ jobs:
 ### Phase 5: Template and CRD Updates (Week 11)
 
 **Tasks**:
+
 - [ ] Update CRD: `kasmvnc` → `vnc` field
 - [ ] Update all 22 template YAMLs
 - [ ] Update database schema
@@ -644,6 +664,7 @@ jobs:
 - [ ] Update controller code
 
 **Deliverables**:
+
 - Updated CRDs
 - Updated templates
 - Database migration script
@@ -651,6 +672,7 @@ jobs:
 ### Phase 6: Documentation Update (Week 12)
 
 **Tasks**:
+
 - [ ] Remove all KasmVNC references
 - [ ] Update ARCHITECTURE.md
 - [ ] Update CONTROLLER_GUIDE.md
@@ -658,6 +680,7 @@ jobs:
 - [ ] Create migration guide for users
 
 **Deliverables**:
+
 - Complete documentation overhaul
 - User migration guide
 - Video tutorial
@@ -665,6 +688,7 @@ jobs:
 ### Phase 7: Testing and Validation (Week 13-14)
 
 **Tasks**:
+
 - [ ] End-to-end testing
 - [ ] Performance comparison
 - [ ] Security audit
@@ -672,6 +696,7 @@ jobs:
 - [ ] Load testing
 
 **Success Criteria**:
+
 - ✅ Zero KasmVNC references in codebase
 - ✅ All images build successfully
 - ✅ Performance ≥ KasmVNC baseline
@@ -681,6 +706,7 @@ jobs:
 ### Phase 8: Deployment (Week 15-16)
 
 **Tasks**:
+
 - [ ] Staged rollout plan
 - [ ] Blue-green deployment
 - [ ] Monitoring and alerts
@@ -688,6 +714,7 @@ jobs:
 - [ ] User communication
 
 **Deliverables**:
+
 - Production deployment
 - Monitoring dashboards
 - Incident response plan
@@ -919,6 +946,7 @@ export default function () {
 ### Rollback Steps
 
 1. **Immediate** (< 15 minutes):
+
    ```bash
    # Revert CRD to previous version
    kubectl apply -f backups/crds/session-kasmvnc.yaml
@@ -945,27 +973,31 @@ export default function () {
 ## 📚 Resources
 
 ### TigerVNC Documentation
-- Official: https://tigervnc.org/
-- GitHub: https://github.com/TigerVNC/tigervnc
-- Wiki: https://github.com/TigerVNC/tigervnc/wiki
+
+- Official: <https://tigervnc.org/>
+- GitHub: <https://github.com/TigerVNC/tigervnc>
+- Wiki: <https://github.com/TigerVNC/tigervnc/wiki>
 
 ### noVNC Documentation
-- Official: https://novnc.com/
-- GitHub: https://github.com/novnc/noVNC
-- API Docs: https://github.com/novnc/noVNC/blob/master/docs/API.md
+
+- Official: <https://novnc.com/>
+- GitHub: <https://github.com/novnc/noVNC>
+- API Docs: <https://github.com/novnc/noVNC/blob/master/docs/API.md>
 
 ### RFB Protocol
-- Specification: https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst
-- Wikipedia: https://en.wikipedia.org/wiki/RFB_protocol
+
+- Specification: <https://github.com/rfbproto/rfbproto/blob/master/rfbproto.rst>
+- Wikipedia: <https://en.wikipedia.org/wiki/RFB_protocol>
 
 ---
 
 ## 📞 Support
 
 For migration questions or issues:
-- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
-- **Discord**: https://discord.gg/streamspace #vnc-migration
-- **Email**: migration-support@streamspace.io
+
+- **GitHub Issues**: <https://github.com/streamspace-dev/streamspace/issues>
+- **Discord**: <https://discord.gg/streamspace> #vnc-migration
+- **Email**: <migration-support@streamspace.io>
 
 ---
 

@@ -13,6 +13,7 @@
 **Progress**: Week 2-3 of 10-12 weeks (45% complete)
 
 **✅ Completed:**
+
 - Comprehensive codebase audit (Architect)
 - All 3 P0 admin features (Builder):
   - Audit Logs Viewer (1,131 lines)
@@ -23,10 +24,12 @@
 - Comprehensive documentation (Scribe, 3,600+ lines)
 
 **🔄 In Progress:**
+
 - API handler test coverage (Validator, next P0 task)
 - Remaining P1 admin features (Builder)
 
 **📋 Next Priorities:**
+
 1. Complete test coverage: API handlers (P0), UI components (P1)
 2. Complete P1 admin features: Alert Management, Controller Management, Session Recordings
 3. Implement top 10 plugins by extracting handler logic
@@ -39,6 +42,7 @@
 **StreamSpace** is a Kubernetes-native container streaming platform that delivers GUI applications to web browsers.
 
 **Key Features:**
+
 - Browser-based access to containerized applications
 - Multi-user support with enterprise SSO (SAML, OIDC, MFA)
 - Auto-hibernation for resource efficiency
@@ -47,6 +51,7 @@
 - Plugin system for extensibility
 
 **Current Architecture:**
+
 - **Kubernetes-native**: Production-ready K8s controller with CRDs
 - **API Backend**: Go/Gin with 70+ handlers, 87 database tables
 - **Web UI**: React/TypeScript with 50+ components
@@ -64,8 +69,8 @@ streamspace/
 │   ├── internal/handlers/      # 70+ API handlers
 │   ├── internal/middleware/    # 15+ middleware layers
 │   └── internal/db/            # Database (87 tables)
-├── k8s-controller/             # Kubernetes controller (Kubebuilder)
-│   └── controllers/            # Session, Hibernation, Template controllers
+├── agents/                      # Platform agents
+│   └── k8s-agent/               # Kubernetes agent (WebSocket-based)
 ├── ui/                         # React web UI
 │   ├── src/pages/admin/        # Admin portal (12+ pages)
 │   └── src/components/         # Reusable components
@@ -89,24 +94,28 @@ StreamSpace uses a **4-agent development model** for parallel work:
 ### Agent Roles
 
 **Agent 1: Architect** (Research & Planning)
+
 - Codebase exploration and analysis
 - Feature gap identification
 - Architecture planning and design decisions
 - **Branch**: `claude/audit-streamspace-codebase-*`
 
 **Agent 2: Builder** (Feature Implementation)
+
 - New features (admin UI, API handlers, controllers)
 - Bug fixes and refactoring
 - **Does NOT write tests** (that's Validator's job)
 - **Branch**: `claude/setup-agent2-builder-*`
 
 **Agent 3: Validator** (Testing & QA)
+
 - Unit tests, integration tests, E2E tests
 - Test coverage expansion (goal: 70%+)
 - Quality assurance and bug discovery
 - **Branch**: `claude/setup-agent3-validator-*`
 
 **Agent 4: Scribe** (Documentation)
+
 - Technical documentation
 - API references, deployment guides
 - Testing guides and implementation guides
@@ -115,11 +124,13 @@ StreamSpace uses a **4-agent development model** for parallel work:
 ### Coordination
 
 **Central Document**: `.claude/multi-agent/MULTI_AGENT_PLAN.md`
+
 - All agents update this file with progress
 - Task assignments and status tracking
 - Integration notes and blockers
 
 **Integration Process**:
+
 1. Agents work independently on their branches
 2. Architect periodically pulls and merges all agent work
 3. Conflicts resolved, progress documented
@@ -130,21 +141,25 @@ StreamSpace uses a **4-agent development model** for parallel work:
 ## 🎯 Key Technologies
 
 **Backend:**
+
 - Go 1.21+ with Gin framework
 - PostgreSQL (87 tables)
 - Kubernetes controller (Kubebuilder 3.x)
 
 **Frontend:**
+
 - React 18+ with TypeScript
 - Material-UI (MUI)
 - React Router, Axios
 
 **Infrastructure:**
+
 - Kubernetes 1.19+ (k3s recommended)
 - NFS storage (ReadWriteMany)
 - Traefik ingress
 
 **Testing:**
+
 - Controller: Ginkgo/Gomega + envtest
 - API: Go standard testing + sqlmock
 - UI: Vitest (configured for 80% threshold)
@@ -217,6 +232,7 @@ spec:
 **Types**: `feat`, `fix`, `docs`, `refactor`, `test`, `chore`
 
 **Examples:**
+
 ```bash
 feat(admin-ui): implement audit logs viewer with CSV export
 fix(controller): handle session deletion during reconciliation
@@ -227,6 +243,7 @@ docs(architecture): update data flow diagrams for v1.0.0
 ### Branch Naming
 
 **Multi-agent branches**:
+
 - `claude/audit-streamspace-codebase-*` - Architect
 - `claude/setup-agent2-builder-*` - Builder
 - `claude/setup-agent3-validator-*` - Validator
@@ -238,14 +255,15 @@ docs(architecture): update data flow diagrams for v1.0.0
 
 ## 🧪 Testing
 
-### Run Controller Tests
+### Run Tests
 
 ```bash
-cd k8s-controller
-make test
+# K8s Agent tests
+cd agents/k8s-agent
+go test ./... -v
 
 # Check coverage
-go test ./controllers -coverprofile=coverage.out
+go test ./... -coverprofile=coverage.out
 go tool cover -func=coverage.out
 ```
 
@@ -312,9 +330,9 @@ kubectl delete session test-firefox -n streamspace
 # Install CRDs
 kubectl apply -f manifests/crds/
 
-# Run controller locally
-cd k8s-controller
-make run ENABLE_WEBHOOKS=false
+# Run K8s agent locally (for testing)
+cd agents/k8s-agent
+go run . --api-url=http://localhost:8000
 
 # Deploy full platform
 helm install streamspace ./chart -n streamspace --create-namespace
@@ -410,6 +428,7 @@ helm install streamspace ./chart -n streamspace --create-namespace
 ### Controller Issues
 
 **Problem**: Session stuck in Pending
+
 ```bash
 # Check controller logs
 kubectl logs -n streamspace deploy/streamspace-controller -f
@@ -421,6 +440,7 @@ kubectl get events -n streamspace --sort-by=.metadata.creationTimestamp
 ### CRD Issues
 
 **Problem**: CRD not found
+
 ```bash
 # Install CRDs
 kubectl apply -f manifests/crds/
@@ -429,6 +449,7 @@ kubectl apply -f manifests/crds/
 ### Storage Issues
 
 **Problem**: PVC stuck in Pending
+
 ```bash
 # Check storage class exists
 kubectl get storageclass
@@ -441,11 +462,11 @@ kubectl get pods -n kube-system | grep nfs
 
 ## 📞 Key References
 
-- **GitHub**: https://github.com/streamspace-dev/streamspace
-- **Website**: https://streamspace.dev
-- **Kubebuilder**: https://book.kubebuilder.io/
-- **Kubernetes CRDs**: https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/
-- **LinuxServer.io**: https://docs.linuxserver.io/ (temporary, migrating away)
+- **GitHub**: <https://github.com/streamspace-dev/streamspace>
+- **Website**: <https://streamspace.dev>
+- **Kubebuilder**: <https://book.kubebuilder.io/>
+- **Kubernetes CRDs**: <https://kubernetes.io/docs/concepts/extend-kubernetes/api-extension/custom-resources/>
+- **LinuxServer.io**: <https://docs.linuxserver.io/> (temporary, migrating away)
 
 ---
 

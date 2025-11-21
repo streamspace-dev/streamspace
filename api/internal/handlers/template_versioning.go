@@ -76,7 +76,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // TemplateVersion represents a version of a template

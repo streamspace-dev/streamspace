@@ -47,9 +47,9 @@ import (
 	"sync"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // ConnectionTracker manages active connections and implements auto-hibernation.

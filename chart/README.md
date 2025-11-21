@@ -5,6 +5,7 @@ This Helm chart deploys StreamSpace, a Kubernetes-native multi-user platform for
 ## Overview
 
 StreamSpace provides:
+
 - **Browser-based access** to any containerized application via KasmVNC
 - **Multi-user support** with SSO authentication (Authentik/Keycloak)
 - **Persistent home directories** using NFS storage
@@ -524,11 +525,13 @@ kubectl logs -n streamspace statefulset/streamspace-postgres -f
 #### Pods Not Starting
 
 Check pod events:
+
 ```bash
 kubectl describe pod <pod-name> -n streamspace
 ```
 
 Common causes:
+
 - Image pull errors: Check image names and pull secrets
 - Resource constraints: Check node capacity
 - PVC issues: Verify storage provisioner
@@ -536,11 +539,13 @@ Common causes:
 #### Database Connection Failures
 
 Check API logs:
+
 ```bash
 kubectl logs -n streamspace deploy/streamspace-api | grep -i database
 ```
 
 Verify database connection:
+
 ```bash
 kubectl exec -it -n streamspace deploy/streamspace-api -- sh -c 'nc -zv $DB_HOST $DB_PORT'
 ```
@@ -548,11 +553,13 @@ kubectl exec -it -n streamspace deploy/streamspace-api -- sh -c 'nc -zv $DB_HOST
 #### Ingress Not Working
 
 Check ingress status:
+
 ```bash
 kubectl describe ingress streamspace -n streamspace
 ```
 
 Verify ingress controller is running:
+
 ```bash
 kubectl get pods -n kube-system | grep -i ingress
 # or
@@ -562,16 +569,19 @@ kubectl get pods -n ingress-nginx
 #### Sessions Not Creating
 
 Check controller logs:
+
 ```bash
 kubectl logs -n streamspace deploy/streamspace-controller -f
 ```
 
 Verify CRDs are installed:
+
 ```bash
 kubectl get crds | grep streamspace
 ```
 
 Test creating a session manually:
+
 ```bash
 kubectl apply -f - <<EOF
 apiVersion: stream.streamspace.io/v1alpha1
@@ -595,6 +605,7 @@ kubectl describe session test-session -n streamspace
 See [values.yaml](values.yaml) for complete configuration options with comments.
 
 Key sections:
+
 - `global.*` - Global settings (registry, storage class)
 - `controller.*` - Controller configuration
 - `api.*` - API backend configuration
@@ -608,10 +619,10 @@ Key sections:
 
 ## Support
 
-- **Documentation**: https://docs.streamspace.io
-- **GitHub Issues**: https://github.com/streamspace/streamspace/issues
-- **Discussions**: https://github.com/streamspace/streamspace/discussions
-- **Discord**: https://discord.gg/streamspace
+- **Documentation**: <https://docs.streamspace.io>
+- **GitHub Issues**: <https://github.com/streamspace-dev/streamspace/issues>
+- **Discussions**: <https://github.com/streamspace-dev/streamspace/discussions>
+- **Discord**: <https://discord.gg/streamspace>
 
 ## License
 

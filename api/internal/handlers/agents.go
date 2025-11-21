@@ -50,10 +50,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
-	"github.com/streamspace/streamspace/api/internal/services"
-	"github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/services"
+	"github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 // AgentHandler handles agent registration and management

@@ -189,7 +189,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // PluginDatabase provides full SQL database access for plugins.

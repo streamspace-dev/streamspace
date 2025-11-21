@@ -6,9 +6,9 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
-	internalWebsocket "github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	internalWebsocket "github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 // setupDispatcherTest creates test database, hub, and dispatcher

@@ -41,8 +41,8 @@ import (
 	"log"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // Tracker manages session activity tracking for idle detection and auto-hibernation.

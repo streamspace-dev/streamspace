@@ -67,7 +67,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // downloadIcon downloads an icon from a URL and returns the binary data and media type.

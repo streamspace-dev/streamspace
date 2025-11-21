@@ -90,9 +90,9 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // SessionTemplatesHandler handles custom session templates and presets

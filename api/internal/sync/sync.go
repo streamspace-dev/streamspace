@@ -39,7 +39,7 @@ import (
 	"time"
 
 	"github.com/lib/pq"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // SyncService manages template and plugin repository synchronization.

@@ -13,20 +13,20 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/activity"
-	"github.com/streamspace/streamspace/api/internal/api"
-	"github.com/streamspace/streamspace/api/internal/auth"
-	"github.com/streamspace/streamspace/api/internal/cache"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/handlers"
-	"github.com/streamspace/streamspace/api/internal/k8s"
-	"github.com/streamspace/streamspace/api/internal/middleware"
-	"github.com/streamspace/streamspace/api/internal/quota"
-	"github.com/streamspace/streamspace/api/internal/services"
-	"github.com/streamspace/streamspace/api/internal/sync"
-	"github.com/streamspace/streamspace/api/internal/tracker"
-	internalWebsocket "github.com/streamspace/streamspace/api/internal/websocket"
+	"github.com/streamspace-dev/streamspace/api/internal/activity"
+	"github.com/streamspace-dev/streamspace/api/internal/api"
+	"github.com/streamspace-dev/streamspace/api/internal/auth"
+	"github.com/streamspace-dev/streamspace/api/internal/cache"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/handlers"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/middleware"
+	"github.com/streamspace-dev/streamspace/api/internal/quota"
+	"github.com/streamspace-dev/streamspace/api/internal/services"
+	"github.com/streamspace-dev/streamspace/api/internal/sync"
+	"github.com/streamspace-dev/streamspace/api/internal/tracker"
+	internalWebsocket "github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
 func main() {
@@ -94,20 +94,11 @@ func main() {
 		log.Fatalf("Failed to initialize Kubernetes client: %v", err)
 	}
 
-	// Initialize NATS event publisher
-	// This enables event-driven communication with platform controllers
-	log.Println("Initializing NATS event publisher...")
-	natsURL := getEnv("NATS_URL", "")
-	natsUser := getEnv("NATS_USER", "")
-	natsPassword := getEnv("NATS_PASSWORD", "")
-	eventPublisher, err := events.NewPublisher(events.Config{
-		URL:      natsURL,
-		User:     natsUser,
-		Password: natsPassword,
-	})
+	// Initialize stub event publisher (NATS removed - WebSocket used instead)
+	log.Println("Initializing event publisher (stub - agents use WebSocket)...")
+	eventPublisher, err := events.NewPublisher(events.Config{})
 	if err != nil {
-		log.Printf("Warning: Failed to initialize NATS publisher: %v", err)
-		log.Println("Event publishing will be disabled - controllers will not receive events")
+		log.Fatalf("Failed to initialize event publisher: %v", err)
 	}
 	defer eventPublisher.Close()
 
@@ -116,28 +107,6 @@ func main() {
 	if platform == "" {
 		platform = events.PlatformKubernetes // Default platform
 	}
-
-	// Initialize NATS event subscriber for receiving status updates from controllers
-	log.Println("Initializing NATS event subscriber...")
-	eventSubscriber, err := events.NewSubscriber(events.Config{
-		URL:      natsURL,
-		User:     natsUser,
-		Password: natsPassword,
-	}, database.DB(), eventPublisher)
-	if err != nil {
-		log.Printf("Warning: Failed to initialize NATS subscriber: %v", err)
-		log.Println("Status feedback from controllers will be disabled")
-	}
-	defer eventSubscriber.Close()
-
-	// Start subscriber in background to receive controller status events
-	subscriberCtx, cancelSubscriber := context.WithCancel(context.Background())
-	defer cancelSubscriber()
-	go func() {
-		if err := eventSubscriber.Start(subscriberCtx); err != nil {
-			log.Printf("NATS subscriber error: %v", err)
-		}
-	}()
 
 	// Initialize connection tracker
 	log.Println("Starting connection tracker...")
@@ -247,9 +216,9 @@ func main() {
 	router.Use(middleware.GzipWithExclusions(
 		middleware.BestSpeed, // Use best speed for balance of compression vs CPU
 		[]string{
-			"/api/v1/ws/",      // Exclude WebSocket paths
-			"/api/v1/auth/",    // Exclude auth endpoints (setup, login, etc.)
-			"/api/v1/metrics",  // Exclude metrics (browser handles decompression inconsistently)
+			"/api/v1/ws/",     // Exclude WebSocket paths
+			"/api/v1/auth/",   // Exclude auth endpoints (setup, login, etc.)
+			"/api/v1/metrics", // Exclude metrics (browser handles decompression inconsistently)
 		},
 	))
 
@@ -370,9 +339,9 @@ func main() {
 		Handler: router,
 
 		// SECURITY: Prevent slow loris attacks and resource exhaustion
-		ReadTimeout:       15 * time.Second, // Time to read request headers + body
-		ReadHeaderTimeout: 5 * time.Second,  // Time to read request headers only
-		WriteTimeout:      30 * time.Second, // Time to write response
+		ReadTimeout:       15 * time.Second,  // Time to read request headers + body
+		ReadHeaderTimeout: 5 * time.Second,   // Time to read request headers only
+		WriteTimeout:      30 * time.Second,  // Time to write response
 		IdleTimeout:       120 * time.Second, // Keep-alive timeout
 
 		// SECURITY: Limit header size to prevent memory exhaustion
@@ -502,20 +471,20 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				// NOTE: Session recording is now handled by the streamspace-recording plugin
 				// Install it via: Admin → Plugins → streamspace-recording
 
-		}
+			}
 
-		// VNC Proxy (v2.0 multi-platform architecture - authenticated users)
-		// Provides VNC WebSocket connections from UI to session desktops via agents
-		vncProxyHandler.RegisterRoutes(protected)
+			// VNC Proxy (v2.0 multi-platform architecture - authenticated users)
+			// Provides VNC WebSocket connections from UI to session desktops via agents
+			vncProxyHandler.RegisterRoutes(protected)
 
-		// VNC Viewer (noVNC static HTML page)
-		// Serves the noVNC client that connects to the Control Plane VNC proxy
-		protected.GET("/vnc-viewer/:sessionId", func(c *gin.Context) {
-			c.File("./api/static/vnc-viewer.html")
-		})
+			// VNC Viewer (noVNC static HTML page)
+			// Serves the noVNC client that connects to the Control Plane VNC proxy
+			protected.GET("/vnc-viewer/:sessionId", func(c *gin.Context) {
+				c.File("./api/static/vnc-viewer.html")
+			})
 
-		// NOTE: Data Loss Prevention (DLP) is now handled by the streamspace-dlp plugin
-		// Install it via: Admin → Plugins → streamspace-dlp
+			// NOTE: Data Loss Prevention (DLP) is now handled by the streamspace-dlp plugin
+			// Install it via: Admin → Plugins → streamspace-dlp
 
 			// NOTE: Workflow Automation is now handled by the streamspace-workflows plugin
 			// Install it via: Admin → Plugins → streamspace-workflows
@@ -581,123 +550,123 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				collaboration.GET("/:collabId/stats", collaborationHandler.GetCollaborationStats)
 			}
 
-		// Integration Hub & Webhooks - Operator/Admin only
-		integrations := protected.Group("/integrations")
-		integrations.Use(operatorMiddleware)
-		{
-			// Webhooks
-			integrations.GET("/webhooks", integrationsHandler.ListWebhooks)
-			integrations.POST("/webhooks", integrationsHandler.CreateWebhook)
-			integrations.PATCH("/webhooks/:webhookId", integrationsHandler.UpdateWebhook)
-			integrations.DELETE("/webhooks/:webhookId", integrationsHandler.DeleteWebhook)
-			integrations.POST("/webhooks/:webhookId/test", integrationsHandler.TestWebhook)
-			integrations.GET("/webhooks/:webhookId/deliveries", integrationsHandler.GetWebhookDeliveries)
-			// NOTE: Webhook retry not yet implemented
-			// integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
+			// Integration Hub & Webhooks - Operator/Admin only
+			integrations := protected.Group("/integrations")
+			integrations.Use(operatorMiddleware)
+			{
+				// Webhooks
+				integrations.GET("/webhooks", integrationsHandler.ListWebhooks)
+				integrations.POST("/webhooks", integrationsHandler.CreateWebhook)
+				integrations.PATCH("/webhooks/:webhookId", integrationsHandler.UpdateWebhook)
+				integrations.DELETE("/webhooks/:webhookId", integrationsHandler.DeleteWebhook)
+				integrations.POST("/webhooks/:webhookId/test", integrationsHandler.TestWebhook)
+				integrations.GET("/webhooks/:webhookId/deliveries", integrationsHandler.GetWebhookDeliveries)
+				// NOTE: Webhook retry not yet implemented
+				// integrations.POST("/webhooks/:webhookId/retry/:deliveryId", h.RetryWebhookDelivery)
 
-			// External Integrations
-			integrations.GET("/external", integrationsHandler.ListIntegrations)
-			integrations.POST("/external", integrationsHandler.CreateIntegration)
-			// NOTE: Update and delete integrations not yet implemented
-			// integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
-			// integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
-			integrations.POST("/external/:integrationId/test", integrationsHandler.TestIntegration)
+				// External Integrations
+				integrations.GET("/external", integrationsHandler.ListIntegrations)
+				integrations.POST("/external", integrationsHandler.CreateIntegration)
+				// NOTE: Update and delete integrations not yet implemented
+				// integrations.PATCH("/external/:integrationId", h.UpdateIntegration)
+				// integrations.DELETE("/external/:integrationId", h.DeleteIntegration)
+				integrations.POST("/external/:integrationId/test", integrationsHandler.TestIntegration)
 
-			// Available events
-			integrations.GET("/events", integrationsHandler.GetAvailableEvents)
-		}
+				// Available events
+				integrations.GET("/events", integrationsHandler.GetAvailableEvents)
+			}
 
-		// Security - MFA, IP Whitelisting, Zero Trust
-		security := protected.Group("/security")
-		{
-			// Multi-Factor Authentication (all users)
-			security.POST("/mfa/setup", securityHandler.SetupMFA)
-			security.POST("/mfa/:mfaId/verify-setup", securityHandler.VerifyMFASetup)
-			security.POST("/mfa/verify", securityHandler.VerifyMFA)
-			security.GET("/mfa/methods", securityHandler.ListMFAMethods)
-			security.DELETE("/mfa/:mfaId", securityHandler.DisableMFA)
-			security.POST("/mfa/backup-codes", securityHandler.GenerateBackupCodes)
+			// Security - MFA, IP Whitelisting, Zero Trust
+			security := protected.Group("/security")
+			{
+				// Multi-Factor Authentication (all users)
+				security.POST("/mfa/setup", securityHandler.SetupMFA)
+				security.POST("/mfa/:mfaId/verify-setup", securityHandler.VerifyMFASetup)
+				security.POST("/mfa/verify", securityHandler.VerifyMFA)
+				security.GET("/mfa/methods", securityHandler.ListMFAMethods)
+				security.DELETE("/mfa/:mfaId", securityHandler.DisableMFA)
+				security.POST("/mfa/backup-codes", securityHandler.GenerateBackupCodes)
 
-			// IP Whitelisting (users can manage their own, admins can manage all)
-			security.POST("/ip-whitelist", securityHandler.CreateIPWhitelist)
-			security.GET("/ip-whitelist", securityHandler.ListIPWhitelist)
-			security.DELETE("/ip-whitelist/:entryId", securityHandler.DeleteIPWhitelist)
-			security.GET("/ip-whitelist/check", securityHandler.CheckIPAccess)
+				// IP Whitelisting (users can manage their own, admins can manage all)
+				security.POST("/ip-whitelist", securityHandler.CreateIPWhitelist)
+				security.GET("/ip-whitelist", securityHandler.ListIPWhitelist)
+				security.DELETE("/ip-whitelist/:entryId", securityHandler.DeleteIPWhitelist)
+				security.GET("/ip-whitelist/check", securityHandler.CheckIPAccess)
 
-			// Zero Trust / Session Verification
-			security.POST("/sessions/:sessionId/verify", securityHandler.VerifySession)
-			security.POST("/device-posture", securityHandler.CheckDevicePosture)
-			security.GET("/alerts", securityHandler.GetSecurityAlerts)
-		}
+				// Zero Trust / Session Verification
+				security.POST("/sessions/:sessionId/verify", securityHandler.VerifySession)
+				security.POST("/device-posture", securityHandler.CheckDevicePosture)
+				security.GET("/alerts", securityHandler.GetSecurityAlerts)
+			}
 
-		// Session Scheduling & Calendar Integration
-		scheduling := protected.Group("/scheduling")
-		{
-			// Scheduled sessions
-			scheduling.GET("/sessions", schedulingHandler.ListScheduledSessions)
-			scheduling.POST("/sessions", schedulingHandler.CreateScheduledSession)
-			scheduling.GET("/sessions/:scheduleId", schedulingHandler.GetScheduledSession)
-			scheduling.PATCH("/sessions/:scheduleId", schedulingHandler.UpdateScheduledSession)
-			scheduling.DELETE("/sessions/:scheduleId", schedulingHandler.DeleteScheduledSession)
-			scheduling.POST("/sessions/:scheduleId/enable", schedulingHandler.EnableScheduledSession)
-			scheduling.POST("/sessions/:scheduleId/disable", schedulingHandler.DisableScheduledSession)
+			// Session Scheduling & Calendar Integration
+			scheduling := protected.Group("/scheduling")
+			{
+				// Scheduled sessions
+				scheduling.GET("/sessions", schedulingHandler.ListScheduledSessions)
+				scheduling.POST("/sessions", schedulingHandler.CreateScheduledSession)
+				scheduling.GET("/sessions/:scheduleId", schedulingHandler.GetScheduledSession)
+				scheduling.PATCH("/sessions/:scheduleId", schedulingHandler.UpdateScheduledSession)
+				scheduling.DELETE("/sessions/:scheduleId", schedulingHandler.DeleteScheduledSession)
+				scheduling.POST("/sessions/:scheduleId/enable", schedulingHandler.EnableScheduledSession)
+				scheduling.POST("/sessions/:scheduleId/disable", schedulingHandler.DisableScheduledSession)
 
-			// Calendar integrations
-			scheduling.POST("/calendar/connect", schedulingHandler.ConnectCalendar)
-			scheduling.GET("/calendar/oauth/callback", schedulingHandler.CalendarOAuthCallback)
-			scheduling.GET("/calendar/integrations", schedulingHandler.ListCalendarIntegrations)
-			scheduling.DELETE("/calendar/integrations/:integrationId", schedulingHandler.DisconnectCalendar)
-			scheduling.POST("/calendar/integrations/:integrationId/sync", schedulingHandler.SyncCalendar)
-			scheduling.GET("/calendar/export.ics", schedulingHandler.ExportICalendar)
-		}
+				// Calendar integrations
+				scheduling.POST("/calendar/connect", schedulingHandler.ConnectCalendar)
+				scheduling.GET("/calendar/oauth/callback", schedulingHandler.CalendarOAuthCallback)
+				scheduling.GET("/calendar/integrations", schedulingHandler.ListCalendarIntegrations)
+				scheduling.DELETE("/calendar/integrations/:integrationId", schedulingHandler.DisconnectCalendar)
+				scheduling.POST("/calendar/integrations/:integrationId/sync", schedulingHandler.SyncCalendar)
+				scheduling.GET("/calendar/export.ics", schedulingHandler.ExportICalendar)
+			}
 
-		// Load Balancing & Auto-scaling - Admin/Operator only
-		scaling := protected.Group("/scaling")
-		scaling.Use(operatorMiddleware)
-		{
-			// Load balancing policies
-			scaling.GET("/load-balancing/policies", loadBalancingHandler.ListLoadBalancingPolicies)
-			scaling.POST("/load-balancing/policies", loadBalancingHandler.CreateLoadBalancingPolicy)
-			scaling.GET("/load-balancing/nodes", loadBalancingHandler.GetNodeStatus)
-			scaling.POST("/load-balancing/select-node", loadBalancingHandler.SelectNode)
+			// Load Balancing & Auto-scaling - Admin/Operator only
+			scaling := protected.Group("/scaling")
+			scaling.Use(operatorMiddleware)
+			{
+				// Load balancing policies
+				scaling.GET("/load-balancing/policies", loadBalancingHandler.ListLoadBalancingPolicies)
+				scaling.POST("/load-balancing/policies", loadBalancingHandler.CreateLoadBalancingPolicy)
+				scaling.GET("/load-balancing/nodes", loadBalancingHandler.GetNodeStatus)
+				scaling.POST("/load-balancing/select-node", loadBalancingHandler.SelectNode)
 
-			// Auto-scaling policies
-			scaling.GET("/autoscaling/policies", loadBalancingHandler.ListAutoScalingPolicies)
-			scaling.POST("/autoscaling/policies", loadBalancingHandler.CreateAutoScalingPolicy)
-			scaling.POST("/autoscaling/policies/:policyId/trigger", loadBalancingHandler.TriggerScaling)
-			scaling.GET("/autoscaling/history", loadBalancingHandler.GetScalingHistory)
-		}
+				// Auto-scaling policies
+				scaling.GET("/autoscaling/policies", loadBalancingHandler.ListAutoScalingPolicies)
+				scaling.POST("/autoscaling/policies", loadBalancingHandler.CreateAutoScalingPolicy)
+				scaling.POST("/autoscaling/policies/:policyId/trigger", loadBalancingHandler.TriggerScaling)
+				scaling.GET("/autoscaling/history", loadBalancingHandler.GetScalingHistory)
+			}
 
-		// Compliance & Governance - Admin only
-		// NOTE: These are STUB endpoints that return empty data when the compliance plugin
-		// is not installed. Install streamspace-compliance plugin for full functionality.
-		compliance := protected.Group("/compliance")
-		compliance.Use(adminMiddleware)
-		{
-			// Dashboard
-			compliance.GET("/dashboard", h.GetComplianceDashboard)
+			// Compliance & Governance - Admin only
+			// NOTE: These are STUB endpoints that return empty data when the compliance plugin
+			// is not installed. Install streamspace-compliance plugin for full functionality.
+			compliance := protected.Group("/compliance")
+			compliance.Use(adminMiddleware)
+			{
+				// Dashboard
+				compliance.GET("/dashboard", h.GetComplianceDashboard)
 
-			// Frameworks
-			compliance.GET("/frameworks", h.ListComplianceFrameworks)
-			compliance.POST("/frameworks", h.CreateComplianceFramework)
+				// Frameworks
+				compliance.GET("/frameworks", h.ListComplianceFrameworks)
+				compliance.POST("/frameworks", h.CreateComplianceFramework)
 
-			// Policies
-			compliance.GET("/policies", h.ListCompliancePolicies)
-			compliance.POST("/policies", h.CreateCompliancePolicy)
+				// Policies
+				compliance.GET("/policies", h.ListCompliancePolicies)
+				compliance.POST("/policies", h.CreateCompliancePolicy)
 
-			// Violations
-			compliance.GET("/violations", h.ListViolations)
-			compliance.POST("/violations", h.RecordViolation)
-			compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
-		}
-		// Templates (read: all users, write: operators/admins)
-		templates := protected.Group("/templates")
-		{
-			// Read-only template endpoints (all authenticated users)
-			templates.GET("", cache.CacheMiddleware(redisCache, 5*time.Minute), h.ListTemplates)
-			templates.GET("/:id", cache.CacheMiddleware(redisCache, 5*time.Minute), h.GetTemplate)
+				// Violations
+				compliance.GET("/violations", h.ListViolations)
+				compliance.POST("/violations", h.RecordViolation)
+				compliance.POST("/violations/:violationId/resolve", h.ResolveViolation)
+			}
+			// Templates (read: all users, write: operators/admins)
+			templates := protected.Group("/templates")
+			{
+				// Read-only template endpoints (all authenticated users)
+				templates.GET("", cache.CacheMiddleware(redisCache, 5*time.Minute), h.ListTemplates)
+				templates.GET("/:id", cache.CacheMiddleware(redisCache, 5*time.Minute), h.GetTemplate)
 
-			// Write operations require operator or admin role
+				// Write operations require operator or admin role
 				templatesWrite := templates.Group("")
 				templatesWrite.Use(operatorMiddleware)
 				{

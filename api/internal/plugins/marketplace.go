@@ -151,8 +151,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // PluginMarketplace manages plugin discovery, download, and installation.
