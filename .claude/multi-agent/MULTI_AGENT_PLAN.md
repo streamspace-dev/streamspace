@@ -1023,6 +1023,216 @@ All changes committed and merged to `feature/streamspace-v2-agent-refactor` ✅
 
 ---
 
+## 📦 Integration Update - Wave 10 (2025-11-21)
+
+### Architect → Team Integration Summary
+
+**Integration Date:** 2025-11-21 (Wave 10)
+**Integrated By:** Agent 1 (Architect)
+**Status:** ✅ P2 CSRF Fixed + Helm Complete | ❌ NEW P0 Bug Discovered
+
+**Integrated Changes:**
+
+### Builder (Agent 2) - CSRF Fix + Helm NOTES ✅
+
+**Commits Integrated:** 2 commits (a9238a3, 4b3e69d)
+**Files Changed:** 2 files (+103 lines)
+
+**Work Completed:**
+
+**1. Fix CSRF Protection Blocking JWT Requests** (a9238a3):
+- **Bug**: P2-004 - CSRF middleware blocked programmatic API access
+- **Issue**: All POST/PUT/DELETE requests required CSRF tokens, even JWT-authenticated ones
+- **Impact**: curl/Postman testing impossible, programmatic access broken
+
+**Fix** (api/internal/middleware/csrf.go - 48 new lines):
+- Added JWT authentication check to CSRF middleware
+- Extracts and validates JWT from Authorization header
+- If JWT valid, bypass CSRF protection
+- CSRF still enforced for cookie-based sessions
+
+**Logic**:
+```go
+if Authorization header present:
+    Extract and validate JWT
+    If JWT valid: skip CSRF check
+    If JWT invalid: enforce CSRF
+else:
+    Enforce CSRF (cookie-based sessions)
+```
+
+**Impact**:
+- ✅ Programmatic API access unblocked
+- ✅ curl/Postman testing works
+- ✅ JWT-authenticated requests work without CSRF tokens
+- ✅ Cookie-based sessions still protected by CSRF
+- ✅ Resolves P2-004 bug
+
+**2. Complete Helm Chart with NOTES.txt** (4b3e69d):
+- **Created**: chart/templates/NOTES.txt (55 lines)
+- Post-installation instructions for operators
+- How to get admin credentials from secrets
+- URLs for accessing UI and API
+- Next steps for agent deployment
+- Quick start guide
+
+**NOTES.txt Content**:
+- Welcome message with deployment summary
+- Admin credentials retrieval command
+- UI URL (with ingress info)
+- API URL and endpoints
+- K8s Agent deployment instructions
+- Links to documentation
+- Support information
+
+**Example Output**:
+```
+StreamSpace v2.0-beta has been deployed!
+
+Get your admin credentials:
+  kubectl get secret streamspace-admin-credentials \
+    -n streamspace -o jsonpath='{.data.password}' | base64 --decode
+
+Access the UI:
+  http://localhost:8080
+
+Deploy K8s Agent:
+  helm upgrade streamspace ./chart --set k8sAgent.enabled=true
+```
+
+**Impact**:
+- ✅ Professional Helm chart (production-ready)
+- ✅ Clear post-install guidance for operators
+- ✅ Reduces support burden (self-service)
+- ✅ Complete v2.0-beta Helm implementation
+
+### Validator (Agent 3) - CSRF Verification + NEW P0 Bug Discovery ❌
+
+**Commits Integrated:** 1 commit (aac670d)
+**Files Changed:** 4 files (+873 lines, -7 deletions)
+
+**Work Completed:**
+
+**1. CSRF Fix Verification** ✅:
+- Rebuilt images with Builder's CSRF fix
+- Redeployed full stack
+- Tested JWT-authenticated API requests
+- **Result**: CSRF fix works correctly! JWT requests bypass CSRF ✅
+
+**2. Integration Testing Progress**:
+- **Test Progress**: 3/8 scenarios completed (37.5%)
+- ✅ Scenario 1: Agent Registration & Heartbeats (PASS)
+- ✅ Scenario 2: Admin Authentication (PASS)
+- ✅ Scenario 3: API Access with JWT (PASS)
+- ❌ Scenario 4: Session Creation (BLOCKED by P0-005)
+
+**3. CRITICAL P0 BUG DISCOVERED** ❌:
+
+**Created BUG_REPORT_P0_ACTIVE_SESSIONS_COLUMN.md (359 lines)**:
+- **Bug ID**: P0-005
+- **Severity**: P0 - Critical (breaks core functionality)
+- **Component**: API CreateSession handler
+- **Status**: Open (blocks all session creation)
+
+**Bug Details**:
+- **Location**: api/internal/api/handlers.go lines 690-695
+- **Issue**: SQL query references non-existent `active_sessions` column
+- **Code**:
+```sql
+SELECT agent_id FROM agents
+WHERE status = 'online' AND platform = $1
+ORDER BY active_sessions ASC  -- ❌ Column doesn't exist!
+LIMIT 1
+```
+
+**Symptoms**:
+- All POST /api/v1/sessions requests return HTTP 503
+- Error: "No agents available"
+- Occurs even when agents are online and connected
+- 100% failure rate for session creation
+
+**Root Cause**:
+- Builder's commit 3284bdf added agent load-balancing
+- Intended to order by active_sessions (fewest sessions first)
+- But `agents` table has no `active_sessions` column
+- Query fails silently, returns no results
+- Session creation has NEVER worked since 3284bdf
+
+**Impact**:
+- ❌ Session creation completely broken
+- ❌ Cannot test pod provisioning
+- ❌ Cannot test VNC streaming
+- ❌ Cannot test session lifecycle
+- ❌ Integration testing blocked at 37.5% (3/8 scenarios)
+- ❌ v2.0-beta core functionality non-functional
+
+**Recommended Fix**:
+Option 1 (Quick): Remove ORDER BY clause
+Option 2 (Proper): Use subquery to calculate active sessions:
+```sql
+SELECT agent_id FROM agents
+WHERE status = 'online' AND platform = $1
+ORDER BY (
+    SELECT COUNT(*) FROM sessions
+    WHERE agent_id = agents.agent_id AND state = 'running'
+) ASC
+LIMIT 1
+```
+
+**4. Updated V2_BETA_VALIDATION_SUMMARY.md** (478 lines, heavily revised):
+- Comprehensive validation summary
+- Bug status tracking (5 bugs, 4 fixed, 1 open)
+- Test scenario progress (3/8 completed)
+- CSRF fix verification ✅
+- P0 bug discovery documentation
+- Detailed reproduction steps
+- Evidence and analysis
+
+**Bug Status Table**:
+| Bug ID | Component | Status | Notes |
+|--------|-----------|--------|-------|
+| P0-001 | K8s Agent | FIXED ✅ | HeartbeatInterval (22a39d8) |
+| P1-002 | Admin Auth | FIXED ✅ | ADMIN_PASSWORD (6c22c96) |
+| P0-003 | Controller | INVALID ❌ | Intentional design (no controller) |
+| P2-004 | CSRF | FIXED ✅ | JWT exemption (a9238a3) |
+| **P0-005** | **Session Creation** | **OPEN ⚠️** | **Missing column blocks all sessions** |
+
+**Integration Summary:**
+- **Total Lines Changed**: 976 (+976 insertions, -7 deletions)
+- **Files**: 6 modified
+- **Builder**: P2 CSRF fixed ✅ + Helm NOTES completed ✅
+- **Validator**: CSRF verified ✅ + NEW P0 bug discovered ❌
+- **Test Progress**: 3/8 scenarios (37.5%)
+- **Bugs Fixed This Wave**: 1 (P2 CSRF)
+- **New Bugs Discovered**: 1 (P0 active_sessions column)
+- **Critical Blocker**: Session creation broken since commit 3284bdf
+
+**🔴 CRITICAL STATUS: Session Creation Has NEVER Worked**
+
+**Timeline**:
+1. Builder's 3284bdf rewrote CreateSession with load-balancing
+2. Used `ORDER BY active_sessions ASC` but column doesn't exist
+3. Query fails, returns "No agents available"
+4. Session creation appeared to be fixed but was actually broken
+5. Validator discovered bug during Scenario 4 testing
+6. **Conclusion**: v2.0-beta has never successfully created a session
+
+**Architecture Status**:
+- ✅ Control Plane deployment
+- ✅ K8s Agent deployment
+- ✅ Agent registration and heartbeats
+- ✅ Admin authentication
+- ✅ JWT API access (CSRF fixed)
+- ❌ Session creation (P0 bug blocks)
+- ❌ Session provisioning (untested, blocked)
+- ❌ VNC streaming (untested, blocked)
+
+**Next**: Builder must fix P0-005 (active_sessions column) to unblock scenarios 4-8
+
+All changes committed and merged to `feature/streamspace-v2-agent-refactor` ✅
+
+---
+
 ## 🚀 Active Tasks - v2.0-beta Release (Phase 10)
 
 ### 🎯 Current Sprint: Testing & Documentation (Week 1-2)
