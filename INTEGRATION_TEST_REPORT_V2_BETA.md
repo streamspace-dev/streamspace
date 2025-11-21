@@ -10,19 +10,21 @@
 
 ## Executive Summary
 
-**Status**: 🟡 **PARTIAL SUCCESS - BLOCKED by P1 Bug**
+**Status**: 🔴 **BLOCKED by P0 Bug** (Critical)
 
 **Progress**: 1/8 test scenarios completed (12.5%)
 
 ✅ **Successfully Tested**:
-- Test Scenario 1: Agent Registration & Heartbeats
+- Test Scenario 1: Agent Registration & Heartbeats (PASS)
 
-❌ **Blocked by P1 Bug**:
-- Test Scenarios 2-8 (Admin authentication failure prevents session creation)
+❌ **Blocked by P0 Bug**:
+- Test Scenarios 2-8 (Missing Kubernetes Controller prevents session provisioning)
 
 ⚠️ **Critical Findings**:
-- **P0 Bug Found & FIXED**: K8s Agent crash on startup (heartbeat ticker panic)
-- **P1 Bug Found (BLOCKING)**: Admin authentication failure prevents API-based testing
+- **P0 Bug #1: K8s Agent Crash** - FIXED ✅ (heartbeat ticker panic)
+- **P1 Bug: Admin Authentication Failure** - FIXED ✅ (secret reference timing issue)
+- **P0 Bug #2: Missing Kubernetes Controller** - OPEN 🔴 (critical blocker, image unavailable)
+- **P2 Bug: CSRF Protection** - OPEN 🟡 (blocks programmatic API access)
 
 ---
 
@@ -312,18 +314,49 @@ All remaining test scenarios depend on successful session creation, which is blo
 
 **Bug Report**: `BUG_REPORT_P0_K8S_AGENT_CRASH.md`
 
-### Bug 2: P1 - Admin Authentication Failure ⚠️ **OPEN**
+### Bug 2: P1 - Admin Authentication Failure ✅ **FIXED**
 
 **Severity**: P1 - HIGH (Blocks API-based integration testing)
-**Status**: ⚠️ **OPEN** - Awaiting Builder investigation
+**Status**: ✅ **FIXED** by Builder (Agent 2)
 
 **Details**:
 - **Issue**: Admin credentials from Kubernetes secret do not authenticate against API
-- **Root Cause**: Suspected mismatch between password in secret and password_hash in database
-- **Impact**: Cannot get JWT token, cannot create sessions via API, test scenarios 2-8 blocked
-- **Next Steps**: Builder needs to investigate admin user creation flow and fix password mismatch
+- **Root Cause**: `optional: true` for ADMIN_PASSWORD secret reference caused timing issue - admin user created without password_hash when secret not ready
+- **Impact**: Cannot get JWT token, cannot create sessions via API
+- **Fix Applied**: Builder changed `optional: false` in `chart/templates/api-deployment.yaml` line 113, forcing fail-fast if secret missing
+- **Fix Validated**: Admin login successful, JWT tokens issued correctly
 
 **Bug Report**: `BUG_REPORT_P1_ADMIN_AUTH.md`
+
+### Bug 3: P0 - Missing Kubernetes Controller 🔴 **OPEN**
+
+**Severity**: P0 - CRITICAL (Blocks all session provisioning)
+**Status**: 🔴 **OPEN** - Critical blocker for v2.0-beta release
+
+**Details**:
+- **Issue**: Kubernetes controller component is not deployed. Session CRDs are created but never reconciled, no session pods are provisioned
+- **Root Cause #1**: Helm release deployed with `controller.enabled: false` (chart has `enabled: true` but deployment overrides it)
+- **Root Cause #2**: When enabled, controller image `ghcr.io/streamspace-dev/streamspace-kubernetes-controller:v0.2.0` does not exist in registry (ImagePullBackOff)
+- **Impact**: Session CRDs remain unprocessed with no `.status` field, no pods created, agent receives no provision commands
+- **Next Steps**: Builder needs to build and publish controller image, or enable v2.0 API to watch CRDs directly
+
+**Bug Report**: `BUG_REPORT_P0_MISSING_CONTROLLER.md`
+
+**Architecture Impact**: The controller is **essential** for Session CRD reconciliation. Without it, even kubectl-created Sessions are never processed.
+
+### Bug 4: P2 - CSRF Protection Blocking API 🟡 **OPEN**
+
+**Severity**: P2 - MEDIUM (Blocks programmatic API access)
+**Status**: 🟡 **OPEN** - Should fix before v2.0-beta release
+
+**Details**:
+- **Issue**: Login endpoint does not set CSRF cookies, preventing programmatic API clients from creating sessions
+- **Root Cause**: CSRF middleware enabled globally, but login endpoint doesn't participate in CSRF token generation
+- **Impact**: `curl` and script-based API clients get "CSRF token missing" error on POST `/api/v1/sessions`
+- **Workaround**: Web UI works fine (browsers handle CSRF automatically), can use kubectl to create Session CRDs directly
+- **Next Steps**: Builder should add CSRF token to login response or exempt authenticated requests
+
+**Bug Report**: `BUG_REPORT_P2_CSRF_PROTECTION.md`
 
 ---
 
@@ -348,13 +381,22 @@ During investigation, we discovered and documented the complete session creation
 8. Agent updates Session CRD with status (phase, podName, etc.)
 9. API polls Session CRD and returns session details to client
 
-**Critical Insight**: In v2.0-beta, the REST API is the **ONLY** way to create sessions. Directly creating Session CRDs via kubectl does NOT work because there's no Kubernetes controller watching them.
+**Critical Insight UPDATE** (2025-11-21 PM): The original assumption was **INCORRECT**. v2.0-beta **DOES** require a Kubernetes controller, but it is **MISSING** from the deployment (Bug #3 - P0).
+
+**Corrected Architecture**:
+1. User creates session via API: `POST /api/v1/sessions`
+2. API creates Session CRD in Kubernetes
+3. **Kubernetes Controller watches Session CRDs** (MISSING - P0 bug!)
+4. Controller reconciles Session, updates `.status`, sends commands to agent via API
+5. Agent provisions pod based on controller instructions
+6. Controller updates Session CRD with final status
 
 **Implications**:
-- Integration testing MUST use the REST API
-- Authentication is REQUIRED for all testing
-- Cannot bypass API for testing purposes
-- P1 auth bug completely blocks API-based testing
+- Controller is **REQUIRED** for session provisioning to work
+- Without controller, Session CRDs are never reconciled (no `.status` field)
+- Agent receives no commands because controller isn't sending them
+- P0 controller bug completely blocks ALL session provisioning (API or kubectl)
+- v2.0-beta **CANNOT** be released without fixing controller deployment
 
 ---
 
@@ -362,15 +404,15 @@ During investigation, we discovered and documented the complete session creation
 
 | Test Scenario | Status | Completion | Notes |
 |--------------|--------|------------|-------|
-| 1. Agent Registration | ✅ PASS | 100% | P0 bug found and fixed |
-| 2. Session Creation | ❌ BLOCKED | 0% | P1 auth bug blocking |
+| 1. Agent Registration | ✅ PASS | 100% | P0 agent crash fixed, P1 auth fixed |
+| 2. Session Creation | ❌ BLOCKED | 0% | P0 controller missing, P2 CSRF |
 | 3. VNC Connection | ❌ BLOCKED | 0% | Depends on scenario 2 |
 | 4. VNC Streaming | ❌ BLOCKED | 0% | Depends on scenario 3 |
 | 5. Session Lifecycle | ❌ BLOCKED | 0% | Depends on scenario 2 |
 | 6. Agent Failover | ❌ BLOCKED | 0% | Depends on scenario 2 |
 | 7. Concurrent Sessions | ❌ BLOCKED | 0% | Depends on scenario 2 |
 | 8. Error Handling | ❌ BLOCKED | 0% | Depends on scenario 2 |
-| **TOTAL** | **12.5%** | **1/8** | **2 bugs found** |
+| **TOTAL** | **12.5%** | **1/8** | **4 bugs found (2 P0, 1 P1, 1 P2)** |
 
 ---
 
