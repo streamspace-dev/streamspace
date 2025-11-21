@@ -1,6 +1,6 @@
 #!/usr/bin/env bash
 #
-# local-port-forward.sh - Start port forwards for StreamSpace services
+# local-port-forward.sh - Start port forwards for StreamSpace v2.0 services
 #
 # This script automatically creates port forwards for all StreamSpace services
 # in the background, making them accessible on localhost.
@@ -8,6 +8,11 @@
 # Services:
 #   - UI:  http://localhost:3000  -> streamspace-ui:80
 #   - API: http://localhost:8000  -> streamspace-api:8000
+#
+# v2.0 Architecture Notes:
+#   - VNC traffic now flows through the API's /api/v1/vnc/{sessionId} endpoint
+#   - K8s Agent communicates with API via WebSocket
+#   - No additional port-forwards needed for v2.0 architecture
 #
 # Port forwards run in the background with output redirected to log files.
 # Use local-stop-port-forward.sh to stop all port forwards.

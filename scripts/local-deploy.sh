@@ -76,11 +76,12 @@ check_prerequisites() {
 
 # Check if images exist locally
 check_images() {
-    log "Checking for locally built images..."
+    log "Checking for locally built images (v2.0)..."
 
     local missing_images=0
 
-    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
+    # v2.0: Added K8s Agent image
+    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui" "streamspace/streamspace-k8s-agent"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"
         else
@@ -193,12 +194,15 @@ deploy_helm() {
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
             --set ui.image.pullPolicy=Never \
+            --set k8sAgent.enabled=true \
+            --set k8sAgent.image.tag="${VERSION}" \
+            --set k8sAgent.image.pullPolicy=Never \
             --set postgresql.enabled=true \
             --set postgresql.auth.password=streamspace \
             --wait \
             --timeout 5m
     else
-        log_info "Installing fresh release..."
+        log_info "Installing fresh release (v2.0 with K8s Agent)..."
         log_info "Running: helm install ${RELEASE_NAME} ${chart_ref}"
         helm install "${RELEASE_NAME}" "${chart_ref}" \
             --namespace "${NAMESPACE}" \
@@ -209,6 +213,9 @@ deploy_helm() {
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
             --set ui.image.pullPolicy=Never \
+            --set k8sAgent.enabled=true \
+            --set k8sAgent.image.tag="${VERSION}" \
+            --set k8sAgent.image.pullPolicy=Never \
             --set postgresql.enabled=true \
             --set postgresql.auth.password=streamspace \
             --debug \
@@ -308,6 +315,7 @@ show_access_info() {
     echo "  Controller: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=controller -f"
     echo "  API:        kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=api -f"
     echo "  UI:         kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=ui -f"
+    echo "  K8s Agent:  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=k8s-agent -f  # v2.0"
     echo ""
 
     log_info "When finished testing:"
@@ -319,12 +327,13 @@ show_access_info() {
 # Main execution
 main() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
-    echo -e "${COLOR_BOLD}  StreamSpace Local Deployment${COLOR_RESET}"
+    echo -e "${COLOR_BOLD}  StreamSpace v2.0 Local Deployment${COLOR_RESET}"
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     echo ""
+    echo -e "${COLOR_BLUE}Version:${COLOR_RESET}       v2.0-beta (K8s Agent enabled)"
     echo -e "${COLOR_BLUE}Namespace:${COLOR_RESET}     ${NAMESPACE}"
     echo -e "${COLOR_BLUE}Release:${COLOR_RESET}       ${RELEASE_NAME}"
-    echo -e "${COLOR_BLUE}Version:${COLOR_RESET}       ${VERSION}"
+    echo -e "${COLOR_BLUE}Build Tag:${COLOR_RESET}     ${VERSION}"
     echo ""
 
     check_prerequisites
