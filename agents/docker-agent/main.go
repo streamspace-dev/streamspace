@@ -129,11 +129,10 @@ func NewDockerAgent(cfg *config.AgentConfig) (*DockerAgent, error) {
 // initCommandHandlers initializes the command handler registry.
 func (a *DockerAgent) initCommandHandlers() {
 	a.commandHandlers = map[string]CommandHandler{
-		// TODO: Implement command handlers
-		// "start_session":     NewStartSessionHandler(a.dockerClient, a.config, a),
-		// "stop_session":      NewStopSessionHandler(a.dockerClient, a.config, a),
-		// "hibernate_session": NewHibernateSessionHandler(a.dockerClient, a.config),
-		// "wake_session":      NewWakeSessionHandler(a.dockerClient, a.config),
+		"start_session":     NewStartSessionHandler(a.dockerClient, a.config, a),
+		"stop_session":      NewStopSessionHandler(a.dockerClient, a.config, a),
+		"hibernate_session": NewHibernateSessionHandler(a.dockerClient, a.config),
+		"wake_session":      NewWakeSessionHandler(a.dockerClient, a.config),
 	}
 }
 
@@ -447,9 +446,8 @@ func (a *DockerAgent) readPump() {
 				return
 			}
 
-			// Handle message (TODO: implement message handler)
-			log.Printf("[readPump] Received message: %s", string(message))
-			// a.handleMessage(message)
+			// Handle message
+			a.handleMessage(message)
 		}
 	}
 }
