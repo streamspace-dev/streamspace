@@ -2226,6 +2226,25 @@ func (d *Database) Migrate() error {
 				WHERE table_name='sessions' AND column_name='platform_metadata') THEN
 				ALTER TABLE sessions ADD COLUMN platform_metadata JSONB;
 			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='cluster_id') THEN
+				ALTER TABLE sessions ADD COLUMN cluster_id VARCHAR(255);
+			END IF;
+		END $$`,
+
+		// Alter agents table to add v2.0-beta cluster fields
+		// NOTE: These columns may already exist from previous runs (IF NOT EXISTS doesn't work on ALTER TABLE)
+		// Using DO $$ block to check if columns exist before adding them
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='cluster_id') THEN
+				ALTER TABLE agents ADD COLUMN cluster_id VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='cluster_name') THEN
+				ALTER TABLE agents ADD COLUMN cluster_name VARCHAR(255);
+			END IF;
 		END $$`,
 
 		// Indexes for agents table
@@ -2234,6 +2253,8 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_region ON agents(region)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_last_heartbeat ON agents(last_heartbeat)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_id ON agents(cluster_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_status ON agents(cluster_id, status)`,
 
 		// Indexes for agent_commands table
 		`CREATE INDEX IF NOT EXISTS idx_agent_commands_command_id ON agent_commands(command_id)`,
@@ -2250,6 +2271,7 @@ func (d *Database) Migrate() error {
 		// Index for sessions table agent_id lookup
 		`CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_cluster_id ON sessions(cluster_id)`,
 	}
 
 	// Execute migrations
