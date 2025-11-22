@@ -111,12 +111,11 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"github.com/streamspace-dev/streamspace/api/internal/quota"
+	"github.com/streamspace-dev/streamspace/api/internal/services"
 	"github.com/streamspace-dev/streamspace/api/internal/sync"
 	"github.com/streamspace-dev/streamspace/api/internal/tracker"
 	"github.com/streamspace-dev/streamspace/api/internal/websocket"
 	"gopkg.in/yaml.v3"
-	corev1 "k8s.io/api/core/v1"
-	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/apimachinery/pkg/runtime/schema"
 )
 
@@ -127,6 +126,12 @@ import (
 //
 // Format: {group}/{version}/namespaces/{namespace}/{resource}
 // Example: stream.space/v1alpha1/namespaces/streamspace/sessions
+const (
+	// DefaultNamespace is the default Kubernetes namespace for resources
+	// v2.0-beta: API doesn't create K8s resources, but passes namespace to agent in payloads
+	DefaultNamespace = "streamspace"
+)
+
 var (
 	sessionGVR = schema.GroupVersionResource{
 		Group:    "stream.space",
@@ -158,16 +163,27 @@ var (
 type Handler struct {
 	db             *db.Database                 // Database for caching and metadata
 	sessionDB      *db.SessionDB                // Session database operations
-	k8sClient      *k8s.Client                  // Kubernetes client for CRD operations
+	templateDB     *db.TemplateDB               // Template database operations
+	agentSelector  *services.AgentSelector      // Agent selection for multi-agent routing
+	k8sClient      *k8s.Client                  // OPTIONAL: K8s client for cluster management endpoints only
+	namespace      string                       // OPTIONAL: K8s namespace for cluster management
 	publisher      *events.Publisher            // DEPRECATED: NATS event publisher (stub, no-op)
 	dispatcher     CommandDispatcher            // Command dispatcher for agent WebSocket commands
 	connTracker    *tracker.ConnectionTracker   // Active connection tracking
 	syncService    *sync.SyncService            // Repository synchronization
 	wsManager      *websocket.Manager           // WebSocket connection manager
 	quotaEnforcer  *quota.Enforcer              // Resource quota enforcement
-	namespace      string                       // Kubernetes namespace for resources
 	platform       string                       // Target platform (kubernetes, docker, etc.)
 }
+
+// NOTE ON K8S CLIENT (v2.0-beta):
+//
+// The k8sClient and namespace fields are OPTIONAL and ONLY used for cluster management
+// admin endpoints (ListNodes, ListPods, GetMetrics, etc.).
+//
+// Session and template operations NEVER use k8sClient - they use database + agent pattern.
+// When API runs outside Kubernetes cluster, k8sClient is nil and cluster management
+// endpoints return stub data or "not available" responses.
 
 // CommandDispatcher interface for dispatching commands to agents
 type CommandDispatcher interface {
@@ -179,45 +195,68 @@ type CommandDispatcher interface {
 // PARAMETERS:
 //
 // - database: PostgreSQL database connection for caching and metadata
-// - k8sClient: Kubernetes client for Session/Template CRD operations
 // - publisher: NATS event publisher for platform-agnostic operations
+// - dispatcher: Command dispatcher for sending commands to agents
 // - connTracker: Connection tracker for active session monitoring
 // - syncService: Service for syncing external template repositories
 // - wsManager: Manager for WebSocket connections and real-time updates
 // - quotaEnforcer: Enforcer for validating resource quotas
 // - platform: Target platform (kubernetes, docker, hyperv, vcenter)
+// - agentHub: Agent hub for tracking connected agents (required for multi-agent routing)
+// - k8sClient: OPTIONAL Kubernetes client for cluster management endpoints (can be nil)
+//
+// v2.0-beta ARCHITECTURE:
+//
+// Session and template operations use database + agent pattern (NO K8s dependencies).
+// The k8sClient parameter is OPTIONAL and only used for cluster management admin
+// endpoints (ListNodes, ListPods, GetMetrics, etc.). When nil, these endpoints
+// return stub data.
+//
+// MULTI-AGENT ROUTING:
+//
+// The agentHub is required to enable multi-agent routing and load balancing.
+// AgentSelector uses agentHub to check which agents are connected and healthy
+// before routing session creation requests.
 //
 // NAMESPACE RESOLUTION:
 //
 // The Kubernetes namespace is read from NAMESPACE environment variable.
-// If not set, defaults to "streamspace".
+// If not set, defaults to "streamspace". Only used when k8sClient is provided.
 //
 // EXAMPLE USAGE:
 //
-//   handler := NewHandler(db, k8sClient, publisher, connTracker, syncService, wsManager, quotaEnforcer, "kubernetes")
-//   router := gin.Default()
-//   router.GET("/api/sessions", handler.ListSessions)
-//   router.POST("/api/sessions", handler.CreateSession)
-func NewHandler(database *db.Database, k8sClient *k8s.Client, publisher *events.Publisher, dispatcher CommandDispatcher, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer, platform string) *Handler {
-	// Read namespace from environment variable for deployment flexibility
-	namespace := os.Getenv("NAMESPACE")
-	if namespace == "" {
-		namespace = "streamspace" // Default namespace
-	}
+//   // API running in Kubernetes with cluster management
+//   handler := NewHandler(db, publisher, dispatcher, connTracker, syncService, wsManager, quotaEnforcer, "kubernetes", agentHub, k8sClient)
+//
+//   // API running standalone (no K8s dependencies)
+//   handler := NewHandler(db, publisher, dispatcher, connTracker, syncService, wsManager, quotaEnforcer, "kubernetes", agentHub, nil)
+func NewHandler(database *db.Database, publisher *events.Publisher, dispatcher CommandDispatcher, connTracker *tracker.ConnectionTracker, syncService *sync.SyncService, wsManager *websocket.Manager, quotaEnforcer *quota.Enforcer, platform string, agentHub *websocket.AgentHub, k8sClient *k8s.Client) *Handler {
 	if platform == "" {
 		platform = events.PlatformKubernetes // Default platform
 	}
+
+	// Read namespace from environment (only used when k8sClient is provided)
+	namespace := os.Getenv("NAMESPACE")
+	if namespace == "" {
+		namespace = DefaultNamespace
+	}
+
+	// Create AgentSelector for multi-agent routing and load balancing
+	agentSelector := services.NewAgentSelector(database.DB(), agentHub)
+
 	return &Handler{
 		db:            database,
 		sessionDB:     db.NewSessionDB(database.DB()),
-		k8sClient:     k8sClient,
+		templateDB:    db.NewTemplateDB(database),
+		agentSelector: agentSelector,
+		k8sClient:     k8sClient, // Can be nil for standalone API
+		namespace:     namespace,
 		publisher:     publisher,
 		dispatcher:    dispatcher,
 		connTracker:   connTracker,
 		syncService:   syncService,
 		wsManager:     wsManager,
 		quotaEnforcer: quotaEnforcer,
-		namespace:     namespace,
 		platform:      platform,
 	}
 }
@@ -284,22 +323,11 @@ func (h *Handler) ListSessions(c *gin.Context) {
 	}
 
 	if err != nil {
-		// Fall back to Kubernetes for backward compatibility
-		log.Printf("Database session query failed, falling back to k8s: %v", err)
-		var k8sSessions []*k8s.Session
-		if userID != "" {
-			k8sSessions, err = h.k8sClient.ListSessionsByUser(ctx, h.namespace, userID)
-		} else {
-			k8sSessions, err = h.k8sClient.ListSessions(ctx, h.namespace)
-		}
-		if err != nil {
-			c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-			return
-		}
-		enriched := h.enrichSessionsWithDBInfo(ctx, k8sSessions)
-		c.JSON(http.StatusOK, gin.H{
-			"sessions": enriched,
-			"total":    len(enriched),
+		// v2.0-beta: Database is source of truth, no K8s fallback
+		log.Printf("Database session query failed: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to list sessions",
+			"message": fmt.Sprintf("Database error: %v", err),
 		})
 		return
 	}
@@ -319,18 +347,14 @@ func (h *Handler) GetSession(c *gin.Context) {
 	ctx := c.Request.Context()
 	sessionID := c.Param("id")
 
-	// Use database as source of truth for multi-platform support
+	// v2.0-beta: Database is source of truth for all session data
 	dbSession, err := h.sessionDB.GetSession(ctx, sessionID)
 	if err != nil {
-		// Fall back to Kubernetes for backward compatibility
-		log.Printf("Database session query failed, falling back to k8s: %v", err)
-		k8sSession, k8sErr := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
-		if k8sErr != nil {
-			c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
-			return
-		}
-		enriched := h.enrichSessionWithDBInfo(ctx, k8sSession)
-		c.JSON(http.StatusOK, enriched)
+		log.Printf("Session %s not found in database: %v", sessionID, err)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": fmt.Sprintf("No session found with ID: %s", sessionID),
+		})
 		return
 	}
 
@@ -453,12 +477,12 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 
 		if installStatus == "pending" || installStatus == "creating" {
-			// Self-healing: Check if the Template CRD actually exists in Kubernetes
-			// This handles cases where the controller created the template but status wasn't updated
+			// v2.0-beta: Check if template exists in database (catalog_templates)
+			// This handles cases where the template was synced but status wasn't updated
 			if appTemplateName != "" {
-				_, templateErr := h.k8sClient.GetTemplate(ctx, h.namespace, appTemplateName)
+				_, templateErr := h.templateDB.GetTemplateByName(ctx, appTemplateName)
 				if templateErr == nil {
-					// Template exists! Update status in database and continue
+					// Template exists in database! Update status and continue
 					_, updateErr := h.db.DB().ExecContext(ctx, `
 						UPDATE installed_applications
 						SET install_status = 'installed', install_message = 'Template ready (self-healed)', updated_at = NOW()
@@ -467,7 +491,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 					if updateErr != nil {
 						log.Printf("Failed to update install status for %s: %v", req.ApplicationId, updateErr)
 					} else {
-						log.Printf("Self-healed application %s status to installed (template found)", req.ApplicationId)
+						log.Printf("Self-healed application %s status to installed (template found in database)", req.ApplicationId)
 					}
 					// Continue with session creation - don't reject
 					installStatus = "installed"
@@ -503,84 +527,28 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Step 2: Verify Kubernetes Template CRD exists
-	// The template must be created during application installation (see handlers/applications.go)
-	// Without a valid template, the session cannot be created
-	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateName)
-	if err != nil {
-		// Template is missing - trigger reinstallation if applicationId was provided
-		if req.ApplicationId != "" {
-			// Query application details for reinstall
-			var (
-				installID         string
-				catalogTemplateID int
-				displayName       string
-				description       string
-				category          string
-				iconURL           string
-				manifest          string
-				installedBy       string
-			)
-			reinstallErr := h.db.DB().QueryRowContext(ctx, `
-				SELECT
-					ia.id,
-					ia.catalog_template_id,
-					ia.display_name,
-					COALESCE(ct.description, ''),
-					COALESCE(ct.category, ''),
-					COALESCE(ct.icon_url, ''),
-					COALESCE(ct.manifest, '{}'),
-					ia.created_by
-				FROM installed_applications ia
-				LEFT JOIN catalog_templates ct ON ia.catalog_template_id = ct.id
-				WHERE ia.id = $1
-			`, req.ApplicationId).Scan(
-				&installID, &catalogTemplateID, &displayName, &description,
-				&category, &iconURL, &manifest, &installedBy,
-			)
-
-			if reinstallErr == nil {
-				// Publish AppInstallEvent to trigger controller to create template
-				if err := h.publisher.PublishAppInstall(ctx, &events.AppInstallEvent{
-					InstallID:         installID,
-					CatalogTemplateID: catalogTemplateID,
-					TemplateName:      templateName,
-					DisplayName:       displayName,
-					Description:       description,
-					Category:          category,
-					IconURL:           iconURL,
-					Manifest:          manifest,
-					InstalledBy:       installedBy,
-					Platform:          h.platform,
-				}); err != nil {
-					log.Printf("Failed to publish app reinstall event for %s: %v", templateName, err)
-				} else {
-					log.Printf("Triggered reinstall for missing template %s (app: %s)", templateName, installID)
-					// Update status to creating
-					h.db.DB().ExecContext(ctx, `
-						UPDATE installed_applications
-						SET install_status = 'creating', install_message = 'Reinstalling missing template', updated_at = NOW()
-						WHERE id = $1
-					`, installID)
-				}
-			}
-
-			c.JSON(http.StatusServiceUnavailable, gin.H{
-				"error":   "Template reinstalling",
-				"message": fmt.Sprintf("The template for '%s' was missing and is being reinstalled. Please try again in a few seconds.", displayName),
-			})
-			return
-		}
-
-		// No applicationId provided - provide generic error
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error": fmt.Sprintf("Template not found: %s. Please ensure the application is properly installed.", templateName),
+	// Step 2: v2.0-beta - Fetch template from database (catalog_templates)
+	// API includes full template manifest in command payload for agent
+	template, err := h.templateDB.GetTemplateByName(ctx, templateName)
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Template not found",
+			"message": fmt.Sprintf("Template '%s' does not exist in the catalog", templateName),
 		})
 		return
 	}
+	if err != nil {
+		log.Printf("Failed to fetch template %s: %v", templateName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to fetch template",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+	log.Printf("Fetched template %s from database (ID: %d)", template.Name, template.ID)
 
 	// Step 3: Determine resource allocation (memory/CPU)
-	// Priority: request > template defaults > system defaults
+	// Priority: request > system defaults
 	memory := "2Gi"   // System default
 	cpu := "1000m"    // System default (1 core)
 	if req.Resources != nil {
@@ -590,14 +558,6 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		}
 		if req.Resources.CPU != "" {
 			cpu = req.Resources.CPU
-		}
-	} else if template.DefaultResources.Memory != "" || template.DefaultResources.CPU != "" {
-		// Fall back to template-defined defaults
-		if template.DefaultResources.Memory != "" {
-			memory = template.DefaultResources.Memory
-		}
-		if template.DefaultResources.CPU != "" {
-			cpu = template.DefaultResources.CPU
 		}
 	}
 
@@ -613,25 +573,48 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 
 	// Step 5: Check user quota before creating session
-	// Get current resource usage by listing all pods belonging to this user
-	podList, err := h.k8sClient.GetPods(ctx, h.namespace)
+	// v2.0-beta: Query DATABASE for current usage (NOT Kubernetes directly)
+	// The database is the source of truth for session resource tracking
+	sessions, err := h.sessionDB.ListSessionsByUser(ctx, req.User)
 	if err != nil {
-		log.Printf("Failed to get pods for quota check: %v", err)
-		// Continue with empty usage if we can't get pods (fail-open for availability)
-		podList = &corev1.PodList{}
+		log.Printf("Failed to get sessions for quota check: %v", err)
+		// Continue with empty usage if we can't get sessions (fail-open for availability)
+		sessions = []*db.Session{}
 	}
 
-	// Filter to only this user's pods based on the "user" label
-	userPods := make([]corev1.Pod, 0)
-	for _, pod := range podList.Items {
-		if user, ok := pod.Labels["user"]; ok && user == req.User {
-			userPods = append(userPods, pod)
+	// Calculate current usage from database sessions
+	// Only count sessions in active states (running, starting, hibernated, waking)
+	var activeSessionCount int
+	var totalCPU, totalMemory int64
+	for _, session := range sessions {
+		if session.State == "running" || session.State == "starting" || session.State == "hibernated" || session.State == "waking" {
+			activeSessionCount++
+
+			// Parse CPU and memory from session
+			if session.CPU != "" {
+				sessionCPU, err := quota.ParseResourceQuantity(session.CPU, "cpu")
+				if err == nil {
+					totalCPU += sessionCPU
+				}
+			}
+			if session.Memory != "" {
+				sessionMemory, err := quota.ParseResourceQuantity(session.Memory, "memory")
+				if err == nil {
+					totalMemory += sessionMemory
+				}
+			}
 		}
 	}
 
-	// Calculate current usage and check if new session would exceed quota
-	currentUsage := h.quotaEnforcer.CalculateUsage(userPods)
+	currentUsage := &quota.Usage{
+		ActiveSessions: activeSessionCount,
+		TotalCPU:       totalCPU,
+		TotalMemory:    totalMemory,
+		TotalStorage:   0, // TODO: Calculate from PVC data in database
+		TotalGPU:       0, // TODO: Add GPU tracking to sessions table
+	}
 
+	// Check if new session would exceed quota
 	if err := h.quotaEnforcer.CheckSessionCreation(ctx, req.User, requestedCPU, requestedMemory, 0, currentUsage); err != nil {
 		c.JSON(http.StatusForbidden, gin.H{
 			"error":   "Quota exceeded",
@@ -640,109 +623,89 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		return
 	}
 
-	// Generate session name: {user}-{template}-{random}
+	// Step 5: Generate session name: {user}-{template}-{random}
 	// Use resolved templateName (from applicationId lookup or req.Template)
 	sessionName := fmt.Sprintf("%s-%s-%s", req.User, templateName, uuid.New().String()[:8])
 
-	session := &k8s.Session{
-		Name:      sessionName,
-		Namespace: h.namespace,
-		User:      req.User,
-		Template:  templateName,
-		State:     "running",
-	}
-
-	session.Resources.Memory = memory
-	session.Resources.CPU = cpu
-
+	// Step 6: Determine session configuration
+	persistentHome := true // Default
 	if req.PersistentHome != nil {
-		session.PersistentHome = *req.PersistentHome
-	} else {
-		session.PersistentHome = true // Default
+		persistentHome = *req.PersistentHome
 	}
 
-	if req.IdleTimeout != "" {
-		session.IdleTimeout = req.IdleTimeout
+	idleTimeout := req.IdleTimeout
+	maxSessionDuration := req.MaxSessionDuration
+	tags := req.Tags
+
+	// Step 7: v2.0-beta - Select an agent to handle this session using AgentSelector
+	// AgentSelector implements intelligent routing with:
+	//   - Load balancing (by active session count)
+	//   - Health filtering (only online agents with WebSocket connections)
+	//   - Platform filtering (kubernetes, docker, etc.)
+	//   - Optional cluster/region affinity
+	criteria := &services.SelectionCriteria{
+		Platform:         h.platform,
+		PreferLowLoad:    true,
+		RequireConnected: true,
 	}
 
-	if req.MaxSessionDuration != "" {
-		session.MaxSessionDuration = req.MaxSessionDuration
-	}
-
-	if len(req.Tags) > 0 {
-		session.Tags = req.Tags
-	}
-
-	// v2.0-beta Architecture: Create Session CRD directly and dispatch command to agent
-	// 1. Create Session CRD in Kubernetes
-	createdSession, err := h.k8sClient.CreateSession(ctx, session)
+	selectedAgent, err := h.agentSelector.SelectAgent(ctx, criteria)
 	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{
-			"error":   "Failed to create session CRD",
-			"message": fmt.Sprintf("Failed to create Session CRD in Kubernetes: %v", err),
-		})
-		return
-	}
-	log.Printf("Created Session CRD: %s in namespace %s", createdSession.Name, createdSession.Namespace)
-
-	// 2. Select an agent to handle this session (load-balanced by active sessions)
-	// Calculate active sessions dynamically from sessions table for accurate load balancing
-	// v2.0-beta: Use agent_id column (not controller_id which is legacy v1.x)
-	var agentID string
-	err = h.db.DB().QueryRowContext(ctx, `
-		SELECT a.agent_id
-		FROM agents a
-		LEFT JOIN (
-			SELECT agent_id, COUNT(*) as active_sessions
-			FROM sessions
-			WHERE state IN ('running', 'starting')
-			GROUP BY agent_id
-		) s ON a.agent_id = s.agent_id
-		WHERE a.status = 'online' AND a.platform = $1
-		ORDER BY COALESCE(s.active_sessions, 0) ASC
-		LIMIT 1
-	`, h.platform).Scan(&agentID)
-
-	if err != nil {
-		// No agents available - update Session status to reflect this
-		session.Status.Phase = "Failed"
-		if updateErr := h.k8sClient.UpdateSessionStatus(ctx, session); updateErr != nil {
-			log.Printf("Failed to update Session status after agent selection failure: %v", updateErr)
-		}
-
+		// No agents available - v2.0-beta: Just return error, no K8s updates
+		log.Printf("No agents available for session %s: %v", sessionName, err)
 		c.JSON(http.StatusServiceUnavailable, gin.H{
 			"error":   "No agents available",
-			"message": "No online agents are currently available to handle this session. Please try again later.",
+			"message": fmt.Sprintf("No online agents are currently available: %v", err),
 		})
 		return
 	}
-	log.Printf("Selected agent %s for session %s", agentID, sessionName)
 
-	// 3. Build command payload with session and template details
-	vncPort := 3000 // Default VNC port
-	if template != nil && template.VNC != nil && template.VNC.Port > 0 {
-		vncPort = int(template.VNC.Port)
+	agentID := selectedAgent.AgentID
+	clusterID := selectedAgent.ClusterID
+
+	log.Printf("Selected agent %s (cluster: %s, load: %d sessions) for session %s",
+		agentID, clusterID, selectedAgent.SessionCount, sessionName)
+
+	// Step 8: Create session in DATABASE first (source of truth for v2.0-beta)
+	dbSession := &db.Session{
+		ID:                 sessionName,
+		UserID:             req.User,
+		TemplateName:       templateName,
+		State:              "pending",
+		Namespace:          DefaultNamespace,
+		Platform:           h.platform,
+		AgentID:            agentID,    // v2.0-beta: Track which agent is managing this session
+		ClusterID:          clusterID,  // v2.0-beta: Track which cluster the session runs on
+		Memory:             memory,
+		CPU:                cpu,
+		PersistentHome:     persistentHome,
+		IdleTimeout:        idleTimeout,
+		MaxSessionDuration: maxSessionDuration,
 	}
-
-	envMap := make(map[string]string)
-	if template != nil {
-		for _, env := range template.Env {
-			envMap[env.Name] = env.Value
-		}
+	if err := h.sessionDB.CreateSession(ctx, dbSession); err != nil {
+		log.Printf("Failed to create session %s in database: %v", sessionName, err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create session",
+			"message": fmt.Sprintf("Failed to create session in database: %v", err),
+		})
+		return
 	}
+	log.Printf("Created session %s in database with state=pending", sessionName)
 
+	// Step 9: Build command payload
+	// v2.0-beta: Include full template manifest in payload (agent doesn't fetch from K8s)
 	payload := models.CommandPayload{
-		"sessionId":      sessionName,
-		"user":           req.User,
-		"template":       templateName,
-		"namespace":      h.namespace,
-		"image":          template.BaseImage,
-		"vncPort":        vncPort,
-		"memory":         memory,
-		"cpu":            cpu,
-		"persistentHome": session.PersistentHome,
-		"idleTimeout":    session.IdleTimeout,
-		"env":            envMap,
+		"sessionId":           sessionName,
+		"user":                req.User,
+		"template":            templateName,
+		"templateManifest":    template.Manifest, // Full Template CRD spec from database
+		"namespace":           DefaultNamespace, // TODO: Remove (agent determines namespace from config)
+		"memory":              memory,
+		"cpu":                 cpu,
+		"persistentHome":      persistentHome,
+		"idleTimeout":         idleTimeout,
+		"maxSessionDuration":  maxSessionDuration,
+		"tags":                tags,
 	}
 
 	// 4. Create command in database
@@ -796,7 +759,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	}
 	log.Printf("Created agent command %s for session %s", commandID, sessionName)
 
-	// 5. Dispatch command to agent via WebSocket
+	// Step 10: Dispatch command to agent via WebSocket
 	if h.dispatcher != nil {
 		if err := h.dispatcher.DispatchCommand(&command); err != nil {
 			log.Printf("Failed to dispatch command %s: %v", commandID, err)
@@ -811,37 +774,17 @@ func (h *Handler) CreateSession(c *gin.Context) {
 		log.Printf("Warning: CommandDispatcher is nil, command %s not dispatched", commandID)
 	}
 
-	// Cache session in database so status updates can be applied
-	// This is best-effort - failure doesn't block session creation
-	dbSession := &db.Session{
-		ID:                 sessionName,
-		UserID:             req.User,
-		TemplateName:       templateName,
-		State:              "pending",
-		Namespace:          h.namespace,
-		Platform:           h.platform,
-		AgentID:            agentID, // v2.0-beta: Track which agent is managing this session
-		Memory:             memory,
-		CPU:                cpu,
-		PersistentHome:     session.PersistentHome,
-		IdleTimeout:        session.IdleTimeout,
-		MaxSessionDuration: session.MaxSessionDuration,
-	}
-	if err := h.sessionDB.CreateSession(ctx, dbSession); err != nil {
-		log.Printf("Failed to cache session %s in database (non-fatal): %v", sessionName, err)
-	}
-
-	// Return the session info immediately
-	// The agent will provision the pod and update the Session CRD status
+	// Step 11: Return the session info immediately
+	// Agent will create K8s resources (Deployment, Service, Session CRD) and update database
 	response := map[string]interface{}{
 		"name":               sessionName,
-		"namespace":          h.namespace,
+		"namespace":          DefaultNamespace,
 		"user":               req.User,
 		"template":           templateName,
 		"state":              "pending",
-		"persistentHome":     session.PersistentHome,
-		"idleTimeout":        session.IdleTimeout,
-		"maxSessionDuration": session.MaxSessionDuration,
+		"persistentHome":     persistentHome,
+		"idleTimeout":        idleTimeout,
+		"maxSessionDuration": maxSessionDuration,
 		"resources": map[string]string{
 			"memory": memory,
 			"cpu":    cpu,
@@ -850,9 +793,10 @@ func (h *Handler) CreateSession(c *gin.Context) {
 			"phase":   "Pending",
 			"message": fmt.Sprintf("Session provisioning in progress (agent: %s, command: %s)", agentID, commandID),
 		},
+		"tags": tags,
 	}
 
-	log.Printf("Session %s created successfully - CRD created, command %s dispatched to agent %s", sessionName, commandID, agentID)
+	log.Printf("Session %s created successfully - saved to database, command %s dispatched to agent %s", sessionName, commandID, agentID)
 	c.JSON(http.StatusAccepted, response)
 }
 
@@ -877,8 +821,8 @@ func (h *Handler) UpdateSession(c *gin.Context) {
 		return
 	}
 
-	// Get current session info for the event
-	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
+	// v2.0-beta: Get current session info from database (no K8s access)
+	session, err := h.sessionDB.GetSession(ctx, sessionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 		return
@@ -890,21 +834,21 @@ func (h *Handler) UpdateSession(c *gin.Context) {
 	case "hibernated":
 		event := &events.SessionHibernateEvent{
 			SessionID: sessionID,
-			UserID:    session.User,
+			UserID:    session.UserID,
 			Platform:  h.platform,
 		}
 		publishErr = h.publisher.PublishSessionHibernate(ctx, event)
 	case "running":
 		event := &events.SessionWakeEvent{
 			SessionID: sessionID,
-			UserID:    session.User,
+			UserID:    session.UserID,
 			Platform:  h.platform,
 		}
 		publishErr = h.publisher.PublishSessionWake(ctx, event)
 	case "terminated":
 		event := &events.SessionDeleteEvent{
 			SessionID: sessionID,
-			UserID:    session.User,
+			UserID:    session.UserID,
 			Platform:  h.platform,
 		}
 		publishErr = h.publisher.PublishSessionDelete(ctx, event)
@@ -982,7 +926,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	now := time.Now()
 	payload := map[string]interface{}{
 		"sessionId": sessionID,
-		"namespace": h.namespace,
+		"namespace": DefaultNamespace,
 	}
 
 	// Marshal payload to JSON for database insertion (JSONB column)
@@ -1061,6 +1005,276 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	})
 }
 
+// HibernateSession handles hibernating a running session (scales to 0 replicas)
+func (h *Handler) HibernateSession(c *gin.Context) {
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
+	sessionID := c.Param("id")
+
+	// 1. Verify session exists in DATABASE and get agent managing it
+	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
+	var agentID sql.NullString // Use sql.NullString for nullable column
+	var currentState string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT agent_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&agentID, &currentState)
+
+	if err == sql.ErrNoRows {
+		log.Printf("Session %s not found in database", sessionID)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": "The specified session does not exist",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Failed to query session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to query session",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session has an agent assigned
+	if !agentID.Valid || agentID.String == "" {
+		log.Printf("Session %s has no agent assigned (agent_id is NULL or empty)", sessionID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session not ready",
+			"message": "Session has no agent assigned - cannot hibernate. Session may still be pending or failed to start.",
+		})
+		return
+	}
+
+	// Check if session is in a state that can be hibernated
+	if currentState != "running" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Invalid session state",
+			"message": fmt.Sprintf("Session must be in 'running' state to hibernate, currently: %s", currentState),
+		})
+		return
+	}
+
+	// 2. Create hibernate_session command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	payload := map[string]interface{}{
+		"sessionId": sessionID,
+		"namespace": DefaultNamespace,
+	}
+
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal hibernate command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create hibernate command",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
+	var command models.AgentCommand
+	var errorMessage sql.NullString
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, agentID.String, sessionID, "hibernate_session", payloadJSON, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&errorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if errorMessage.Valid {
+		command.ErrorMessage = errorMessage.String
+	}
+
+	if err != nil {
+		log.Printf("Failed to create hibernate_session command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create hibernate command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
+		})
+		return
+	}
+	log.Printf("Created hibernate_session command %s for session %s", commandID, sessionID)
+
+	// 3. Update database session state to hibernating
+	// Agent will update CRD when it processes the command
+	if err := h.sessionDB.UpdateSessionState(ctx, sessionID, "hibernating"); err != nil {
+		log.Printf("Failed to update database session state (non-fatal): %v", err)
+	}
+
+	// 4. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch hibernate command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch hibernate command",
+				"message": fmt.Sprintf("Failed to dispatch command to agent: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched hibernate_session command %s to agent %s for session %s", commandID, agentID.String, sessionID)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, hibernate command %s not dispatched", commandID)
+	}
+
+	// Return accepted response
+	// Agent will handle ALL Kubernetes operations (scale deployment to 0)
+	c.JSON(http.StatusAccepted, gin.H{
+		"name":      sessionID,
+		"commandId": commandID,
+		"message":   "Session hibernation requested, agent will scale down resources",
+	})
+}
+
+// WakeSession handles waking a hibernated session (scales to 1 replica)
+func (h *Handler) WakeSession(c *gin.Context) {
+	// SECURITY FIX: Use request context for proper cancellation and timeout handling
+	ctx := c.Request.Context()
+	sessionID := c.Param("id")
+
+	// 1. Verify session exists in DATABASE and get agent managing it
+	// v2.0-beta: API does NOT access Kubernetes directly - agent handles ALL K8s operations
+	var agentID sql.NullString // Use sql.NullString for nullable column
+	var currentState string
+	err := h.db.DB().QueryRowContext(ctx, `
+		SELECT agent_id, state FROM sessions WHERE id = $1
+	`, sessionID).Scan(&agentID, &currentState)
+
+	if err == sql.ErrNoRows {
+		log.Printf("Session %s not found in database", sessionID)
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Session not found",
+			"message": "The specified session does not exist",
+		})
+		return
+	}
+
+	if err != nil {
+		log.Printf("Failed to query session: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to query session",
+			"message": fmt.Sprintf("Database error: %v", err),
+		})
+		return
+	}
+
+	// Check if session has an agent assigned
+	if !agentID.Valid || agentID.String == "" {
+		log.Printf("Session %s has no agent assigned (agent_id is NULL or empty)", sessionID)
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Session not ready",
+			"message": "Session has no agent assigned - cannot wake. Session may have been terminated.",
+		})
+		return
+	}
+
+	// Check if session is in a state that can be woken
+	if currentState != "hibernated" {
+		c.JSON(http.StatusConflict, gin.H{
+			"error":   "Invalid session state",
+			"message": fmt.Sprintf("Session must be in 'hibernated' state to wake, currently: %s", currentState),
+		})
+		return
+	}
+
+	// 2. Create wake_session command in database
+	commandID := fmt.Sprintf("cmd-%s", uuid.New().String()[:8])
+	now := time.Now()
+	payload := map[string]interface{}{
+		"sessionId": sessionID,
+		"namespace": DefaultNamespace,
+	}
+
+	// Marshal payload to JSON for database insertion (JSONB column)
+	payloadJSON, err := json.Marshal(payload)
+	if err != nil {
+		log.Printf("Failed to marshal wake command payload: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create wake command",
+			"message": fmt.Sprintf("Failed to marshal payload: %v", err),
+		})
+		return
+	}
+
+	var command models.AgentCommand
+	var errorMessage sql.NullString
+	err = h.db.DB().QueryRowContext(ctx, `
+		INSERT INTO agent_commands (command_id, agent_id, session_id, action, payload, status, created_at)
+		VALUES ($1, $2, $3, $4, $5, 'pending', $6)
+		RETURNING id, command_id, agent_id, session_id, action, payload, status, error_message, created_at, sent_at, acknowledged_at, completed_at
+	`, commandID, agentID.String, sessionID, "wake_session", payloadJSON, now).Scan(
+		&command.ID,
+		&command.CommandID,
+		&command.AgentID,
+		&command.SessionID,
+		&command.Action,
+		&command.Payload,
+		&command.Status,
+		&errorMessage,
+		&command.CreatedAt,
+		&command.SentAt,
+		&command.AcknowledgedAt,
+		&command.CompletedAt,
+	)
+
+	if errorMessage.Valid {
+		command.ErrorMessage = errorMessage.String
+	}
+
+	if err != nil {
+		log.Printf("Failed to create wake_session command: %v", err)
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to create wake command",
+			"message": fmt.Sprintf("Failed to create command in database: %v", err),
+		})
+		return
+	}
+	log.Printf("Created wake_session command %s for session %s", commandID, sessionID)
+
+	// 3. Update database session state to waking
+	// Agent will update CRD when it processes the command
+	if err := h.sessionDB.UpdateSessionState(ctx, sessionID, "waking"); err != nil {
+		log.Printf("Failed to update database session state (non-fatal): %v", err)
+	}
+
+	// 4. Dispatch command to agent via WebSocket
+	if h.dispatcher != nil {
+		if err := h.dispatcher.DispatchCommand(&command); err != nil {
+			log.Printf("Failed to dispatch wake command %s: %v", commandID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to dispatch wake command",
+				"message": fmt.Sprintf("Failed to dispatch command to agent: %v", err),
+			})
+			return
+		}
+		log.Printf("Dispatched wake_session command %s to agent %s for session %s", commandID, agentID.String, sessionID)
+	} else {
+		log.Printf("Warning: CommandDispatcher is nil, wake command %s not dispatched", commandID)
+	}
+
+	// Return accepted response
+	// Agent will handle ALL Kubernetes operations (scale deployment to 1, wait for pod ready)
+	c.JSON(http.StatusAccepted, gin.H{
+		"name":      sessionID,
+		"commandId": commandID,
+		"message":   "Session wake requested, agent will scale up resources",
+	})
+}
+
 // ConnectSession handles a user connecting to a session
 func (h *Handler) ConnectSession(c *gin.Context) {
 	// SECURITY FIX: Use request context for proper cancellation and timeout handling
@@ -1073,8 +1287,8 @@ func (h *Handler) ConnectSession(c *gin.Context) {
 		return
 	}
 
-	// Verify session exists
-	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
+	// v2.0-beta: Verify session exists in database (no K8s access)
+	session, err := h.sessionDB.GetSession(ctx, sessionID)
 	if err != nil {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
 		return
@@ -1097,7 +1311,7 @@ func (h *Handler) ConnectSession(c *gin.Context) {
 	}
 
 	// Determine session readiness and URL availability
-	sessionUrl := session.Status.URL
+	sessionUrl := session.URL
 	message := "Connection established."
 	ready := true
 
@@ -1207,37 +1421,24 @@ func (h *Handler) UpdateSessionTags(c *gin.Context) {
 		return
 	}
 
-	// Get the session first
-	obj, err := h.k8sClient.GetDynamicClient().Resource(sessionGVR).Namespace(h.namespace).Get(ctx, sessionID, metav1.GetOptions{})
-	if err != nil {
-		c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+	// v2.0-beta: Update tags in database only (no K8s access)
+	if err := h.sessionDB.UpdateSessionTags(ctx, sessionID, req.Tags); err != nil {
+		if err.Error() == fmt.Sprintf("session not found: %s", sessionID) {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Session not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Update the tags in spec
-	spec, ok := obj.Object["spec"].(map[string]interface{})
-	if !ok {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": "Invalid session spec"})
-		return
-	}
-
-	spec["tags"] = req.Tags
-
-	// Update the session
-	_, err = h.k8sClient.GetDynamicClient().Resource(sessionGVR).Namespace(h.namespace).Update(ctx, obj, metav1.UpdateOptions{})
+	// Get the updated session from database
+	session, err := h.sessionDB.GetSession(ctx, sessionID)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Get the updated session using the k8s client
-	session, err := h.k8sClient.GetSession(ctx, h.namespace, sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	c.JSON(http.StatusOK, h.enrichSessionWithDBInfo(ctx, session))
+	c.JSON(http.StatusOK, session)
 }
 
 // ListSessionsByTags returns sessions filtered by tags
@@ -1251,43 +1452,16 @@ func (h *Handler) ListSessionsByTags(c *gin.Context) {
 		return
 	}
 
-	// Build label selector for tags
-	// Multiple tags are OR'd together
-	labelSelectors := make([]string, 0, len(tags))
-	for _, tag := range tags {
-		if tag != "" {
-			labelSelectors = append(labelSelectors, fmt.Sprintf("tag.stream.space/%s=true", tag))
-		}
-	}
-
-	// Note: Kubernetes label selectors with comma are AND not OR
-	// For OR logic, we need to list all sessions and filter in code
-	allSessions, err := h.k8sClient.ListSessions(ctx, h.namespace)
+	// v2.0-beta: Query database directly for sessions with tags (no K8s access)
+	sessions, err := h.sessionDB.ListSessionsByTags(ctx, tags)
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Filter sessions that have any of the requested tags
-	filtered := make([]*k8s.Session, 0)
-	for _, session := range allSessions {
-		for _, sessionTag := range session.Tags {
-			for _, requestedTag := range tags {
-				if sessionTag == requestedTag {
-					filtered = append(filtered, session)
-					goto nextSession
-				}
-			}
-		}
-	nextSession:
-	}
-
-	// Enrich with database info
-	enriched := h.enrichSessionsWithDBInfo(ctx, filtered)
-
 	c.JSON(http.StatusOK, gin.H{
-		"sessions": enriched,
-		"total":    len(enriched),
+		"sessions": sessions,
+		"total":    len(sessions),
 		"tags":     tags,
 	})
 }
@@ -1306,16 +1480,16 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 	search := c.Query("search")        // Search in name, description, tags
 	sortBy := c.Query("sort")          // name, popularity, created (default: name)
 	tags := c.QueryArray("tags")       // Filter by tags
-	featured := c.Query("featured")    // Filter featured templates
+	featured := c.Query("featured")    // Filter featured templates (TODO: implement with featured_templates join)
 
-	// Get all templates first
-	var templates []*k8s.Template
+	// v2.0-beta: Get templates from database (catalog_templates)
+	var templates []*db.Template
 	var err error
 
 	if category != "" {
-		templates, err = h.k8sClient.ListTemplatesByCategory(ctx, h.namespace, category)
+		templates, err = h.templateDB.ListTemplatesByCategory(ctx, category)
 	} else {
-		templates, err = h.k8sClient.ListTemplates(ctx, h.namespace)
+		templates, err = h.templateDB.ListTemplates(ctx)
 	}
 
 	if err != nil {
@@ -1325,7 +1499,7 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 
 	// Apply search filter
 	if search != "" {
-		filtered := make([]*k8s.Template, 0)
+		filtered := make([]*db.Template, 0)
 		searchLower := strings.ToLower(search)
 
 		for _, tmpl := range templates {
@@ -1352,7 +1526,7 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 
 	// Apply tag filter
 	if len(tags) > 0 {
-		filtered := make([]*k8s.Template, 0)
+		filtered := make([]*db.Template, 0)
 		for _, tmpl := range templates {
 			hasAllTags := true
 			for _, requiredTag := range tags {
@@ -1375,23 +1549,18 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 		templates = filtered
 	}
 
-	// Apply featured filter
+	// Apply featured filter (TODO: join with featured_templates table)
 	if featured == "true" {
-		filtered := make([]*k8s.Template, 0)
-		for _, tmpl := range templates {
-			if tmpl.Featured {
-				filtered = append(filtered, tmpl)
-			}
-		}
-		templates = filtered
+		// Temporarily skip - requires database join with featured_templates
+		log.Printf("Featured filter requested but not yet implemented with database")
 	}
 
 	// Sort templates
 	switch sortBy {
 	case "popularity":
-		// Sort by usage count (if tracked)
+		// Sort by install count
 		sort.Slice(templates, func(i, j int) bool {
-			return templates[i].UsageCount > templates[j].UsageCount
+			return templates[i].InstallCount > templates[j].InstallCount
 		})
 	case "created":
 		// Sort by creation time (newest first)
@@ -1406,7 +1575,7 @@ func (h *Handler) ListTemplates(c *gin.Context) {
 	}
 
 	// Group templates by category for UI
-	categories := make(map[string][]*k8s.Template)
+	categories := make(map[string][]*db.Template)
 	for _, tmpl := range templates {
 		cat := tmpl.Category
 		if cat == "" {
@@ -1435,9 +1604,14 @@ func (h *Handler) GetTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
-	template, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateID)
-	if err != nil {
+	// v2.0-beta: Get template from database (catalog_templates)
+	template, err := h.templateDB.GetTemplateByName(ctx, templateID)
+	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -1449,33 +1623,21 @@ func (h *Handler) CreateTemplate(c *gin.Context) {
 	// SECURITY FIX: Use request context for proper cancellation and timeout handling
 	ctx := c.Request.Context()
 
-	var template k8s.Template
+	var template db.Template
 	if err := c.ShouldBindJSON(&template); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
 		return
 	}
 
-	template.Namespace = h.namespace
-
-	created, err := h.k8sClient.CreateTemplate(ctx, &template)
-	if err != nil {
+	// v2.0-beta: Create template in database (catalog_templates)
+	if err := h.templateDB.CreateTemplate(ctx, &template); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Publish template create event for controllers
-	createEvent := &events.TemplateCreateEvent{
-		TemplateID:  created.Name,
-		DisplayName: created.DisplayName,
-		Category:    created.Category,
-		BaseImage:   created.BaseImage,
-		Platform:    h.platform,
-	}
-	if err := h.publisher.PublishTemplateCreate(ctx, createEvent); err != nil {
-		log.Printf("Warning: Failed to publish template create event: %v", err)
-	}
+	log.Printf("Created template %s in database (ID: %d)", template.Name, template.ID)
 
-	c.JSON(http.StatusCreated, created)
+	c.JSON(http.StatusCreated, template)
 }
 
 // DeleteTemplate deletes a template (admin only)
@@ -1484,19 +1646,16 @@ func (h *Handler) DeleteTemplate(c *gin.Context) {
 	ctx := c.Request.Context()
 	templateID := c.Param("id")
 
-	if err := h.k8sClient.DeleteTemplate(ctx, h.namespace, templateID); err != nil {
+	// v2.0-beta: Delete template from database (catalog_templates)
+	if err := h.templateDB.DeleteTemplate(ctx, templateID); err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
+		return
+	} else if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
-	// Publish template delete event for controllers
-	deleteEvent := &events.TemplateDeleteEvent{
-		TemplateName: templateID,
-		Platform:     h.platform,
-	}
-	if err := h.publisher.PublishTemplateDelete(ctx, deleteEvent); err != nil {
-		log.Printf("Warning: Failed to publish template delete event: %v", err)
-	}
+	log.Printf("Deleted template %s from database", templateID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "Template deleted"})
 }
@@ -1546,10 +1705,14 @@ func (h *Handler) AddTemplateFavorite(c *gin.Context) {
 		return
 	}
 
-	// Verify template exists
-	_, err := h.k8sClient.GetTemplate(ctx, h.namespace, templateID)
-	if err != nil {
+	// v2.0-beta: Verify template exists in database
+	_, err := h.templateDB.GetTemplateByName(ctx, templateID)
+	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
+		return
+	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
 
@@ -1666,12 +1829,12 @@ func (h *Handler) ListUserFavoriteTemplates(c *gin.Context) {
 		templateNames = append(templateNames, entry.Name)
 	}
 
-	// Fetch full template details from Kubernetes
-	templates := make([]*k8s.Template, 0, len(templateNames))
+	// v2.0-beta: Fetch full template details from database (catalog_templates)
+	templates := make([]*db.Template, 0, len(templateNames))
 	for _, name := range templateNames {
-		template, err := h.k8sClient.GetTemplate(ctx, h.namespace, name)
+		template, err := h.templateDB.GetTemplateByName(ctx, name)
 		if err != nil {
-			log.Printf("Warning: Favorite template %s not found in cluster: %v", name, err)
+			log.Printf("Warning: Favorite template %s not found in database: %v", name, err)
 			continue
 		}
 		templates = append(templates, template)
@@ -1685,7 +1848,7 @@ func (h *Handler) ListUserFavoriteTemplates(c *gin.Context) {
 			"displayName": tmpl.DisplayName,
 			"description": tmpl.Description,
 			"category":    tmpl.Category,
-			"icon":        tmpl.Icon,
+			"icon":        tmpl.IconURL,
 			"tags":        tmpl.Tags,
 			"favorited":   true,
 			"favoritedAt": favorites[i].FavoritedAt,
@@ -1899,7 +2062,7 @@ func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 	// Build Template struct from manifest
 	template := &k8s.Template{
 		Name:        name,
-		Namespace:   h.namespace,
+		Namespace:   DefaultNamespace,
 		DisplayName: displayName,
 		Description: description,
 		Category:    category,
@@ -1942,10 +2105,12 @@ func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 		}
 	}
 
-	// Create Template CRD in Kubernetes
-	createdTemplate, err := h.k8sClient.CreateTemplate(ctx, template)
+	// v2.0-beta: Template already exists in database (catalog_templates)
+	// "Installing" just increments the install count
+	// Agent will fetch template from database when creating sessions
+	err = h.templateDB.IncrementInstallCount(ctx, name)
 	if err != nil {
-		log.Printf("Error creating template in Kubernetes: %v", err)
+		log.Printf("Error incrementing install count: %v", err)
 		c.JSON(http.StatusInternalServerError, gin.H{
 			"error":   "Failed to install template",
 			"message": err.Error(),
@@ -1953,20 +2118,11 @@ func (h *Handler) InstallCatalogTemplate(c *gin.Context) {
 		return
 	}
 
-	// Increment install count (best effort, don't fail the request if this fails)
-	_, err = h.db.DB().ExecContext(ctx, `
-		UPDATE catalog_templates SET install_count = install_count + 1 WHERE id = $1
-	`, catalogID)
-	if err != nil {
-		// Log error but don't fail the request - install count is not critical
-		log.Printf("Warning: Failed to increment install count for template %s: %v", catalogID, err)
-	}
+	log.Printf("Template %s installed successfully (incremented install_count)", name)
 
 	c.JSON(http.StatusCreated, gin.H{
-		"message":  "Template installed successfully",
-		"template": createdTemplate,
-		"name":     createdTemplate.Name,
-		"namespace": createdTemplate.Namespace,
+		"message": "Template installed successfully",
+		"name":    name,
 	})
 }
 
@@ -2221,36 +2377,12 @@ func (h *Handler) convertDBSessionsToResponse(sessions []*db.Session) []map[stri
 }
 
 // convertDBSessionToResponse converts a database session to API response format.
-// If the database doesn't have the session URL, it fetches the status from Kubernetes.
+// v2.0-beta: Database is the single source of truth, no K8s fallback.
 func (h *Handler) convertDBSessionToResponse(session *db.Session) map[string]interface{} {
-	// Fetch Kubernetes status if database is missing URL or phase is empty
-	// This handles the case where the controller hasn't yet communicated status back to API
+	// v2.0-beta: Use database values directly (agent updates database)
 	url := session.URL
 	podName := session.PodName
 	phase := session.State
-
-	if (url == "" || phase == "") && h.k8sClient != nil {
-		ctx := context.Background()
-		k8sSession, err := h.k8sClient.GetSession(ctx, h.namespace, session.ID)
-		if err == nil && k8sSession != nil {
-			if k8sSession.Status.URL != "" {
-				url = k8sSession.Status.URL
-			}
-			if k8sSession.Status.PodName != "" {
-				podName = k8sSession.Status.PodName
-			}
-			if k8sSession.Status.Phase != "" {
-				phase = k8sSession.Status.Phase
-			}
-			// Also update resources from Kubernetes if missing
-			if session.Memory == "" && k8sSession.Resources.Memory != "" {
-				session.Memory = k8sSession.Resources.Memory
-			}
-			if session.CPU == "" && k8sSession.Resources.CPU != "" {
-				session.CPU = k8sSession.Resources.CPU
-			}
-		}
-	}
 
 	// Capitalize phase for status.phase (UI expects "Running" not "running")
 	capitalizedPhase := phase

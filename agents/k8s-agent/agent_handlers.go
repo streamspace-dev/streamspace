@@ -1,10 +1,11 @@
 package main
-import "github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
 
 import (
 	"fmt"
 	"log"
 
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
+	"k8s.io/client-go/dynamic"
 	"k8s.io/client-go/kubernetes"
 )
 
@@ -32,17 +33,19 @@ type SessionSpec struct {
 
 // StartSessionHandler handles start_session commands.
 type StartSessionHandler struct {
-	kubeClient *kubernetes.Clientset
-	config     *config.AgentConfig
-	agent      *K8sAgent
+	kubeClient    *kubernetes.Clientset
+	dynamicClient dynamic.Interface
+	config        *config.AgentConfig
+	agent         *K8sAgent
 }
 
 // NewStartSessionHandler creates a new start session handler.
-func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig, agent *K8sAgent) *StartSessionHandler {
+func NewStartSessionHandler(kubeClient *kubernetes.Clientset, dynamicClient dynamic.Interface, config *config.AgentConfig, agent *K8sAgent) *StartSessionHandler {
 	return &StartSessionHandler{
-		kubeClient: kubeClient,
-		config:     config,
-		agent:      agent,
+		kubeClient:    kubeClient,
+		dynamicClient: dynamicClient,
+		config:        config,
+		agent:         agent,
 	}
 }
 
@@ -50,12 +53,13 @@ func NewStartSessionHandler(kubeClient *kubernetes.Clientset, config *config.Age
 //
 // Steps:
 //  1. Parse session spec from command payload
-//  2. Create Deployment (from template)
-//  3. Create Service (ClusterIP)
-//  4. Create PVC (if persistentHome enabled)
-//  5. Wait for pod to be Running
-//  6. Get pod IP and VNC port
-//  7. Return result with session metadata
+//  2. Parse template manifest from payload (v2.0-beta: API sends full manifest, no K8s fetch)
+//  3. Create Deployment (using template)
+//  4. Create Service (ClusterIP)
+//  5. Create PVC (if persistentHome enabled)
+//  6. Wait for pod to be Running
+//  7. Get pod IP and VNC port
+//  8. Return result with session metadata
 func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error) {
 	log.Printf("[StartSessionHandler] Starting session from command %s", cmd.CommandID)
 
@@ -70,25 +74,39 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 		return nil, fmt.Errorf("missing or invalid user")
 	}
 
-	template, ok := cmd.Payload["template"].(string)
-	if !ok || template == "" {
+	templateName, ok := cmd.Payload["template"].(string)
+	if !ok || templateName == "" {
 		return nil, fmt.Errorf("missing or invalid template")
 	}
 
 	spec := &SessionSpec{
 		SessionID:      sessionID,
 		User:           user,
-		Template:       template,
+		Template:       templateName,
 		PersistentHome: getBoolOrDefault(cmd.Payload, "persistentHome", false),
-		Memory:         getStringOrDefault(cmd.Payload, "memory", "2Gi"),
-		CPU:            getStringOrDefault(cmd.Payload, "cpu", "1000m"),
+		Memory:         getStringOrDefault(cmd.Payload, "memory", ""),
+		CPU:            getStringOrDefault(cmd.Payload, "cpu", ""),
 	}
 
 	log.Printf("[StartSessionHandler] Session spec: user=%s, template=%s, persistent=%v",
 		spec.User, spec.Template, spec.PersistentHome)
 
+	// v2.0-beta: Parse template manifest from payload (API sends full manifest from database)
+	// This eliminates the need for agent to have read access to Template CRDs
+	template, err := parseTemplateFromPayload(cmd.Payload, h.config.Namespace)
+	if err != nil {
+		// Fallback: Try fetching from Kubernetes for backwards compatibility
+		log.Printf("[StartSessionHandler] Warning: No templateManifest in payload, falling back to K8s fetch: %v", err)
+		template, err = fetchTemplateCRD(h.dynamicClient, h.config.Namespace, templateName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get template %s: %w", templateName, err)
+		}
+	}
+
+	log.Printf("[StartSessionHandler] Using template: %s (image: %s)", template.DisplayName, template.BaseImage)
+
 	// Create Kubernetes resources
-	deployment, err := createSessionDeployment(h.kubeClient, h.config.Namespace, spec)
+	deployment, err := createSessionDeployment(h.kubeClient, h.config.Namespace, spec, template)
 	if err != nil {
 		return nil, fmt.Errorf("failed to create deployment: %w", err)
 	}
@@ -108,12 +126,18 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 	}
 
 	// Wait for pod to be ready
-	podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
+	podName, podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
 	if err != nil {
 		return nil, fmt.Errorf("pod not ready: %w", err)
 	}
 
-	log.Printf("[StartSessionHandler] Session %s started successfully (pod IP: %s)", sessionID, podIP)
+	log.Printf("[StartSessionHandler] Session %s started successfully (pod: %s, IP: %s)", sessionID, podName, podIP)
+
+	// Create Session CRD in Kubernetes (v2.0: Agent creates Session CRD)
+	if err := createSessionCRD(h.dynamicClient, h.config.Namespace, spec, podName, podIP); err != nil {
+		log.Printf("[StartSessionHandler] Warning: Failed to create Session CRD: %v", err)
+		// Don't fail the command - Session CRD is informational
+	}
 
 	// Initialize VNC tunnel for this session
 	if h.agent != nil {
@@ -131,6 +155,7 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 			"deployment": deployment.Name,
 			"service":    service.Name,
 			"pvc":        pvcName,
+			"podName":    podName,
 			"podIP":      podIP,
 			"vncPort":    3000, // Default VNC port
 			"state":      "running",
@@ -296,17 +321,18 @@ func (h *WakeSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 	}
 
 	// Wait for pod to be ready
-	podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
+	podName, podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
 	if err != nil {
 		return nil, fmt.Errorf("pod not ready after wake: %w", err)
 	}
 
-	log.Printf("[WakeSessionHandler] Session %s woke successfully (pod IP: %s)", sessionID, podIP)
+	log.Printf("[WakeSessionHandler] Session %s woke successfully (pod: %s, IP: %s)", sessionID, podName, podIP)
 
 	return &CommandResult{
 		Success: true,
 		Data: map[string]interface{}{
 			"sessionId": sessionID,
+			"podName":   podName,
 			"podIP":     podIP,
 			"vncPort":   3000,
 			"state":     "running",

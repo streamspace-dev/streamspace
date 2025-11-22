@@ -281,7 +281,8 @@ func main() {
 	}
 
 	// Initialize API handlers
-	apiHandler := api.NewHandler(database, k8sClient, eventPublisher, commandDispatcher, connTracker, syncService, wsManager, quotaEnforcer, platform)
+	// v2.0-beta: agentHub enables multi-agent routing, k8sClient is OPTIONAL (last parameter) - can be nil for standalone API
+	apiHandler := api.NewHandler(database, eventPublisher, commandDispatcher, connTracker, syncService, wsManager, quotaEnforcer, platform, agentHub, k8sClient)
 	userHandler := handlers.NewUserHandler(userDB, groupDB)
 	groupHandler := handlers.NewGroupHandler(groupDB, userDB)
 	authHandler := auth.NewAuthHandler(userDB, jwtManager, samlAuth)
@@ -466,6 +467,10 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				sessions.PATCH("/:id/tags", cache.InvalidateCacheMiddleware(redisCache, cache.SessionPattern()), h.UpdateSessionTags)
 				sessions.GET("/:id/connect", h.ConnectSession)
 				sessions.POST("/:id/disconnect", h.DisconnectSession)
+
+				// Session lifecycle management (v2.0-beta)
+				sessions.PUT("/:id/hibernate", cache.InvalidateCacheMiddleware(redisCache, cache.SessionPattern()), h.HibernateSession)
+				sessions.PUT("/:id/wake", cache.InvalidateCacheMiddleware(redisCache, cache.SessionPattern()), h.WakeSession)
 
 				// NOTE: Session heartbeat is registered by ActivityHandler.RegisterRoutes()
 				// NOTE: Session recording is now handled by the streamspace-recording plugin

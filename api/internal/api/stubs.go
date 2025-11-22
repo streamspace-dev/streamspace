@@ -43,6 +43,8 @@ package api
 import (
 	"bufio"
 	"context"
+	"database/sql"
+	"encoding/json"
 	"fmt"
 	"io"
 	"log"
@@ -136,6 +138,7 @@ func (h *Handler) Version(c *gin.Context) {
 // ============================================================================
 
 // UpdateTemplate updates a template (admin only)
+// v2.0-beta: Updates database only (catalog_templates), not Kubernetes CRDs
 func (h *Handler) UpdateTemplate(c *gin.Context) {
 	templateName := c.Param("id")
 	if templateName == "" {
@@ -144,14 +147,17 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 	}
 
 	var updateReq struct {
-		DisplayName      *string  `json:"displayName"`
-		Description      *string  `json:"description"`
-		Icon             *string  `json:"icon"`
-		Tags             []string `json:"tags"`
+		DisplayName      *string                `json:"displayName"`
+		Description      *string                `json:"description"`
+		IconURL          *string                `json:"iconUrl"`
+		Tags             []string               `json:"tags"`
+		Category         *string                `json:"category"`
+		AppType          *string                `json:"appType"`
+		Manifest         *json.RawMessage       `json:"manifest"` // Full Template CRD spec
 		DefaultResources *struct {
 			Memory string `json:"memory"`
 			CPU    string `json:"cpu"`
-		} `json:"defaultResources"`
+		} `json:"defaultResources"` // Optional: updates manifest if provided
 	}
 
 	if err := c.ShouldBindJSON(&updateReq); err != nil {
@@ -159,54 +165,59 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 		return
 	}
 
-	// Get existing template
-	template, err := h.k8sClient.GetTemplate(c.Request.Context(), h.namespace, templateName)
-	if err != nil {
+	// v2.0-beta: Get existing template from database
+	template, err := h.templateDB.GetTemplateByName(c.Request.Context(), templateName)
+	if err == sql.ErrNoRows {
 		c.JSON(http.StatusNotFound, gin.H{"error": "Template not found"})
 		return
 	}
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
 
-	// Apply updates
+	// Apply updates to template metadata
 	if updateReq.DisplayName != nil {
 		template.DisplayName = *updateReq.DisplayName
 	}
 	if updateReq.Description != nil {
 		template.Description = *updateReq.Description
 	}
-	if updateReq.Icon != nil {
-		template.Icon = *updateReq.Icon
+	if updateReq.IconURL != nil {
+		template.IconURL = *updateReq.IconURL
 	}
 	if updateReq.Tags != nil {
 		template.Tags = updateReq.Tags
 	}
-	if updateReq.DefaultResources != nil {
-		template.DefaultResources.Memory = updateReq.DefaultResources.Memory
-		template.DefaultResources.CPU = updateReq.DefaultResources.CPU
+	if updateReq.Category != nil {
+		template.Category = *updateReq.Category
+	}
+	if updateReq.AppType != nil {
+		template.AppType = *updateReq.AppType
 	}
 
-	// Update template in Kubernetes using dynamic client
-	obj := h.k8sClient.GetDynamicClient().Resource(templateGVR).Namespace(h.namespace)
-	unstructuredTemplate, err := obj.Get(c.Request.Context(), templateName, metav1.GetOptions{})
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Update spec fields
-	spec := unstructuredTemplate.Object["spec"].(map[string]interface{})
-	spec["displayName"] = template.DisplayName
-	spec["description"] = template.Description
-	spec["icon"] = template.Icon
-	spec["tags"] = template.Tags
-	if updateReq.DefaultResources != nil {
-		spec["defaultResources"] = map[string]interface{}{
-			"memory": template.DefaultResources.Memory,
-			"cpu":    template.DefaultResources.CPU,
+	// Handle manifest updates
+	if updateReq.Manifest != nil {
+		template.Manifest = *updateReq.Manifest
+	} else if updateReq.DefaultResources != nil {
+		// Update defaultResources within the existing manifest
+		var manifestMap map[string]interface{}
+		if err := json.Unmarshal(template.Manifest, &manifestMap); err == nil {
+			if spec, ok := manifestMap["spec"].(map[string]interface{}); ok {
+				spec["defaultResources"] = map[string]interface{}{
+					"memory": updateReq.DefaultResources.Memory,
+					"cpu":    updateReq.DefaultResources.CPU,
+				}
+				if updatedManifest, err := json.Marshal(manifestMap); err == nil {
+					template.Manifest = updatedManifest
+				}
+			}
 		}
 	}
 
-	_, err = obj.Update(c.Request.Context(), unstructuredTemplate, metav1.UpdateOptions{})
-	if err != nil {
+	// v2.0-beta: Update template in database (catalog_templates)
+	// Agent will fetch updated template from database when creating sessions
+	if err := h.templateDB.UpdateTemplate(c.Request.Context(), template); err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
 		return
 	}
@@ -220,7 +231,16 @@ func (h *Handler) UpdateTemplate(c *gin.Context) {
 // ListNodes returns cluster nodes
 // Note: This is now implemented in handlers/nodes.go via NodeHandler
 // This stub remains for backwards compatibility with old routes
+// v2.0-beta: Returns stub data when API runs without K8s access
 func (h *Handler) ListNodes(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	nodes, err := h.k8sClient.GetNodes(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -230,7 +250,16 @@ func (h *Handler) ListNodes(c *gin.Context) {
 }
 
 // ListPods returns pods in namespace
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) ListPods(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	namespace := c.Query("namespace")
 	if namespace == "" {
 		namespace = h.namespace
@@ -245,7 +274,16 @@ func (h *Handler) ListPods(c *gin.Context) {
 }
 
 // ListDeployments returns deployments
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) ListDeployments(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	namespace := c.Query("namespace")
 	if namespace == "" {
 		namespace = h.namespace
@@ -260,7 +298,16 @@ func (h *Handler) ListDeployments(c *gin.Context) {
 }
 
 // ListServices returns services
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) ListServices(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	namespace := c.Query("namespace")
 	if namespace == "" {
 		namespace = h.namespace
@@ -275,7 +322,16 @@ func (h *Handler) ListServices(c *gin.Context) {
 }
 
 // ListNamespaces returns namespaces
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) ListNamespaces(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	namespaces, err := h.k8sClient.GetNamespaces(c.Request.Context())
 	if err != nil {
 		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
@@ -285,7 +341,16 @@ func (h *Handler) ListNamespaces(c *gin.Context) {
 }
 
 // CreateResource creates a K8s resource
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) CreateResource(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	var req struct {
 		APIVersion string                 `json:"apiVersion" binding:"required"`
 		Kind       string                 `json:"kind" binding:"required"`
@@ -351,7 +416,16 @@ func (h *Handler) CreateResource(c *gin.Context) {
 }
 
 // UpdateResource updates a K8s resource
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) UpdateResource(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	_ = c.Param("type") // Resource type not used; Kind from request body
 	resourceName := c.Param("name")
 	namespace := c.Query("namespace")
@@ -425,7 +499,16 @@ func (h *Handler) UpdateResource(c *gin.Context) {
 }
 
 // DeleteResource deletes a K8s resource
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) DeleteResource(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	resourceType := c.Param("type") // e.g., "deployment", "service"
 	resourceName := c.Param("name")
 	apiVersion := c.Query("apiVersion") // e.g., "apps/v1"
@@ -514,7 +597,16 @@ func (h *Handler) getGVRForKind(apiVersion, kind string) (schema.GroupVersionRes
 }
 
 // GetPodLogs returns pod logs
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) GetPodLogs(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Cluster management not available",
+			"message": "API is running without Kubernetes access. Cluster management features are disabled.",
+		})
+		return
+	}
+
 	namespace := c.Query("namespace")
 	if namespace == "" {
 		namespace = h.namespace
@@ -568,7 +660,25 @@ func (h *Handler) GetPodLogs(c *gin.Context) {
 }
 
 // GetConfig returns configuration
+// v2.0-beta: Returns default config when API runs without K8s access
 func (h *Handler) GetConfig(c *gin.Context) {
+	// If no K8s access, return default config
+	if h.k8sClient == nil {
+		c.JSON(http.StatusOK, gin.H{
+			"namespace":     DefaultNamespace,
+			"ingressDomain": os.Getenv("INGRESS_DOMAIN"),
+			"hibernation": gin.H{
+				"enabled":            true,
+				"defaultIdleTimeout": "30m",
+			},
+			"resources": gin.H{
+				"defaultMemory": "2Gi",
+				"defaultCPU":    "1000m",
+			},
+		})
+		return
+	}
+
 	// Get configuration from streamspace-config ConfigMap
 	configMap, err := h.k8sClient.GetClientset().CoreV1().ConfigMaps(h.namespace).Get(
 		c.Request.Context(),
@@ -597,7 +707,16 @@ func (h *Handler) GetConfig(c *gin.Context) {
 }
 
 // UpdateConfig updates configuration
+// v2.0-beta: Returns error when API runs without K8s access
 func (h *Handler) UpdateConfig(c *gin.Context) {
+	if h.k8sClient == nil {
+		c.JSON(http.StatusServiceUnavailable, gin.H{
+			"error":   "Configuration management not available",
+			"message": "API is running without Kubernetes access. Configuration must be managed via environment variables or database.",
+		})
+		return
+	}
+
 	var config map[string]string
 	if err := c.ShouldBindJSON(&config); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
