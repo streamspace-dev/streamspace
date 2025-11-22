@@ -6,6 +6,8 @@ import (
 	"encoding/json"
 	"fmt"
 	"time"
+
+	"github.com/lib/pq" // PostgreSQL array support
 )
 
 // TemplateDB provides database operations for templates.
@@ -52,7 +54,7 @@ func (t *TemplateDB) GetTemplateByName(ctx context.Context, name string) (*Templ
 	err := t.db.DB().QueryRowContext(ctx, query, name).Scan(
 		&template.ID, &template.RepositoryID, &template.Name, &template.DisplayName,
 		&template.Description, &template.Category, &template.AppType, &template.IconURL,
-		&template.Manifest, &template.Tags, &template.InstallCount,
+		&template.Manifest, pq.Array(&template.Tags), &template.InstallCount,
 		&template.CreatedAt, &template.UpdatedAt,
 	)
 
@@ -78,7 +80,7 @@ func (t *TemplateDB) GetTemplateByID(ctx context.Context, id int) (*Template, er
 	err := t.db.DB().QueryRowContext(ctx, query, id).Scan(
 		&template.ID, &template.RepositoryID, &template.Name, &template.DisplayName,
 		&template.Description, &template.Category, &template.AppType, &template.IconURL,
-		&template.Manifest, &template.Tags, &template.InstallCount,
+		&template.Manifest, pq.Array(&template.Tags), &template.InstallCount,
 		&template.CreatedAt, &template.UpdatedAt,
 	)
 
@@ -144,7 +146,7 @@ func (t *TemplateDB) CreateTemplate(ctx context.Context, template *Template) err
 	return t.db.DB().QueryRowContext(ctx, query,
 		template.RepositoryID, template.Name, template.DisplayName, template.Description,
 		template.Category, template.AppType, template.IconURL, template.Manifest,
-		template.Tags, template.InstallCount, time.Now(), time.Now(),
+		pq.Array(template.Tags), template.InstallCount, time.Now(), time.Now(),
 	).Scan(&template.ID, &template.CreatedAt, &template.UpdatedAt)
 }
 
@@ -160,7 +162,7 @@ func (t *TemplateDB) UpdateTemplate(ctx context.Context, template *Template) err
 
 	result, err := t.db.DB().ExecContext(ctx, query,
 		template.DisplayName, template.Description, template.Category, template.AppType,
-		template.IconURL, template.Manifest, template.Tags, time.Now(), template.Name,
+		template.IconURL, template.Manifest, pq.Array(template.Tags), time.Now(), template.Name,
 	)
 
 	if err != nil {
@@ -205,6 +207,8 @@ func (t *TemplateDB) IncrementInstallCount(ctx context.Context, name string) err
 }
 
 // scanTemplates scans multiple template rows from a query result.
+// scanTemplates scans template rows from a query result.
+// FIX P1: Use pq.Array() for PostgreSQL TEXT[] column scanning.
 func (t *TemplateDB) scanTemplates(rows *sql.Rows) ([]*Template, error) {
 	var templates []*Template
 
@@ -213,7 +217,7 @@ func (t *TemplateDB) scanTemplates(rows *sql.Rows) ([]*Template, error) {
 		err := rows.Scan(
 			&template.ID, &template.RepositoryID, &template.Name, &template.DisplayName,
 			&template.Description, &template.Category, &template.AppType, &template.IconURL,
-			&template.Manifest, &template.Tags, &template.InstallCount,
+			&template.Manifest, pq.Array(&template.Tags), &template.InstallCount,
 			&template.CreatedAt, &template.UpdatedAt,
 		)
 		if err != nil {
