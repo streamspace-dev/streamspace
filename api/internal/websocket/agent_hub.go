@@ -470,11 +470,13 @@ func (h *AgentHub) UpdateAgentHeartbeat(agentID string) error {
 	conn.LastPing = time.Now()
 	conn.Mutex.Unlock()
 
-	// Also update database heartbeat timestamp
+	// Also update database heartbeat timestamp and status
+	// FIX P1-AGENT-STATUS-001: Update status to 'online' on every heartbeat
+	// to ensure database state matches in-memory WebSocket connection state
 	now := time.Now()
 	_, err := h.database.DB().Exec(`
 		UPDATE agents
-		SET last_heartbeat = $1, updated_at = $1
+		SET status = 'online', last_heartbeat = $1, updated_at = $1
 		WHERE agent_id = $2
 	`, now, agentID)
 

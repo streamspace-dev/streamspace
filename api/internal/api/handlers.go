@@ -787,7 +787,7 @@ func (h *Handler) CreateSession(c *gin.Context) {
 
 	// Assign error_message if it's not NULL
 	if errorMessage.Valid {
-		command.ErrorMessage = errorMessage.String
+		command.ErrorMessage = &errorMessage.String
 	}
 
 	if err != nil {
@@ -1003,7 +1003,7 @@ func (h *Handler) DeleteSession(c *gin.Context) {
 	)
 
 	if errorMessage.Valid {
-		command.ErrorMessage = errorMessage.String
+		command.ErrorMessage = &errorMessage.String
 	}
 
 	if err != nil {
@@ -1138,7 +1138,7 @@ func (h *Handler) HibernateSession(c *gin.Context) {
 	)
 
 	if errorMessage.Valid {
-		command.ErrorMessage = errorMessage.String
+		command.ErrorMessage = &errorMessage.String
 	}
 
 	if err != nil {
@@ -1273,7 +1273,7 @@ func (h *Handler) WakeSession(c *gin.Context) {
 	)
 
 	if errorMessage.Valid {
-		command.ErrorMessage = errorMessage.String
+		command.ErrorMessage = &errorMessage.String
 	}
 
 	if err != nil {

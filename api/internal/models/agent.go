@@ -276,7 +276,8 @@ type AgentCommand struct {
 	Status string `json:"status" db:"status"`
 
 	// ErrorMessage contains the error details if status is "failed".
-	ErrorMessage string `json:"errorMessage,omitempty" db:"error_message"`
+	// Uses pointer type to handle NULL values for pending/successful commands.
+	ErrorMessage *string `json:"errorMessage,omitempty" db:"error_message"`
 
 	// CreatedAt is when this command was created in the database.
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
