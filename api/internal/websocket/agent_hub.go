@@ -25,13 +25,16 @@
 package websocket
 
 import (
+	"context"
 	"encoding/json"
 	"fmt"
 	"log"
+	"os"
 	"sync"
 	"time"
 
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
@@ -88,9 +91,14 @@ type BroadcastMessage struct {
 //   - broadcast: Messages to all agents
 //   - staleCheck: Periodic cleanup of stale connections
 //
+// Multi-Pod Support (P1-MULTI-POD-001):
+//   - Uses Redis to share agent connection state across API replicas
+//   - Redis pub/sub for cross-pod command routing
+//   - Local connections map for direct WebSocket access
+//
 // Thread Safety: All operations use channels for synchronization.
 type AgentHub struct {
-	// connections maps agent_id -> AgentConnection
+	// connections maps agent_id -> AgentConnection (local to this pod)
 	connections map[string]*AgentConnection
 
 	// mutex protects concurrent access to the connections map
@@ -108,14 +116,22 @@ type AgentHub struct {
 	// database is used to persist agent status changes
 	database *db.Database
 
+	// redisClient is used for shared state across API pods (optional)
+	redisClient *redis.Client
+
+	// podName is the name of this API pod (for Redis pub/sub routing)
+	podName string
+
 	// stopChan is used to signal the hub to stop running
 	stopChan chan struct{}
 }
 
-// NewAgentHub creates a new AgentHub instance.
+// NewAgentHub creates a new AgentHub instance without Redis support.
 //
 // The hub is initialized with empty connection map and buffered channels.
 // Call Run() to start the hub's event loop.
+//
+// For multi-pod deployments, use NewAgentHubWithRedis instead.
 //
 // Example:
 //
@@ -128,8 +144,52 @@ func NewAgentHub(database *db.Database) *AgentHub {
 		unregister:  make(chan string, 10),
 		broadcast:   make(chan BroadcastMessage, 100),
 		database:    database,
+		redisClient: nil, // No Redis support
+		podName:     "",
 		stopChan:    make(chan struct{}),
 	}
+}
+
+// NewAgentHubWithRedis creates a new AgentHub instance with Redis support.
+//
+// This enables multi-pod deployments by sharing agent connection state across
+// API replicas via Redis.
+//
+// Parameters:
+//   - database: Database connection for persisting agent status
+//   - redisClient: Redis client for shared state (pass nil to disable multi-pod support)
+//
+// Example:
+//
+//	redisClient := redis.NewClient(&redis.Options{Addr: "streamspace-redis:6379"})
+//	hub := websocket.NewAgentHubWithRedis(database, redisClient)
+//	go hub.Run()
+func NewAgentHubWithRedis(database *db.Database, redisClient *redis.Client) *AgentHub {
+	// Get pod name from environment (set by Kubernetes)
+	podName := os.Getenv("POD_NAME")
+	if podName == "" {
+		podName = "unknown-pod"
+		log.Println("[AgentHub] WARNING: POD_NAME not set, using 'unknown-pod'")
+	}
+
+	hub := &AgentHub{
+		connections: make(map[string]*AgentConnection),
+		register:    make(chan *AgentConnection, 10),
+		unregister:  make(chan string, 10),
+		broadcast:   make(chan BroadcastMessage, 100),
+		database:    database,
+		redisClient: redisClient,
+		podName:     podName,
+		stopChan:    make(chan struct{}),
+	}
+
+	// Start Redis pub/sub listener if Redis is enabled
+	if redisClient != nil {
+		go hub.listenRedisCommands()
+		log.Printf("[AgentHub] Redis enabled for pod: %s", podName)
+	}
+
+	return hub
 }
 
 // Run starts the hub's main event loop.
@@ -209,6 +269,24 @@ func (h *AgentHub) handleRegister(conn *AgentConnection) {
 	if err != nil {
 		log.Printf("[AgentHub] Error updating agent status to online: %v", err)
 	}
+
+	// Store connection state in Redis for multi-pod support
+	if h.redisClient != nil {
+		ctx := context.Background()
+		// Store agent→pod mapping (expires in 5 minutes, refreshed by heartbeats)
+		err = h.redisClient.Set(ctx, fmt.Sprintf("agent:%s:pod", conn.AgentID), h.podName, 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error storing agent→pod mapping in Redis: %v", err)
+		}
+
+		// Store connection state (expires in 5 minutes, refreshed by heartbeats)
+		err = h.redisClient.Set(ctx, fmt.Sprintf("agent:%s:connected", conn.AgentID), "true", 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error storing connection state in Redis: %v", err)
+		}
+
+		log.Printf("[AgentHub] Stored agent %s → pod %s mapping in Redis", conn.AgentID, h.podName)
+	}
 }
 
 // handleUnregister processes an agent disconnection.
@@ -244,6 +322,24 @@ func (h *AgentHub) handleUnregister(agentID string) {
 
 	if err != nil {
 		log.Printf("[AgentHub] Error updating agent status to offline: %v", err)
+	}
+
+	// Remove connection state from Redis
+	if h.redisClient != nil {
+		ctx := context.Background()
+		// Delete agent→pod mapping
+		err = h.redisClient.Del(ctx, fmt.Sprintf("agent:%s:pod", agentID)).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error removing agent→pod mapping from Redis: %v", err)
+		}
+
+		// Delete connection state
+		err = h.redisClient.Del(ctx, fmt.Sprintf("agent:%s:connected", agentID)).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error removing connection state from Redis: %v", err)
+		}
+
+		log.Printf("[AgentHub] Removed agent %s from Redis", agentID)
 	}
 }
 
@@ -353,13 +449,10 @@ func (h *AgentHub) UnregisterAgent(agentID string) {
 //	}
 //	err := hub.SendCommandToAgent("k8s-prod-us-east-1", command)
 func (h *AgentHub) SendCommandToAgent(agentID string, command *models.AgentCommand) error {
+	// Check if agent is connected locally
 	h.mutex.RLock()
-	conn, ok := h.connections[agentID]
+	conn, locallyConnected := h.connections[agentID]
 	h.mutex.RUnlock()
-
-	if !ok {
-		return fmt.Errorf("agent %s is not connected", agentID)
-	}
 
 	// Create command message
 	commandMsg := models.CommandMessage{
@@ -392,14 +485,49 @@ func (h *AgentHub) SendCommandToAgent(agentID string, command *models.AgentComma
 		return fmt.Errorf("failed to marshal agent message: %w", err)
 	}
 
-	// Send to agent's Send channel
-	select {
-	case conn.Send <- msgBytes:
-		log.Printf("[AgentHub] Sent command %s to agent %s", command.CommandID, agentID)
-		return nil
-	default:
-		return fmt.Errorf("agent %s send buffer is full", agentID)
+	// If agent connected locally, send directly via WebSocket
+	if locallyConnected {
+		select {
+		case conn.Send <- msgBytes:
+			log.Printf("[AgentHub] Sent command %s to agent %s (local)", command.CommandID, agentID)
+			return nil
+		default:
+			return fmt.Errorf("agent %s send buffer is full", agentID)
+		}
 	}
+
+	// If Redis enabled, check if agent connected to another pod
+	if h.redisClient != nil {
+		ctx := context.Background()
+
+		// Get the pod name where agent is connected
+		podName, err := h.redisClient.Get(ctx, fmt.Sprintf("agent:%s:pod", agentID)).Result()
+		if err != nil {
+			return fmt.Errorf("agent %s is not connected (not found in Redis)", agentID)
+		}
+
+		// Create Redis message with agent ID
+		redisMsg := map[string]interface{}{
+			"agentId": agentID,
+			"message": string(msgBytes),
+		}
+		redisMsgBytes, err := json.Marshal(redisMsg)
+		if err != nil {
+			return fmt.Errorf("failed to marshal Redis message: %w", err)
+		}
+
+		// Publish command to pod-specific channel
+		err = h.redisClient.Publish(ctx, fmt.Sprintf("pod:%s:commands", podName), redisMsgBytes).Err()
+		if err != nil {
+			return fmt.Errorf("failed to publish command to pod %s: %w", podName, err)
+		}
+
+		log.Printf("[AgentHub] Published command %s to pod %s for agent %s", command.CommandID, podName, agentID)
+		return nil
+	}
+
+	// No Redis and not locally connected
+	return fmt.Errorf("agent %s is not connected", agentID)
 }
 
 // BroadcastToAllAgents sends a message to all connected agents.
@@ -437,17 +565,34 @@ func (h *AgentHub) GetConnectedAgents() []string {
 
 // IsAgentConnected checks if a specific agent is currently connected.
 //
+// For multi-pod deployments with Redis, this checks both local connections
+// and Redis state to find agents connected to other API pods.
+//
 // Example:
 //
 //	if hub.IsAgentConnected("k8s-prod-us-east-1") {
 //	    fmt.Println("Agent is online")
 //	}
 func (h *AgentHub) IsAgentConnected(agentID string) bool {
+	// Check local connections first (fastest)
 	h.mutex.RLock()
-	defer h.mutex.RUnlock()
-
 	_, ok := h.connections[agentID]
-	return ok
+	h.mutex.RUnlock()
+
+	if ok {
+		return true
+	}
+
+	// If Redis enabled, check if agent connected to another pod
+	if h.redisClient != nil {
+		ctx := context.Background()
+		connected, err := h.redisClient.Get(ctx, fmt.Sprintf("agent:%s:connected", agentID)).Result()
+		if err == nil && connected == "true" {
+			return true
+		}
+	}
+
+	return false
 }
 
 // UpdateAgentHeartbeat updates the LastPing timestamp for an agent.
@@ -485,6 +630,22 @@ func (h *AgentHub) UpdateAgentHeartbeat(agentID string) error {
 		return err
 	}
 
+	// Refresh Redis state (extend TTL) for multi-pod support
+	if h.redisClient != nil {
+		ctx := context.Background()
+		// Refresh agent→pod mapping (5 minute TTL)
+		err = h.redisClient.Expire(ctx, fmt.Sprintf("agent:%s:pod", agentID), 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error refreshing agent→pod mapping in Redis: %v", err)
+		}
+
+		// Refresh connection state (5 minute TTL)
+		err = h.redisClient.Expire(ctx, fmt.Sprintf("agent:%s:connected", agentID), 5*time.Minute).Err()
+		if err != nil {
+			log.Printf("[AgentHub] Error refreshing connection state in Redis: %v", err)
+		}
+	}
+
 	return nil
 }
 
@@ -505,4 +666,93 @@ func (h *AgentHub) GetConnection(agentID string) *AgentConnection {
 	defer h.mutex.RUnlock()
 
 	return h.connections[agentID]
+}
+
+// listenRedisCommands listens for commands published via Redis pub/sub.
+//
+// This enables cross-pod command routing. When a command is sent to an agent
+// connected to another pod, it's published to Redis. This method listens for
+// commands targeted at agents connected to THIS pod.
+//
+// This method runs in a goroutine and is started automatically by NewAgentHubWithRedis.
+//
+// P1-MULTI-POD-001: Critical for multi-replica API deployments.
+func (h *AgentHub) listenRedisCommands() {
+	if h.redisClient == nil {
+		log.Println("[AgentHub] Cannot listen for Redis commands: Redis client is nil")
+		return
+	}
+
+	ctx := context.Background()
+	channelName := fmt.Sprintf("pod:%s:commands", h.podName)
+
+	log.Printf("[AgentHub] Starting Redis pub/sub listener on channel: %s", channelName)
+
+	// Subscribe to pod-specific command channel
+	pubsub := h.redisClient.Subscribe(ctx, channelName)
+	defer pubsub.Close()
+
+	// Wait for subscription confirmation
+	_, err := pubsub.Receive(ctx)
+	if err != nil {
+		log.Printf("[AgentHub] Error subscribing to Redis channel %s: %v", channelName, err)
+		return
+	}
+
+	log.Printf("[AgentHub] Successfully subscribed to Redis channel: %s", channelName)
+
+	// Listen for messages
+	ch := pubsub.Channel()
+	for {
+		select {
+		case msg := <-ch:
+			if msg == nil {
+				log.Println("[AgentHub] Redis pub/sub channel closed")
+				return
+			}
+
+			// Parse Redis message wrapper
+			var redisMsg map[string]interface{}
+			if err := json.Unmarshal([]byte(msg.Payload), &redisMsg); err != nil {
+				log.Printf("[AgentHub] Error unmarshaling Redis message: %v", err)
+				continue
+			}
+
+			// Extract agent ID
+			agentID, ok := redisMsg["agentId"].(string)
+			if !ok {
+				log.Printf("[AgentHub] Redis message missing agentId field")
+				continue
+			}
+
+			// Extract message bytes
+			messageStr, ok := redisMsg["message"].(string)
+			if !ok {
+				log.Printf("[AgentHub] Redis message missing message field")
+				continue
+			}
+
+			// Find the target agent in local connections
+			h.mutex.RLock()
+			conn, ok := h.connections[agentID]
+			h.mutex.RUnlock()
+
+			if !ok {
+				log.Printf("[AgentHub] Received command for agent %s via Redis but agent not locally connected", agentID)
+				continue
+			}
+
+			// Forward to local WebSocket connection
+			select {
+			case conn.Send <- []byte(messageStr):
+				log.Printf("[AgentHub] Forwarded Redis command to local agent %s", agentID)
+			default:
+				log.Printf("[AgentHub] Failed to forward Redis command to agent %s: send buffer full", agentID)
+			}
+
+		case <-h.stopChan:
+			log.Println("[AgentHub] Stopping Redis pub/sub listener")
+			return
+		}
+	}
 }

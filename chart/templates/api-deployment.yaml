@@ -86,6 +86,11 @@ spec:
                 fieldPath: metadata.namespace
           - name: PLATFORM
             value: kubernetes
+          # POD_NAME is required for multi-pod AgentHub support (Redis pub/sub routing)
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
           {{- if .Values.redis.enabled }}
           - name: CACHE_ENABLED
             value: "true"
@@ -100,8 +105,14 @@ spec:
                 name: {{ .Values.redis.external.existingSecret }}
                 key: {{ .Values.redis.external.existingSecretPasswordKey }}
           {{- end }}
+          # Enable AgentHub Redis for multi-pod support when Redis is available
+          # This allows multiple API replicas to share agent connection state
+          - name: AGENTHUB_REDIS_ENABLED
+            value: {{ .Values.redis.agentHubEnabled | default "true" | quote }}
           {{- else }}
           - name: CACHE_ENABLED
+            value: "false"
+          - name: AGENTHUB_REDIS_ENABLED
             value: "false"
           {{- end }}
           # Admin password for initial setup (Priority 1: Kubernetes Secret)
