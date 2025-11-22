@@ -27,7 +27,8 @@ type Session struct {
 	URL                string     `json:"url,omitempty"`
 	Namespace          string     `json:"namespace"`
 	Platform           string     `json:"platform"`
-	AgentID            string     `json:"agent_id,omitempty"` // v2.0-beta: Agent managing this session
+	AgentID            string     `json:"agent_id,omitempty"`    // v2.0-beta: Agent managing this session
+	ClusterID          string     `json:"cluster_id,omitempty"`  // v2.0-beta: Cluster where session runs
 	PodName            string     `json:"pod_name,omitempty"`
 	Memory             string     `json:"memory,omitempty"`
 	CPU                string     `json:"cpu,omitempty"`
@@ -65,15 +66,16 @@ func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 	query := `
 		INSERT INTO sessions (
 			id, user_id, team_id, template_name, state, app_type,
-			active_connections, url, namespace, platform, agent_id, pod_name,
+			active_connections, url, namespace, platform, agent_id, cluster_id, pod_name,
 			memory, cpu, persistent_home, idle_timeout, max_session_duration,
 			tags, created_at, updated_at, last_connection, last_disconnect, last_activity
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24)
 		ON CONFLICT (id) DO UPDATE SET
 			state = EXCLUDED.state,
 			url = EXCLUDED.url,
 			agent_id = EXCLUDED.agent_id,
+			cluster_id = EXCLUDED.cluster_id,
 			pod_name = EXCLUDED.pod_name,
 			tags = EXCLUDED.tags,
 			updated_at = EXCLUDED.updated_at
@@ -81,7 +83,7 @@ func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 
 	_, err := s.db.ExecContext(ctx, query,
 		session.ID, session.UserID, nullString(session.TeamID), session.TemplateName, session.State, session.AppType,
-		session.ActiveConnections, session.URL, session.Namespace, session.Platform, nullString(session.AgentID), session.PodName,
+		session.ActiveConnections, session.URL, session.Namespace, session.Platform, nullString(session.AgentID), nullString(session.ClusterID), session.PodName,
 		session.Memory, session.CPU, session.PersistentHome, session.IdleTimeout, session.MaxSessionDuration,
 		pq.Array(session.Tags), session.CreatedAt, session.UpdatedAt, session.LastConnection, session.LastDisconnect, session.LastActivity,
 	)
@@ -99,7 +101,7 @@ func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session,
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
@@ -110,7 +112,7 @@ func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session,
 
 	err := s.db.QueryRowContext(ctx, query, sessionID).Scan(
 		&session.ID, &session.UserID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
-		&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.PodName,
+		&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.AgentID, &session.ClusterID, &session.PodName,
 		&session.Memory, &session.CPU, &session.PersistentHome, &session.IdleTimeout, &session.MaxSessionDuration,
 		pq.Array(&session.Tags),
 		&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
@@ -131,7 +133,7 @@ func (s *SessionDB) ListSessions(ctx context.Context) ([]*Session, error) {
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
@@ -150,7 +152,7 @@ func (s *SessionDB) ListSessionsByUser(ctx context.Context, userID string) ([]*S
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
@@ -179,7 +181,7 @@ func (s *SessionDB) ListSessionsByState(ctx context.Context, state string) ([]*S
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
@@ -333,7 +335,7 @@ func (s *SessionDB) GetIdleSessions(ctx context.Context) ([]*Session, error) {
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
@@ -372,7 +374,7 @@ func (s *SessionDB) scanSessions(rows *sql.Rows) ([]*Session, error) {
 		session := &Session{}
 		err := rows.Scan(
 			&session.ID, &session.UserID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
-			&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.PodName,
+			&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.AgentID, &session.ClusterID, &session.PodName,
 			&session.Memory, &session.CPU, &session.PersistentHome, &session.IdleTimeout, &session.MaxSessionDuration,
 			pq.Array(&session.Tags),
 			&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
@@ -417,7 +419,7 @@ func (s *SessionDB) ListSessionsByTags(ctx context.Context, tags []string) ([]*S
 		SELECT
 			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
