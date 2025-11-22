@@ -51,6 +51,11 @@ rules:
   resources: ["pods/log"]
   verbs: ["get", "list"]
 
+# Port-forward - for VNC tunneling
+- apiGroups: [""]
+  resources: ["pods/portforward"]
+  verbs: ["create", "get"]
+
 # PersistentVolumeClaims - for persistent user storage
 - apiGroups: [""]
   resources: ["persistentvolumeclaims"]

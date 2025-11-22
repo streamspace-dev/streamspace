@@ -142,6 +142,11 @@ rules:
     resources: ["pods", "pods/log"]
     verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
 
+  # Port-forward for VNC tunneling
+  - apiGroups: [""]
+    resources: ["pods/portforward"]
+    verbs: ["create", "get"]
+
   # PVCs for persistent home directories
   - apiGroups: [""]
     resources: ["persistentvolumeclaims"]
