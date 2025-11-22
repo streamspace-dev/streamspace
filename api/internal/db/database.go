@@ -2230,6 +2230,10 @@ func (d *Database) Migrate() error {
 				WHERE table_name='sessions' AND column_name='cluster_id') THEN
 				ALTER TABLE sessions ADD COLUMN cluster_id VARCHAR(255);
 			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='tags') THEN
+				ALTER TABLE sessions ADD COLUMN tags TEXT[];
+			END IF;
 		END $$`,
 
 		// Alter agents table to add v2.0-beta cluster fields
@@ -2272,6 +2276,7 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform)`,
 		`CREATE INDEX IF NOT EXISTS idx_sessions_cluster_id ON sessions(cluster_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_tags ON sessions USING GIN(tags)`,
 	}
 
 	// Execute migrations
