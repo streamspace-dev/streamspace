@@ -13,6 +13,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 	"github.com/streamspace-dev/streamspace/api/internal/activity"
 	"github.com/streamspace-dev/streamspace/api/internal/api"
 	"github.com/streamspace-dev/streamspace/api/internal/auth"
@@ -139,9 +140,46 @@ func main() {
 	wsManager := internalWebsocket.NewManager(database, k8sClient)
 	wsManager.Start()
 
+	// Initialize Redis client for AgentHub multi-pod support (optional)
+	// This is separate from the cache Redis client and enables agent state sharing across API replicas
+	var agentHubRedis *redis.Client
+	agentHubRedisEnabled := getEnv("AGENTHUB_REDIS_ENABLED", "false") == "true"
+
+	if agentHubRedisEnabled {
+		log.Println("Initializing Redis for AgentHub multi-pod support...")
+		agentHubRedisAddr := fmt.Sprintf("%s:%s", redisHost, redisPort)
+
+		agentHubRedis = redis.NewClient(&redis.Options{
+			Addr:     agentHubRedisAddr,
+			Password: redisPassword,
+			DB:       1, // Use DB 1 for AgentHub (DB 0 is for cache)
+		})
+
+		// Test connection
+		ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+		defer cancel()
+
+		if err := agentHubRedis.Ping(ctx).Err(); err != nil {
+			log.Printf("WARNING: Failed to connect to Redis for AgentHub (continuing in single-pod mode): %v", err)
+			agentHubRedis.Close()
+			agentHubRedis = nil
+		} else {
+			log.Println("AgentHub Redis connected - multi-pod support enabled")
+		}
+	} else {
+		log.Println("AgentHub Redis disabled (single-pod mode) - set AGENTHUB_REDIS_ENABLED=true for multi-pod support")
+	}
+
 	// Initialize Agent Hub for v2.0 multi-platform architecture
 	log.Println("Initializing Agent Hub...")
-	agentHub := internalWebsocket.NewAgentHub(database)
+	var agentHub *internalWebsocket.AgentHub
+	if agentHubRedis != nil {
+		agentHub = internalWebsocket.NewAgentHubWithRedis(database, agentHubRedis)
+		log.Println("AgentHub initialized with Redis (multi-pod mode)")
+	} else {
+		agentHub = internalWebsocket.NewAgentHub(database)
+		log.Println("AgentHub initialized without Redis (single-pod mode)")
+	}
 	go agentHub.Run()
 
 	// Initialize Command Dispatcher for agent commands
@@ -407,6 +445,16 @@ func main() {
 			log.Printf("Error closing Redis cache: %v", err)
 		} else {
 			log.Println("Redis cache closed")
+		}
+	}
+
+	// Close AgentHub Redis client
+	if agentHubRedis != nil {
+		log.Println("Closing AgentHub Redis client...")
+		if err := agentHubRedis.Close(); err != nil {
+			log.Printf("Error closing AgentHub Redis: %v", err)
+		} else {
+			log.Println("AgentHub Redis closed")
 		}
 	}
 

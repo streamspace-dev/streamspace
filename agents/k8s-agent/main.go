@@ -31,6 +31,7 @@ package main
 
 import (
 	"bytes"
+	"context"
 	"encoding/json"
 	"flag"
 	"fmt"
@@ -52,6 +53,7 @@ import (
 	"k8s.io/client-go/tools/clientcmd"
 
 	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/leaderelection"
 )
 
 // K8sAgent represents a Kubernetes agent instance.
@@ -253,6 +255,7 @@ func main() {
 	maxMemory := flag.Int("max-memory", 128, "Maximum memory in GB")
 	maxSessions := flag.Int("max-sessions", 100, "Maximum concurrent sessions")
 	heartbeatInterval := flag.Int("heartbeat-interval", getEnvIntOrDefault("HEALTH_CHECK_INTERVAL", 30), "Heartbeat interval in seconds")
+	enableHA := flag.Bool("enable-ha", getEnvOrDefault("ENABLE_HA", "false") == "true", "Enable high availability mode with leader election")
 
 	flag.Parse()
 
@@ -291,6 +294,18 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
+	// Check if HA mode is enabled
+	if *enableHA {
+		log.Println("[K8sAgent] High Availability mode ENABLED - using leader election")
+		runWithLeaderElection(agent, config)
+	} else {
+		log.Println("[K8sAgent] High Availability mode DISABLED - running as single instance")
+		runStandalone(agent)
+	}
+}
+
+// runStandalone runs the agent in standalone mode (no leader election).
+func runStandalone(agent *K8sAgent) {
 	// Run agent in background
 	go func() {
 		if err := agent.Run(); err != nil {
@@ -300,6 +315,88 @@ func main() {
 
 	// Wait for shutdown signal
 	agent.WaitForShutdown()
+}
+
+// runWithLeaderElection runs the agent with leader election enabled.
+//
+// Only the leader replica will be active. Standby replicas will wait
+// and automatically take over if the leader fails.
+func runWithLeaderElection(agent *K8sAgent, config *config.AgentConfig) {
+	// Create Kubernetes client for leader election
+	kubeClient, _, err := createKubernetesClient(config.KubeConfig)
+	if err != nil {
+		log.Fatalf("Failed to create Kubernetes client for leader election: %v", err)
+	}
+
+	// Create leader election configuration
+	leConfig := leaderelection.DefaultConfig(config.AgentID, config.Namespace)
+	elector := leaderelection.NewLeaderElector(kubeClient, leConfig)
+
+	// Context for leader election
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	// Track if agent is running
+	agentRunning := false
+	var agentStopFunc func()
+
+	// Define callbacks for leader election
+	onBecomeLeader := func() {
+		log.Println("[K8sAgent] 🎖️  I am the LEADER - starting agent...")
+
+		// Start agent
+		agentStopFunc = func() {
+			log.Println("[K8sAgent] Stopping agent due to leadership loss...")
+			close(agent.stopChan)
+		}
+
+		go func() {
+			if err := agent.Run(); err != nil {
+				log.Printf("[K8sAgent] Agent error: %v", err)
+			}
+		}()
+
+		agentRunning = true
+		log.Println("[K8sAgent] Agent is now ACTIVE")
+	}
+
+	onLoseLeadership := func() {
+		log.Println("[K8sAgent] ⚠️  Lost leadership - stopping agent...")
+
+		if agentRunning && agentStopFunc != nil {
+			agentStopFunc()
+			agentRunning = false
+		}
+
+		log.Println("[K8sAgent] Agent is now STANDBY")
+	}
+
+	// Run leader election in background
+	go func() {
+		if err := elector.Run(ctx, onBecomeLeader, onLoseLeadership); err != nil {
+			log.Printf("[K8sAgent] Leader election error: %v", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+
+	log.Printf("[K8sAgent] Received signal: %v", sig)
+
+	// Cancel leader election context
+	cancel()
+
+	// Stop agent if running
+	if agentRunning {
+		log.Println("[K8sAgent] Stopping agent...")
+		close(agent.stopChan)
+	}
+
+	// Wait for graceful shutdown
+	time.Sleep(2 * time.Second)
+	log.Println("[K8sAgent] Shutdown complete")
 }
 
 // getEnvOrDefault returns environment variable value or default.

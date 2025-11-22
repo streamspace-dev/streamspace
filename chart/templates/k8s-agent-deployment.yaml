@@ -78,6 +78,15 @@ spec:
           - name: RECONNECT_MULTIPLIER
             value: {{ .Values.k8sAgent.config.reconnect.multiplier | quote }}
 
+          # High Availability Settings (Leader Election)
+          - name: ENABLE_HA
+            value: {{ .Values.k8sAgent.ha.enabled | quote }}
+          # POD_NAME is required for leader election (identifies this replica)
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+
           {{- with .Values.k8sAgent.extraEnv }}
           {{- toYaml . | nindent 10 }}
           {{- end }}

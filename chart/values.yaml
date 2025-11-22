@@ -100,8 +100,17 @@ k8sAgent:
   # Enable K8s Agent deployment
   enabled: true
 
-  # Number of agent replicas (recommended: 1 per cluster)
+  # Number of agent replicas
+  # - For single-pod mode (ha.enabled=false): Set to 1
+  # - For HA mode (ha.enabled=true): Set to 2+ for high availability
   replicaCount: 1
+
+  # High Availability configuration
+  ha:
+    # Enable leader election for agent HA
+    # When enabled, multiple replicas can run but only one will be active (leader)
+    # Standby replicas automatically take over if the leader fails
+    enabled: false
 
   image:
     registry: ghcr.io
@@ -430,7 +439,12 @@ postgresql:
 
 ## Redis Cache (Optional)
 redis:
-  enabled: false # Set to true to enable caching
+  enabled: false # Set to true to enable caching and multi-pod AgentHub support
+
+  # Enable Redis for AgentHub multi-pod support
+  # When true and redis.enabled is true, multiple API replicas can share agent connection state
+  # Set to false to disable AgentHub Redis (single-pod mode only)
+  agentHubEnabled: true
 
   # Use external Redis
   external:
