@@ -133,43 +133,43 @@ type ParsedTemplate struct {
 //	    port: 3000
 //	  tags: [browser, web, privacy]
 type TemplateManifest struct {
-	APIVersion string `yaml:"apiVersion"`
-	Kind       string `yaml:"kind"`
+	APIVersion string `yaml:"apiVersion" json:"apiVersion"`
+	Kind       string `yaml:"kind" json:"kind"`
 	Metadata   struct {
-		Name      string            `yaml:"name"`
-		Namespace string            `yaml:"namespace,omitempty"`
-		Labels    map[string]string `yaml:"labels,omitempty"`
-	} `yaml:"metadata"`
+		Name      string            `yaml:"name" json:"name"`
+		Namespace string            `yaml:"namespace,omitempty" json:"namespace,omitempty"`
+		Labels    map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
+	} `yaml:"metadata" json:"metadata"`
 	Spec struct {
-		DisplayName      string            `yaml:"displayName"`
-		Description      string            `yaml:"description"`
-		Category         string            `yaml:"category"`
-		AppType          string            `yaml:"appType,omitempty"`
-		Icon             string            `yaml:"icon,omitempty"`
-		BaseImage        string            `yaml:"baseImage"`
-		DefaultResources map[string]string `yaml:"defaultResources,omitempty"`
+		DisplayName      string            `yaml:"displayName" json:"displayName"`
+		Description      string            `yaml:"description" json:"description"`
+		Category         string            `yaml:"category" json:"category"`
+		AppType          string            `yaml:"appType,omitempty" json:"appType,omitempty"`
+		Icon             string            `yaml:"icon,omitempty" json:"icon,omitempty"`
+		BaseImage        string            `yaml:"baseImage" json:"baseImage"`
+		DefaultResources map[string]string `yaml:"defaultResources,omitempty" json:"defaultResources,omitempty"`
 		Ports            []struct {
-			Name          string `yaml:"name"`
-			ContainerPort int    `yaml:"containerPort"`
-			Protocol      string `yaml:"protocol,omitempty"`
-		} `yaml:"ports,omitempty"`
-		Env          []map[string]interface{} `yaml:"env,omitempty"`
-		VolumeMounts []map[string]interface{} `yaml:"volumeMounts,omitempty"`
+			Name          string `yaml:"name" json:"name"`
+			ContainerPort int    `yaml:"containerPort" json:"containerPort"`
+			Protocol      string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+		} `yaml:"ports,omitempty" json:"ports,omitempty"`
+		Env          []map[string]interface{} `yaml:"env,omitempty" json:"env,omitempty"`
+		VolumeMounts []map[string]interface{} `yaml:"volumeMounts,omitempty" json:"volumeMounts,omitempty"`
 		VNC          *struct {
-			Enabled    bool   `yaml:"enabled"`
-			Port       int    `yaml:"port"`
-			Protocol   string `yaml:"protocol,omitempty"`
-			Encryption bool   `yaml:"encryption,omitempty"`
-		} `yaml:"vnc,omitempty"`
+			Enabled    bool   `yaml:"enabled" json:"enabled"`
+			Port       int    `yaml:"port" json:"port"`
+			Protocol   string `yaml:"protocol,omitempty" json:"protocol,omitempty"`
+			Encryption bool   `yaml:"encryption,omitempty" json:"encryption,omitempty"`
+		} `yaml:"vnc,omitempty" json:"vnc,omitempty"`
 		WebApp *struct {
-			Enabled     bool   `yaml:"enabled"`
-			Port        int    `yaml:"port"`
-			Path        string `yaml:"path,omitempty"`
-			HealthCheck string `yaml:"healthCheck,omitempty"`
-		} `yaml:"webapp,omitempty"`
-		Capabilities []string `yaml:"capabilities,omitempty"`
-		Tags         []string `yaml:"tags,omitempty"`
-	} `yaml:"spec"`
+			Enabled     bool   `yaml:"enabled" json:"enabled"`
+			Port        int    `yaml:"port" json:"port"`
+			Path        string `yaml:"path,omitempty" json:"path,omitempty"`
+			HealthCheck string `yaml:"healthCheck,omitempty" json:"healthCheck,omitempty"`
+		} `yaml:"webapp,omitempty" json:"webapp,omitempty"`
+		Capabilities []string `yaml:"capabilities,omitempty" json:"capabilities,omitempty"`
+		Tags         []string `yaml:"tags,omitempty" json:"tags,omitempty"`
+	} `yaml:"spec" json:"spec"`
 }
 
 // ParseRepository parses all Template manifests in a Git repository.
