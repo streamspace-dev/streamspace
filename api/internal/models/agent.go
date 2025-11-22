@@ -250,7 +250,8 @@ type AgentCommand struct {
 	AgentID string `json:"agentId" db:"agent_id"`
 
 	// SessionID is the session this command affects (if applicable).
-	SessionID string `json:"sessionId,omitempty" db:"session_id"`
+	// Uses pointer type to handle NULL values for commands without sessions.
+	SessionID *string `json:"sessionId,omitempty" db:"session_id"`
 
 	// Action is the operation to perform.
 	//
