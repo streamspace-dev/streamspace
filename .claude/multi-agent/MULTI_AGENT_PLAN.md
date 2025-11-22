@@ -137,13 +137,34 @@ Merge To:   feature/streamspace-v2-agent-refactor
 
 ---
 
-## 🎯 CURRENT FOCUS: v2.0-beta.1 Release Testing & Documentation (UPDATED 2025-11-22 12:30)
+## 🎯 CURRENT FOCUS: P1 Bug Fixes Before HA Testing (UPDATED 2025-11-22 19:30)
 
 ### Architect's Coordination Update
 
-**DATE**: 2025-11-22 12:30 UTC
+**DATE**: 2025-11-22 19:30 UTC
 **BY**: Agent 1 (Architect)
-**STATUS**: 🚀 **FEATURE COMPLETE + HA READY** - Final testing and documentation sprint for v2.0-beta.1 release!
+**STATUS**: ⚠️ **HA TESTING BLOCKED** - Two new P1 bugs discovered during integration testing!
+
+### ⚡ BREAKING NEWS: New P1 Bugs Discovered
+
+**Validator has discovered 2 CRITICAL P1 bugs that BLOCK HA testing:**
+
+🔴 **P1-MULTI-POD-001**: AgentHub Not Shared Across API Replicas
+- **Impact**: BLOCKS horizontal scaling of API (cannot run multiple API pods)
+- **Severity**: P1-HIGH - Blocks production HA deployments
+- **Status**: ACTIVE - Awaiting Builder fix
+- **Report**: `.claude/reports/BUG_REPORT_P1_MULTI_POD_001.md`
+
+🔴 **P1-SCHEMA-002**: Missing updated_at Column in agent_commands Table
+- **Impact**: BLOCKS accurate command status tracking
+- **Severity**: P1-HIGH - Affects audit logging and operations
+- **Status**: ACTIVE - Awaiting Builder fix
+- **Report**: `.claude/reports/BUG_REPORT_P1_SCHEMA_002.md`
+
+**🎯 IMMEDIATE ACTION REQUIRED:**
+- **Builder (P0 URGENT)**: Fix P1-MULTI-POD-001 and P1-SCHEMA-002 ASAP
+- **Validator**: Wait for fixes, then resume HA testing
+- **Release Timeline**: DELAYED until P1 fixes validated
 
 ### Phase Status Summary
 
@@ -152,31 +173,39 @@ Merge To:   feature/streamspace-v2-agent-refactor
 - ✅ Phase 4: VNC Proxy/Tunnel Implementation (100%)
 - ✅ Phase 5: K8s Agent Core (100%)
 - ✅ Phase 6: K8s Agent VNC Tunneling (100%)
-- ✅ Phase 7: Bug Fixes (ALL P0/P1 bugs resolved) (100%)
+- ✅ Phase 7: Bug Fixes (100%)
 - ✅ Phase 8: UI Updates (Admin Agents page + Session VNC viewer) (100%)
 - ✅ **Phase 9: Docker Agent** (100%) ⭐ **Delivered ahead of schedule!**
 
 **✅ COMPLETED TESTING:**
 - ✅ Session Lifecycle (E2E validated, 6s pod startup)
 - ✅ Agent Failover (Test 3.1: 23s reconnection, 100% session survival)
-- ✅ Command Retry (Test 3.2: P1-COMMAND-SCAN-001 fix validated)
+- ✅ Command Retry (Test 3.2: 12s processing after reconnect)
 - ✅ VNC Streaming (Port-forward tunneling operational)
 
-**🔥 NEW: High Availability (Wave 17)**
-- ✅ Redis-backed AgentHub (multi-pod API support)
-- ✅ K8s Agent Leader Election (3+ agent replicas)
+**✅ BUGS FIXED:**
+- ✅ P1-COMMAND-SCAN-001 (NULL error_message scan) - FIXED & VALIDATED
+- ✅ P1-AGENT-STATUS-001 (Agent status sync) - FIXED & VALIDATED
+
+**🔴 ACTIVE BUGS (BLOCKING HA TESTING):**
+- 🔴 P1-MULTI-POD-001 (AgentHub not shared) - BLOCKS multi-pod API
+- 🔴 P1-SCHEMA-002 (missing updated_at) - BLOCKS command status tracking
+
+**🔥 High Availability Features (Wave 17):**
+- ✅ Redis-backed AgentHub (implemented but NOT TESTED due to P1-MULTI-POD-001)
+- ✅ K8s Agent Leader Election (implemented but NOT TESTED)
 - ✅ Docker Agent HA (File, Redis, Swarm backends)
-- ⏳ **TESTING REQUIRED** - HA features not yet validated
+- ⚠️ **TESTING BLOCKED** - Cannot test HA until P1-MULTI-POD-001 fixed
 
-**🎯 CURRENT SPRINT: v2.0-beta.1 Release (Wave 18)**
+**🎯 CURRENT SPRINT: P1 Bug Fixes (Wave 19 - URGENT)**
 
-**TARGET RELEASE**: 3-4 days (2025-11-25/26)
+**TARGET**: Fix P1 bugs within 24 hours, resume HA testing
 
 **CRITICAL PATH:**
-1. **Validator**: HA testing + Multi-user + Performance (P0 - 2-3 days)
-2. **Scribe**: Release docs + HA deployment guide (P0 - 2-3 days)
-3. **Builder**: Standby for bug fixes (P1 - reactive)
-4. **Architect**: Daily integration + release coordination (P0 - ongoing)
+1. **Builder**: Fix P1-MULTI-POD-001 + P1-SCHEMA-002 (P0 URGENT - 4-6 hours)
+2. **Validator**: Validate fixes, resume HA testing (P0 - after Builder)
+3. **Scribe**: Continue docs (P1 - parallel work)
+4. **Architect**: Integration + coordination (P0 - ongoing)
 
 ---
 
@@ -383,6 +412,231 @@ Merge To:   feature/streamspace-v2-agent-refactor
    - Test coverage improvements
 
 **CRITICAL**: All bug reports and fixes must follow `.claude/reports/` standards!
+
+---
+
+## 📋 Wave 19 Task Assignments: URGENT P1 Bug Fixes (2025-11-22 → ASAP)
+
+### 🚨 CRITICAL: P1 Bugs Blocking HA Testing
+
+**Two P1 bugs discovered by Validator during integration testing MUST be fixed before HA testing can proceed!**
+
+**Timeline**: Fix within 24 hours (by 2025-11-23 19:30)
+**Priority**: P0 URGENT - BLOCKS v2.0-beta.1 release
+
+---
+
+### 🔨 Agent 2: Builder - P1 Bug Fixes (P0 URGENT)
+
+**Branch**: `claude/v2-builder`
+**Status**: P0 URGENT - Fix required ASAP
+**Timeline**: 4-6 hours total
+
+#### Task 1: Fix P1-MULTI-POD-001 - AgentHub Multi-Pod Support (P0 - 3-4 hours)
+
+**Bug Report**: `.claude/reports/BUG_REPORT_P1_MULTI_POD_001.md`
+
+**Problem**: AgentHub stores WebSocket connections in-memory per pod, preventing multi-replica API deployments
+
+**Impact**: BLOCKS horizontal scaling of API, BLOCKS HA deployments
+
+**Recommended Solution (from Validator)**:
+
+1. **Add Redis-based connection state tracking**:
+   ```go
+   // Store connection metadata in Redis
+   h.redisClient.Set(ctx, fmt.Sprintf("agent:%s:connected", agentID), "true", 5*time.Minute)
+   h.redisClient.Set(ctx, fmt.Sprintf("agent:%s:pod", agentID), os.Getenv("POD_NAME"), 5*time.Minute)
+   ```
+
+2. **Add Redis pub/sub for cross-pod command routing**:
+   ```go
+   // Publish command to pod-specific channel when agent on different pod
+   commandJSON, _ := json.Marshal(command)
+   h.redisClient.Publish(ctx, fmt.Sprintf("pod:%s:commands", podName), commandJSON)
+   ```
+
+3. **Add pub/sub listener in each pod**:
+   ```go
+   func (h *AgentHub) ListenForCommands() {
+       pubsub := h.redisClient.Subscribe(ctx, fmt.Sprintf("pod:%s:commands", os.Getenv("POD_NAME")))
+       for msg := range pubsub.Channel() {
+           // Forward to local WebSocket connection
+       }
+   }
+   ```
+
+**Files to Modify**:
+- `api/internal/websocket/hub.go` - Add Redis state tracking
+- `api/internal/websocket/hub.go` - Add pub/sub routing
+- `manifests/redis.yaml` - Add Redis deployment (if not exists)
+- `chart/values.yaml` - Add Redis dependency
+
+**Testing Plan**:
+1. Build and deploy with fix
+2. Scale API to 2 replicas
+3. Create sessions (should work on all replicas)
+4. Document results in `.claude/reports/P1_MULTI_POD_001_VALIDATION_RESULTS.md`
+
+**Estimated Time**: 3-4 hours
+
+---
+
+#### Task 2: Fix P1-SCHEMA-002 - Add updated_at Column (P0 - 30 minutes)
+
+**Bug Report**: `.claude/reports/BUG_REPORT_P1_SCHEMA_002.md`
+
+**Problem**: `agent_commands` table missing `updated_at` column expected by CommandDispatcher code
+
+**Impact**: BLOCKS accurate command status tracking and audit logging
+
+**Recommended Solution (from Validator)**:
+
+1. **Create migration script**:
+   ```sql
+   -- Add updated_at column
+   ALTER TABLE agent_commands
+   ADD COLUMN updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP;
+
+   -- Backfill existing rows
+   UPDATE agent_commands
+   SET updated_at = created_at
+   WHERE updated_at IS NULL;
+
+   -- Add auto-update trigger
+   CREATE OR REPLACE FUNCTION update_agent_commands_updated_at()
+   RETURNS TRIGGER AS $$
+   BEGIN
+       NEW.updated_at = NOW();
+       RETURN NEW;
+   END;
+   $$ LANGUAGE plpgsql;
+
+   CREATE TRIGGER agent_commands_updated_at_trigger
+   BEFORE UPDATE ON agent_commands
+   FOR EACH ROW
+   EXECUTE FUNCTION update_agent_commands_updated_at();
+   ```
+
+2. **Add migration to deployment**:
+   - Add to init container scripts
+   - Include in Helm chart migrations
+   - Document in deployment guide
+
+**Files to Modify**:
+- `api/migrations/` - Add new migration script
+- `manifests/init-db-job.yaml` - Update init scripts
+- `chart/templates/` - Update Helm migrations
+
+**Testing Plan**:
+1. Apply migration to test database
+2. Verify column exists and trigger works
+3. Test command status updates (no errors)
+4. Document results in `.claude/reports/P1_SCHEMA_002_VALIDATION_RESULTS.md`
+
+**Estimated Time**: 30 minutes
+
+---
+
+#### Commit & Push Workflow
+
+**After completing both fixes:**
+
+1. **Run local tests**:
+   ```bash
+   cd api && go test ./...
+   ```
+
+2. **Commit to claude/v2-builder**:
+   ```bash
+   git add .
+   git commit -m "fix(P1): Multi-pod AgentHub support + updated_at migration
+
+   P1-MULTI-POD-001:
+   - Add Redis-based connection state tracking
+   - Implement pub/sub for cross-pod command routing
+   - Enable multi-replica API deployments
+
+   P1-SCHEMA-002:
+   - Add updated_at column to agent_commands table
+   - Add auto-update trigger
+   - Backfill existing rows
+
+   These fixes unblock HA testing and v2.0-beta.1 release.
+
+   🤖 Generated with [Claude Code](https://claude.com/claude-code)
+
+   Co-Authored-By: Claude <noreply@anthropic.com>"
+   ```
+
+3. **Push to remote**:
+   ```bash
+   git push origin claude/v2-builder
+   ```
+
+4. **Notify Architect**: Fixes ready for integration and validation
+
+**Expected Output**:
+- `.claude/reports/P1_MULTI_POD_001_FIX.md` (optional - fix summary)
+- `.claude/reports/P1_SCHEMA_002_FIX.md` (optional - fix summary)
+
+---
+
+### 🧪 Agent 3: Validator - Standby (P1)
+
+**Branch**: `claude/v2-validator`
+**Status**: STANDBY - Wait for Builder fixes
+**Timeline**: After Builder completes
+
+**Tasks**:
+1. Wait for Builder's P1 fixes
+2. Merge fixes from Architect
+3. Validate P1-MULTI-POD-001 fix
+4. Validate P1-SCHEMA-002 fix
+5. Resume HA testing (Wave 18 Task 1)
+
+---
+
+### 📝 Agent 4: Scribe - Continue Docs (P1)
+
+**Branch**: `claude/v2-scribe`
+**Status**: ACTIVE - Continue documentation work
+**Timeline**: Parallel with Builder
+
+**Tasks**:
+- Continue Wave 18 documentation tasks
+- No changes needed due to P1 bugs
+- Documentation can proceed in parallel
+
+---
+
+### 🏗️ Agent 1: Architect - Integration & Coordination (P0)
+
+**Branch**: `feature/streamspace-v2-agent-refactor`
+**Status**: ACTIVE - Coordinating Wave 19
+**Timeline**: Ongoing
+
+**Tasks**:
+1. Monitor Builder progress on P1 fixes
+2. Integrate Builder fixes when ready
+3. Trigger Validator validation
+4. Update MULTI_AGENT_PLAN with results
+5. Resume Wave 18 after P1 fixes validated
+
+---
+
+## 🕐 Wave 19 Timeline (URGENT)
+
+| Time | Agent | Task | Deliverable |
+|------|-------|------|-------------|
+| **+0h** | Builder | Start P1-MULTI-POD-001 fix | Redis implementation |
+| **+3h** | Builder | Complete P1-MULTI-POD-001 | Commit + push |
+| **+3.5h** | Builder | Complete P1-SCHEMA-002 | Migration script |
+| **+4h** | Architect | Integrate fixes | Wave 19 integration |
+| **+5h** | Validator | Validate fixes | Validation reports |
+| **+6h** | All | Resume Wave 18 | HA testing begins |
+
+**CRITICAL**: Builder must complete within 6 hours to stay on release timeline!
 
 ---
 
