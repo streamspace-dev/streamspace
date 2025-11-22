@@ -3,6 +3,58 @@
 **Version**: 2.0.0-beta
 **Date**: 2025-11-21
 **Status**: Production Ready (K8s Agent)
+**Last Updated**: 2025-11-21 (Integration Testing Phase)
+
+---
+
+## ⚠️ Recent Updates (Integration Testing - Wave 9)
+
+**Helm Chart Updated for v2.0-beta** (2025-11-21):
+- ✅ K8s Agent deployment template added
+- ✅ NATS removed (v1.x event system deprecated)
+- ✅ JWT_SECRET environment variable added to API
+- ✅ Admin password stored as secret
+- ✅ Agent RBAC and ServiceAccount templates added
+
+**Known Issues Resolved:**
+- 🐛 K8s Agent startup crash (HeartbeatInterval) - FIXED
+- 🐛 Session creation missing controller - FIXED
+- 🐛 Admin authentication broken - FIXED
+- 🐛 Helm chart v1.x architecture mismatch - FIXED
+
+**Deployment Status**: First successful v2.0-beta deployment completed with all bugs fixed. Integration testing 1/8 scenarios complete.
+
+### Helm Chart v2.0-beta Migration Details
+
+The Helm chart has been fully updated from v1.x (Kubernetes controller) to v2.0-beta (agent-based architecture):
+
+**What Changed:**
+- ❌ **Removed**: `chart/templates/nats.yaml` (122 lines) - v1.x event system deprecated
+- ❌ **Removed**: `controller-deployment.yaml` now disabled by default (v1.x architecture)
+- ✅ **Added**: `chart/templates/k8s-agent-deployment.yaml` (118 lines) - v2.0 K8s Agent
+- ✅ **Added**: `chart/templates/k8s-agent-serviceaccount.yaml` (17 lines) - Agent ServiceAccount
+- ✅ **Updated**: `chart/templates/rbac.yaml` (62 lines) - K8s Agent RBAC permissions
+- ✅ **Updated**: `chart/values.yaml` (125+ lines) - K8sAgent configuration section
+- ✅ **Updated**: `chart/templates/api-deployment.yaml` - JWT_SECRET and admin password fixes
+
+**v1.x → v2.0-beta Values Migration:**
+```yaml
+# v1.x (DEPRECATED):
+controller:
+  enabled: true  # Kubernetes controller with CRDs
+
+nats:
+  enabled: true  # Event system for controller
+
+# v2.0-beta (CURRENT):
+k8sAgent:
+  enabled: true  # WebSocket agent connecting to Control Plane
+  config:
+    controlPlaneURL: "ws://streamspace-api:8000/agent/ws"
+    heartbeatInterval: "30s"
+```
+
+For complete Helm chart migration details, see `BUG_REPORT_P0_HELM_CHART_v2.md`.
 
 ---
 
@@ -134,25 +186,68 @@ The Control Plane is the centralized management component that coordinates all a
 
 ### Option 1: Helm Chart Deployment (Recommended)
 
+#### Production Deployment
+
 ```bash
-# Add StreamSpace Helm repository
+# Add StreamSpace Helm repository (when published)
 helm repo add streamspace https://charts.streamspace.io
 helm repo update
 
 # Create namespace
 kubectl create namespace streamspace
 
-# Deploy Control Plane
-helm install streamspace-control-plane streamspace/control-plane \
+# Deploy Control Plane with K8s Agent
+helm install streamspace streamspace/streamspace \
   --namespace streamspace \
+  --create-namespace \
   --set database.host=postgres.example.com \
   --set database.port=5432 \
   --set database.name=streamspace \
   --set database.user=streamspace \
   --set database.password=changeme \
   --set ingress.enabled=true \
-  --set ingress.host=streamspace.example.com
+  --set ingress.host=streamspace.example.com \
+  --set k8sAgent.enabled=true
 ```
+
+#### Local Development Deployment
+
+For local development with Docker Desktop or Minikube:
+
+```bash
+# 1. Build local images
+./scripts/local-build.sh
+
+# 2. Deploy with local images
+helm install streamspace ./chart \
+  --namespace streamspace \
+  --create-namespace \
+  --set api.image.registry="" \
+  --set api.image.repository="streamspace/streamspace-api" \
+  --set api.image.tag=local \
+  --set api.image.pullPolicy=Never \
+  --set ui.image.registry="" \
+  --set ui.image.repository="streamspace/streamspace-ui" \
+  --set ui.image.tag=local \
+  --set ui.image.pullPolicy=Never \
+  --set k8sAgent.enabled=true \
+  --set k8sAgent.image.registry="" \
+  --set k8sAgent.image.repository="streamspace/streamspace-k8s-agent" \
+  --set k8sAgent.image.tag=local \
+  --set k8sAgent.image.pullPolicy=Never \
+  --wait
+
+# 3. Verify deployment
+kubectl get pods -n streamspace
+kubectl get secret streamspace-admin-credentials -n streamspace -o jsonpath='{.data.username}' | base64 -d
+kubectl get secret streamspace-admin-credentials -n streamspace -o jsonpath='{.data.password}' | base64 -d
+```
+
+**Important Notes for Local Development:**
+- Use `pullPolicy=Never` to prevent pulling from remote registry
+- Set `registry=""` to avoid prefixing with ghcr.io
+- Admin credentials are auto-generated in secret `streamspace-admin-credentials`
+- Use `--wait` flag to ensure all pods are ready before command returns
 
 ### Option 2: Manual Kubernetes Deployment
 
@@ -344,7 +439,15 @@ docker run -d \
 
 The K8s Agent connects to the Control Plane and manages sessions in a Kubernetes cluster.
 
-### Prerequisites
+### Deployment via Helm Chart (Recommended)
+
+If you deployed the Control Plane via Helm with `k8sAgent.enabled=true`, the K8s Agent is **already deployed**. Skip to the [Verification](#verification--testing) section.
+
+### Manual Agent Deployment
+
+For advanced use cases (e.g., deploying agent to a different cluster than Control Plane):
+
+#### Prerequisites
 
 **1. Create namespace for agent:**
 
@@ -354,9 +457,11 @@ kubectl create namespace streamspace
 
 **2. Apply RBAC permissions:**
 
+The K8s Agent requires permissions to manage Deployments, Services, and PVCs for session pods.
+
 ```bash
 # Download and apply RBAC manifests
-kubectl apply -f https://raw.githubusercontent.com/JoshuaAFerguson/streamspace/main/agents/k8s-agent/k8s/rbac.yaml
+kubectl apply -f https://raw.githubusercontent.com/streamspace-dev/streamspace/main/agents/k8s-agent/k8s/rbac.yaml
 ```
 
 Or create manually:
@@ -696,17 +801,127 @@ kubectl logs -n streamspace -l component=control-plane | grep vnc
 
 ## Troubleshooting
 
+### K8s Agent Crashes on Startup (P0 - FIXED in v2.0-beta)
+
+**Symptoms:**
+- Agent pod crashes with `CrashLoopBackOff`
+- Agent logs show: `panic: runtime error: invalid memory address or nil pointer dereference`
+- Error related to `HeartbeatInterval` or config initialization
+
+**Root Cause:**
+The agent's `HeartbeatInterval` configuration field was not being loaded from the environment variable, causing a nil pointer dereference on startup.
+
+**Solution (Applied in Integration Wave 7):**
+
+Fixed in `agents/k8s-agent/main.go`:
+```go
+// Load HeartbeatInterval from env var with default
+heartbeatInterval := 30 * time.Second
+if envInterval := os.Getenv("HEARTBEAT_INTERVAL"); envInterval != "" {
+    if d, err := time.ParseDuration(envInterval); err == nil {
+        heartbeatInterval = d
+    }
+}
+config.HeartbeatInterval = heartbeatInterval
+```
+
+**Verify Fix:**
+```bash
+# Check agent pod is running
+kubectl get pods -n streamspace -l app.kubernetes.io/component=k8s-agent
+
+# Check agent logs for successful startup
+kubectl logs -n streamspace -l app.kubernetes.io/component=k8s-agent --tail=20
+# Expected: "Agent started successfully" or similar
+```
+
+### Admin Authentication Fails (P1 - FIXED in v2.0-beta)
+
+**Symptoms:**
+- Cannot login with admin credentials
+- UI shows "Invalid credentials" error
+- Admin user exists in database but authentication fails
+
+**Root Cause:**
+Admin password was passed as plain environment variable in API deployment, but authentication expected it from Kubernetes secret. Password value mismatch between what was set and what was checked.
+
+**Solution (Applied in Integration Wave 8):**
+
+Fixed in `chart/templates/api-deployment.yaml`:
+```yaml
+# Before (WRONG):
+- name: ADMIN_PASSWORD
+  value: {{ .Values.adminPassword | quote }}
+
+# After (CORRECT):
+- name: ADMIN_PASSWORD
+  valueFrom:
+    secretKeyRef:
+      name: {{ include "streamspace.fullname" . }}-admin-credentials
+      key: password
+```
+
+**Verify Fix:**
+```bash
+# Get admin credentials from secret
+kubectl get secret streamspace-admin-credentials -n streamspace -o jsonpath='{.data.username}' | base64 -d
+kubectl get secret streamspace-admin-credentials -n streamspace -o jsonpath='{.data.password}' | base64 -d
+
+# Try logging into UI with these credentials
+```
+
+### Session Creation Stuck in Pending (P0 - FIXED in v2.0-beta)
+
+**Symptoms:**
+- Sessions remain in "pending" state indefinitely
+- No session pods are created
+- API logs show: "controller not available" or "session provisioner unavailable"
+
+**Root Cause:**
+API session creation handler was calling v1.x controller code (CRD-based) instead of v2.0 agent-based workflow. The handler expected a Kubernetes controller to exist, but v2.0 architecture uses agents instead.
+
+**Solution (Applied in Integration Wave 8):**
+
+Rewrote session creation in `api/internal/handlers/sessions.go` to use agent-based workflow:
+```go
+// v1.x (DEPRECATED):
+// Create Session CRD and wait for controller to provision
+
+// v2.0 (CORRECT):
+// 1. Create session record in database
+// 2. Find available agent
+// 3. Send start_session command to agent via WebSocket
+// 4. Agent provisions pod and reports back
+```
+
+**Verify Fix:**
+```bash
+# Create test session via API
+curl -X POST http://localhost:8000/api/v1/sessions \
+  -H "Authorization: Bearer $TOKEN" \
+  -H "Content-Type: application/json" \
+  -d '{
+    "user": "testuser",
+    "template": "firefox-browser",
+    "state": "running"
+  }'
+
+# Check session moves from pending to running
+kubectl get pods -n streamspace -l app=session
+```
+
 ### Agent Not Connecting
 
 **Symptoms:**
 - Agent status shows "offline" in UI
 - Agent logs show connection errors
+- WebSocket connection fails
 
 **Solutions:**
 
 ```bash
 # 1. Check agent logs
-kubectl logs -n streamspace -l component=k8s-agent --tail=50
+kubectl logs -n streamspace -l app.kubernetes.io/component=k8s-agent --tail=50
 
 # 2. Verify Control Plane URL is accessible
 kubectl exec -n streamspace deployment/streamspace-k8s-agent -- \
@@ -720,6 +935,14 @@ kubectl exec -n streamspace deployment/streamspace-k8s-agent -- \
 
 # 5. Check firewall rules
 # Agent needs outbound HTTPS/WSS (port 443) access
+
+# 6. Check Control Plane WebSocket endpoint
+curl -i -N -H "Connection: Upgrade" \
+  -H "Upgrade: websocket" \
+  -H "Sec-WebSocket-Version: 13" \
+  -H "Sec-WebSocket-Key: test" \
+  wss://streamspace.example.com/api/v1/agents/hub
+# Should return 101 Switching Protocols
 ```
 
 ### VNC Connection Fails
@@ -945,12 +1168,34 @@ kubectl apply -f agent-deployment-eu-west-1.yaml
 
 ## Support
 
-- GitHub Issues: https://github.com/JoshuaAFerguson/streamspace/issues
-- Documentation: https://docs.streamspace.io
-- Community Discord: https://discord.gg/streamspace
+- **GitHub Issues**: https://github.com/streamspace-dev/streamspace/issues
+- **GitHub Repository**: https://github.com/streamspace-dev/streamspace
+- **Documentation**: https://docs.streamspace.io
+- **Community Discord**: https://discord.gg/streamspace
+
+### Integration Testing Status
+
+**Phase**: Phase 10 - v2.0-beta Integration Testing
+**Progress**: 1/8 test scenarios complete
+**Status**: Active - bugs discovered and fixed (Waves 7-9)
+
+**Completed Scenarios:**
+1. ✅ Control Plane Deployment (API, UI, Database)
+
+**Remaining Scenarios:**
+2. ⏳ Agent Registration
+3. ⏳ Session Creation
+4. ⏳ VNC Connection
+5. ⏳ VNC Streaming
+6. ⏳ Session Lifecycle
+7. ⏳ Agent Failover
+8. ⏳ Concurrent Sessions
+
+See `INTEGRATION_TEST_REPORT_V2_BETA.md` for detailed test results.
 
 ---
 
-**Deployment Guide Version**: 1.0
-**Last Updated**: 2025-11-21
+**Deployment Guide Version**: 1.1 (Updated with Integration Testing lessons learned)
+**Last Updated**: 2025-11-21 (Integration Testing Wave 9)
 **StreamSpace Version**: v2.0.0-beta
+**Helm Chart Version**: 0.2.0 (v2.0-beta compatible)
