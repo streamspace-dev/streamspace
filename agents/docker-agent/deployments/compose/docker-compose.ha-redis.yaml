@@ -1,0 +1,116 @@
+# Docker Compose - HA Mode with Redis Backend
+#
+# This configuration runs multiple docker-agent replicas with Redis-based leader election.
+# Suitable for:
+#   - Multi-host Docker deployments
+#   - Production environments
+#   - Distributed agent clusters without Docker Swarm
+#
+# How it works:
+#   - Uses Redis SET NX with TTL for leader election
+#   - Atomic operations via Lua scripts
+#   - Supports agents across multiple Docker hosts
+#   - Automatic failover in ~15-20 seconds
+#
+# Requirements:
+#   - Redis server accessible to all agent instances
+#   - Network connectivity between agents and Redis
+#
+# Usage:
+#   docker-compose -f docker-compose.ha-redis.yaml up -d --scale docker-agent=3
+#
+# Environment Variables:
+#   AGENT_ID: Unique identifier for this agent (required)
+#   CONTROL_PLANE_URL: Control Plane WebSocket URL (required)
+#   REDIS_URL: Redis connection URL (required)
+#   REPLICA_COUNT: Number of replicas (default: 3)
+
+version: '3.8'
+
+services:
+  # Redis for leader election (optional - use external Redis in production)
+  redis:
+    image: redis:7-alpine
+    container_name: streamspace-redis-leader-election
+    restart: unless-stopped
+    command: redis-server --appendonly yes
+    ports:
+      - "${REDIS_PORT:-6379}:6379"
+    volumes:
+      - redis-data:/data
+    networks:
+      - streamspace
+    healthcheck:
+      test: ["CMD", "redis-cli", "ping"]
+      interval: 10s
+      timeout: 5s
+      retries: 5
+
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    restart: unless-stopped
+    depends_on:
+      redis:
+        condition: service_healthy
+
+    # Scale manually with: --scale docker-agent=3
+    # Default: 3 replicas for HA
+
+    # Environment Configuration
+    environment:
+      # Agent Identity
+      AGENT_ID: ${AGENT_ID:-docker-agent-ha}
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-ws://host.docker.internal:8000}
+      PLATFORM: ${PLATFORM:-docker}
+      REGION: ${REGION:-default}
+
+      # Docker Configuration
+      DOCKER_HOST: unix:///var/run/docker.sock
+      NETWORK_NAME: ${NETWORK_NAME:-streamspace}
+      VOLUME_DRIVER: ${VOLUME_DRIVER:-local}
+
+      # Capacity Limits
+      MAX_CPU: ${MAX_CPU:-100}
+      MAX_MEMORY: ${MAX_MEMORY:-128}
+      MAX_SESSIONS: ${MAX_SESSIONS:-100}
+
+      # Health Check Settings
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30s}
+
+      # HA Mode with Redis Backend
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "redis"
+      REDIS_URL: ${REDIS_URL:-redis://redis:6379/0}
+
+    # Docker Socket Access
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+    # Network Configuration
+    networks:
+      - streamspace
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep docker-agent || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Volumes
+volumes:
+  redis-data:
+    driver: local
+
+networks:
+  streamspace:
+    name: ${NETWORK_NAME:-streamspace}
+    driver: bridge
