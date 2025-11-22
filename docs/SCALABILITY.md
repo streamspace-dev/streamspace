@@ -30,7 +30,8 @@ StreamSpace v2.0-beta is designed for **horizontal scalability** across all majo
 | **API Server** | ✅ Full | 1 | Unlimited | Requires Redis for multi-pod AgentHub |
 | **UI Server** | ✅ Full | 1 | Unlimited | Stateless React app |
 | **Agents (Multi-Cluster)** | ✅ Full | 1 per cluster | 1000+ clusters | Different agent per cluster |
-| **Agents (HA per Cluster)** | ⏳ Planned | 1 | 1 | Requires leader election (v2.1+) |
+| **k8s-Agent (HA)** | ✅ Full | 1 | Unlimited | Leader election with Kubernetes Leases |
+| **docker-Agent (HA)** | ✅ Full | 1 | Unlimited | Multi-backend leader election (file/redis/swarm) |
 | **PostgreSQL** | ⚠️ External | 1 | N/A | Use PostgreSQL HA solution |
 | **Redis** | ⚠️ External | 1 | N/A | Use Redis Sentinel/Cluster |
 
@@ -277,22 +278,378 @@ k8sAgent:
 
 #### Agent HA (High Availability)
 
-**Current Status:** ⏳ **Not Implemented**
+**Current Status:** ✅ **Implemented** (v2.0)
 
-**Planned for v2.1:**
-- Leader election between agent replicas
-- Active-Standby failover
-- Only one active agent per cluster at a time
-- Automatic failover on active agent failure
+**Features:**
+- Leader election using Kubernetes Leases
+- Active-Standby failover pattern
+- Only one active agent replica at a time
+- Automatic failover in ~15-20 seconds on leader failure
+- Graceful leader handoff on shutdown
 
-**Workaround:**
-- Use Kubernetes liveness/readiness probes
-- Auto-restart on failure
-- Agent reconnects automatically
+**How It Works:**
+1. Multiple k8s-agent replicas deployed in same cluster
+2. All replicas participate in leader election
+3. Only the leader processes agent operations
+4. Standby replicas wait for leadership
+5. If leader fails, standby automatically takes over
+6. On leader shutdown, leadership released gracefully
+
+**Configuration:**
+```yaml
+# values.yaml
+k8sAgent:
+  enabled: true
+  replicaCount: 3  # Deploy 3 replicas for HA
+  ha:
+    enabled: true  # Enable leader election
+```
+
+**Environment Variables:**
+- `ENABLE_HA=true` - Enables leader election mode
+- `POD_NAME` - Auto-injected (identifies replica for leader election)
+
+**Leader Election Parameters:**
+- **Lease Duration**: 15 seconds (how long leader holds lease)
+- **Renew Deadline**: 10 seconds (how often leader renews lease)
+- **Retry Period**: 2 seconds (how often standby checks for leadership)
+
+**Verify HA Status:**
+```bash
+# Check leader election lease
+kubectl get lease -n streamspace | grep streamspace-agent
+
+# View which pod is leader
+kubectl get lease streamspace-agent-k8s-prod-us-east-1 -n streamspace -o jsonpath='{.spec.holderIdentity}'
+
+# Check agent logs
+kubectl logs -n streamspace -l app.kubernetes.io/component=k8s-agent -f
+```
+
+**Failover Testing:**
+```bash
+# Delete leader pod to trigger failover
+LEADER=$(kubectl get lease streamspace-agent-k8s-prod-us-east-1 -n streamspace -o jsonpath='{.spec.holderIdentity}')
+kubectl delete pod $LEADER -n streamspace
+
+# Watch new leader election
+watch kubectl get lease -n streamspace
+```
 
 ---
 
-### 4. PostgreSQL
+### 4. Agents (docker-agent)
+
+#### How It Scales
+
+**Multi-Host Architecture:**
+- **One agent per Docker host/cluster**
+- Each agent has unique `agentId`
+- Example: `docker-prod-host1`, `docker-staging-host2`
+- Agents connect to Control Plane via WebSocket
+- Supports standalone Docker, multi-host, and Docker Swarm
+
+**Agent Connection Flow:**
+1. Agent connects to API WebSocket endpoint
+2. Registers with unique `agentId`
+3. API stores `agent:{agentId}:pod` → pod name in Redis (if multi-pod)
+4. Heartbeats every 30 seconds
+5. If disconnected, reconnects to any available API pod
+
+**Command Routing:**
+- Same as k8s-agent: Redis pub/sub routing between API pods
+- Commands routed to pod where agent is connected
+- Supports cross-pod command delivery
+
+#### Configuration
+
+**Standalone Deployment:**
+```bash
+docker run -d \
+  --name streamspace-docker-agent \
+  -v /var/run/docker.sock:/var/run/docker.sock \
+  -e AGENT_ID=docker-prod-host1 \
+  -e CONTROL_PLANE_URL=wss://streamspace-api.example.com \
+  -e PLATFORM=docker \
+  -e REGION=us-east-1 \
+  streamspace/docker-agent:latest
+```
+
+**Docker Compose Deployment:**
+```yaml
+# docker-compose.standalone.yaml
+version: '3.8'
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    environment:
+      AGENT_ID: docker-prod-host1
+      CONTROL_PLANE_URL: wss://streamspace-api.example.com
+      ENABLE_HA: "false"  # Standalone mode
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+#### Agent HA (High Availability)
+
+**Current Status:** ✅ **Implemented** (v2.0)
+
+**Features:**
+- Multi-backend leader election (file, redis, swarm)
+- Active-Standby failover pattern
+- Only one active agent replica per Docker host/cluster
+- Automatic failover in ~15-20 seconds
+- Graceful leader handoff on shutdown
+- Flexible deployment: standalone Docker, multi-host, Docker Swarm
+
+**Leader Election Backends:**
+
+##### File Backend (Single Host)
+
+**Use Case**: Single Docker host with multiple agent processes
+
+**How It Works:**
+- Uses `flock` (file locking) for exclusive access
+- Lock file shared via Docker volume or host mount
+- Only works on single host (not NFS)
+- Simplest HA option without external dependencies
+
+**Configuration:**
+```yaml
+# docker-compose.ha-file.yaml
+version: '3.8'
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    environment:
+      AGENT_ID: docker-prod-host1
+      CONTROL_PLANE_URL: wss://streamspace-api.example.com
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "file"
+      LOCK_FILE_PATH: "/var/run/streamspace/agent.lock"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+      - leader-locks:/var/run/streamspace
+
+volumes:
+  leader-locks:
+    driver: local
+```
+
+**Deploy with 3 replicas:**
+```bash
+docker-compose -f docker-compose.ha-file.yaml up -d --scale docker-agent=3
+```
+
+**Verify:**
+```bash
+# Check lock file
+docker exec streamspace-docker-agent-1 cat /var/run/streamspace/agent.lock
+
+# View leader
+docker-compose -f docker-compose.ha-file.yaml logs -f docker-agent
+```
+
+##### Redis Backend (Multi-Host)
+
+**Use Case**: Multiple Docker hosts without orchestration
+
+**How It Works:**
+- Uses Redis `SET NX` with TTL for distributed locking
+- Atomic operations via Lua scripts
+- Works across multiple Docker hosts
+- Requires Redis server accessible to all agents
+
+**Configuration:**
+```yaml
+# docker-compose.ha-redis.yaml
+version: '3.8'
+services:
+  redis:
+    image: redis:7-alpine
+    ports:
+      - "6379:6379"
+
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    depends_on:
+      - redis
+    environment:
+      AGENT_ID: docker-prod-cluster
+      CONTROL_PLANE_URL: wss://streamspace-api.example.com
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "redis"
+      REDIS_URL: "redis://redis:6379/0"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+**Deploy across multiple hosts:**
+```bash
+# Host 1
+docker-compose -f docker-compose.ha-redis.yaml up -d
+
+# Host 2 (same config, different REDIS_URL pointing to shared Redis)
+docker-compose -f docker-compose.ha-redis.yaml up -d
+
+# Host 3
+docker-compose -f docker-compose.ha-redis.yaml up -d
+```
+
+**Verify:**
+```bash
+# Check Redis leader key
+redis-cli GET streamspace:agent:leader:docker-prod-cluster
+redis-cli TTL streamspace:agent:leader:docker-prod-cluster
+```
+
+##### Swarm Backend (Docker Swarm)
+
+**Use Case**: Production Docker Swarm clusters
+
+**How It Works:**
+- Uses Docker Swarm service labels for leader election
+- Atomic updates via Swarm API
+- Leverages Swarm's Raft consensus
+- Requires manager node access
+- Most native option for Swarm deployments
+
+**Configuration:**
+```yaml
+# docker-swarm.yaml
+version: '3.8'
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    deploy:
+      mode: replicated
+      replicas: 3
+      placement:
+        constraints:
+          - node.role == manager  # Required for Swarm API access
+    environment:
+      AGENT_ID: docker-swarm-prod
+      CONTROL_PLANE_URL: wss://streamspace-api.example.com
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "swarm"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+```
+
+**Deploy to Swarm:**
+```bash
+# Initialize Swarm (if not already)
+docker swarm init
+
+# Deploy stack
+docker stack deploy -c docker-swarm.yaml streamspace-agent
+
+# Scale agent
+docker service scale streamspace-agent_docker-agent=5
+
+# View service status
+docker service ps streamspace-agent_docker-agent
+```
+
+**Verify:**
+```bash
+# Check service labels
+docker service inspect streamspace-agent_docker-agent \
+  --format '{{ json .Spec.Labels }}' | jq
+
+# View leader from labels
+docker service inspect streamspace-agent_docker-agent \
+  --format '{{ index .Spec.Labels "streamspace.agent.leader.docker-swarm-prod" }}'
+```
+
+**Leader Election Parameters:**
+- **Lease Duration**: 15 seconds (how long leader holds lease)
+- **Renew Deadline**: 10 seconds (how often leader renews lease)
+- **Retry Period**: 2 seconds (how often standby checks for leadership)
+
+**Systemd Deployment (Bare Metal):**
+
+**Installation:**
+```bash
+# Copy binary
+sudo cp docker-agent /usr/local/bin/docker-agent
+
+# Copy systemd unit
+sudo cp docker-agent.service /etc/systemd/system/
+
+# Create environment file
+sudo mkdir -p /etc/streamspace
+sudo cp docker-agent.env.example /etc/streamspace/docker-agent.env
+sudo chmod 600 /etc/streamspace/docker-agent.env
+
+# Edit configuration
+sudo vi /etc/streamspace/docker-agent.env
+
+# Enable and start service
+sudo systemctl daemon-reload
+sudo systemctl enable docker-agent
+sudo systemctl start docker-agent
+```
+
+**HA Configuration:**
+```bash
+# /etc/streamspace/docker-agent.env
+AGENT_ID=docker-prod-host1
+CONTROL_PLANE_URL=wss://streamspace-api.example.com
+ENABLE_HA=true
+LEADER_ELECTION_BACKEND=redis  # or file, swarm
+REDIS_URL=redis://redis.example.com:6379/0
+```
+
+**Verify:**
+```bash
+# Check service status
+sudo systemctl status docker-agent
+
+# View logs
+sudo journalctl -u docker-agent -f
+
+# Check leader election
+# For file backend:
+cat /var/run/streamspace/docker-agent-*.lock
+
+# For Redis backend:
+redis-cli GET streamspace:agent:leader:docker-prod-host1
+```
+
+**Deployment Examples:**
+
+See `agents/docker-agent/deployments/README.md` for comprehensive deployment guides including:
+- Docker Compose configurations (standalone, HA with file, HA with Redis)
+- Docker Swarm stack definitions
+- Systemd service files
+- Environment variable reference
+- Troubleshooting guides
+
+**Backend Comparison:**
+
+| Backend | Use Case | Multi-Host | Dependencies | Complexity |
+|---------|----------|------------|--------------|------------|
+| **File** | Dev/Testing, Single Host | ❌ | None | Low |
+| **Redis** | Production, Multi-Host | ✅ | Redis | Medium |
+| **Swarm** | Production Swarm | ✅ | Swarm | Medium |
+
+**Failover Testing:**
+
+```bash
+# File backend: Kill leader process
+docker kill $(docker ps --filter name=docker-agent -q | head -1)
+
+# Redis backend: Verify new leader
+redis-cli GET streamspace:agent:leader:docker-prod-cluster
+
+# Swarm backend: Remove leader task
+docker service update --force streamspace-agent_docker-agent
+```
+
+---
+
+### 5. PostgreSQL
 
 #### Current Approach
 

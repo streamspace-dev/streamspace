@@ -118,6 +118,64 @@ go run cmd/main.go
 
 ---
 
+## 📂 Documentation Standards
+
+**IMPORTANT**: All agents must follow these documentation standards:
+
+### Report Location
+
+**All bug reports, test reports, validation reports, and analysis documents MUST be placed in `.claude/reports/`**
+
+- ✅ **Correct**: `.claude/reports/BUG_REPORT_P1_*.md`
+- ✅ **Correct**: `.claude/reports/INTEGRATION_TEST_*.md`
+- ✅ **Correct**: `.claude/reports/VALIDATION_RESULTS_*.md`
+- ❌ **Wrong**: `BUG_REPORT_*.md` (in project root)
+- ❌ **Wrong**: `TEST_REPORT_*.md` (in project root)
+
+### Project Root Documentation
+
+**Only essential, user-facing documentation belongs in the project root:**
+
+- `README.md` - Project overview
+- `FEATURES.md` - Feature status
+- `CONTRIBUTING.md` - Contribution guidelines
+- `CHANGELOG.md` - Version history
+- `DEPLOYMENT.md` - Deployment instructions
+
+### docs/ Directory
+
+**Permanent, reference documentation:**
+
+- `docs/ARCHITECTURE.md` - System design
+- `docs/SCALABILITY.md` - Scaling guide
+- `docs/TROUBLESHOOTING.md` - Common issues
+- `docs/V2_DEPLOYMENT_GUIDE.md` - Deployment details
+- `docs/V2_BETA_RELEASE_NOTES.md` - Release notes
+
+### .claude/ Directory Structure
+
+```
+.claude/
+├── multi-agent/              # Multi-agent coordination
+│   ├── MULTI_AGENT_PLAN.md  # Agent coordination plan
+│   ├── agent*-instructions.md
+│   └── ...
+└── reports/                  # All bug/test/validation reports
+    ├── BUG_REPORT_*.md
+    ├── INTEGRATION_TEST_*.md
+    ├── VALIDATION_RESULTS_*.md
+    └── ...
+```
+
+### Why This Matters
+
+- **Clean Root**: Users see only essential docs when browsing repo
+- **Organized Reports**: All agent work tracked in one location
+- **Git History**: Cleaner commits without report noise
+- **Discoverability**: Easier to find specific reports
+
+---
+
 ## 📚 Documentation Map
 
 - **[README.md](README.md)**: Project Overview
@@ -125,3 +183,4 @@ go run cmd/main.go
 - **[ROADMAP.md](ROADMAP.md)**: Future Plans
 - **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: System Design
 - **[DEPLOYMENT.md](DEPLOYMENT.md)**: Installation Guide
+- **[.claude/reports/](.claude/reports/)**: Bug Reports, Test Results, Validation Reports

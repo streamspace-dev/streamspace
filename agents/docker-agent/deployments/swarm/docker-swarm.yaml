@@ -1,0 +1,140 @@
+# Docker Swarm Stack - HA Mode with Swarm Backend
+#
+# This configuration deploys docker-agent to Docker Swarm with Swarm-native leader election.
+# Suitable for:
+#   - Production Docker Swarm clusters
+#   - Multi-node Swarm deployments
+#   - Native Swarm orchestration
+#
+# How it works:
+#   - Uses Docker Swarm service labels for leader election
+#   - Leverages Swarm's distributed consensus
+#   - Atomic operations via service update API
+#   - Automatic failover via Swarm scheduling
+#
+# Requirements:
+#   - Docker Swarm mode enabled
+#   - Manager node access (for service label updates)
+#   - /var/run/docker.sock mounted (for Swarm API access)
+#
+# Usage:
+#   # Deploy stack
+#   docker stack deploy -c docker-swarm.yaml streamspace-agent
+#
+#   # Scale agent
+#   docker service scale streamspace-agent_docker-agent=5
+#
+#   # View service status
+#   docker service ps streamspace-agent_docker-agent
+#
+#   # Remove stack
+#   docker stack rm streamspace-agent
+#
+# Environment Variables:
+#   Set via: docker config create or docker secret create
+#   Or pass via --env when deploying stack
+
+version: '3.8'
+
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+
+    # Deployment Configuration
+    deploy:
+      # Replicated mode with 3 replicas
+      mode: replicated
+      replicas: 3
+
+      # Placement: Prefer manager nodes for Swarm API access
+      placement:
+        constraints:
+          - node.role == manager
+        preferences:
+          - spread: node.id
+
+      # Update Configuration
+      update_config:
+        parallelism: 1
+        delay: 10s
+        failure_action: rollback
+        order: stop-first
+
+      # Rollback Configuration
+      rollback_config:
+        parallelism: 1
+        delay: 5s
+
+      # Restart Policy
+      restart_policy:
+        condition: on-failure
+        delay: 5s
+        max_attempts: 3
+        window: 120s
+
+      # Resource Limits
+      resources:
+        limits:
+          cpus: '1'
+          memory: 512M
+        reservations:
+          cpus: '0.5'
+          memory: 256M
+
+      # Labels for Swarm
+      labels:
+        - "com.streamspace.component=docker-agent"
+        - "com.streamspace.version=1.0.0"
+
+    # Environment Configuration
+    environment:
+      # Agent Identity
+      AGENT_ID: ${AGENT_ID:-docker-agent-swarm}
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-ws://streamspace-api:8000}
+      PLATFORM: ${PLATFORM:-docker}
+      REGION: ${REGION:-default}
+
+      # Docker Configuration
+      DOCKER_HOST: unix:///var/run/docker.sock
+      NETWORK_NAME: ${NETWORK_NAME:-streamspace}
+      VOLUME_DRIVER: ${VOLUME_DRIVER:-local}
+
+      # Capacity Limits
+      MAX_CPU: ${MAX_CPU:-100}
+      MAX_MEMORY: ${MAX_MEMORY:-128}
+      MAX_SESSIONS: ${MAX_SESSIONS:-100}
+
+      # Health Check Settings
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30s}
+
+      # HA Mode with Swarm Backend
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "swarm"
+
+    # Docker Socket Access (required for Swarm API)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+    # Network Configuration
+    networks:
+      - streamspace
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep docker-agent || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  streamspace:
+    driver: overlay
+    attachable: true

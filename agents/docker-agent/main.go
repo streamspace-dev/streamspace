@@ -17,6 +17,10 @@
 //   --platform: Platform type (default: docker)
 //   --region: Deployment region (e.g., us-east-1)
 //   --docker-host: Docker daemon socket (default: unix:///var/run/docker.sock)
+//   --enable-ha: Enable HA mode with leader election (default: false)
+//   --leader-election-backend: Backend for leader election (file, redis, swarm)
+//   --lock-file-path: Lock file path for file backend (optional)
+//   --redis-url: Redis URL for redis backend (e.g., redis://localhost:6379/0)
 //
 // Environment variables (alternative to flags):
 //   AGENT_ID: Agent identifier
@@ -24,9 +28,26 @@
 //   PLATFORM: Platform type
 //   REGION: Deployment region
 //   DOCKER_HOST: Docker daemon socket
+//   ENABLE_HA: Enable HA mode (true/false)
+//   LEADER_ELECTION_BACKEND: Leader election backend (file/redis/swarm)
+//   LOCK_FILE_PATH: Lock file path for file backend
+//   REDIS_URL: Redis URL for redis backend
 //
 // Usage:
+//   # Standalone mode (single instance)
 //   docker-agent --agent-id=docker-prod-us-east-1 --control-plane-url=wss://control.example.com
+//
+//   # HA mode with file backend (single host, multiple processes)
+//   docker-agent --agent-id=docker-prod-us-east-1 --control-plane-url=wss://control.example.com \
+//     --enable-ha --leader-election-backend=file
+//
+//   # HA mode with Redis backend (multi-host)
+//   docker-agent --agent-id=docker-prod-us-east-1 --control-plane-url=wss://control.example.com \
+//     --enable-ha --leader-election-backend=redis --redis-url=redis://localhost:6379/0
+//
+//   # HA mode with Swarm backend (Docker Swarm)
+//   docker-agent --agent-id=docker-prod-us-east-1 --control-plane-url=wss://control.example.com \
+//     --enable-ha --leader-election-backend=swarm
 package main
 
 import (
@@ -42,14 +63,17 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
+	"strings"
 	"sync"
 	"syscall"
 	"time"
 
 	"github.com/docker/docker/client"
 	"github.com/gorilla/websocket"
+	"github.com/redis/go-redis/v9"
 
 	"github.com/streamspace-dev/streamspace/agents/docker-agent/internal/config"
+	"github.com/streamspace-dev/streamspace/agents/docker-agent/internal/leaderelection"
 )
 
 // DockerAgent represents a Docker agent instance.
@@ -481,6 +505,94 @@ func (a *DockerAgent) SendHeartbeats() {
 	}
 }
 
+// runStandalone runs the agent without leader election (single instance mode).
+func runStandalone(agent *DockerAgent) {
+	log.Println("[DockerAgent] Running in standalone mode (no HA)")
+
+	// Run agent in background
+	go func() {
+		if err := agent.Run(); err != nil {
+			log.Printf("[DockerAgent] Agent error: %v", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	agent.WaitForShutdown()
+}
+
+// runWithLeaderElection runs the agent with leader election (HA mode).
+//
+// Only the leader replica will actively run the agent logic.
+// Standby replicas wait for leadership and automatically take over on leader failure.
+func runWithLeaderElection(agent *DockerAgent, cfg *config.AgentConfig, backend leaderelection.Backend, redisClient *redis.Client) {
+	log.Printf("[DockerAgent] Running in HA mode (backend: %s)", backend)
+
+	// Create leader election configuration
+	leConfig := leaderelection.DefaultConfig(cfg.AgentID, backend)
+
+	// Set backend-specific configuration
+	if backend == leaderelection.BackendRedis {
+		leConfig.RedisClient = redisClient
+	} else if backend == leaderelection.BackendFile {
+		// Override lock file path if specified
+		if lockPath := os.Getenv("LOCK_FILE_PATH"); lockPath != "" {
+			leConfig.LockFilePath = lockPath
+		}
+	}
+
+	// Create leader elector
+	elector, err := leaderelection.NewLeaderElector(leConfig)
+	if err != nil {
+		log.Fatalf("[DockerAgent] Failed to create leader elector: %v", err)
+	}
+
+	// Set up leader election callbacks
+	onBecomeLeader := func() {
+		log.Println("[DockerAgent] 🎖️  I am the LEADER - starting agent...")
+		go func() {
+			if err := agent.Run(); err != nil {
+				log.Printf("[DockerAgent] Agent error: %v", err)
+			}
+		}()
+	}
+
+	onLoseLeadership := func() {
+		log.Println("[DockerAgent] ⚠️  Lost leadership - stopping agent...")
+		close(agent.stopChan)
+	}
+
+	// Run leader election in background
+	ctx, cancel := context.WithCancel(context.Background())
+	defer cancel()
+
+	go func() {
+		if err := elector.Run(ctx, onBecomeLeader, onLoseLeadership); err != nil {
+			log.Printf("[DockerAgent] Leader election error: %v", err)
+		}
+	}()
+
+	// Wait for shutdown signal
+	quit := make(chan os.Signal, 1)
+	signal.Notify(quit, syscall.SIGINT, syscall.SIGTERM)
+	sig := <-quit
+
+	log.Printf("[DockerAgent] Received signal: %v", sig)
+
+	// Cancel leader election context
+	cancel()
+
+	// Stop agent if running
+	select {
+	case agent.stopChan <- struct{}{}:
+	default:
+	}
+
+	// Wait briefly for graceful shutdown
+	time.Sleep(500 * time.Millisecond)
+
+	log.Println("[DockerAgent] Shutdown complete")
+}
+
 // main is the entry point for the Docker Agent.
 func main() {
 	// Command-line flags
@@ -495,6 +607,12 @@ func main() {
 	maxMemory := flag.Int("max-memory", 128, "Maximum memory in GB")
 	maxSessions := flag.Int("max-sessions", 100, "Maximum concurrent sessions")
 	heartbeatInterval := flag.Int("heartbeat-interval", getEnvIntOrDefault("HEALTH_CHECK_INTERVAL", 30), "Heartbeat interval in seconds")
+
+	// High Availability flags
+	enableHA := flag.Bool("enable-ha", getEnvOrDefault("ENABLE_HA", "false") == "true", "Enable HA mode with leader election")
+	leaderBackend := flag.String("leader-election-backend", getEnvOrDefault("LEADER_ELECTION_BACKEND", "file"), "Leader election backend (file, redis, swarm)")
+	lockFilePath := flag.String("lock-file-path", getEnvOrDefault("LOCK_FILE_PATH", ""), "Lock file path for file backend")
+	redisURL := flag.String("redis-url", os.Getenv("REDIS_URL"), "Redis URL for redis backend (e.g., redis://localhost:6379/0)")
 
 	flag.Parse()
 
@@ -534,15 +652,50 @@ func main() {
 		log.Fatalf("Failed to create agent: %v", err)
 	}
 
-	// Run agent in background
-	go func() {
-		if err := agent.Run(); err != nil {
-			log.Fatalf("Agent error: %v", err)
+	// Check if HA mode is enabled
+	if *enableHA {
+		// Validate backend
+		backend := leaderelection.Backend(*leaderBackend)
+		if backend != leaderelection.BackendFile && backend != leaderelection.BackendRedis && backend != leaderelection.BackendSwarm {
+			log.Fatalf("Invalid leader election backend: %s (must be file, redis, or swarm)", *leaderBackend)
 		}
-	}()
 
-	// Wait for shutdown signal
-	agent.WaitForShutdown()
+		// Set up Redis client if needed
+		var redisClient *redis.Client
+		if backend == leaderelection.BackendRedis {
+			if *redisURL == "" {
+				log.Fatal("--redis-url is required for redis backend")
+			}
+
+			// Parse Redis URL
+			opt, err := redis.ParseURL(*redisURL)
+			if err != nil {
+				log.Fatalf("Invalid Redis URL: %v", err)
+			}
+
+			redisClient = redis.NewClient(opt)
+
+			// Test connection
+			ctx, cancel := context.WithTimeout(context.Background(), 5*time.Second)
+			defer cancel()
+			if err := redisClient.Ping(ctx).Err(); err != nil {
+				log.Fatalf("Failed to connect to Redis: %v", err)
+			}
+			log.Println("[DockerAgent] Connected to Redis for leader election")
+		}
+
+		// Override lock file path if specified
+		if *lockFilePath != "" {
+			// This will be used by DefaultConfig in runWithLeaderElection
+			os.Setenv("LOCK_FILE_PATH", *lockFilePath)
+		}
+
+		// Run with leader election
+		runWithLeaderElection(agent, cfg, backend, redisClient)
+	} else {
+		// Run in standalone mode
+		runStandalone(agent)
+	}
 }
 
 // getEnvOrDefault returns environment variable value or default.

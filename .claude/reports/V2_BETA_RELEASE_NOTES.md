@@ -1,90 +1,9 @@
 # StreamSpace v2.0-beta Release Notes
 
-> **Status**: Integration Testing Phase - 4 Critical Bugs Fixed
+> **Status**: Development Complete - Ready for Integration Testing
 > **Version**: v2.0-beta
 > **Release Date**: 2025-11-21
 > **Architecture**: Multi-Platform Control Plane + Agent Model
-> **Integration Testing**: Phase 10 Started - 1/8 Scenarios Complete
-
----
-
-## ⚠️ Integration Testing Updates (Waves 7-9)
-
-**Status**: Integration testing started - first deployment completed with 4 critical bugs discovered and fixed.
-
-### Bugs Fixed (2025-11-21)
-
-#### 🐛 P0 Bug #1: K8s Agent Startup Crash
-- **Issue**: Agent crashed on startup with nil pointer dereference
-- **Root Cause**: `HeartbeatInterval` not loaded from environment variable
-- **Impact**: Agent pods showed `CrashLoopBackOff`, blocking all testing
-- **Fix**: Added environment variable loading with 30s default in `agents/k8s-agent/main.go`
-- **Status**: ✅ FIXED (Wave 7)
-
-#### 🐛 P0 Bug #2: Helm Chart Not Updated for v2.0-beta
-- **Issue**: Helm chart still defined v1.x components (controller, NATS)
-- **Root Cause**: Chart not updated during architecture migration
-- **Impact**: Deployment failed, integration testing blocked
-- **Fixes Applied** (Wave 7-8):
-  - ❌ Removed `chart/templates/nats.yaml` (122 lines) - v1.x event system deprecated
-  - ✅ Added `chart/templates/k8s-agent-deployment.yaml` (118 lines)
-  - ✅ Added `chart/templates/k8s-agent-serviceaccount.yaml` (17 lines)
-  - ✅ Updated `chart/templates/rbac.yaml` (62 lines) - K8s Agent RBAC
-  - ✅ Updated `chart/values.yaml` (125+ lines) - k8sAgent configuration section
-  - ✅ Added JWT_SECRET environment variable to API deployment
-- **Status**: ✅ FIXED - Helm chart production-ready
-
-#### 🐛 P0 Bug #3: Session Creation Stuck in Pending
-- **Issue**: Sessions remained in "pending" state, no pods created
-- **Root Cause**: API handler called v1.x controller code instead of v2.0 agent workflow
-- **Impact**: Session creation completely broken
-- **Fix**: Rewrote session creation in `api/internal/handlers/sessions.go` for agent-based workflow
-- **Status**: ✅ FIXED (Wave 8)
-
-#### 🐛 P1 Bug #4: Admin Authentication Broken
-- **Issue**: Admin login failed with correct credentials
-- **Root Cause**: Password from plain env var instead of Kubernetes secret
-- **Impact**: Unable to access admin UI
-- **Fix**: Updated `chart/templates/api-deployment.yaml` to use `secretKeyRef` for `ADMIN_PASSWORD`
-- **Status**: ✅ FIXED (Wave 8)
-
-### First Deployment Results
-
-**Deployment Target**: Local Kubernetes cluster (Docker Desktop)
-
-**Control Plane Status**: ✅ Operational
-- API Server: 2 replicas running
-- Web UI: 2 replicas running
-- PostgreSQL: 1 replica running
-- Admin credentials: Auto-generated
-- Health checks: Passing
-
-**K8s Agent Status**: ✅ Deployed
-- Agent pod: Running with 0 restarts
-- WebSocket: Connected to Control Plane
-- Heartbeat: Active (30s interval)
-- RBAC: Configured correctly
-
-**Integration Testing Progress**: 1/8 scenarios complete
-- ✅ Scenario 1: Control Plane Deployment
-- ⏳ Scenario 2: Agent Registration
-- ⏳ Scenario 3: Session Creation
-- ⏳ Scenario 4: VNC Connection
-- ⏳ Scenario 5: VNC Streaming
-- ⏳ Scenario 6: Session Lifecycle
-- ⏳ Scenario 7: Agent Failover
-- ⏳ Scenario 8: Concurrent Sessions
-
-**Documentation Created**:
-- `BUG_REPORT_P0_HELM_CHART_v2.md` (624 lines) - Helm chart root cause analysis
-- `BUG_REPORT_P0_K8S_AGENT_CRASH.md` (405 lines) - Agent crash investigation
-- `BUG_REPORT_P0_MISSING_CONTROLLER.md` (473 lines) - Session creation fix
-- `BUG_REPORT_P1_ADMIN_AUTH.md` (443 lines) - Admin auth analysis
-- `DEPLOYMENT_SUMMARY_V2_BETA.md` (515 lines) - Complete deployment report
-- `INTEGRATION_TEST_REPORT_V2_BETA.md` (619 lines) - Test results
-- `TROUBLESHOOTING.md` (939 lines) - Common issues guide
-
-**Total Bug Report Documentation**: 4,018 lines
 
 ---
 
@@ -882,26 +801,6 @@ psql -h localhost -U streamspace -d streamspace -c "\dt"
 
 ## 🐛 Known Issues
 
-### Critical Issues Resolved
-
-The following critical issues were discovered and **FIXED** during Integration Testing (Waves 7-9):
-
-1. ✅ **K8s Agent Startup Crash** (P0) - FIXED
-   - Agent crashed with nil pointer dereference
-   - Fixed: HeartbeatInterval environment variable loading
-
-2. ✅ **Helm Chart v1.x Architecture Mismatch** (P0) - FIXED
-   - Chart not updated for v2.0-beta
-   - Fixed: Complete Helm chart rewrite with k8sAgent support
-
-3. ✅ **Session Creation Broken** (P0) - FIXED
-   - Sessions stuck in pending, no pods created
-   - Fixed: Rewrote session creation for agent-based workflow
-
-4. ✅ **Admin Authentication Failing** (P1) - FIXED
-   - Login failed with correct credentials
-   - Fixed: Admin password now from Kubernetes secret
-
 ### Non-Critical
 
 1. **Docker Agent Not Included**
@@ -919,19 +818,14 @@ The following critical issues were discovered and **FIXED** during Integration T
    - **Workaround**: Use "Reconnect" button (Ctrl+Alt+Shift+R) instead of page reload
    - **Fix**: Optimize tunnel establishment (v2.1)
 
-### Integration Testing In Progress
+### Integration Testing Required
 
-**Phase 10 Status**: Started (1/8 scenarios complete)
-
-The following are being validated during Integration Testing:
-- ✅ Control Plane deployment (completed)
-- ⏳ Agent registration and health monitoring
-- ⏳ Session creation end-to-end flow
-- ⏳ VNC proxy performance under load (10+ concurrent streams)
-- ⏳ Agent failover and recovery
-- ⏳ Command timeout handling
-- ⏳ Multi-agent session distribution
-- ⏳ Database query performance at scale (1000+ agents)
+The following will be validated during Phase 10 Integration Testing (starting immediately):
+- Multi-agent session distribution
+- VNC proxy performance under load (10+ concurrent streams)
+- Agent failover and recovery
+- Command timeout handling
+- Database query performance at scale (1000+ agents)
 
 ---
 
@@ -1073,8 +967,7 @@ The following are being validated during Integration Testing:
 
 ### Getting Help
 
-- **GitHub Issues**: https://github.com/streamspace-dev/streamspace/issues
-- **GitHub Repository**: https://github.com/streamspace-dev/streamspace
+- **GitHub Issues**: https://github.com/JoshuaAFerguson/streamspace/issues
 - **Community Forum**: (TBD)
 - **Slack Channel**: (TBD)
 - **Email**: support@streamspace.io (TBD)
