@@ -4,18 +4,20 @@ import (
 	"encoding/json"
 	"testing"
 	"time"
+
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
 )
 
 // TestAgentConfig tests agent configuration validation
 func TestAgentConfig(t *testing.T) {
 	tests := []struct {
 		name    string
-		config  *AgentConfig
+		config  *config.AgentConfig
 		wantErr bool
 	}{
 		{
 			name: "Valid configuration",
-			config: &AgentConfig{
+			config: &config.AgentConfig{
 				AgentID:         "k8s-test-local",
 				ControlPlaneURL: "ws://localhost:8000",
 				Platform:        "kubernetes",
@@ -26,21 +28,21 @@ func TestAgentConfig(t *testing.T) {
 		},
 		{
 			name: "Missing agent ID",
-			config: &AgentConfig{
+			config: &config.AgentConfig{
 				ControlPlaneURL: "ws://localhost:8000",
 			},
 			wantErr: true,
 		},
 		{
 			name: "Missing control plane URL",
-			config: &AgentConfig{
+			config: &config.AgentConfig{
 				AgentID: "k8s-test-local",
 			},
 			wantErr: true,
 		},
 		{
 			name: "Default values applied",
-			config: &AgentConfig{
+			config: &config.AgentConfig{
 				AgentID:         "k8s-test-local",
 				ControlPlaneURL: "ws://localhost:8000",
 			},
