@@ -12,21 +12,22 @@ Example: `/update-issue 200` (for Issue #200)
 
 ## What This Does
 
-1. **Fetch current issue** from GitHub
-2. **Prompt for update type**:
-   - Progress update
-   - Blocker found
-   - Question for issue creator
-   - Additional findings
-   - Status change
-3. **Post comment** to issue
-4. **Update labels** (if needed)
-5. **Log in MULTI_AGENT_PLAN.md**
+ 1. **Fetch current issue**: Run `gh issue view <number>` to get context.
+ 2. **Prompt for update type**:
+    - Progress update
+    - Blocker found
+    - Question for issue creator
+    - Additional findings
+    - Status change
+ 3. **Post comment**: Use `gh issue comment <number> --body "..."`
+ 4. **Update labels**: Use `gh issue edit <number> --add-label "..."` (if needed)
+ 5. **Log in MULTI_AGENT_PLAN.md**: Update the plan file directly.
 
 ## Update Types
 
 ### 1. Progress Update
-```
+
+```markdown
 ## 🔄 Progress Update
 
 **Agent**: Builder
@@ -47,7 +48,8 @@ None
 ```
 
 ### 2. Blocker Found
-```
+
+```markdown
 ## 🚨 Blocker Discovered
 
 **Agent**: Builder
@@ -69,7 +71,8 @@ Cannot proceed with test fixes due to missing test database setup.
 ```
 
 ### 3. Question
-```
+
+```markdown
 ## ❓ Question for Clarification
 
 **Agent**: Validator
@@ -88,7 +91,8 @@ B. Redis HA (production-like, slower)
 ```
 
 ### 4. Findings
-```
+
+```markdown
 ## 🔍 Additional Findings
 
 **Agent**: Validator

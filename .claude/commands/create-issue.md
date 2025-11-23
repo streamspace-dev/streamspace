@@ -13,24 +13,28 @@ Example: `/create-issue`
 ## Interactive Prompts
 
 ### 1. Issue Type
+
 - **Bug**: Something broken or not working as expected
 - **Feature**: New functionality needed
 - **Task**: Work item (testing, documentation, refactoring)
 - **Question**: Need clarification or discussion
 
 ### 2. Priority
+
 - **P0 CRITICAL**: Blocks release, production down, security vulnerability
 - **P1 HIGH**: Important for release, affects multiple users
 - **P2 MEDIUM**: Nice to have, affects some users
 - **P3 LOW**: Future work, minor issue
 
 ### 3. Basic Information
+
 - **Title**: Clear, concise summary (will be auto-prefixed with type)
 - **Description**: Detailed explanation
 - **Component**: Which part of system (API, K8s Agent, Docker Agent, UI, etc.)
 - **Agent assignment**: Which agent should handle this?
 
 ### 4. Additional Context
+
 - **Steps to reproduce** (for bugs)
 - **Expected behavior** (for bugs)
 - **Actual behavior** (for bugs)
@@ -38,6 +42,7 @@ Example: `/create-issue`
 - **Related issues**: Dependencies or related work
 
 ### 5. Metadata
+
 - **Milestone**: Which release? (v2.0-beta.1, v2.0-beta.2, v2.1.0, etc.)
 - **Labels**: Auto-assigned based on type/priority/component/agent
 - **Assignee**: (Optional) specific GitHub user
@@ -45,7 +50,8 @@ Example: `/create-issue`
 ## Example Output
 
 For a bug:
-```
+
+```text
 Title: [BUG] WebSocket connection drops after 5 minutes
 
 Labels: bug, P1, component:api, agent:builder
@@ -91,28 +97,23 @@ Nginx/Load balancer timeout = 300s (5 minutes)
 🤖 Created by Builder via `/create-issue` command
 ```
 
-## Auto-Generated Content
+## Execution Steps
 
-The command automatically:
-1. **Formats title** with appropriate prefix ([BUG], [FEATURE], [TEST], etc.)
-2. **Assigns labels** based on your selections
-3. **Sets milestone** based on priority
-4. **Links related issues** if mentioned
-5. **Creates in `.claude/reports/`** a tracking file for P0/P1 issues
-6. **Updates MULTI_AGENT_PLAN.md** with new issue reference
+The agent will:
+
+1. **Collect Information**: Ask for any missing details.
+2. **Create Issue**: Use `gh issue create` with the formatted title and body.
+
+   ```bash
+   gh issue create --title "[TYPE] Title" --body "Description..." --label "bug,P1" --assignee "@me"
+   ```
+
+3. **Update Plan**: Add the new issue to `MULTI_AGENT_PLAN.md`.
+4. **Create Report**: For P0/P1 issues, create a file in `.claude/reports/`.
 
 ## Validation
 
-Before creating, the command will:
-- Check for duplicate issues
+Before running the command, the agent will:
+
+- Check for duplicate issues using `gh issue list --search "query"`
 - Validate required fields
-- Confirm priority assignment
-- Show preview for your approval
-
-## After Creation
-
-1. **Issue number returned** (e.g., #210)
-2. **Added to GitHub project** board automatically
-3. **Logged in MULTI_AGENT_PLAN.md**
-4. **Notification** to assigned agent (via comment)
-5. **Report file created** (if P0/P1)

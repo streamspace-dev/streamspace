@@ -15,11 +15,13 @@ Example: `/review-pr 42`
 Launches the `@pr-reviewer` subagent to perform comprehensive review:
 
 ### Code Quality Checks
+
 - **Go**: gofmt, golint, go vet, ineffassign, staticcheck
 - **TypeScript**: ESLint, TypeScript compiler, unused imports
 - **General**: Code duplication, complexity, naming conventions
 
 ### Security Analysis
+
 - **SQL Injection**: Unsafe query construction
 - **XSS**: Unescaped output, dangerous HTML
 - **Secrets**: Hardcoded credentials, API keys
@@ -27,12 +29,14 @@ Launches the `@pr-reviewer` subagent to perform comprehensive review:
 - **RBAC**: Permission bypasses
 
 ### Performance Review
+
 - **Database**: N+1 queries, missing indexes, inefficient queries
 - **Caching**: Missing cache opportunities
 - **Memory**: Potential leaks, inefficient allocations
 - **Algorithms**: Inefficient loops, unnecessary work
 
 ### Testing & Documentation
+
 - **Test Coverage**: Are tests included?
 - **Test Quality**: Edge cases, mocks, assertions
 - **Documentation**: Comments, README, API docs
@@ -84,15 +88,20 @@ Creates review report in `.claude/reports/PR_REVIEW_<number>_<date>.md`:
 
 ## GitHub Integration
 
-The command will:
-1. Post review summary as PR comment
-2. Request changes if P0/P1 issues found
-3. Approve if only P2/P3 issues (with suggestions)
-4. Add labels: `security-review-needed`, `needs-tests`, etc.
+The command will use `gh` CLI to interact with the PR:
+
+1. **Fetch PR details**: `gh pr view <number>`
+2. **Fetch PR diff**: `gh pr diff <number>`
+3. **Post review**:
+   - Comment: `gh pr review <number> --comment --body "..."`
+   - Request Changes: `gh pr review <number> --request-changes --body "..."`
+   - Approve: `gh pr review <number> --approve --body "..."`
+4. **Add labels**: `gh pr edit <number> --add-label "security-review-needed"`
 
 ## Follow-up Actions
 
 After review:
+
 - **P0 Issues**: PR blocked until fixed
 - **P1 Issues**: Should fix before merge
 - **P2/P3 Issues**: Can merge, fix in follow-up

@@ -6,15 +6,29 @@ Check GitHub issues for work assigned to your agent role.
 
 ## What This Checks
 
-1. **Issues assigned to your role** (via labels: `agent:builder`, `agent:validator`, `agent:scribe`)
-2. **Current milestone** (v2.0-beta.1 by default)
-3. **Priority order** (P0 → P1 → P2)
-4. **Blocking issues** (issues that block others)
-5. **Ready-for-testing** issues (if you're Validator)
+ 1. **Issues assigned to your role**:
+
+    ```bash
+    gh issue list --label "agent:builder" --state open
+    ```
+
+ 2. **Current milestone**:
+
+    ```bash
+    gh issue list --milestone "v2.0-beta.1"
+    ```
+
+ 3. **Priority order**: Filter results by P0/P1/P2 labels.
+ 4. **Blocking issues**: Check issue body for "Blocks #" text.
+ 5. **Ready-for-testing**:
+
+    ```bash
+    gh issue list --label "ready-for-testing"
+    ```
 
 ## Output Format
 
-```
+```markdown
 ## 🎯 Your Assigned Work
 
 ### P0 CRITICAL (Do First)
@@ -44,6 +58,7 @@ Check GitHub issues for work assigned to your agent role.
 ## Filters
 
 You can filter by:
+
 - `/check-work milestone:v2.0-beta.2` - Check specific milestone
 - `/check-work priority:P0` - Only P0 issues
 - `/check-work status:open` - Only open issues
@@ -51,6 +66,7 @@ You can filter by:
 ## Integration with MULTI_AGENT_PLAN.md
 
 The command will also check MULTI_AGENT_PLAN.md for:
+
 - Current wave assignments
 - Coordination notes from Architect
 - Blocked work dependencies
