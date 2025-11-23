@@ -327,9 +327,9 @@ type AgentCommand struct {
 //	  }
 //	}
 type AgentRegistrationRequest struct {
-	AgentID  string          `json:"agentId" binding:"required"`
-	Platform string          `json:"platform" binding:"required,oneof=kubernetes docker vm cloud"`
-	Region   string          `json:"region,omitempty"`
+	AgentID  string          `json:"agentId" binding:"required" validate:"required,min=3,max=100"`
+	Platform string          `json:"platform" binding:"required,oneof=kubernetes docker vm cloud" validate:"required,oneof=kubernetes docker vm cloud"`
+	Region   string          `json:"region,omitempty" validate:"omitempty,min=2,max=50"`
 	Capacity *AgentCapacity  `json:"capacity,omitempty"`
 	Metadata *AgentMetadata  `json:"metadata,omitempty"`
 }
@@ -350,8 +350,8 @@ type AgentRegistrationRequest struct {
 //	  }
 //	}
 type AgentHeartbeatRequest struct {
-	Status         string         `json:"status" binding:"required,oneof=online draining"`
-	ActiveSessions int            `json:"activeSessions"`
+	Status         string         `json:"status" binding:"required,oneof=online draining" validate:"required,oneof=online draining"`
+	ActiveSessions int            `json:"activeSessions" validate:"gte=0"`
 	Capacity       *AgentCapacity `json:"capacity,omitempty"`
 }
 

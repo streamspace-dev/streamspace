@@ -85,6 +85,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // PreferencesHandler handles user preferences and settings
@@ -191,8 +192,7 @@ func (h *PreferencesHandler) UpdatePreferences(c *gin.Context) {
 	}
 
 	var prefs map[string]interface{}
-	if err := c.ShouldBindJSON(&prefs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &prefs) {
 		return
 	}
 
@@ -267,8 +267,7 @@ func (h *PreferencesHandler) UpdateUIPreferences(c *gin.Context) {
 	userIDStr := userID.(string)
 
 	var uiPrefs map[string]interface{}
-	if err := c.ShouldBindJSON(&uiPrefs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &uiPrefs) {
 		return
 	}
 
@@ -337,8 +336,7 @@ func (h *PreferencesHandler) UpdateNotificationPreferences(c *gin.Context) {
 	userIDStr := userID.(string)
 
 	var notifPrefs map[string]interface{}
-	if err := c.ShouldBindJSON(&notifPrefs); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &notifPrefs) {
 		return
 	}
 
@@ -406,8 +404,7 @@ func (h *PreferencesHandler) UpdateDefaultsPreferences(c *gin.Context) {
 	userIDStr := userID.(string)
 
 	var defaults map[string]interface{}
-	if err := c.ShouldBindJSON(&defaults); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &defaults) {
 		return
 	}
 

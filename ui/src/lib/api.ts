@@ -1309,7 +1309,8 @@ class APIClient {
   async listInstalledPlugins(enabledOnly?: boolean): Promise<InstalledPlugin[]> {
     const params = enabledOnly ? { enabled: 'true' } : {};
     const response = await this.client.get<{ plugins: InstalledPlugin[] }>('/plugins', { params });
-    return response.data.plugins;
+    // BUG FIX P0-123: Guard against null/undefined plugins response
+    return Array.isArray(response.data.plugins) ? response.data.plugins : [];
   }
 
   async getInstalledPlugin(id: number): Promise<InstalledPlugin> {

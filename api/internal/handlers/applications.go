@@ -49,6 +49,7 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/events"
 	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // ApplicationHandler handles installed application endpoints
@@ -175,12 +176,10 @@ func (h *ApplicationHandler) InstallApplication(c *gin.Context) {
 
 	// Step 1: Parse and validate the installation request
 	var req models.InstallApplicationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Step 1b: Get authenticated user ID from JWT context
@@ -380,12 +379,10 @@ func (h *ApplicationHandler) UpdateApplication(c *gin.Context) {
 	appID := c.Param("id")
 
 	var req models.UpdateApplicationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	err := h.appDB.UpdateApplication(c.Request.Context(), appID, &req)
@@ -487,19 +484,19 @@ func (h *ApplicationHandler) DeleteApplication(c *gin.Context) {
 // @Success 200 {object} map[string]interface{}
 // @Failure 400 {object} ErrorResponse
 // @Router /api/v1/applications/{id}/enabled [put]
+// SetApplicationEnabledRequest is the request to enable/disable an application
+type SetApplicationEnabledRequest struct {
+	Enabled bool `json:"enabled"`
+}
+
 func (h *ApplicationHandler) SetApplicationEnabled(c *gin.Context) {
 	appID := c.Param("id")
 
-	var req struct {
-		Enabled bool `json:"enabled"`
-	}
+	var req SetApplicationEnabledRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	err := h.appDB.SetApplicationEnabled(c.Request.Context(), appID, req.Enabled)
@@ -565,12 +562,10 @@ func (h *ApplicationHandler) AddGroupAccess(c *gin.Context) {
 	appID := c.Param("id")
 
 	var req models.AddGroupAccessRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	accessLevel := req.AccessLevel
@@ -609,12 +604,10 @@ func (h *ApplicationHandler) UpdateGroupAccess(c *gin.Context) {
 	groupID := c.Param("groupId")
 
 	var req models.UpdateGroupAccessRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	err := h.appDB.UpdateGroupAccessLevel(c.Request.Context(), appID, groupID, req.AccessLevel)

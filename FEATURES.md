@@ -2,50 +2,59 @@
 
 # ✨ StreamSpace Features
 
-**Version**: v2.0-beta • **Last Updated**: 2025-11-21
+**Version**: v2.0-beta • **Last Updated**: 2025-11-23
 
-[![Status](https://img.shields.io/badge/Status-v2.0--beta-success.svg)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/Status-v2.0--beta--testing-yellow.svg)](CHANGELOG.md)
 [![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
 
 </div>
 
 ---
 
+> [!WARNING]
+> **Current Status: Testing Phase - NOT Production Ready**
+>
+> While many features are implemented, StreamSpace is experiencing a test coverage crisis. See [TEST_STATUS.md](TEST_STATUS.md) for details.
+
 > [!NOTE]
 > **Status Legend**
 >
-> - ✅ **Complete**: Fully implemented and tested
-> - 🚧 **In Progress**: Implementation started but not complete
-> - ⚠️ **Partial**: Framework exists but implementation is incomplete
+> - ✅ **Implemented & Tested**: Feature works and has test coverage
+> - 🔄 **Implemented, Testing**: Feature implemented but lacks test coverage
+> - ⚠️ **Partial**: Framework exists but implementation incomplete or untested
 > - 📝 **Planned**: Not yet implemented
 
 ## 📊 Implementation Summary
 
-| Category | Status | Notes |
-| :--- | :--- | :--- |
-| **Kubernetes Controller** | ✅ Complete | 5,282 lines of production code |
-| **API Backend** | ✅ Complete | 61,289 lines, 70+ handlers |
-| **Web UI** | ✅ Complete | 25,629 lines, 50+ components |
-| **Database** | ✅ Complete | 87 tables |
-| **Authentication** | ✅ Complete | Local, SAML, OIDC, MFA |
-| **Plugin System** | ⚠️ Partial | Framework only, 28 stub plugins |
-| **Docker Controller** | 📝 Planned | Deferred to v2.1 |
-| **Test Coverage** | 🚧 In Progress | ~70% on new code, ~20% overall |
+| Category | Status | Test Coverage | Notes |
+| :--- | :--- | :--- | :--- |
+| **K8s Agent (v2.0)** | 🔄 Implemented | 0% ([#203](https://github.com/streamspace-dev/streamspace/issues/203)) | Agent functional, tests broken |
+| **Docker Agent (v2.0)** | 🔄 Implemented | 0% ([#201](https://github.com/streamspace-dev/streamspace/issues/201)) | 2,100+ lines, no tests |
+| **API Backend** | 🔄 Implemented | 4% ([#204](https://github.com/streamspace-dev/streamspace/issues/204)) | Many tests failing |
+| **Web UI** | 🔄 Implemented | 32% ([#207](https://github.com/streamspace-dev/streamspace/issues/207)) | 136/201 tests failing |
+| **Database** | ✅ Tested | ~50% | Schema validated |
+| **Authentication** | 🔄 Implemented | ~30% | Local, SAML, OIDC, MFA |
+| **Plugin System** | ⚠️ Partial | 0% | Framework only, 28 stub plugins |
+| **VNC Proxy (v2.0)** | 🔄 Implemented | 0% | WebSocket tunneling, untested |
+| **High Availability** | 🔄 Implemented | 0% ([#202](https://github.com/streamspace-dev/streamspace/issues/202)) | Multi-pod API, leader election |
+
+**Overall Test Coverage**: ~10% (down from 65-70% pre-v2.0)
+**Status**: See [TEST_STATUS.md](TEST_STATUS.md) for complete analysis and remediation plan.
 
 ## 🚀 Core Features
 
 ### Session Management
 
-| Feature | Status | Notes |
-| :--- | :--- | :--- |
-| **Create/List/Delete** | ✅ Complete | Full CRUD operations |
-| **State Management** | ✅ Complete | Running/Hibernated/Terminated |
-| **Resource Allocation** | ✅ Complete | CPU, memory configuration |
-| **Auto-Hibernation** | ✅ Complete | Idle detection, scale to zero |
-| **Wake on Demand** | ✅ Complete | Instant restart |
-| **Session Sharing** | ✅ Complete | Permissions, invitations |
-| **Snapshots** | ✅ Complete | Tar-based backup/restore |
-| **VNC Proxy** | ✅ Complete | Secure WebSocket tunneling (v2.0) |
+| Feature | Status | Test Coverage | Notes |
+| :--- | :--- | :--- | :--- |
+| **Create/List/Delete** | 🔄 Implemented | ~20% | CRUD operations work, minimal tests |
+| **State Management** | 🔄 Implemented | ~10% | Running/Hibernated/Terminated |
+| **Resource Allocation** | 🔄 Implemented | ~15% | CPU, memory configuration |
+| **Auto-Hibernation** | 🔄 Implemented | 0% | Idle detection, untested |
+| **Wake on Demand** | 🔄 Implemented | 0% | Restart functionality, untested |
+| **Session Sharing** | 🔄 Implemented | 0% | Permissions exist, untested |
+| **Snapshots** | 🔄 Implemented | 0% | Tar-based backup/restore, untested |
+| **VNC Proxy (v2.0)** | 🔄 Implemented | 0% | WebSocket tunneling works, no tests ([#157](https://github.com/streamspace-dev/streamspace/issues/157)) |
 
 ### Template System
 
@@ -145,26 +154,35 @@
 - **Plugins**: System-wide plugin admin
 - **Agents**: Real-time agent monitoring (v2.0)
 
-## 🏗️ Platform Support
+## 🏗️ Platform Support (v2.0 Architecture)
 
-| Platform | Status | Notes |
-| :--- | :--- | :--- |
-| **Kubernetes** | ✅ Complete | Full support (v2.0 Agent) |
-| **Docker** | 📝 Planned | v2.1 |
-| **VM / Cloud** | 📝 Planned | Future |
+| Platform | Status | Test Coverage | Notes |
+| :--- | :--- | :--- | :--- |
+| **Kubernetes** | 🔄 Implemented | 0% ([#203](https://github.com/streamspace-dev/streamspace/issues/203)) | K8s Agent functional, tests broken |
+| **Docker** | 🔄 Implemented | 0% ([#201](https://github.com/streamspace-dev/streamspace/issues/201)) | Docker Agent delivered in v2.0 (2,100+ lines, no tests) |
+| **VM / Cloud** | 📝 Planned | N/A | Future (v2.2+) |
 
-## 📊 Code Statistics
+> [!IMPORTANT]
+> Both Kubernetes and Docker agents are **implemented but untested**. While they work in development, they are not production-ready without comprehensive test coverage.
 
-| Component | Lines of Code | Files |
-| :--- | :--- | :--- |
-| **Kubernetes Controller** | ~5,300 | ~30 |
-| **API Backend** | ~61,300 | ~150 |
-| **Web UI** | ~25,600 | ~80 |
-| **Test Code** | ~6,200 | 21 |
-| **Total** | **~99,000** | **~280** |
+## 📊 Code Statistics (v2.0-beta)
+
+| Component | Lines of Code | Test Files | Test Coverage |
+| :--- | :--- | :--- | :--- |
+| **K8s Agent** | ~2,500 | 1 (broken) | 0% |
+| **Docker Agent** | ~2,100 | 0 | 0% |
+| **API Backend** | ~61,300 | 41 | 4% |
+| **Web UI** | ~25,600 | 9 | 32% (136/201 failing) |
+| **Test Code** | ~6,200 | - | - |
+| **Total** | **~97,700** | **51** | **~10% overall** |
+
+> [!NOTE]
+> Test coverage declined from 65-70% to ~10% during v2.0-beta development due to rapid feature implementation.
+> See [TEST_STATUS.md](TEST_STATUS.md) for remediation plan targeting 40%+ API and 60%+ agent coverage.
 
 ---
 
 <div align="center">
-  <sub>Updated for v2.0-beta</sub>
+  <sub>Updated for v2.0-beta • Last updated: 2025-11-23</sub><br>
+  <sub>For accurate production-readiness status, see <a href="TEST_STATUS.md">TEST_STATUS.md</a></sub>
 </div>

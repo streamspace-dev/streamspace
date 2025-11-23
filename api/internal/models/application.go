@@ -120,29 +120,29 @@ type ApplicationGroupAccess struct {
 // InstallApplicationRequest is the request to install a new application.
 type InstallApplicationRequest struct {
 	// CatalogTemplateID is the source template to install from.
-	CatalogTemplateID int `json:"catalogTemplateId" binding:"required"`
+	CatalogTemplateID int `json:"catalogTemplateId" binding:"required" validate:"required,gt=0"`
 
 	// DisplayName is the custom name for this installation (optional).
 	// If not provided, uses the template's default display name.
-	DisplayName string `json:"displayName"`
+	DisplayName string `json:"displayName" validate:"omitempty,min=1,max=200"`
 
 	// Platform specifies which platform to install on (optional).
 	// Valid values: kubernetes, docker, hyperv, vcenter
 	// If not provided, defaults to the template's platform or 'kubernetes'.
-	Platform string `json:"platform"`
+	Platform string `json:"platform" validate:"omitempty,oneof=kubernetes docker hyperv vcenter"`
 
 	// Configuration is the initial application settings (optional).
 	Configuration map[string]interface{} `json:"configuration"`
 
 	// GroupIDs is the list of groups to grant access (optional).
 	// If not provided, no groups will have access initially.
-	GroupIDs []string `json:"groupIds"`
+	GroupIDs []string `json:"groupIds" validate:"omitempty,dive,min=1,max=100"`
 }
 
 // UpdateApplicationRequest is the request to update an installed application.
 type UpdateApplicationRequest struct {
 	// DisplayName updates the custom display name.
-	DisplayName *string `json:"displayName,omitempty"`
+	DisplayName *string `json:"displayName,omitempty" validate:"omitempty,min=1,max=200"`
 
 	// Enabled updates the active status.
 	Enabled *bool `json:"enabled,omitempty"`
@@ -154,19 +154,19 @@ type UpdateApplicationRequest struct {
 // AddGroupAccessRequest is the request to grant group access to an application.
 type AddGroupAccessRequest struct {
 	// GroupID is the group to grant access.
-	GroupID string `json:"groupId" binding:"required"`
+	GroupID string `json:"groupId" binding:"required" validate:"required,min=1,max=100"`
 
 	// AccessLevel is the permission level.
 	// Valid values: "view", "launch", "admin"
 	// Default: "launch"
-	AccessLevel string `json:"accessLevel"`
+	AccessLevel string `json:"accessLevel" validate:"omitempty,oneof=view launch admin"`
 }
 
 // UpdateGroupAccessRequest is the request to update a group's access level.
 type UpdateGroupAccessRequest struct {
 	// AccessLevel is the new permission level.
 	// Valid values: "view", "launch", "admin"
-	AccessLevel string `json:"accessLevel" binding:"required"`
+	AccessLevel string `json:"accessLevel" binding:"required" validate:"required,oneof=view launch admin"`
 }
 
 // ApplicationListResponse is the response for listing applications.

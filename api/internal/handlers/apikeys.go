@@ -71,6 +71,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/lib/pq"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // APIKeyHandler handles API key management
@@ -121,21 +122,24 @@ func hashAPIKey(key string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// CreateAPIKeyRequest is the request body for creating an API key
+type CreateAPIKeyRequest struct {
+	Name        string   `json:"name" binding:"required" validate:"required,min=3,max=100"`
+	Description string   `json:"description" validate:"omitempty,max=500"`
+	Scopes      []string `json:"scopes" validate:"omitempty,dive,min=3,max=50"`
+	RateLimit   int      `json:"rateLimit" validate:"omitempty,gte=0,lte=100000"`
+	ExpiresIn   string   `json:"expiresIn" validate:"omitempty,min=2,max=10"` // Duration string like "30d", "1y"
+}
+
 // CreateAPIKey creates a new API key
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	ctx := context.Background()
 
-	var req struct {
-		Name        string    `json:"name" binding:"required"`
-		Description string    `json:"description"`
-		Scopes      []string  `json:"scopes"`
-		RateLimit   int       `json:"rateLimit"`
-		ExpiresIn   string    `json:"expiresIn"` // Duration string like "30d", "1y"
-	}
+	var req CreateAPIKeyRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Get user ID from context

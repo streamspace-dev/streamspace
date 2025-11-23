@@ -61,6 +61,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // IntegrationsHandler handles webhook and external integration requests.
@@ -274,24 +275,44 @@ var AvailableEvents = []string{
 	"alert.triggered",
 }
 
+// CreateWebhookRequest is the request body for creating a webhook
+type CreateWebhookRequest struct {
+	Name        string                 `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	URL         string                 `json:"url" binding:"required" validate:"required,url,max=2048"`
+	Secret      string                 `json:"secret" validate:"omitempty,min=16,max=256"`
+	Events      []string               `json:"events" binding:"required" validate:"required,min=1,max=50,dive,min=3,max=100"`
+	Headers     map[string]string      `json:"headers" validate:"omitempty,max=50,dive,keys,max=100,endkeys,max=1000"`
+	Enabled     bool                   `json:"enabled"`
+	RetryPolicy WebhookRetryPolicy     `json:"retry_policy"`
+	Filters     WebhookFilters         `json:"filters"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 // CreateWebhook creates a new webhook
 func (h *IntegrationsHandler) CreateWebhook(c *gin.Context) {
-	var webhook Webhook
-	if err := c.ShouldBindJSON(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req CreateWebhookRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	userID := c.GetString("user_id")
-	webhook.CreatedBy = userID
 
-	// INPUT VALIDATION: Validate all webhook input fields
-	if err := validateWebhookInput(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to webhook
+	webhook := Webhook{
+		Name:        req.Name,
+		Description: req.Description,
+		URL:         req.URL,
+		Secret:      req.Secret,
+		Events:      req.Events,
+		Headers:     req.Headers,
+		Enabled:     req.Enabled,
+		RetryPolicy: req.RetryPolicy,
+		Filters:     req.Filters,
+		Metadata:    req.Metadata,
+		CreatedBy:   userID,
 	}
 
 	// SECURITY: Validate webhook URL to prevent SSRF attacks
@@ -419,6 +440,19 @@ func (h *IntegrationsHandler) ListWebhooks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"webhooks": webhooks})
 }
 
+// UpdateWebhookRequest is the request body for updating a webhook
+type UpdateWebhookRequest struct {
+	Name        string                 `json:"name" validate:"omitempty,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	URL         string                 `json:"url" validate:"omitempty,url,max=2048"`
+	Events      []string               `json:"events" validate:"omitempty,min=1,max=50,dive,min=3,max=100"`
+	Headers     map[string]string      `json:"headers" validate:"omitempty,max=50,dive,keys,max=100,endkeys,max=1000"`
+	Enabled     *bool                  `json:"enabled"`
+	RetryPolicy *WebhookRetryPolicy    `json:"retry_policy"`
+	Filters     *WebhookFilters        `json:"filters"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 // UpdateWebhook updates an existing webhook
 func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
@@ -430,19 +464,30 @@ func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
 
-	var webhook Webhook
-	if err := c.ShouldBindJSON(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req UpdateWebhookRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
-	// INPUT VALIDATION: Validate all webhook input fields
-	if err := validateWebhookInput(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to webhook for update
+	webhook := Webhook{
+		Name:        req.Name,
+		Description: req.Description,
+		URL:         req.URL,
+		Events:      req.Events,
+		Headers:     req.Headers,
+		Metadata:    req.Metadata,
+	}
+	if req.Enabled != nil {
+		webhook.Enabled = *req.Enabled
+	}
+	if req.RetryPolicy != nil {
+		webhook.RetryPolicy = *req.RetryPolicy
+	}
+	if req.Filters != nil {
+		webhook.Filters = *req.Filters
 	}
 
 	// SECURITY: Validate webhook URL to prevent SSRF attacks
@@ -674,24 +719,38 @@ func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 
 // Integrations
 
+// CreateIntegrationRequest is the request body for creating an integration
+type CreateIntegrationRequest struct {
+	Type        string                 `json:"type" binding:"required" validate:"required,oneof=custom"`
+	Name        string                 `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	Config      map[string]interface{} `json:"config"`
+	Enabled     bool                   `json:"enabled"`
+	Events      []string               `json:"events" validate:"omitempty,max=50,dive,min=3,max=100"`
+	TestMode    bool                   `json:"test_mode"`
+}
+
 // CreateIntegration creates a new integration
 func (h *IntegrationsHandler) CreateIntegration(c *gin.Context) {
-	var integration Integration
-	if err := c.ShouldBindJSON(&integration); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req CreateIntegrationRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	userID := c.GetString("user_id")
-	integration.CreatedBy = userID
 
-	// INPUT VALIDATION: Validate all integration input fields
-	if err := validateIntegrationInput(&integration); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to integration
+	integration := Integration{
+		Type:        req.Type,
+		Name:        req.Name,
+		Description: req.Description,
+		Config:      req.Config,
+		Enabled:     req.Enabled,
+		Events:      req.Events,
+		TestMode:    req.TestMode,
+		CreatedBy:   userID,
 	}
 
 	err := h.DB.DB().QueryRow(`
