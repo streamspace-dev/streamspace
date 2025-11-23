@@ -830,6 +830,13 @@ func (a *AuditLogger) Middleware() gin.HandlerFunc {
 			RequestBody: requestBody,
 		}
 
+		// Add custom metadata (e.g., agent authentication details)
+		if metadata, exists := c.Get("audit_metadata"); exists {
+			if metadataMap, ok := metadata.(map[string]interface{}); ok {
+				event.Metadata = metadataMap
+			}
+		}
+
 		// Add error information if request failed
 		if len(c.Errors) > 0 {
 			event.Error = c.Errors.String()
