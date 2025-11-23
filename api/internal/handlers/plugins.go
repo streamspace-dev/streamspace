@@ -83,6 +83,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // PluginHandler handles plugin-related HTTP requests.
@@ -592,13 +593,7 @@ func (h *PluginHandler) RatePlugin(c *gin.Context) {
 	userID := c.GetString("user_id") // From auth middleware
 
 	var req models.RatePluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
-		return
-	}
-
-	if req.Rating < 1 || req.Rating > 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Rating must be between 1 and 5"})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -679,7 +674,12 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req models.InstallPluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if !validator.BindAndValidate(c, &req) {
+		return
+	}
+
+	// Set default config if not provided
+	if len(req.Config) == 0 {
 		req.Config = json.RawMessage("{}")
 	}
 
@@ -997,8 +997,7 @@ func (h *PluginHandler) UpdateInstalledPlugin(c *gin.Context) {
 	id := c.Param("id")
 
 	var req models.UpdatePluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 

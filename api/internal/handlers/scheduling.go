@@ -75,6 +75,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/robfig/cron/v3"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // SchedulingHandler handles session scheduling and calendar integration requests.
@@ -112,17 +113,17 @@ func NewSchedulingHandler(database *db.Database) *SchedulingHandler {
 type ScheduledSession struct {
 	ID             int64                  `json:"id"`
 	UserID         string                 `json:"user_id"`
-	TemplateID     string                 `json:"template_id"`
-	Name           string                 `json:"name"`
-	Description    string                 `json:"description,omitempty"`
-	Timezone       string                 `json:"timezone"`
-	Schedule       ScheduleConfig         `json:"schedule"`
-	Resources      ResourceConfig         `json:"resources"`
+	TemplateID     string                 `json:"template_id" validate:"required,min=1,max=100"`
+	Name           string                 `json:"name" validate:"required,min=1,max=200"`
+	Description    string                 `json:"description,omitempty" validate:"omitempty,max=1000"`
+	Timezone       string                 `json:"timezone" validate:"required,min=1,max=50"`
+	Schedule       ScheduleConfig         `json:"schedule" validate:"required"`
+	Resources      ResourceConfig         `json:"resources" validate:"required"`
 	AutoTerminate  bool                   `json:"auto_terminate"`
-	TerminateAfter int                    `json:"terminate_after_minutes,omitempty"` // Minutes after start
-	PreWarm        bool                   `json:"pre_warm"`                          // Start before scheduled time
-	PreWarmMinutes int                    `json:"pre_warm_minutes,omitempty"`
-	PostCleanup    bool                   `json:"post_cleanup"` // Cleanup after termination
+	TerminateAfter int                    `json:"terminate_after_minutes,omitempty" validate:"omitempty,gte=1,lte=1440"` // 1-1440 minutes (24 hours)
+	PreWarm        bool                   `json:"pre_warm"`
+	PreWarmMinutes int                    `json:"pre_warm_minutes,omitempty" validate:"omitempty,gte=1,lte=120"` // 1-120 minutes
+	PostCleanup    bool                   `json:"post_cleanup"`
 	Enabled        bool                   `json:"enabled"`
 	NextRunAt      time.Time              `json:"next_run_at,omitempty"`
 	LastRunAt      time.Time              `json:"last_run_at,omitempty"`
@@ -135,22 +136,22 @@ type ScheduledSession struct {
 
 // ScheduleConfig defines when a session should run
 type ScheduleConfig struct {
-	Type       string    `json:"type"` // "once", "daily", "weekly", "monthly", "cron"
+	Type       string    `json:"type" validate:"required,oneof=once daily weekly monthly cron"`
 	StartTime  time.Time `json:"start_time,omitempty"`
-	CronExpr   string    `json:"cron_expr,omitempty"`    // For cron type
-	DaysOfWeek []int     `json:"days_of_week,omitempty"` // 0=Sunday, 1=Monday, etc.
-	DayOfMonth int       `json:"day_of_month,omitempty"` // 1-31
-	TimeOfDay  string    `json:"time_of_day,omitempty"`  // HH:MM format
-	EndDate    time.Time `json:"end_date,omitempty"`     // When to stop recurring
-	Exceptions []string  `json:"exceptions,omitempty"`   // Dates to skip (YYYY-MM-DD)
+	CronExpr   string    `json:"cron_expr,omitempty" validate:"omitempty,max=100"`
+	DaysOfWeek []int     `json:"days_of_week,omitempty" validate:"omitempty,dive,gte=0,lte=6"` // 0=Sunday, 6=Saturday
+	DayOfMonth int       `json:"day_of_month,omitempty" validate:"omitempty,gte=1,lte=31"`
+	TimeOfDay  string    `json:"time_of_day,omitempty" validate:"omitempty,len=5"` // HH:MM format (5 chars)
+	EndDate    time.Time `json:"end_date,omitempty"`
+	Exceptions []string  `json:"exceptions,omitempty" validate:"omitempty,dive,len=10"` // YYYY-MM-DD format (10 chars)
 }
 
 // ResourceConfig for scheduled sessions
 type ResourceConfig struct {
-	Memory   string `json:"memory"`
-	CPU      string `json:"cpu"`
-	Storage  string `json:"storage,omitempty"`
-	GPUCount int    `json:"gpu_count,omitempty"`
+	Memory   string `json:"memory" validate:"required,min=2,max=20"`     // e.g., "512Mi", "2Gi"
+	CPU      string `json:"cpu" validate:"required,min=1,max=20"`        // e.g., "100m", "2"
+	Storage  string `json:"storage,omitempty" validate:"omitempty,max=20"` // e.g., "1Gi", "10Gi"
+	GPUCount int    `json:"gpu_count,omitempty" validate:"omitempty,gte=0,lte=8"`
 }
 
 // CreateScheduledSession creates a new scheduled session.
@@ -220,8 +221,7 @@ func (h *SchedulingHandler) CreateScheduledSession(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req ScheduledSession
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -425,8 +425,7 @@ func (h *SchedulingHandler) UpdateScheduledSession(c *gin.Context) {
 	role := c.GetString("role")
 
 	var req ScheduledSession
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 

@@ -58,6 +58,7 @@ import (
 	"strconv"
 
 	"github.com/gin-gonic/gin"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 	"github.com/lib/pq"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
@@ -437,17 +438,17 @@ func (h *CatalogHandler) AddRating(c *gin.Context) {
 		return
 	}
 
-	var req struct {
-		Rating int    `json:"rating" binding:"required,min=1,max=5"`
-		Review string `json:"review"`
+	// AddTemplateRatingRequest is the request to rate a template
+	type AddTemplateRatingRequest struct {
+		Rating int    `json:"rating" binding:"required" validate:"required,min=1,max=5"`
+		Review string `json:"review" validate:"omitempty,max=2000"`
 	}
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+	var req AddTemplateRatingRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Insert or update rating

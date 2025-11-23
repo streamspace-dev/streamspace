@@ -93,6 +93,7 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/events"
 	"github.com/streamspace-dev/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // SessionTemplatesHandler handles custom session templates and presets
@@ -257,29 +258,32 @@ func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
 	})
 }
 
+// CreateSessionTemplateRequest is the request body for creating a session template
+type CreateSessionTemplateRequest struct {
+	Name          string                 `json:"name" binding:"required" validate:"required,min=3,max=100"`
+	Description   string                 `json:"description" validate:"omitempty,max=1000"`
+	Icon          string                 `json:"icon" validate:"omitempty,max=100"`
+	Category      string                 `json:"category" validate:"omitempty,min=2,max=50"`
+	Tags          []string               `json:"tags" validate:"omitempty,dive,min=2,max=50"`
+	Visibility    string                 `json:"visibility" validate:"omitempty,oneof=private team public"`
+	TeamID        string                 `json:"teamId" validate:"omitempty,uuid"`
+	BaseTemplate  string                 `json:"baseTemplate" binding:"required" validate:"required,min=3,max=100"`
+	Configuration map[string]interface{} `json:"configuration"`
+	Resources     map[string]interface{} `json:"resources"`
+	Environment   map[string]string      `json:"environment" validate:"omitempty,dive,keys,min=1,max=100,endkeys,min=0,max=10000"`
+	IsDefault     bool                   `json:"isDefault"`
+}
+
 // CreateSessionTemplate creates a new session template
 func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
 	userID, _ := c.Get("userID")
 	userIDStr := userID.(string)
 
-	var req struct {
-		Name          string                 `json:"name" binding:"required"`
-		Description   string                 `json:"description"`
-		Icon          string                 `json:"icon"`
-		Category      string                 `json:"category"`
-		Tags          []string               `json:"tags"`
-		Visibility    string                 `json:"visibility"` // private, team, public
-		TeamID        string                 `json:"teamId"`
-		BaseTemplate  string                 `json:"baseTemplate" binding:"required"`
-		Configuration map[string]interface{} `json:"configuration"`
-		Resources     map[string]interface{} `json:"resources"`
-		Environment   map[string]string      `json:"environment"`
-		IsDefault     bool                   `json:"isDefault"`
-	}
+	var req CreateSessionTemplateRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Default visibility to private
@@ -375,26 +379,29 @@ func (h *SessionTemplatesHandler) GetSessionTemplate(c *gin.Context) {
 	c.JSON(http.StatusOK, t)
 }
 
+// UpdateSessionTemplateRequest is the request body for updating a session template
+type UpdateSessionTemplateRequest struct {
+	Name          string                 `json:"name" validate:"omitempty,min=3,max=100"`
+	Description   string                 `json:"description" validate:"omitempty,max=1000"`
+	Icon          string                 `json:"icon" validate:"omitempty,max=100"`
+	Category      string                 `json:"category" validate:"omitempty,min=2,max=50"`
+	Tags          []string               `json:"tags" validate:"omitempty,dive,min=2,max=50"`
+	Configuration map[string]interface{} `json:"configuration"`
+	Resources     map[string]interface{} `json:"resources"`
+	Environment   map[string]string      `json:"environment" validate:"omitempty,dive,keys,min=1,max=100,endkeys,min=0,max=10000"`
+}
+
 // UpdateSessionTemplate updates a template
 func (h *SessionTemplatesHandler) UpdateSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
 	userID, _ := c.Get("userID")
 	userIDStr := userID.(string)
 
-	var req struct {
-		Name          string                 `json:"name"`
-		Description   string                 `json:"description"`
-		Icon          string                 `json:"icon"`
-		Category      string                 `json:"category"`
-		Tags          []string               `json:"tags"`
-		Configuration map[string]interface{} `json:"configuration"`
-		Resources     map[string]interface{} `json:"resources"`
-		Environment   map[string]string      `json:"environment"`
-	}
+	var req UpdateSessionTemplateRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	ctx := context.Background()

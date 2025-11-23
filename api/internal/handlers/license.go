@@ -43,6 +43,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // LicenseHandler handles license management endpoints
@@ -345,7 +346,7 @@ func (h *LicenseHandler) generateLimitWarnings(usage LicenseUsageStats) []LimitW
 
 // ActivateLicenseRequest represents license activation request
 type ActivateLicenseRequest struct {
-	LicenseKey string `json:"license_key" binding:"required"`
+	LicenseKey string `json:"license_key" binding:"required" validate:"required,min=10,max=256"`
 }
 
 // ActivateLicense godoc
@@ -362,21 +363,10 @@ type ActivateLicenseRequest struct {
 // @Router /api/v1/admin/license/activate [post]
 func (h *LicenseHandler) ActivateLicense(c *gin.Context) {
 	var req ActivateLicenseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
-	}
 
-	// Validate license key format (basic validation)
-	if len(req.LicenseKey) < 10 {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid license key",
-			Message: "License key is too short",
-		})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Begin transaction
@@ -583,7 +573,7 @@ func (h *LicenseHandler) GetLicenseUsage(c *gin.Context) {
 
 // ValidateLicenseRequest represents license validation request
 type ValidateLicenseRequest struct {
-	LicenseKey string `json:"license_key" binding:"required"`
+	LicenseKey string `json:"license_key" binding:"required" validate:"required,min=10,max=256"`
 }
 
 // ValidateLicenseResponse represents license validation result
@@ -607,12 +597,10 @@ type ValidateLicenseResponse struct {
 // @Router /api/v1/admin/license/validate [post]
 func (h *LicenseHandler) ValidateLicense(c *gin.Context) {
 	var req ValidateLicenseRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Check if license key exists

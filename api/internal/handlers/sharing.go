@@ -82,6 +82,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // SharingHandler handles session sharing and collaboration
@@ -115,25 +116,20 @@ func (h *SharingHandler) RegisterRoutes(router *gin.RouterGroup) {
 	router.GET("/shared-sessions", h.ListSharedSessions)
 }
 
+// CreateShareRequest represents a request to share a session with a user
+type CreateShareRequest struct {
+	SharedWithUserId string     `json:"sharedWithUserId" binding:"required" validate:"required,min=1,max=100"`
+	PermissionLevel  string     `json:"permissionLevel" binding:"required" validate:"required,oneof=view collaborate control"`
+	ExpiresAt        *time.Time `json:"expiresAt"`
+}
+
 // CreateShare creates a direct share with a specific user
 func (h *SharingHandler) CreateShare(c *gin.Context) {
 	ctx := context.Background()
 	sessionID := c.Param("id")
 
-	var req struct {
-		SharedWithUserId string    `json:"sharedWithUserId" binding:"required"`
-		PermissionLevel  string    `json:"permissionLevel" binding:"required"`
-		ExpiresAt        *time.Time `json:"expiresAt"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Validate permission level
-	if req.PermissionLevel != "view" && req.PermissionLevel != "collaborate" && req.PermissionLevel != "control" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission level. Must be: view, collaborate, or control"})
+	var req CreateShareRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -280,17 +276,18 @@ func (h *SharingHandler) RevokeShare(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Share revoked successfully"})
 }
 
+// TransferOwnershipRequest represents a request to transfer session ownership
+type TransferOwnershipRequest struct {
+	NewOwnerUserId string `json:"newOwnerUserId" binding:"required" validate:"required,min=1,max=100"`
+}
+
 // TransferOwnership transfers session ownership to another user
 func (h *SharingHandler) TransferOwnership(c *gin.Context) {
 	ctx := context.Background()
 	sessionID := c.Param("id")
 
-	var req struct {
-		NewOwnerUserId string `json:"newOwnerUserId" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req TransferOwnershipRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -317,25 +314,20 @@ func (h *SharingHandler) TransferOwnership(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Ownership transferred successfully"})
 }
 
+// CreateInvitationRequest represents a request to create a shareable invitation link
+type CreateInvitationRequest struct {
+	PermissionLevel string     `json:"permissionLevel" binding:"required" validate:"required,oneof=view collaborate control"`
+	MaxUses         int        `json:"maxUses" validate:"omitempty,gte=1,lte=1000"`
+	ExpiresAt       *time.Time `json:"expiresAt"`
+}
+
 // CreateInvitation creates a shareable invitation link
 func (h *SharingHandler) CreateInvitation(c *gin.Context) {
 	ctx := context.Background()
 	sessionID := c.Param("id")
 
-	var req struct {
-		PermissionLevel string     `json:"permissionLevel" binding:"required"`
-		MaxUses         int        `json:"maxUses"`
-		ExpiresAt       *time.Time `json:"expiresAt"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
-	}
-
-	// Validate permission level
-	if req.PermissionLevel != "view" && req.PermissionLevel != "collaborate" && req.PermissionLevel != "control" {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid permission level"})
+	var req CreateInvitationRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -445,17 +437,18 @@ func (h *SharingHandler) RevokeInvitation(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"message": "Invitation revoked successfully"})
 }
 
+// AcceptInvitationRequest represents a request to accept a session invitation
+type AcceptInvitationRequest struct {
+	UserId string `json:"userId" binding:"required" validate:"required,min=1,max=100"`
+}
+
 // AcceptInvitation accepts an invitation and creates a share
 func (h *SharingHandler) AcceptInvitation(c *gin.Context) {
 	ctx := context.Background()
 	token := c.Param("token")
 
-	var req struct {
-		UserId string `json:"userId" binding:"required"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req AcceptInvitationRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 

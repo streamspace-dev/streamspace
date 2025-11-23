@@ -55,6 +55,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // GroupHandler handles group-related API requests
@@ -142,12 +143,10 @@ func (h *GroupHandler) ListGroups(c *gin.Context) {
 // @Router /api/v1/groups [post]
 func (h *GroupHandler) CreateGroup(c *gin.Context) {
 	var req models.CreateGroupRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	group, err := h.groupDB.CreateGroup(c.Request.Context(), &req)
@@ -205,12 +204,10 @@ func (h *GroupHandler) UpdateGroup(c *gin.Context) {
 	groupID := c.Param("id")
 
 	var req models.UpdateGroupRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	if err := h.groupDB.UpdateGroup(c.Request.Context(), groupID, &req); err != nil {
@@ -318,12 +315,10 @@ func (h *GroupHandler) AddGroupMember(c *gin.Context) {
 	groupID := c.Param("id")
 
 	var req models.AddGroupMemberRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Verify user exists
