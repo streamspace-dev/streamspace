@@ -198,6 +198,21 @@ Merge To:   feature/streamspace-v2-agent-refactor
 
 ### Integration Workflow
 
+**Use Slash Commands for Common Tasks:**
+
+```bash
+# Quick integration using the custom command
+/integrate-agents
+
+# Generate integration wave summary
+/wave-summary
+
+# Run all verification checks before committing
+/verify-all
+```
+
+**Manual Integration (if needed):**
+
 ```bash
 # 1. Fetch updates from all agents
 git fetch origin claude/v2-builder \

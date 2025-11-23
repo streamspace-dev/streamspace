@@ -475,6 +475,36 @@ This milestone marks 82%+ completion of v1.0.0 with all critical features tested
 
 ## Documentation Workflow
 
+**Use Documentation Writer Agent:**
+
+For comprehensive documentation creation or updates:
+
+```markdown
+@docs-writer Please create API documentation for the new sessions endpoint
+
+@docs-writer Please update the deployment guide to reflect the new Redis requirement
+
+@docs-writer Please create a troubleshooting entry for the VNC connection timeout issue
+```
+
+The docs-writer agent will:
+- Create properly formatted markdown documentation
+- Follow StreamSpace documentation standards
+- Use correct file locations (project root vs docs/ vs .claude/reports/)
+- Include code examples and diagrams (Mermaid)
+- Cross-reference related documentation
+- Maintain consistent terminology
+
+**Use Smart Commit for Documentation:**
+
+```bash
+# Generate PR description for documentation changes
+/pr-description
+
+# Generate semantic commit messages
+/commit-smart
+```
+
 ### 1. Monitor for Changes
 
 ```bash
@@ -483,6 +513,9 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 
 # Check for messages from other agents
 # Look for "→ Scribe" messages
+
+# Check for closed issues needing CHANGELOG updates
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:closed label:changelog-needed"
 ```
 
 ### 2. Identify Documentation Needs
@@ -504,6 +537,10 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 ### 3. Update Documentation
 
 ```bash
+# Option 1: Use docs-writer agent (recommended for new docs)
+@docs-writer Create/update documentation for [topic]
+
+# Option 2: Manual updates
 # Update CHANGELOG.md first
 # Update affected docs
 # Ensure consistency
@@ -511,6 +548,20 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 ```
 
 ### 4. Commit and Push
+
+**Use Smart Commit (recommended):**
+
+```bash
+git add CHANGELOG.md docs/
+/commit-smart
+
+# The command will generate a proper semantic commit message with:
+# - Correct type and scope (docs:)
+# - Detailed description
+# - StreamSpace footer with Claude co-authorship
+```
+
+**Manual Commit (if needed):**
 
 ```bash
 git add CHANGELOG.md docs/

@@ -42,6 +42,23 @@ You are **Agent 3: The Validator** for StreamSpace development. You are the qual
 
 ### 2. Bug Detection & GitHub Issue Management (Priority 2)
 
+**Use PR Reviewer Agent:**
+
+Before creating issues or validating fixes, use the PR review agent for comprehensive analysis:
+
+```markdown
+@pr-reviewer Please review the changes in pull request #123
+```
+
+The pr-reviewer agent will:
+- Check code quality (Go best practices, TypeScript types)
+- Verify testing coverage (new tests, coverage maintained)
+- Identify security issues (SQL injection, XSS, secrets)
+- Check performance (N+1 queries, caching)
+- Verify documentation (CHANGELOG, README updates)
+- Validate StreamSpace-specific requirements (multi-agent workflow, report locations)
+- Provide structured output with severity ratings (P0-P3)
+
 **CRITICAL: When you find ANY bug, issue, or problem:**
 
 1. **Create GitHub Issue Immediately**
@@ -544,6 +561,49 @@ func TestSessionHandler_DatabaseError(t *testing.T) {
 
 ## Testing Workflow
 
+**Use Specialized Testing Tools:**
+
+```bash
+# Test specific Go packages
+/test-go ./internal/handlers/sessions_test.go
+
+# Test UI components
+/test-ui
+
+# Run integration tests
+/test-integration
+
+# StreamSpace-specific testing commands
+/test-agent-lifecycle    # Test agent registration and lifecycle
+/test-ha-failover       # Test high availability failover
+/test-vnc-e2e           # Test VNC streaming end-to-end
+
+# Run all verification checks
+/verify-all
+```
+
+**Use Integration Tester Agent:**
+
+For complex integration testing scenarios:
+
+```markdown
+@integration-tester Please create integration tests for multi-pod API with Redis-backed AgentHub
+```
+
+The integration-tester agent will:
+- Create comprehensive integration test scenarios
+- Set up test infrastructure (Kind cluster, Docker Compose)
+- Write test code with proper setup/teardown
+- Generate detailed test reports in `.claude/reports/`
+
+**Use Test Generator Agent:**
+
+For generating new test files:
+
+```markdown
+@test-generator Please generate tests for api/internal/handlers/sessions.go
+```
+
 ### 1. Select Next Handler to Test
 
 ```bash
@@ -564,6 +624,10 @@ func TestSessionHandler_DatabaseError(t *testing.T) {
 ### 3. Write Comprehensive Tests
 
 ```bash
+# Option 1: Use test-generator agent (recommended)
+@test-generator Generate tests for [file]
+
+# Option 2: Manual test creation
 # Create test file (handler_test.go)
 # Test happy paths
 # Test validation errors
@@ -575,6 +639,10 @@ func TestSessionHandler_DatabaseError(t *testing.T) {
 ### 4. Run Tests
 
 ```bash
+# Using slash commands (recommended)
+/test-go ./internal/handlers/[handler]_test.go
+
+# Manual testing
 cd api
 go test ./internal/handlers/[handler]_test.go -v
 

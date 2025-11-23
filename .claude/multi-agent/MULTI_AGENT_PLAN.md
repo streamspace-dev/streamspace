@@ -13,9 +13,15 @@
 **Updated by:** Agent 1 (Architect)
 **Date:** 2025-11-23
 
-### 🎯 Major Achievement: Comprehensive Roadmap Created
+### 🎯 Major Achievement: Enhanced Multi-Agent Workflow Tools
 
-**Work Completed:**
+**Latest Update (2025-11-23):**
+- ✅ Created 18 slash commands for streamlined workflows
+- ✅ Created 4 specialized subagents for automation
+- ✅ Updated all multi-agent instruction files to use new tools
+- ✅ Comprehensive recommendations document created
+
+**Previous Achievement:**
 - ✅ Created 57 new GitHub issues for production hardening and future features
 - ✅ Organized issues across 4 milestones (v2.0-beta.1, beta.2, v2.1.0, v2.2.0)
 - ✅ Created comprehensive roadmap document (`.github/RECOMMENDATIONS_ROADMAP.md`)
@@ -75,29 +81,101 @@
 - Success criteria for each milestone
 - Quick wins identified for immediate impact
 
+### 🛠️ Enhanced Multi-Agent Workflow Tools
+
+**New Slash Commands (18 total):**
+
+*Testing Commands:*
+- `/test-go [package]` - Run Go tests with coverage
+- `/test-ui` - Run UI tests with coverage
+- `/test-integration` - Run integration tests
+- `/test-agent-lifecycle` - Test agent lifecycle
+- `/test-ha-failover` - Test HA failover
+- `/test-vnc-e2e` - Test VNC streaming E2E
+- `/verify-all` - Complete pre-commit verification (uses haiku for speed)
+
+*Git & Workflow Commands:*
+- `/commit-smart` - Generate semantic commit messages
+- `/pr-description` - Auto-generate PR descriptions
+- `/integrate-agents` - Merge multi-agent work
+- `/wave-summary` - Generate integration summaries
+
+*Kubernetes Commands:*
+- `/k8s-deploy` - Deploy to Kubernetes
+- `/k8s-logs [component]` - Fetch component logs
+- `/k8s-debug` - Debug Kubernetes issues
+
+*Docker Commands:*
+- `/docker-build` - Build all Docker images
+- `/docker-test` - Test Docker Agent locally
+
+*Utilities:*
+- `/fix-imports` - Fix Go/TypeScript imports
+- `/security-audit` - Run security scans
+
+**New Subagents (4 total):**
+
+1. **`@test-generator`** - Auto-generate comprehensive tests
+   - Table-driven tests for Go
+   - React Testing Library for UI
+   - 80%+ coverage target
+   - Mocks included
+
+2. **`@pr-reviewer`** - Comprehensive PR review
+   - Code quality checks (Go, TypeScript)
+   - Security analysis (SQL injection, XSS, secrets)
+   - Performance review (N+1 queries, caching)
+   - Documentation validation
+   - Structured output with P0-P3 severity
+
+3. **`@integration-tester`** - Complex integration testing
+   - 5 test scenarios (Multi-pod API, HA, VNC, Cross-platform, Performance)
+   - Infrastructure setup automation
+   - Detailed test reports in `.claude/reports/`
+
+4. **`@docs-writer`** - Documentation maintenance
+   - Proper file locations (root, docs/, reports/)
+   - Code examples and Mermaid diagrams
+   - Cross-referencing
+   - Consistent terminology
+
+**Reference:** See `.claude/RECOMMENDED_TOOLS.md` for complete details
+
 ### 🚀 Next Steps for Agents
 
 **Builder (Agent 2):**
 1. Start with #158 (Health Check Endpoints) - 2 hours, immediate value
+   - Use `/test-go` and `/verify-all` for testing
+   - Use `@test-generator` to create comprehensive tests
 2. Continue with security P0 issues (#163, #164, #165)
+   - Run `/security-audit` before and after implementation
 3. Implement observability features (#159, #160)
 4. Reference roadmap for implementation details
 
 **Validator (Agent 3):**
 1. Monitor Builder's progress on quick wins
+   - Use `@pr-reviewer` for code review
+   - Use `/test-integration` and specialized test commands
 2. Test security implementations as they're deployed
+   - Use `@integration-tester` for complex scenarios
 3. Prepare integration test plans
 4. Continue with existing validation work
+   - Use `@test-generator` for new test files
 
 **Scribe (Agent 4):**
 1. Document completed features as they land
+   - Use `@docs-writer` for comprehensive documentation
+   - Use `/commit-smart` and `/pr-description` for commits
 2. Prepare for OpenAPI spec creation (#188)
 3. Plan video tutorial content (#189)
 4. Update CHANGELOG.md with new improvements
 
 **Architect (Agent 1):**
 1. Monitor milestone progress
+   - Use `/integrate-agents` for merging work
+   - Use `/wave-summary` for integration reports
 2. Coordinate agent work across issues
+   - Use `/verify-all` before major integrations
 3. Weekly status reports (automated via GitHub Actions)
 4. Triage new issues as they arrive
 
