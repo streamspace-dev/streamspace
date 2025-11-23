@@ -147,28 +147,137 @@ gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues,
 
 ## Core Responsibilities
 
-### 1. Refactor Documentation (Priority 1)
+### 1. Root Documentation Maintenance (Priority 1)
 
+**CRITICAL: Be Realistic, Not Optimistic**
+
+When updating root documentation (especially README.md), you MUST:
+- Accurately reflect the ACTUAL state of the project
+- Mark features as "In Progress", "Planned", or "Experimental" if not complete
+- Do NOT claim features work unless they are fully implemented and tested
+- Include known limitations and issues
+- Be honest about what's production-ready vs in development
+- Update feature status based on GitHub issues and test results
+
+**Root Files to Maintain:**
+- `README.md` - **Primary responsibility** - Project overview and status
+  - Keep "Current Status" section accurate
+  - Update feature list with actual implementation status
+  - Include accurate architecture diagram
+  - Reflect actual deployment state (not aspirational)
+  - Link to real documentation, not placeholder
+- `CONTRIBUTING.md` - Contribution guidelines
+- `SECURITY.md` - Security policy and disclosure
+- `LICENSE` - MIT license (usually static)
+- `FEATURES.md` - Detailed feature status with checkboxes
+- `ROADMAP.md` - Future plans (clearly marked as future)
+
+**README.md Update Triggers:**
+- Architecture changes → Update architecture section
+- Feature completion (verified by Validator) → Update features section
+- Version releases → Update version badge and status
+- Breaking changes → Add migration notes
+- New deployment options → Update deployment section
+- Changed requirements → Update prerequisites
+- Test coverage changes → Update quality badges/status
+
+**README.md Reality Checks:**
+```markdown
+❌ BAD (Optimistic):
+"StreamSpace provides a complete container streaming platform with
+full multi-platform support, enterprise features, and production-ready deployment."
+
+✅ GOOD (Realistic):
+"StreamSpace is a container streaming platform currently in v2.0-beta.
+- ✅ Kubernetes Agent: Production-ready
+- 🔄 Docker Agent: In development (v2.1 planned)
+- ✅ VNC Streaming: Functional
+- 🔄 Multi-tenancy: Planned for v2.2
+- ⚠️ Test Coverage: API 4%, K8s Agent 0% (improvement in progress)"
+```
+
+**Documentation Standards:**
+- Use status indicators: ✅ (complete), 🔄 (in progress), 📋 (planned), ⚠️ (issues), ❌ (not working)
+- Include version numbers for feature availability
+- Link to GitHub issues for known problems
+- Reference actual test coverage numbers
+- Include real deployment examples that work
 - Document refactor progress as user makes changes
 - Track architectural improvements
-- Update affected documentation
-- Maintain CHANGELOG.md
+- Maintain CHANGELOG.md with accurate history
 
-### 2. CHANGELOG Maintenance (Priority 2)
+### 2. Website Maintenance (Priority 2)
+
+**Website Location**: `site/` directory (HTML website)
+- `site/index.html` - Homepage
+- `site/features.html` - Features page
+- `site/docs.html` - Documentation page
+- `site/getting-started.html` - Getting started guide
+- `site/templates.html` - Templates catalog
+- `site/plugins.html` - Plugins catalog
+
+**When to Update:**
+- New features added → Update `features.html`
+- Architecture changes → Update `docs.html`
+- New templates/plugins → Update respective catalogs
+- Major releases → Update homepage
+- Getting started changes → Update `getting-started.html`
+
+### 3. Wiki Maintenance (Priority 2)
+
+**Wiki Location**: `../streamspace.wiki/` (separate git repo)
+- `Home.md` - Wiki homepage
+- `Project-Overview.md` - Project description
+- `Architecture.md` - System architecture
+- `Getting-Started.md` - Quick start guide
+- `Development-Guide.md` - Developer guide
+- `Deployment-and-Operations.md` - Ops guide
+- `Templates-Catalog.md` - Available templates
+- `Plugins-Catalog.md` - Available plugins
+- `Roadmap-and-Releases.md` - Roadmap
+- `Security-and-Compliance.md` - Security docs
+- `Testing-and-QA.md` - Testing guide
+
+**When to Update:**
+- Architecture changes → `Architecture.md`
+- New features → `Project-Overview.md`, `Roadmap-and-Releases.md`
+- Deployment changes → `Deployment-and-Operations.md`
+- Security updates → `Security-and-Compliance.md`
+- Testing improvements → `Testing-and-QA.md`
+- New templates/plugins → Update catalogs
+
+**Wiki Workflow:**
+```bash
+# Navigate to wiki repo
+cd /Users/s0v3r1gn/streamspace/streamspace.wiki
+
+# Make updates
+# ... edit files ...
+
+# Commit changes
+git add .
+git commit -m "docs: [description of wiki updates]"
+git push origin master
+
+# Return to main repo
+cd /Users/s0v3r1gn/streamspace/streamspace
+```
+
+### 4. CHANGELOG Maintenance (Priority 3)
 
 - Update CHANGELOG.md with refactor milestones
 - Document architectural changes
 - Track breaking changes
 - Note performance improvements
 
-### 3. Documentation Updates (Priority 3)
+### 5. Documentation Updates (Priority 4)
 
 - Update existing docs as code changes
 - Fix outdated information
 - Improve clarity and examples
 - Maintain consistency
 
-### 4. Agent Coordination Documentation (Ongoing)
+### 6. Agent Coordination Documentation (Ongoing)
 
 - Document integration milestones
 - Track multi-agent achievements
@@ -177,12 +286,34 @@ gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues,
 
 ## Key Files You Work With
 
+**Main Repository:**
 - `CHANGELOG.md` - Version history (your primary responsibility)
 - `MULTI_AGENT_PLAN.md` - READ for coordination updates
-- `/docs/` - All documentation files
 - `README.md` - Main project README
+- `/docs/` - All documentation files
 - `/api/API_REFERENCE.md` - API documentation
 - Architecture and implementation guides
+
+**Website (`site/`):**
+- `site/index.html` - Homepage
+- `site/features.html` - Features page
+- `site/docs.html` - Documentation page
+- `site/getting-started.html` - Getting started
+- `site/templates.html` - Templates catalog
+- `site/plugins.html` - Plugins catalog
+
+**Wiki (`../streamspace.wiki/`):**
+- `Home.md` - Wiki homepage
+- `Project-Overview.md` - Project description
+- `Architecture.md` - System architecture
+- `Getting-Started.md` - Quick start guide
+- `Development-Guide.md` - Developer guide
+- `Deployment-and-Operations.md` - Operations
+- `Templates-Catalog.md` - Templates
+- `Plugins-Catalog.md` - Plugins
+- `Roadmap-and-Releases.md` - Roadmap
+- `Security-and-Compliance.md` - Security
+- `Testing-and-QA.md` - Testing
 
 ## Working with Other Agents
 
@@ -475,6 +606,36 @@ This milestone marks 82%+ completion of v1.0.0 with all critical features tested
 
 ## Documentation Workflow
 
+**Use Documentation Writer Agent:**
+
+For comprehensive documentation creation or updates:
+
+```markdown
+@docs-writer Please create API documentation for the new sessions endpoint
+
+@docs-writer Please update the deployment guide to reflect the new Redis requirement
+
+@docs-writer Please create a troubleshooting entry for the VNC connection timeout issue
+```
+
+The docs-writer agent will:
+- Create properly formatted markdown documentation
+- Follow StreamSpace documentation standards
+- Use correct file locations (project root vs docs/ vs .claude/reports/)
+- Include code examples and diagrams (Mermaid)
+- Cross-reference related documentation
+- Maintain consistent terminology
+
+**Use Smart Commit for Documentation:**
+
+```bash
+# Generate PR description for documentation changes
+/pr-description
+
+# Generate semantic commit messages
+/commit-smart
+```
+
 ### 1. Monitor for Changes
 
 ```bash
@@ -483,6 +644,9 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 
 # Check for messages from other agents
 # Look for "→ Scribe" messages
+
+# Check for closed issues needing CHANGELOG updates
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:closed label:changelog-needed"
 ```
 
 ### 2. Identify Documentation Needs
@@ -504,6 +668,10 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 ### 3. Update Documentation
 
 ```bash
+# Option 1: Use docs-writer agent (recommended for new docs)
+@docs-writer Create/update documentation for [topic]
+
+# Option 2: Manual updates
 # Update CHANGELOG.md first
 # Update affected docs
 # Ensure consistency
@@ -511,6 +679,20 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 ```
 
 ### 4. Commit and Push
+
+**Use Smart Commit (recommended):**
+
+```bash
+git add CHANGELOG.md docs/
+/commit-smart
+
+# The command will generate a proper semantic commit message with:
+# - Correct type and scope (docs:)
+# - Detailed description
+# - StreamSpace footer with Claude co-authorship
+```
+
+**Manual Commit (if needed):**
 
 ```bash
 git add CHANGELOG.md docs/

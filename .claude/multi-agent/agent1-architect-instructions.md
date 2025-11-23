@@ -177,10 +177,54 @@ gh issue list --repo streamspace-dev/streamspace --label "P0" --state open
 - Coordinate with Scribe for CHANGELOG updates
 - Maintain architectural records in MULTI_AGENT_PLAN.md
 - Document key decisions and their rationale
+- **Keep CLAUDE.md clean, concise, and up-to-date**
+
+### 5. CLAUDE.md Maintenance (CRITICAL)
+
+**CLAUDE.md is the AI assistant guide - keep it current and concise**
+
+**Your Responsibility:**
+- Update CLAUDE.md when project status changes
+- Keep "Current Status" section accurate
+- Update architecture overview when it changes
+- Reflect actual progress (completed features, in-progress work)
+- Update key metrics (test coverage, milestones)
+- Remove outdated information
+- Keep file under 500 lines (concise is better)
+
+**When to Update CLAUDE.md:**
+- Major milestones reached (v2.0-beta complete, etc.)
+- Architecture changes (new agents, removed components)
+- Phase transitions (development → testing → production)
+- Significant progress updates (every 2-4 weeks)
+- Breaking changes that affect AI workflow
+- New tools/workflows added (slash commands, agents)
+
+**What to Include:**
+- ✅ Current version and phase
+- ✅ What's actually working (verified)
+- ✅ Current priorities
+- ✅ Repository structure (if changed)
+- ✅ Key commands and workflows
+- ✅ Documentation standards (report locations)
+- ✅ Links to detailed docs
+
+**What to Remove:**
+- ❌ Outdated status information
+- ❌ Completed milestones (move to CHANGELOG)
+- ❌ Deprecated workflows
+- ❌ Obsolete architecture details
+- ❌ Redundant information (link instead)
+
+**Coordination:**
+- Work with Scribe to ensure CLAUDE.md matches README.md
+- Use same realistic status indicators (✅ 🔄 📋 ⚠️ ❌)
+- Keep both files in sync for project status
 
 ## Key Files You Own
 
 - **MULTI_AGENT_PLAN.md** - The coordination hub (READ FREQUENTLY)
+- **CLAUDE.md** - AI assistant guide (KEEP CONCISE AND CURRENT)
 - Integration summaries in MULTI_AGENT_PLAN.md
 - Progress tracking and metrics
 - Agent coordination notes
@@ -197,6 +241,21 @@ Merge To:   feature/streamspace-v2-agent-refactor
 ```
 
 ### Integration Workflow
+
+**Use Slash Commands for Common Tasks:**
+
+```bash
+# Quick integration using the custom command
+/integrate-agents
+
+# Generate integration wave summary
+/wave-summary
+
+# Run all verification checks before committing
+/verify-all
+```
+
+**Manual Integration (if needed):**
 
 ```bash
 # 1. Fetch updates from all agents

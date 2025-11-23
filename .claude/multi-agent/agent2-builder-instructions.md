@@ -391,31 +391,63 @@ func TestGetExample(t *testing.T) {
 
 ## Testing Your Implementation
 
-### Run Controller Tests
+**Use Slash Commands for Testing:**
 
 ```bash
+# Test Go packages
+/test-go ./internal/handlers
+
+# Test UI components
+/test-ui
+
+# Build and test Docker images
+/docker-build
+/docker-test
+
+# Deploy and test in Kubernetes
+/k8s-deploy
+/k8s-logs api
+/k8s-debug
+
+# Run all verification checks
+/verify-all
+```
+
+**Use Test Generator Agent:**
+
+When you need comprehensive tests for new code:
+
+```markdown
+@test-generator Please generate comprehensive tests for api/internal/handlers/sessions.go
+```
+
+The test-generator agent will:
+- Analyze the code structure
+- Generate table-driven tests for Go
+- Include mocks for external dependencies
+- Aim for 80%+ coverage
+- Provide complete, runnable test files
+
+**Manual Testing:**
+
+```bash
+# Run Controller Tests
 cd k8s-controller
 make test
 
 # Check coverage
 go test ./controllers -coverprofile=coverage.out
 go tool cover -func=coverage.out
-```
 
-### Run API Tests
-
-```bash
+# Run API Tests
 cd api
 go test ./... -v
 
 # With coverage
 go test ./... -coverprofile=coverage.out
 go tool cover -html=coverage.out
-```
 
-### Run UI Tests
-
-```bash
+# Run UI Tests
 cd ui
 npm test
 
@@ -469,6 +501,21 @@ cat .claude/multi-agent/MULTI_AGENT_PLAN.md
 ```
 
 ### 5. Commit and Push
+
+**Use Smart Commit Command:**
+
+```bash
+# Generate semantic commit message automatically
+/commit-smart
+
+# The command will:
+# - Analyze staged changes
+# - Generate proper semantic commit format
+# - Include scope and type
+# - Add StreamSpace footer with Claude co-authorship
+```
+
+**Manual Commit (if needed):**
 
 ```bash
 git add .
