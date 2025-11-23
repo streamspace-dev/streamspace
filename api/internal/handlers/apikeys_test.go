@@ -71,27 +71,23 @@ func TestCreateAPIKey_Success(t *testing.T) {
 	defer cleanup()
 
 	now := time.Now()
-	expiresAt := now.AddDate(0, 0, 30)
 
-	// Mock insert query
-	mock.ExpectQuery(`INSERT INTO api_keys`).
+	// Mock insert query - handler only expects id and created_at from RETURNING clause
+	// Use regex to match the multi-line SQL with whitespace
+	mock.ExpectQuery(`(?s)INSERT INTO api_keys.*RETURNING`).
 		WithArgs(
-			sqlmock.AnyArg(), // key_prefix
 			sqlmock.AnyArg(), // key_hash
+			sqlmock.AnyArg(), // key_prefix
 			"production-api",
 			"API key for production use",
 			"user123",
-			sqlmock.AnyArg(), // scopes (JSON array)
+			sqlmock.AnyArg(), // scopes (array)
 			1000,
 			sqlmock.AnyArg(), // expires_at
-			true,
-			sqlmock.AnyArg(), // created_at
+			"user123", // created_by
 		).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-			"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
-		}).AddRow(1, "sk_abcde", "production-api", "API key for production use", "user123",
-			`["sessions:read","sessions:write"]`, 1000, expiresAt, nil, 0, true, now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
+			AddRow(1, now))
 
 	// Create test context
 	w := httptest.NewRecorder()
@@ -123,15 +119,23 @@ func TestCreateAPIKey_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	// Verify the response contains the API key (only shown once)
-	apiKeyData := response["apiKey"].(map[string]interface{})
-	assert.Equal(t, "production-api", apiKeyData["name"])
-	assert.Equal(t, "user123", apiKeyData["userId"])
+	// Verify the response contains the expected fields (flat structure)
+	assert.Equal(t, float64(1), response["id"])
+	assert.Equal(t, "production-api", response["name"])
 
 	// Verify the plaintext key is returned (starts with sk_)
-	key := response["key"].(string)
+	key, ok := response["key"].(string)
+	require.True(t, ok, "key should be a string")
 	assert.Contains(t, key, "sk_")
 	assert.Greater(t, len(key), 20) // Should be long cryptographic key
+
+	// Verify key prefix
+	keyPrefix, ok := response["keyPrefix"].(string)
+	require.True(t, ok, "keyPrefix should be a string")
+	assert.Equal(t, key[:8], keyPrefix) // Prefix should be first 8 characters
+
+	// Verify success message
+	assert.Contains(t, response["message"], "created successfully")
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -142,24 +146,21 @@ func TestCreateAPIKey_Success_NoExpiration(t *testing.T) {
 
 	now := time.Now()
 
-	// Mock insert query with nil expiration
-	mock.ExpectQuery(`INSERT INTO api_keys`).
+	// Mock insert query with nil expiration - handler only expects id and created_at
+	mock.ExpectQuery(`(?s)INSERT INTO api_keys.*RETURNING`).
 		WithArgs(
-			sqlmock.AnyArg(),
-			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // key_hash
+			sqlmock.AnyArg(), // key_prefix
 			"test-key",
 			"",
 			"user123",
-			sqlmock.AnyArg(),
+			sqlmock.AnyArg(), // scopes
 			500,
 			nil, // no expiration
-			true,
-			sqlmock.AnyArg(),
+			"user123", // created_by
 		).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-			"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
-		}).AddRow(1, "sk_test1", "test-key", "", "user123", `[]`, 500, nil, nil, 0, true, now, now))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
+			AddRow(1, now))
 
 	// Create test context
 	w := httptest.NewRecorder()
@@ -232,7 +233,18 @@ func TestCreateAPIKey_DatabaseError(t *testing.T) {
 	defer cleanup()
 
 	// Mock database error
-	mock.ExpectQuery(`INSERT INTO api_keys`).
+	mock.ExpectQuery(`(?s)INSERT INTO api_keys.*RETURNING`).
+		WithArgs(
+			sqlmock.AnyArg(), // key_hash
+			sqlmock.AnyArg(), // key_prefix
+			"test-key",
+			"",
+			"user123",
+			sqlmock.AnyArg(), // scopes
+			1000,
+			nil, // no expiration
+			"user123", // created_by
+		).
 		WillReturnError(fmt.Errorf("database error"))
 
 	// Create test context
