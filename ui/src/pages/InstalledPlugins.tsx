@@ -136,7 +136,8 @@ function InstalledPluginsContent() {
   const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
 
   // Fetch plugins via React Query
-  // BUG FIX P0-1: Ensure plugins is always an array, never null/undefined
+  // BUG FIX P0-123: Ensure plugins is always an array, never null/undefined
+  // Handle undefined, null, and non-array responses gracefully
   const { data: pluginsData, isLoading: loading } = useInstalledPlugins();
   const plugins = Array.isArray(pluginsData) ? pluginsData : [];
   const queryClient = useQueryClient();
@@ -352,19 +353,19 @@ function InstalledPluginsContent() {
           />
           <Box display="flex" gap={1} flexWrap="wrap">
             <Chip
-              label={`All (${plugins.length})`}
+              label={`All (${plugins?.length ?? 0})`}
               onClick={() => setFilter('all')}
               color={filter === 'all' ? 'primary' : 'default'}
               variant={filter === 'all' ? 'filled' : 'outlined'}
             />
             <Chip
-              label={`Enabled (${plugins.filter(p => p.enabled).length})`}
+              label={`Enabled (${plugins?.filter(p => p.enabled).length ?? 0})`}
               onClick={() => setFilter('enabled')}
               color={filter === 'enabled' ? 'primary' : 'default'}
               variant={filter === 'enabled' ? 'filled' : 'outlined'}
             />
             <Chip
-              label={`Disabled (${plugins.filter(p => !p.enabled).length})`}
+              label={`Disabled (${plugins?.filter(p => !p.enabled).length ?? 0})`}
               onClick={() => setFilter('disabled')}
               color={filter === 'disabled' ? 'primary' : 'default'}
               variant={filter === 'disabled' ? 'filled' : 'outlined'}
