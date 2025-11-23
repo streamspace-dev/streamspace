@@ -55,6 +55,7 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"github.com/streamspace-dev/streamspace/api/internal/services"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 	"github.com/streamspace-dev/streamspace/api/internal/websocket"
 )
 
@@ -122,26 +123,7 @@ func (h *AgentHandler) RegisterAdminRoutes(router *gin.RouterGroup) {
 // @Router /agents/register [post]
 func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	var req models.AgentRegistrationRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Validate platform
-	validPlatforms := map[string]bool{
-		"kubernetes": true,
-		"docker":     true,
-		"vm":         true,
-		"cloud":      true,
-	}
-	if !validPlatforms[req.Platform] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid platform",
-			"details": fmt.Sprintf("Platform must be one of: kubernetes, docker, vm, cloud. Got: %s", req.Platform),
-		})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -424,20 +406,7 @@ func (h *AgentHandler) UpdateHeartbeat(c *gin.Context) {
 	agentID := c.Param("agent_id")
 
 	var req models.AgentHeartbeatRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Validate status
-	if req.Status != "online" && req.Status != "draining" {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid status",
-			"details": "Status must be 'online' or 'draining'",
-		})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -508,36 +477,18 @@ func (h *AgentHandler) UpdateHeartbeat(c *gin.Context) {
 // @Failure 503 {object} map[string]interface{} "Agent not connected"
 // @Failure 500 {object} map[string]interface{} "Internal server error"
 // @Router /agents/{agent_id}/command [post]
+// SendCommandRequest represents a command to send to an agent
+type SendCommandRequest struct {
+	Action    string                 `json:"action" binding:"required" validate:"required,oneof=start_session stop_session hibernate_session wake_session"`
+	SessionID string                 `json:"sessionId,omitempty" validate:"omitempty,min=1,max=100"`
+	Payload   map[string]interface{} `json:"payload,omitempty"`
+}
+
 func (h *AgentHandler) SendCommand(c *gin.Context) {
 	agentID := c.Param("agent_id")
 
-	// Parse request
-	var req struct {
-		Action    string                 `json:"action" binding:"required"`
-		SessionID string                 `json:"sessionId,omitempty"`
-		Payload   map[string]interface{} `json:"payload,omitempty"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid request",
-			"details": err.Error(),
-		})
-		return
-	}
-
-	// Validate action
-	validActions := map[string]bool{
-		"start_session":     true,
-		"stop_session":      true,
-		"hibernate_session": true,
-		"wake_session":      true,
-	}
-	if !validActions[req.Action] {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Invalid action",
-			"details": "Action must be one of: start_session, stop_session, hibernate_session, wake_session",
-		})
+	var req SendCommandRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 

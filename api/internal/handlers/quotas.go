@@ -97,6 +97,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // QuotasHandler handles resource quotas and limits.
@@ -115,6 +116,47 @@ func NewQuotasHandler(database *db.Database) *QuotasHandler {
 	return &QuotasHandler{
 		db: database,
 	}
+}
+
+// SetQuotaRequest represents a request to set resource quotas
+type SetQuotaRequest struct {
+	MaxSessions int `json:"maxSessions" validate:"gte=0,lte=10000"`
+	MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=1000000"`      // millicores, max 1000 cores
+	MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=10000000"`  // MB, max ~10TB
+	MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=100000"`   // GB, max 100TB
+}
+
+// SetDefaultQuotasRequest represents a request to set default quotas
+type SetDefaultQuotasRequest struct {
+	User struct {
+		MaxSessions int `json:"maxSessions" validate:"gte=0,lte=1000"`
+		MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=100000"`
+		MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=1000000"`
+		MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=10000"`
+	} `json:"user" validate:"required"`
+	Team struct {
+		MaxSessions int `json:"maxSessions" validate:"gte=0,lte=10000"`
+		MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=1000000"`
+		MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=10000000"`
+		MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=100000"`
+	} `json:"team" validate:"required"`
+}
+
+// CheckQuotaRequest represents a request to check quota availability
+type CheckQuotaRequest struct {
+	UserID      string `json:"userId" binding:"required" validate:"required,min=1,max=100"`
+	CPU         int    `json:"cpu" validate:"gte=0,lte=100000"`
+	Memory      int    `json:"memory" validate:"gte=0,lte=1000000"`
+	AddSessions int    `json:"addSessions" validate:"gte=0,lte=100"`
+}
+
+// QuotaPolicyRequest represents a quota policy create/update request
+type QuotaPolicyRequest struct {
+	Name        string `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string `json:"description" validate:"omitempty,max=1000"`
+	Rules       string `json:"rules" binding:"required" validate:"required,max=10000"`
+	Priority    int    `json:"priority" validate:"gte=0,lte=100"`
+	Enabled     bool   `json:"enabled"`
 }
 
 // RegisterRoutes registers quota routes
@@ -199,15 +241,8 @@ func (h *QuotasHandler) GetUserQuota(c *gin.Context) {
 func (h *QuotasHandler) SetUserQuota(c *gin.Context) {
 	userID := c.Param("userId")
 
-	var req struct {
-		MaxSessions int `json:"maxSessions"`
-		MaxCPU      int `json:"maxCPU"`      // millicores
-		MaxMemory   int `json:"maxMemory"`   // MB
-		MaxStorage  int `json:"maxStorage"`  // GB
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -480,15 +515,8 @@ func (h *QuotasHandler) GetTeamQuota(c *gin.Context) {
 func (h *QuotasHandler) SetTeamQuota(c *gin.Context) {
 	teamID := c.Param("teamId")
 
-	var req struct {
-		MaxSessions int `json:"maxSessions"`
-		MaxCPU      int `json:"maxCPU"`
-		MaxMemory   int `json:"maxMemory"`
-		MaxStorage  int `json:"maxStorage"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -792,23 +820,8 @@ func (h *QuotasHandler) GetDefaultQuotas(c *gin.Context) {
 
 // SetDefaultQuotas sets default quotas (stored in config or database)
 func (h *QuotasHandler) SetDefaultQuotas(c *gin.Context) {
-	var req struct {
-		User struct {
-			MaxSessions int `json:"maxSessions"`
-			MaxCPU      int `json:"maxCPU"`
-			MaxMemory   int `json:"maxMemory"`
-			MaxStorage  int `json:"maxStorage"`
-		} `json:"user"`
-		Team struct {
-			MaxSessions int `json:"maxSessions"`
-			MaxCPU      int `json:"maxCPU"`
-			MaxMemory   int `json:"maxMemory"`
-			MaxStorage  int `json:"maxStorage"`
-		} `json:"team"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetDefaultQuotasRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -935,15 +948,8 @@ func (h *QuotasHandler) GetQuotaViolations(c *gin.Context) {
 
 // CheckQuota checks if a quota would be exceeded
 func (h *QuotasHandler) CheckQuota(c *gin.Context) {
-	var req struct {
-		UserID      string `json:"userId" binding:"required"`
-		CPU         int    `json:"cpu"`
-		Memory      int    `json:"memory"`
-		AddSessions int    `json:"addSessions"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req CheckQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -1074,16 +1080,8 @@ func (h *QuotasHandler) GetPolicies(c *gin.Context) {
 
 // CreatePolicy creates a new quota policy
 func (h *QuotasHandler) CreatePolicy(c *gin.Context) {
-	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		Rules       string `json:"rules" binding:"required"`
-		Priority    int    `json:"priority"`
-		Enabled     bool   `json:"enabled"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req QuotaPolicyRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -1153,16 +1151,8 @@ func (h *QuotasHandler) GetPolicy(c *gin.Context) {
 func (h *QuotasHandler) UpdatePolicy(c *gin.Context) {
 	policyID := c.Param("id")
 
-	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Rules       string `json:"rules"`
-		Priority    int    `json:"priority"`
-		Enabled     bool   `json:"enabled"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req QuotaPolicyRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
