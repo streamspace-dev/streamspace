@@ -65,6 +65,21 @@ The agent can be configured via:
 | `--max-memory` | `MAX_MEMORY` | `128` | Maximum memory in GB |
 | `--max-sessions` | `MAX_SESSIONS` | `100` | Maximum concurrent sessions |
 | `--heartbeat-interval` | `HEALTH_CHECK_INTERVAL` | `30` | Heartbeat interval in seconds |
+| `--api-key` | `API_KEY` | - | Agent API key for authentication (64 hex chars) |
+
+### High Availability Configuration
+
+| Flag | Environment Variable | Default | Description |
+|------|---------------------|---------|-------------|
+| `--enable-ha` | `ENABLE_HA` | `false` | Enable HA mode with leader election |
+| `--leader-election-backend` | `LEADER_ELECTION_BACKEND` | `file` | Backend: `file`, `redis`, or `swarm` |
+| `--redis-url` | `REDIS_URL` | - | Redis URL for redis backend (e.g., `redis://localhost:6379/0`) |
+| `--lock-file-path` | `LOCK_FILE_PATH` | `/var/run/streamspace/agent.lock` | Lock file path for file backend |
+
+**Leader Election Backends**:
+- **`redis`** (Recommended for production): Distributed leader election using Redis SET NX with TTL. Best for multi-host deployments.
+- **`file`**: File-based locking using flock. Only works on single-host deployments.
+- **`swarm`**: Docker Swarm service labels. Native Swarm HA (requires Swarm mode).
 
 ## Deployment
 
@@ -148,6 +163,155 @@ Run with:
 ```bash
 docker-compose up -d
 ```
+
+### Option 4: High Availability Deployment with Redis
+
+For production deployments requiring failover and zero downtime, run multiple agent replicas with Redis-based leader election.
+
+#### Prerequisites
+
+- Redis server accessible to all agent instances
+- Same `AGENT_ID` for all replicas (identifies the agent cluster)
+- Unique hostnames for each replica (automatically used as instance ID)
+
+#### 1. Deploy Redis (if not already available)
+
+```bash
+docker run -d \
+  --name redis \
+  --network streamspace \
+  -p 6379:6379 \
+  redis:7-alpine
+```
+
+#### 2. Deploy Agent Replicas
+
+Create `docker-compose.ha.yml`:
+
+```yaml
+version: '3.8'
+
+services:
+  redis:
+    image: redis:7-alpine
+    container_name: streamspace-redis
+    restart: unless-stopped
+    networks:
+      - streamspace
+    ports:
+      - "6379:6379"
+
+  agent-1:
+    image: streamspace/docker-agent:v2.0
+    container_name: streamspace-agent-1
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      AGENT_ID: docker-prod-cluster  # Same for all replicas
+      CONTROL_PLANE_URL: wss://control.example.com
+      API_KEY: ${AGENT_API_KEY}  # Required for authentication
+      REGION: us-east-1
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: redis  # Use Redis backend
+      REDIS_URL: redis://redis:6379/0
+    networks:
+      - streamspace
+    depends_on:
+      - redis
+
+  agent-2:
+    image: streamspace/docker-agent:v2.0
+    container_name: streamspace-agent-2
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      AGENT_ID: docker-prod-cluster  # Same for all replicas
+      CONTROL_PLANE_URL: wss://control.example.com
+      API_KEY: ${AGENT_API_KEY}  # Required for authentication
+      REGION: us-east-1
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    networks:
+      - streamspace
+    depends_on:
+      - redis
+
+  agent-3:
+    image: streamspace/docker-agent:v2.0
+    container_name: streamspace-agent-3
+    restart: unless-stopped
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    environment:
+      AGENT_ID: docker-prod-cluster  # Same for all replicas
+      CONTROL_PLANE_URL: wss://control.example.com
+      API_KEY: ${AGENT_API_KEY}  # Required for authentication
+      REGION: us-east-1
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: redis
+      REDIS_URL: redis://redis:6379/0
+    networks:
+      - streamspace
+    depends_on:
+      - redis
+
+networks:
+  streamspace:
+    driver: bridge
+```
+
+#### 3. Set Agent API Key
+
+```bash
+export AGENT_API_KEY="your-64-char-hex-api-key"
+```
+
+#### 4. Deploy HA Stack
+
+```bash
+docker-compose -f docker-compose.ha.yml up -d
+```
+
+#### 5. Verify Leader Election
+
+```bash
+# Check logs - only one agent should be leader
+docker logs streamspace-agent-1 | grep -i leader
+docker logs streamspace-agent-2 | grep -i leader
+docker logs streamspace-agent-3 | grep -i leader
+```
+
+Expected output (one leader, two standbys):
+```
+[LeaderElection] 🎖️  Became leader for agent: docker-prod-cluster
+[DockerAgent] 🎖️  I am the LEADER - starting agent...
+```
+
+#### 6. Test Failover
+
+```bash
+# Stop the leader container
+docker stop streamspace-agent-1
+
+# Watch standby logs - one should become leader within 15 seconds
+docker logs -f streamspace-agent-2
+```
+
+Expected output:
+```
+[LeaderElection] 🎖️  Became leader for agent: docker-prod-cluster
+[DockerAgent] 🎖️  I am the LEADER - starting agent...
+```
+
+**Benefits of Redis Backend**:
+- ✅ Automatic failover (typically 5-15 seconds)
+- ✅ Works across multiple Docker hosts
+- ✅ No shared filesystem required
+- ✅ Battle-tested Redis reliability
+- ✅ Simple to deploy and maintain
 
 ## Verification
 

@@ -43,6 +43,11 @@ type AgentConfig struct{
 	// ReconnectBackoff defines the reconnection strategy
 	// Default: [2s, 4s, 8s, 16s, 32s]
 	ReconnectBackoff []int // in seconds
+
+	// APIKey is the agent's API key for authentication with Control Plane
+	// SECURITY: Must be stored securely (e.g., Kubernetes Secret)
+	// Format: 64 hexadecimal characters (32 bytes)
+	APIKey string
 }
 
 // AgentCapacity defines the maximum resources available on the agent.
@@ -68,6 +73,10 @@ func (c *AgentConfig) Validate() error {
 
 	if c.ControlPlaneURL == "" {
 		return errors.ErrMissingControlPlaneURL
+	}
+
+	if c.APIKey == "" {
+		return errors.ErrMissingAPIKey
 	}
 
 	if c.Platform == "" {

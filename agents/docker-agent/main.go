@@ -63,7 +63,6 @@ import (
 	"os"
 	"os/signal"
 	"strconv"
-	"strings"
 	"sync"
 	"syscall"
 	"time"
@@ -323,7 +322,16 @@ func (a *DockerAgent) registerAgent() error {
 
 	// Send registration request
 	log.Printf("[DockerAgent] Registering agent at: %s", u.String())
-	resp, err := http.Post(u.String(), "application/json", bytes.NewBuffer(jsonBody))
+	req, err := http.NewRequest("POST", u.String(), bytes.NewBuffer(jsonBody))
+	if err != nil {
+		return fmt.Errorf("failed to create request: %w", err)
+	}
+
+	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-API-Key", a.config.APIKey)
+
+	client := &http.Client{Timeout: 10 * time.Second}
+	resp, err := client.Do(req)
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
@@ -360,7 +368,12 @@ func (a *DockerAgent) connectWebSocket() error {
 
 	// Connect WebSocket
 	log.Printf("[DockerAgent] Connecting WebSocket to: %s", u.String())
-	conn, _, err := websocket.DefaultDialer.Dial(u.String(), nil)
+
+	// Add API key header for authentication
+	headers := http.Header{}
+	headers.Set("X-Agent-API-Key", a.config.APIKey)
+
+	conn, _, err := websocket.DefaultDialer.Dial(u.String(), headers)
 	if err != nil {
 		return fmt.Errorf("WebSocket dial failed: %w", err)
 	}
@@ -391,8 +404,11 @@ func (a *DockerAgent) sendMessage(message interface{}) error {
 }
 
 // writePump handles WebSocket writes (single goroutine, single writer).
+//
+// FIX: Align with k8s-agent implementation - use pingPeriod for WebSocket pings.
+// This is separate from application heartbeats (sent by SendHeartbeats goroutine).
 func (a *DockerAgent) writePump() {
-	ticker := time.NewTicker(time.Duration(a.config.HeartbeatInterval) * time.Second)
+	ticker := time.NewTicker(pingPeriod)
 	defer ticker.Stop()
 
 	for {
@@ -484,9 +500,11 @@ func (a *DockerAgent) SendHeartbeats() {
 	for {
 		select {
 		case <-ticker.C:
+			// BUG FIX P0-001: Use time.Now() instead of time.Now().Unix()
+			// API expects RFC3339 JSON string, not Unix timestamp int64
 			heartbeat := map[string]interface{}{
 				"type":      "heartbeat",
-				"timestamp": time.Now().Unix(),
+				"timestamp": time.Now(), // Marshals to RFC3339 string in JSON
 				"agentId":   a.config.AgentID,
 				"status":    "online",
 				// TODO: Add actual session count
@@ -598,6 +616,7 @@ func main() {
 	// Command-line flags
 	agentID := flag.String("agent-id", os.Getenv("AGENT_ID"), "Agent ID (e.g., docker-prod-us-east-1)")
 	controlPlaneURL := flag.String("control-plane-url", os.Getenv("CONTROL_PLANE_URL"), "Control Plane WebSocket URL")
+	apiKey := flag.String("api-key", os.Getenv("AGENT_API_KEY"), "Agent API key for authentication (64 hex chars)")
 	platform := flag.String("platform", getEnvOrDefault("PLATFORM", "docker"), "Platform type")
 	region := flag.String("region", os.Getenv("REGION"), "Deployment region")
 	dockerHost := flag.String("docker-host", getEnvOrDefault("DOCKER_HOST", "unix:///var/run/docker.sock"), "Docker daemon socket")
@@ -628,6 +647,7 @@ func main() {
 	cfg := &config.AgentConfig{
 		AgentID:           *agentID,
 		ControlPlaneURL:   *controlPlaneURL,
+		APIKey:            *apiKey,
 		Platform:          *platform,
 		Region:            *region,
 		DockerHost:        *dockerHost,

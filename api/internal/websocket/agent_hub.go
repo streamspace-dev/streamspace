@@ -13,9 +13,9 @@
 // Connection Lifecycle:
 //   1. Agent connects via WebSocket (/api/v1/agents/connect)
 //   2. Hub registers the connection (updates DB status to "online")
-//   3. Agent sends heartbeats every 10 seconds
+//   3. Agent sends heartbeats every 30 seconds (default, configurable)
 //   4. Hub monitors LastPing timestamp
-//   5. If no heartbeat for >30 seconds, connection is considered stale
+//   5. If no heartbeat for >45 seconds, connection is considered stale
 //   6. On disconnect, hub unregisters connection (updates DB status to "offline")
 //
 // Thread Safety:
@@ -367,9 +367,16 @@ func (h *AgentHub) handleBroadcast(msg BroadcastMessage) {
 	log.Printf("[AgentHub] Broadcast message sent to %d agents", count)
 }
 
-// checkStaleConnections detects and closes connections with no heartbeat for >30 seconds.
+// checkStaleConnections detects and closes connections with no heartbeat for >45 seconds.
 //
 // This runs periodically (every 10 seconds) to clean up stale connections.
+//
+// The 45-second threshold provides a 15-second buffer beyond the 30-second default
+// heartbeat interval, accounting for network delays, clock skew, and processing time.
+// This prevents false positives from marking recently-reconnected agents as stale.
+//
+// Fix for P2 Connection Stability Issue: Increased from 30s to 45s to eliminate
+// race condition between heartbeat interval and stale detection threshold.
 func (h *AgentHub) checkStaleConnections() {
 	h.mutex.RLock()
 	staleAgents := make([]string, 0)
@@ -380,7 +387,7 @@ func (h *AgentHub) checkStaleConnections() {
 		lastPing := conn.LastPing
 		conn.Mutex.RUnlock()
 
-		if now.Sub(lastPing) > 30*time.Second {
+		if now.Sub(lastPing) > 45*time.Second {
 			staleAgents = append(staleAgents, agentID)
 		}
 	}
@@ -388,7 +395,7 @@ func (h *AgentHub) checkStaleConnections() {
 
 	// Unregister stale agents
 	for _, agentID := range staleAgents {
-		log.Printf("[AgentHub] Detected stale connection for agent %s (no heartbeat for >30s)", agentID)
+		log.Printf("[AgentHub] Detected stale connection for agent %s (no heartbeat for >45s)", agentID)
 		h.unregister <- agentID
 	}
 }

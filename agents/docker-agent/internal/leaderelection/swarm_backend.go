@@ -10,7 +10,6 @@ import (
 
 	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/filters"
-	"github.com/docker/docker/api/types/swarm"
 	"github.com/docker/docker/client"
 )
 
@@ -66,35 +65,47 @@ func newSwarmBackend(config *LeaderElectorConfig) (*swarmBackend, error) {
 		return nil, fmt.Errorf("not running in Docker Swarm mode or not a manager node")
 	}
 
-	// Get current task/container ID from hostname
+	// BUG FIX P0-002: Get task ID from container inspection, not hostname
+	// In Docker Swarm, hostname is the container ID (12 hex chars), not task ID (25 chars)
+	// We need to inspect the container to get the actual task ID from labels
 	hostname, err := os.Hostname()
 	if err != nil {
 		return nil, fmt.Errorf("failed to get hostname: %w", err)
 	}
 
-	// In Docker Swarm, hostname is typically the task ID
-	// Format: <service-name>.<replica-number>.<task-id>
-	taskID := hostname
-	if len(hostname) > 25 {
-		// Docker task IDs are 25 characters
-		taskID = hostname[:25]
+	// Inspect container to get Swarm task ID from labels
+	containerJSON, err := dockerClient.ContainerInspect(context.Background(), hostname)
+	if err != nil {
+		return nil, fmt.Errorf("failed to inspect container %s: %w", hostname, err)
 	}
 
-	// Find service ID by filtering tasks
-	taskFilter := filters.NewArgs()
-	taskFilter.Add("id", taskID)
+	// Get task ID from container labels (set by Docker Swarm)
+	taskID, ok := containerJSON.Config.Labels["com.docker.swarm.task.id"]
+	if !ok || taskID == "" {
+		return nil, fmt.Errorf("container %s is not a Swarm task (missing com.docker.swarm.task.id label)", hostname)
+	}
+
+	// Get service ID directly from container labels (more reliable than task lookup)
+	serviceID, ok := containerJSON.Config.Labels["com.docker.swarm.service.id"]
+	if !ok || serviceID == "" {
+		return nil, fmt.Errorf("container %s missing com.docker.swarm.service.id label", hostname)
+	}
+
+	serviceName, ok := containerJSON.Config.Labels["com.docker.swarm.service.name"]
+	if !ok || serviceName == "" {
+		return nil, fmt.Errorf("container %s missing com.docker.swarm.service.name label", hostname)
+	}
+
+	// Verify task exists by looking it up (optional validation step)
 	tasks, err := dockerClient.TaskList(context.Background(), types.TaskListOptions{
-		Filters: taskFilter,
+		Filters: filters.NewArgs(filters.Arg("id", taskID)),
 	})
 	if err != nil {
-		return nil, fmt.Errorf("failed to list tasks: %w", err)
+		return nil, fmt.Errorf("failed to verify task %s: %w", taskID, err)
 	}
 	if len(tasks) == 0 {
-		return nil, fmt.Errorf("no task found with ID: %s", taskID)
+		return nil, fmt.Errorf("task %s not found in Swarm", taskID)
 	}
-
-	serviceID := tasks[0].ServiceID
-	serviceName := tasks[0].Spec.ContainerSpec.Labels["com.docker.swarm.service.name"]
 
 	leaderLabel := fmt.Sprintf("streamspace.agent.leader.%s", config.AgentID)
 	timestampLabel := fmt.Sprintf("streamspace.agent.leader.%s.timestamp", config.AgentID)

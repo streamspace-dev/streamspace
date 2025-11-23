@@ -45,11 +45,13 @@ package handlers
 import (
 	"database/sql"
 	"fmt"
+	"log"
 	"net/http"
 	"time"
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
+	"github.com/streamspace-dev/streamspace/api/internal/auth"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"github.com/streamspace-dev/streamspace/api/internal/services"
@@ -72,16 +74,37 @@ func NewAgentHandler(database *db.Database, hub *websocket.AgentHub, dispatcher 
 	}
 }
 
-// RegisterRoutes registers agent routes
+// RegisterRoutes registers agent routes (for agent self-service - requires API key)
+// These routes are used by agents themselves, not by admin UI
 func (h *AgentHandler) RegisterRoutes(router *gin.RouterGroup) {
 	agents := router.Group("/agents")
 	{
+		// Agent self-registration (requires API key via middleware)
 		agents.POST("/register", h.RegisterAgent)
+
+		// Agent heartbeat (optional API key for backward compatibility)
+		agents.POST("/:agent_id/heartbeat", h.UpdateHeartbeat)
+	}
+}
+
+// RegisterAdminRoutes registers admin-only agent management routes (requires JWT admin auth)
+// These routes are used by admin UI to manage agents
+func (h *AgentHandler) RegisterAdminRoutes(router *gin.RouterGroup) {
+	agents := router.Group("/agents")
+	{
+		// List and view agents
 		agents.GET("", h.ListAgents)
 		agents.GET("/:agent_id", h.GetAgent)
+
+		// Deregister agent
 		agents.DELETE("/:agent_id", h.DeregisterAgent)
-		agents.POST("/:agent_id/heartbeat", h.UpdateHeartbeat)
+
+		// Send command to agent (for admin testing/debugging)
 		agents.POST("/:agent_id/command", h.SendCommand)
+
+		// API key management (admin only)
+		agents.POST("/:agent_id/generate-key", h.GenerateAPIKey)
+		agents.POST("/:agent_id/rotate-key", h.RotateAPIKey)
 	}
 }
 
@@ -605,4 +628,178 @@ func (h *AgentHandler) SendCommand(c *gin.Context) {
 	}
 
 	c.JSON(http.StatusCreated, command)
+}
+
+// GenerateAPIKey godoc
+// @Summary Generate API key for an agent (admin only)
+// @Description Generates a new API key for an agent. The plaintext key is returned ONCE and must be saved by the administrator. The key is hashed with bcrypt before storage.
+// @Tags agents
+// @Accept json
+// @Produce json
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{} "API key generated successfully"
+// @Failure 404 {object} map[string]interface{} "Agent not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/agents/{agent_id}/generate-key [post]
+// @Security BearerAuth
+func (h *AgentHandler) GenerateAPIKey(c *gin.Context) {
+	agentID := c.Param("agent_id")
+
+	// Verify agent exists
+	var existingID string
+	err := h.database.DB().QueryRow(
+		"SELECT id FROM agents WHERE agent_id = $1",
+		agentID,
+	).Scan(&existingID)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Agent not found",
+			"agentId": agentID,
+		})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to lookup agent",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Generate new API key with metadata
+	keyMetadata, err := auth.GenerateAPIKeyWithMetadata()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate API key",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Update agent with new API key hash
+	_, err = h.database.DB().Exec(`
+		UPDATE agents
+		SET api_key_hash = $1, api_key_created_at = $2, updated_at = $2
+		WHERE agent_id = $3
+	`, keyMetadata.Hash, keyMetadata.CreatedAt, agentID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to store API key",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// SECURITY: Return plaintext key ONCE
+	// Admin must save this key immediately
+	c.JSON(http.StatusOK, gin.H{
+		"message": "API key generated successfully",
+		"agentId": agentID,
+		"apiKey":  keyMetadata.PlaintextKey,
+		"warning": "SAVE THIS KEY NOW - it will not be shown again",
+		"usage": map[string]string{
+			"header": "X-Agent-API-Key",
+			"value":  keyMetadata.PlaintextKey,
+		},
+		"createdAt": keyMetadata.CreatedAt,
+	})
+
+	// Audit log
+	log.Printf("[AgentHandler] API key generated for agent %s by admin from IP %s", agentID, c.ClientIP())
+}
+
+// RotateAPIKey godoc
+// @Summary Rotate API key for an agent (admin only)
+// @Description Generates a new API key and immediately invalidates the old one. The plaintext key is returned ONCE.
+// @Tags agents
+// @Accept json
+// @Produce json
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{} "API key rotated successfully"
+// @Failure 404 {object} map[string]interface{} "Agent not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /admin/agents/{agent_id}/rotate-key [post]
+// @Security BearerAuth
+func (h *AgentHandler) RotateAPIKey(c *gin.Context) {
+	agentID := c.Param("agent_id")
+
+	// Verify agent exists
+	var existingID string
+	var oldKeyHash sql.NullString
+	err := h.database.DB().QueryRow(
+		"SELECT id, api_key_hash FROM agents WHERE agent_id = $1",
+		agentID,
+	).Scan(&existingID, &oldKeyHash)
+
+	if err == sql.ErrNoRows {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error":   "Agent not found",
+			"agentId": agentID,
+		})
+		return
+	}
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to lookup agent",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Generate new API key
+	keyMetadata, err := auth.GenerateAPIKeyWithMetadata()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to generate API key",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Update agent with new API key hash (atomic operation - old key immediately invalid)
+	_, err = h.database.DB().Exec(`
+		UPDATE agents
+		SET api_key_hash = $1, api_key_created_at = $2, updated_at = $2
+		WHERE agent_id = $3
+	`, keyMetadata.Hash, keyMetadata.CreatedAt, agentID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error":   "Failed to rotate API key",
+			"details": err.Error(),
+		})
+		return
+	}
+
+	// Check if this was the first key or a rotation
+	wasRotation := oldKeyHash.Valid && oldKeyHash.String != ""
+
+	message := "API key generated successfully"
+	if wasRotation {
+		message = "API key rotated successfully - old key is now invalid"
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": message,
+		"agentId": agentID,
+		"apiKey":  keyMetadata.PlaintextKey,
+		"warning": "SAVE THIS KEY NOW - it will not be shown again",
+		"usage": map[string]string{
+			"header": "X-Agent-API-Key",
+			"value":  keyMetadata.PlaintextKey,
+		},
+		"createdAt": keyMetadata.CreatedAt,
+		"rotated":   wasRotation,
+	})
+
+	// Audit log
+	action := "generated"
+	if wasRotation {
+		action = "rotated"
+	}
+	log.Printf("[AgentHandler] API key %s for agent %s by admin from IP %s", action, agentID, c.ClientIP())
 }

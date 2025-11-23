@@ -2,11 +2,15 @@ package main
 
 import (
 	"context"
+	"crypto/tls"
+	"crypto/x509"
 	"fmt"
+	"io/ioutil"
 	"log"
 	"net/http"
 	"os"
 	"os/signal"
+	"strconv"
 	"strings"
 	"syscall"
 	"time"
@@ -33,6 +37,15 @@ import (
 func main() {
 	// Configuration from environment
 	port := getEnv("API_PORT", "8000")
+	tlsCertFile := os.Getenv("TLS_CERT_FILE")       // Path to TLS certificate file (PEM format)
+	tlsKeyFile := os.Getenv("TLS_KEY_FILE")         // Path to TLS private key file (PEM format)
+	agentCACertFile := os.Getenv("AGENT_CA_CERT_FILE") // Path to CA cert for validating agent client certs (enables mTLS)
+	requireClientCert := getEnv("REQUIRE_CLIENT_CERT", "false") == "true" // Require client cert (only with mTLS)
+	rateLimitEnabled := getEnv("RATE_LIMIT_ENABLED", "true") == "true" // Enable rate limiting (default: true)
+	rateLimitRPM := getEnvInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 60) // Requests per minute (default: 60)
+	// rateLimitBurst := getEnvInt("RATE_LIMIT_BURST", 10) // Burst capacity (default: 10) - reserved for future use
+	auditLogEnabled := getEnv("AUDIT_LOG_ENABLED", "true") == "true" // Enable audit logging (default: true)
+	auditLogBodies := getEnv("AUDIT_LOG_BODIES", "false") == "true" // Log request bodies (default: false for privacy)
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USER", "streamspace")
@@ -246,9 +259,14 @@ func main() {
 	// Maximum 10MB for general requests
 	router.Use(middleware.RequestSizeLimiter(10 * 1024 * 1024))
 
-	// SECURITY: Add audit logging for all requests
-	auditLogger := middleware.NewAuditLogger(database, false) // Don't log request bodies by default
-	router.Use(auditLogger.Middleware())
+	// SECURITY: Add audit logging for all requests (configurable)
+	if auditLogEnabled {
+		auditLogger := middleware.NewAuditLogger(database, auditLogBodies)
+		router.Use(auditLogger.Middleware())
+		log.Printf("Audit logging ENABLED (bodies: %v)", auditLogBodies)
+	} else {
+		log.Println("Audit logging DISABLED (not recommended for production)")
+	}
 
 	// Add gzip compression (exclude WebSocket, auth, and metrics endpoints)
 	router.Use(middleware.GzipWithExclusions(
@@ -370,7 +388,42 @@ func main() {
 	}
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, nodeHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, applicationHandler, auditHandler, configurationHandler, licenseHandler, controllerHandler, recordingHandler, agentHandler, agentWebSocketHandler, vncProxyHandler, jwtManager, userDB, redisCache, webhookSecret)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, nodeHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, applicationHandler, auditHandler, configurationHandler, licenseHandler, controllerHandler, recordingHandler, agentHandler, agentWebSocketHandler, vncProxyHandler, jwtManager, userDB, database, redisCache, webhookSecret, rateLimitEnabled, rateLimitRPM)
+
+	// SECURITY: Configure mTLS for agent authentication (optional)
+	var tlsConfig *tls.Config
+	if agentCACertFile != "" {
+		log.Println("Configuring mTLS (Mutual TLS) for agent authentication...")
+
+		// Load CA certificate
+		caCert, err := ioutil.ReadFile(agentCACertFile)
+		if err != nil {
+			log.Fatalf("Failed to read agent CA certificate: %v", err)
+		}
+
+		// Create CA certificate pool
+		caCertPool := x509.NewCertPool()
+		if !caCertPool.AppendCertsFromPEM(caCert) {
+			log.Fatalf("Failed to parse agent CA certificate")
+		}
+
+		// Configure TLS with client certificate validation
+		tlsConfig = &tls.Config{
+			ClientCAs: caCertPool,
+			ClientAuth: tls.VerifyClientCertIfGiven, // Default: optional client cert
+			MinVersion: tls.VersionTLS12, // Enforce TLS 1.2+
+		}
+
+		// If REQUIRE_CLIENT_CERT is true, make client certs mandatory
+		if requireClientCert {
+			tlsConfig.ClientAuth = tls.RequireAndVerifyClientCert
+			log.Println("mTLS: Client certificates REQUIRED")
+		} else {
+			log.Println("mTLS: Client certificates OPTIONAL (fallback to API keys)")
+		}
+
+		log.Printf("mTLS: Loaded CA certificate from %s", agentCACertFile)
+	}
 
 	// Create HTTP server with security timeouts
 	srv := &http.Server{
@@ -385,13 +438,32 @@ func main() {
 
 		// SECURITY: Limit header size to prevent memory exhaustion
 		MaxHeaderBytes: 1 << 20, // 1 MB
+
+		// SECURITY: TLS configuration (includes mTLS if configured)
+		TLSConfig: tlsConfig,
 	}
 
 	// Start server in goroutine
 	go func() {
-		log.Printf("API Server listening on port %s", port)
-		if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
-			log.Fatalf("Failed to start server: %v", err)
+		// Check if TLS is configured
+		if tlsCertFile != "" && tlsKeyFile != "" {
+			if agentCACertFile != "" {
+				log.Printf("API Server listening on port %s (HTTPS/TLS + mTLS enabled)", port)
+			} else {
+				log.Printf("API Server listening on port %s (HTTPS/TLS enabled)", port)
+			}
+			log.Printf("TLS Certificate: %s", tlsCertFile)
+			log.Printf("TLS Key: %s", tlsKeyFile)
+			if err := srv.ListenAndServeTLS(tlsCertFile, tlsKeyFile); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start HTTPS server: %v", err)
+			}
+		} else {
+			log.Printf("API Server listening on port %s (HTTP - TLS not configured)", port)
+			log.Println("WARNING: Running without TLS/HTTPS. This is insecure for production!")
+			log.Println("         Set TLS_CERT_FILE and TLS_KEY_FILE environment variables to enable HTTPS")
+			if err := srv.ListenAndServe(); err != nil && err != http.ErrServerClosed {
+				log.Fatalf("Failed to start HTTP server: %v", err)
+			}
 		}
 	}()
 
@@ -461,11 +533,22 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, nodeHandler *handlers.NodeHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, applicationHandler *handlers.ApplicationHandler, auditHandler *handlers.AuditHandler, configurationHandler *handlers.ConfigurationHandler, licenseHandler *handlers.LicenseHandler, controllerHandler *handlers.ControllerHandler, recordingHandler *handlers.RecordingHandler, agentHandler *handlers.AgentHandler, agentWebSocketHandler *handlers.AgentWebSocketHandler, vncProxyHandler *handlers.VNCProxyHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, redisCache *cache.Cache, webhookSecret string) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, nodeHandler *handlers.NodeHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, applicationHandler *handlers.ApplicationHandler, auditHandler *handlers.AuditHandler, configurationHandler *handlers.ConfigurationHandler, licenseHandler *handlers.LicenseHandler, controllerHandler *handlers.ControllerHandler, recordingHandler *handlers.RecordingHandler, agentHandler *handlers.AgentHandler, agentWebSocketHandler *handlers.AgentWebSocketHandler, vncProxyHandler *handlers.VNCProxyHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, database *db.Database, redisCache *cache.Cache, webhookSecret string, rateLimitEnabled bool, rateLimitRPM int) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
 	operatorMiddleware := auth.RequireAnyRole("admin", "operator")
+
+	// SECURITY: Create agent API key authentication middleware
+	agentAuth := middleware.NewAgentAuth(database)
+
+	// SECURITY: Get global rate limiter for agent endpoints
+	globalRateLimiter := middleware.GetRateLimiter()
+	if rateLimitEnabled {
+		log.Printf("Rate limiting ENABLED: %d requests/min", rateLimitRPM)
+	} else {
+		log.Println("Rate limiting DISABLED (not recommended for production)")
+	}
 
 	// SECURITY: Create webhook authentication middleware
 	var webhookAuth *middleware.WebhookAuth
@@ -942,10 +1025,8 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 				recordingHandler.RegisterRoutes(admin)
 
 				// v2.0 Agent management (admin only - multi-platform architecture)
-				agentHandler.RegisterRoutes(v1)
+				agentHandler.RegisterAdminRoutes(admin)
 
-				// v2.0 Agent WebSocket connections (agents connect here)
-				agentWebSocketHandler.RegisterRoutes(v1)
 			}
 
 			// NOTE: Billing is now handled by the streamspace-billing plugin
@@ -954,6 +1035,28 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// Metrics (operators/admins only)
 			protected.GET("/metrics", operatorMiddleware, h.GetMetrics)
 		}
+
+	// v2.0 Agent self-service routes (require mTLS OR API key authentication, not JWT)
+	// These routes are for agents to register themselves and send heartbeats
+	// Authentication: mTLS (if configured) or API key fallback
+	// Rate limited to prevent brute-force attacks
+	agentRoutes := v1.Group("/agents")
+	agentRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM))       // Apply rate limiting first
+	agentRoutes.Use(agentAuth.RequireAuth())   // Then authentication
+	{
+		agentHandler.RegisterRoutes(agentRoutes)
+	}
+
+	// v2.0 Agent WebSocket connections (require mTLS OR API key authentication, not JWT)
+	// Agents connect here to receive commands and send status updates
+	// Authentication: mTLS (if configured) or API key fallback
+	// Rate limited to prevent connection flooding
+	agentWSRoutes := v1.Group("")
+	agentWSRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM))     // Apply rate limiting first
+	agentWSRoutes.Use(agentAuth.RequireAuth()) // Then authentication
+	{
+		agentWebSocketHandler.RegisterRoutes(agentWSRoutes)
+	}
 	}
 
 	// WebSocket endpoints (require authentication)
@@ -1096,4 +1199,49 @@ func getEnv(key, defaultValue string) string {
 		return value
 	}
 	return defaultValue
+}
+
+func getEnvInt(key string, defaultValue int) int {
+	if value := os.Getenv(key); value != "" {
+		if intValue, err := strconv.Atoi(value); err == nil {
+			return intValue
+		}
+	}
+	return defaultValue
+}
+
+// agentRateLimit returns a middleware that rate limits agent requests.
+func agentRateLimit(limiter *middleware.RateLimiter, enabled bool, maxRequests int) gin.HandlerFunc {
+	return func(c *gin.Context) {
+		if !enabled {
+			c.Next()
+			return
+		}
+
+		// Use client IP as rate limit key
+		key := "agent:" + c.ClientIP()
+		window := 1 * time.Minute
+
+		// Check rate limit
+		if !limiter.CheckLimit(key, maxRequests, window) {
+			log.Printf("[RateLimit] Rate limit exceeded for IP %s (max %d req/min)", c.ClientIP(), maxRequests)
+
+			// Set audit metadata for rate limiting event
+			c.Set("audit_metadata", map[string]interface{}{
+				"rate_limit_exceeded": true,
+				"max_requests":        maxRequests,
+				"window_seconds":      60,
+			})
+
+			c.JSON(http.StatusTooManyRequests, gin.H{
+				"error":      "Rate limit exceeded",
+				"details":    "Too many requests. Please try again later.",
+				"retryAfter": 60, // seconds
+			})
+			c.Abort()
+			return
+		}
+
+		c.Next()
+	}
 }

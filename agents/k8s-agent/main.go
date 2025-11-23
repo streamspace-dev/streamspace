@@ -247,6 +247,7 @@ func main() {
 	// Command-line flags
 	agentID := flag.String("agent-id", os.Getenv("AGENT_ID"), "Agent ID (e.g., k8s-prod-us-east-1)")
 	controlPlaneURL := flag.String("control-plane-url", os.Getenv("CONTROL_PLANE_URL"), "Control Plane WebSocket URL")
+	apiKey := flag.String("api-key", os.Getenv("AGENT_API_KEY"), "Agent API key for authentication (64 hex chars)")
 	platform := flag.String("platform", getEnvOrDefault("PLATFORM", "kubernetes"), "Platform type")
 	region := flag.String("region", os.Getenv("REGION"), "Deployment region")
 	namespace := flag.String("namespace", getEnvOrDefault("NAMESPACE", "streamspace"), "Kubernetes namespace for sessions")
@@ -271,6 +272,7 @@ func main() {
 	config := &config.AgentConfig{
 		AgentID:           *agentID,
 		ControlPlaneURL:   *controlPlaneURL,
+		APIKey:            *apiKey,
 		Platform:          *platform,
 		Region:            *region,
 		Namespace:         *namespace,
@@ -508,6 +510,7 @@ func (a *K8sAgent) registerAgent() error {
 	}
 
 	req.Header.Set("Content-Type", "application/json")
+	req.Header.Set("X-Agent-API-Key", a.config.APIKey)
 
 	client := &http.Client{Timeout: 10 * time.Second}
 	resp, err := client.Do(req)
@@ -544,7 +547,11 @@ func (a *K8sAgent) connectWebSocket() error {
 		HandshakeTimeout: 10 * time.Second,
 	}
 
-	conn, _, err := dialer.Dial(wsURL, nil)
+	// Add API key header for authentication
+	headers := http.Header{}
+	headers.Set("X-Agent-API-Key", a.config.APIKey)
+
+	conn, _, err := dialer.Dial(wsURL, headers)
 	if err != nil {
 		return fmt.Errorf("WebSocket dial failed: %w", err)
 	}

@@ -165,6 +165,19 @@ type Agent struct {
 	// Stored as JSONB in the database.
 	Metadata *AgentMetadata `json:"metadata,omitempty" db:"metadata"`
 
+	// APIKeyHash is the bcrypt hash of the agent's API key.
+	// SECURITY: Never expose this field in JSON responses (json:"-")
+	// Used for authenticating agent registration and WebSocket connections.
+	APIKeyHash *string `json:"-" db:"api_key_hash"`
+
+	// APIKeyCreatedAt is when the API key was generated.
+	// Used for key rotation policies and security auditing.
+	APIKeyCreatedAt *time.Time `json:"-" db:"api_key_created_at"`
+
+	// APIKeyLastUsedAt is when the API key was last used successfully.
+	// Used for anomaly detection and security auditing.
+	APIKeyLastUsedAt *time.Time `json:"-" db:"api_key_last_used_at"`
+
 	// CreatedAt is when this agent was first registered.
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
 
@@ -250,7 +263,8 @@ type AgentCommand struct {
 	AgentID string `json:"agentId" db:"agent_id"`
 
 	// SessionID is the session this command affects (if applicable).
-	SessionID string `json:"sessionId,omitempty" db:"session_id"`
+	// Uses pointer type to handle NULL values for commands without sessions.
+	SessionID *string `json:"sessionId,omitempty" db:"session_id"`
 
 	// Action is the operation to perform.
 	//

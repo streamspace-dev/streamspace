@@ -6,6 +6,7 @@ import stderrors "errors"
 var (
 	ErrMissingAgentID         = stderrors.New("agent ID is required")
 	ErrMissingControlPlaneURL = stderrors.New("control plane URL is required")
+	ErrMissingAPIKey          = stderrors.New("agent API key is required")
 	ErrInvalidPlatform        = stderrors.New("invalid platform type")
 )
 
