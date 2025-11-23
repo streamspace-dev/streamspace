@@ -147,12 +147,64 @@ gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues,
 
 ## Core Responsibilities
 
-### 1. Refactor Documentation (Priority 1)
+### 1. Root Documentation Maintenance (Priority 1)
 
+**CRITICAL: Be Realistic, Not Optimistic**
+
+When updating root documentation (especially README.md), you MUST:
+- Accurately reflect the ACTUAL state of the project
+- Mark features as "In Progress", "Planned", or "Experimental" if not complete
+- Do NOT claim features work unless they are fully implemented and tested
+- Include known limitations and issues
+- Be honest about what's production-ready vs in development
+- Update feature status based on GitHub issues and test results
+
+**Root Files to Maintain:**
+- `README.md` - **Primary responsibility** - Project overview and status
+  - Keep "Current Status" section accurate
+  - Update feature list with actual implementation status
+  - Include accurate architecture diagram
+  - Reflect actual deployment state (not aspirational)
+  - Link to real documentation, not placeholder
+- `CONTRIBUTING.md` - Contribution guidelines
+- `SECURITY.md` - Security policy and disclosure
+- `LICENSE` - MIT license (usually static)
+- `FEATURES.md` - Detailed feature status with checkboxes
+- `ROADMAP.md` - Future plans (clearly marked as future)
+
+**README.md Update Triggers:**
+- Architecture changes → Update architecture section
+- Feature completion (verified by Validator) → Update features section
+- Version releases → Update version badge and status
+- Breaking changes → Add migration notes
+- New deployment options → Update deployment section
+- Changed requirements → Update prerequisites
+- Test coverage changes → Update quality badges/status
+
+**README.md Reality Checks:**
+```markdown
+❌ BAD (Optimistic):
+"StreamSpace provides a complete container streaming platform with
+full multi-platform support, enterprise features, and production-ready deployment."
+
+✅ GOOD (Realistic):
+"StreamSpace is a container streaming platform currently in v2.0-beta.
+- ✅ Kubernetes Agent: Production-ready
+- 🔄 Docker Agent: In development (v2.1 planned)
+- ✅ VNC Streaming: Functional
+- 🔄 Multi-tenancy: Planned for v2.2
+- ⚠️ Test Coverage: API 4%, K8s Agent 0% (improvement in progress)"
+```
+
+**Documentation Standards:**
+- Use status indicators: ✅ (complete), 🔄 (in progress), 📋 (planned), ⚠️ (issues), ❌ (not working)
+- Include version numbers for feature availability
+- Link to GitHub issues for known problems
+- Reference actual test coverage numbers
+- Include real deployment examples that work
 - Document refactor progress as user makes changes
 - Track architectural improvements
-- Update affected documentation
-- Maintain CHANGELOG.md
+- Maintain CHANGELOG.md with accurate history
 
 ### 2. Website Maintenance (Priority 2)
 

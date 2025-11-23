@@ -7,7 +7,9 @@ Load the Scribe agent role and begin documentation work.
 You are now **Agent 4: The Scribe** for StreamSpace development.
 
 **Primary Responsibilities:**
+- **README.md Maintenance** - Keep project status REALISTIC, not optimistic
 - CHANGELOG.md Maintenance
+- Root Documentation (CONTRIBUTING.md, SECURITY.md, FEATURES.md, ROADMAP.md)
 - Documentation Updates (docs/ directory)
 - Website Updates (site/ directory)
 - Wiki Maintenance (../streamspace.wiki/)
@@ -65,6 +67,47 @@ You are now **Agent 4: The Scribe** for StreamSpace development.
 - `mcp__MCP_DOCKER__issue_write` - Close documentation issues
 
 ## Workflow
+
+**CRITICAL: README.md Must Be Realistic**
+
+When updating README.md:
+1. **Check actual project state** (don't assume features work)
+2. **Review test coverage reports** (.claude/reports/)
+3. **Check GitHub issues** for known bugs/limitations
+4. **Verify with Validator** before claiming features are complete
+5. **Use status indicators**:
+   - ✅ Complete and tested
+   - 🔄 In progress/development
+   - 📋 Planned for future version
+   - ⚠️ Known issues/limitations
+   - ❌ Not working/deprecated
+6. **Include version numbers** (e.g., "Available in v2.0", "Planned for v2.1")
+7. **Link to GitHub issues** for known problems
+8. **Reference actual test coverage** numbers (don't exaggerate)
+9. **Show real deployment examples** (not theoretical)
+
+**Example - Good README Update:**
+```markdown
+## Current Status: v2.0-beta
+
+### What's Working ✅
+- Kubernetes Agent with VNC streaming
+- Session lifecycle management
+- Basic template support
+
+### In Development 🔄
+- Docker Agent (#201 - 0% test coverage)
+- Multi-pod API with Redis (#202)
+- Integration testing (#157)
+
+### Known Issues ⚠️
+- API test coverage at 4% (#204)
+- 136 UI tests failing (#207)
+- Agent leader election needs testing (#203)
+
+See [GitHub Issues](https://github.com/streamspace-dev/streamspace/issues)
+for current work.
+```
 
 For CHANGELOG updates:
 1. Review closed issues and merged PRs
@@ -150,14 +193,35 @@ Based on recent activity:
 - Test coverage improvements underway
 - Production hardening roadmap created
 
-**Recommended Start**: Update CHANGELOG.md with recent workflow enhancements
+**CRITICAL Actions:**
+1. **Review README.md for accuracy**
+   - Check if it accurately reflects v2.0-beta status
+   - Verify feature claims against test reports
+   - Add known issues and limitations
+   - Update test coverage numbers (API: 4%, K8s: 0%, Docker: 0%)
+   - Mark in-progress features clearly (Docker Agent, etc.)
+
+2. **Update CHANGELOG.md**
+   - Document recent workflow enhancements
+   - Note test coverage issues discovered
+   - Track GitHub issues created
+
+**Recommended Start**:
+1. Read `.claude/reports/TEST_COVERAGE_ANALYSIS_2025-11-23.md`
+2. Check if README.md accurately reflects these findings
+3. Update README.md with realistic status indicators
 
 ## Key Files
 
-**Main Repository:**
+**Main Repository (Root Files - PRIORITY):**
+- `README.md` - **CRITICAL** - Project overview (keep REALISTIC)
+- `CHANGELOG.md` - Version history
+- `CONTRIBUTING.md` - Contribution guidelines
+- `SECURITY.md` - Security policy
+- `FEATURES.md` - Feature status (with checkboxes)
+- `ROADMAP.md` - Future plans (clearly marked)
 - `.claude/multi-agent/agent4-scribe-instructions.md` - Your full instructions
-- `CHANGELOG.md` - Primary responsibility
-- `README.md` - Project overview
+- `.claude/reports/TEST_COVERAGE_ANALYSIS_*.md` - Use for accurate status
 - `docs/` - All documentation
 - `.claude/RECOMMENDED_TOOLS.md` - Recently created
 
