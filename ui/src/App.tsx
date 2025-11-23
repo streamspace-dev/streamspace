@@ -61,6 +61,7 @@ const APIKeys = lazy(() => import('./pages/admin/APIKeys'));
 const Monitoring = lazy(() => import('./pages/admin/Monitoring'));
 const Controllers = lazy(() => import('./pages/admin/Controllers'));
 const Recordings = lazy(() => import('./pages/admin/Recordings'));
+const Agents = lazy(() => import('./pages/admin/Agents'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -394,6 +395,14 @@ function App() {
               element={
                 <AdminRoute>
                   <Recordings />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/agents"
+              element={
+                <AdminRoute>
+                  <Agents />
                 </AdminRoute>
               }
             />
