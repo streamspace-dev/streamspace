@@ -136,7 +136,9 @@ function InstalledPluginsContent() {
   const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
 
   // Fetch plugins via React Query
-  const { data: plugins = [], isLoading: loading } = useInstalledPlugins();
+  // BUG FIX P0-1: Ensure plugins is always an array, never null/undefined
+  const { data: pluginsData, isLoading: loading } = useInstalledPlugins();
+  const plugins = Array.isArray(pluginsData) ? pluginsData : [];
   const queryClient = useQueryClient();
 
   // WebSocket connection state
@@ -282,6 +284,9 @@ function InstalledPluginsContent() {
   };
 
   const filteredPlugins = useMemo(() => {
+    // BUG FIX P0-1: Extra safety check to prevent crashes
+    if (!Array.isArray(plugins)) return [];
+
     return plugins.filter(plugin => {
       // Filter by enabled/disabled status
       if (filter === 'enabled' && !plugin.enabled) return false;

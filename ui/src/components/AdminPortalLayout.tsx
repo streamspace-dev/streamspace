@@ -40,7 +40,7 @@ import {
   CardMembership as LicenseIcon,
   VpnKey as APIKeysIcon,
   Notifications as MonitoringIcon,
-  DeviceHub as ControllersIcon,
+  // BUG FIX P0-3: ControllersIcon removed (Controllers page obsolete)
   VideoLibrary as RecordingsIcon,
   Dns as AgentsIcon,
 } from '@mui/icons-material';
@@ -155,7 +155,7 @@ function AdminPortalLayout({ children }: AdminPortalLayoutProps) {
       title: 'Platform Management',
       items: [
         { text: 'Agents', icon: <AgentsIcon />, path: '/admin/agents' },
-        { text: 'Controllers', icon: <ControllersIcon />, path: '/admin/controllers' },
+        // BUG FIX P0-3: Controllers removed - obsolete in v2.0 (replaced by Agents)
         { text: 'Cluster Nodes', icon: <StorageIcon />, path: '/admin/nodes' },
       ],
     },

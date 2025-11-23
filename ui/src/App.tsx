@@ -40,6 +40,7 @@ const SecuritySettings = lazy(() => import('./pages/SecuritySettings'));
 const EnhancedRepositories = lazy(() => import('./pages/EnhancedRepositories'));
 const PluginCatalog = lazy(() => import('./pages/PluginCatalog'));
 const InstalledPlugins = lazy(() => import('./pages/InstalledPlugins'));
+const PluginAdministration = lazy(() => import('./pages/admin/PluginAdministration'));
 
 // Admin Pages (loaded only for admin users)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -59,7 +60,7 @@ const Settings = lazy(() => import('./pages/admin/Settings'));
 const License = lazy(() => import('./pages/admin/License'));
 const APIKeys = lazy(() => import('./pages/admin/APIKeys'));
 const Monitoring = lazy(() => import('./pages/admin/Monitoring'));
-const Controllers = lazy(() => import('./pages/admin/Controllers'));
+// BUG FIX P0-3: Controllers page removed - obsolete in v2.0 (replaced by Agents)
 const Recordings = lazy(() => import('./pages/admin/Recordings'));
 const Agents = lazy(() => import('./pages/admin/Agents'));
 
@@ -382,14 +383,7 @@ function App() {
                 </AdminRoute>
               }
             />
-            <Route
-              path="/admin/controllers"
-              element={
-                <AdminRoute>
-                  <Controllers />
-                </AdminRoute>
-              }
-            />
+            {/* BUG FIX P0-3: Controllers route removed - page obsolete in v2.0 */}
             <Route
               path="/admin/recordings"
               element={
@@ -437,6 +431,14 @@ function App() {
               element={
                 <AdminRoute>
                   <InstalledPlugins />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/plugin-administration"
+              element={
+                <AdminRoute>
+                  <PluginAdministration />
                 </AdminRoute>
               }
             />

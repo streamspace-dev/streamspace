@@ -227,7 +227,10 @@ export default function License() {
     return `${key.substring(0, 4)}${'*'.repeat(key.length - 8)}${key.substring(key.length - 4)}`;
   };
 
-  const getTierColor = (tier: string) => {
+  const getTierColor = (tier: string | null | undefined) => {
+    // BUG FIX P0-2: Add null check before calling toLowerCase()
+    if (!tier) return 'default';
+
     switch (tier.toLowerCase()) {
       case 'community':
         return 'default';
