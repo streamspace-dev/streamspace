@@ -69,6 +69,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
@@ -195,7 +196,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		req.Name,
 		req.Description,
 		userIDStr,
-		req.Scopes,
+		pq.Array(req.Scopes),
 		rateLimit,
 		expiresAt,
 		userIDStr,
@@ -247,7 +248,7 @@ func (h *APIKeyHandler) ListAllAPIKeys(c *gin.Context) {
 			&key.Name,
 			&key.Description,
 			&key.UserID,
-			&scopes,
+			pq.Array(&scopes),
 			&key.RateLimit,
 			&key.ExpiresAt,
 			&key.LastUsedAt,
@@ -311,7 +312,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 			&key.Name,
 			&key.Description,
 			&key.UserID,
-			&scopes,
+			pq.Array(&scopes),
 			&key.RateLimit,
 			&key.ExpiresAt,
 			&key.LastUsedAt,

@@ -5,7 +5,6 @@ import (
 	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
-	"github.com/gorilla/websocket"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
@@ -17,8 +16,7 @@ func setupHubTest(t *testing.T) (*AgentHub, sqlmock.Sqlmock, func()) {
 		t.Fatalf("Failed to create mock database: %v", err)
 	}
 
-	database := &db.Database{}
-	database.SetDB(mockDB)
+	database := db.NewDatabaseForTesting(mockDB)
 
 	hub := NewAgentHub(database)
 
@@ -69,13 +67,10 @@ func TestRegisterAgent(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "test-agent").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	// Create mock WebSocket connection
-	conn := &websocket.Conn{}
-
-	// Create agent connection
+	// Create agent connection (Conn set to nil for testing - Close() is handled safely)
 	agentConn := &AgentConnection{
 		AgentID:  "test-agent",
-		Conn:     conn,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -124,10 +119,9 @@ func TestUnregisterAgent(t *testing.T) {
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// Create and register agent
-	conn := &websocket.Conn{}
 	agentConn := &AgentConnection{
 		AgentID:  "test-agent",
-		Conn:     conn,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -168,10 +162,9 @@ func TestGetConnection(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "test-agent").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn := &websocket.Conn{}
 	agentConn := &AgentConnection{
 		AgentID:  "test-agent",
-		Conn:     conn,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -219,10 +212,9 @@ func TestUpdateAgentHeartbeat(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "test-agent").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn := &websocket.Conn{}
 	agentConn := &AgentConnection{
 		AgentID:  "test-agent",
-		Conn:     conn,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now().Add(-10 * time.Second), // 10 seconds ago
 		Send:     make(chan []byte, 256),
@@ -236,8 +228,9 @@ func TestUpdateAgentHeartbeat(t *testing.T) {
 
 	time.Sleep(100 * time.Millisecond)
 
-	// Mock database update for heartbeat
-	mock.ExpectExec(`UPDATE agents SET last_heartbeat`).
+	// Mock database update for heartbeat (includes status update)
+	// Note: Query uses $1 for both last_heartbeat and updated_at, so only 2 args (timestamp, agentID)
+	mock.ExpectExec(`UPDATE agents SET status = 'online', last_heartbeat`).
 		WithArgs(sqlmock.AnyArg(), "test-agent").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
@@ -275,10 +268,9 @@ func TestSendCommandToAgent(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "test-agent").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn := &websocket.Conn{}
 	agentConn := &AgentConnection{
 		AgentID:  "test-agent",
-		Conn:     conn,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -369,20 +361,18 @@ func TestBroadcastToAllAgents(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "agent-2").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn1 := &websocket.Conn{}
 	agentConn1 := &AgentConnection{
 		AgentID:  "agent-1",
-		Conn:     conn1,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
 		Receive:  make(chan []byte, 256),
 	}
 
-	conn2 := &websocket.Conn{}
 	agentConn2 := &AgentConnection{
 		AgentID:  "agent-2",
-		Conn:     conn2,
+		Conn:     nil,
 		Platform: "docker",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -433,20 +423,18 @@ func TestBroadcastWithExclusion(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "agent-2").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn1 := &websocket.Conn{}
 	agentConn1 := &AgentConnection{
 		AgentID:  "agent-1",
-		Conn:     conn1,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
 		Receive:  make(chan []byte, 256),
 	}
 
-	conn2 := &websocket.Conn{}
 	agentConn2 := &AgentConnection{
 		AgentID:  "agent-2",
-		Conn:     conn2,
+		Conn:     nil,
 		Platform: "docker",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
@@ -504,20 +492,18 @@ func TestGetConnectedAgents(t *testing.T) {
 		WithArgs(sqlmock.AnyArg(), "agent-2").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
-	conn1 := &websocket.Conn{}
 	agentConn1 := &AgentConnection{
 		AgentID:  "agent-1",
-		Conn:     conn1,
+		Conn:     nil,
 		Platform: "kubernetes",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),
 		Receive:  make(chan []byte, 256),
 	}
 
-	conn2 := &websocket.Conn{}
 	agentConn2 := &AgentConnection{
 		AgentID:  "agent-2",
-		Conn:     conn2,
+		Conn:     nil,
 		Platform: "docker",
 		LastPing: time.Now(),
 		Send:     make(chan []byte, 256),

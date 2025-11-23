@@ -724,6 +724,44 @@ func main() {
 	}
 }
 
+// SessionSpec defines the specification for a session container
+type SessionSpec struct {
+	SessionID string               `json:"sessionId"`
+	UserID    string               `json:"userId"`
+	Template  string               `json:"template"`
+	Resources ResourceRequirements `json:"resources"`
+}
+
+// ResourceRequirements defines resource limits for a session
+type ResourceRequirements struct {
+	CPU    string `json:"cpu"`    // e.g., "1000m" (1 core)
+	Memory string `json:"memory"` // e.g., "2Gi" (2 GB)
+}
+
+// CommandResult represents the result of a command execution
+type CommandResult struct {
+	CommandID string `json:"commandId"`
+	Success   bool   `json:"success"`
+	Message   string `json:"message"`
+	SessionID string `json:"sessionId,omitempty"`
+}
+
+// AgentRegistration represents agent registration data
+type AgentRegistration struct {
+	AgentID  string                `json:"agentId"`
+	Platform string                `json:"platform"`
+	Region   string                `json:"region"`
+	Capacity config.AgentCapacity `json:"capacity"`
+}
+
+// Heartbeat represents a heartbeat message
+type Heartbeat struct {
+	AgentID        string   `json:"agentId"`
+	Timestamp      string   `json:"timestamp"`
+	Status         string   `json:"status"`
+	ActiveSessions []string `json:"activeSessions"`
+}
+
 // getEnvOrDefault returns environment variable value or default.
 func getEnvOrDefault(key, defaultValue string) string {
 	if value := os.Getenv(key); value != "" {

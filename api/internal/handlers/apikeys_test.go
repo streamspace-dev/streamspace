@@ -29,6 +29,7 @@ import (
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
+	"github.com/lib/pq"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/require"
@@ -203,7 +204,8 @@ func TestCreateAPIKey_InvalidJSON(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "Invalid request", response.Error)
+	// Gin returns the actual JSON parsing error message
+	assert.Contains(t, response.Error, "invalid character")
 }
 
 func TestCreateAPIKey_MissingName(t *testing.T) {
@@ -281,11 +283,11 @@ func TestListAllAPIKeys_Success(t *testing.T) {
 	// Mock API keys from multiple users
 	rows := sqlmock.NewRows([]string{
 		"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
+		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "created_by",
 	}).
-		AddRow(1, "sk_user1a", "user1-key", "Key 1", "user1", `["sessions:read"]`, 1000, nil, now, 5, true, now, now).
-		AddRow(2, "sk_user2a", "user2-key", "Key 2", "user2", `["sessions:write"]`, 500, nil, nil, 0, true, now, now).
-		AddRow(3, "sk_user1b", "user1-key2", "Key 3", "user1", `["admin:all"]`, 2000, nil, now, 10, false, now, now)
+		AddRow(1, "sk_user1a", "user1-key", "Key 1", "user1", pq.Array([]string{"sessions:read"}), 1000, nil, now, 5, true, now, "user1").
+		AddRow(2, "sk_user2a", "user2-key", "Key 2", "user2", pq.Array([]string{"sessions:write"}), 500, nil, nil, 0, true, now, "user2").
+		AddRow(3, "sk_user1b", "user1-key2", "Key 3", "user1", pq.Array([]string{"admin:all"}), 2000, nil, now, 10, false, now, "user1")
 
 	mock.ExpectQuery(`SELECT .+ FROM api_keys ORDER BY created_at DESC`).
 		WillReturnRows(rows)
@@ -319,7 +321,7 @@ func TestListAllAPIKeys_EmptyResult(t *testing.T) {
 	// Mock empty result
 	rows := sqlmock.NewRows([]string{
 		"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
+		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "created_by",
 	})
 
 	mock.ExpectQuery(`SELECT .+ FROM api_keys ORDER BY created_at DESC`).
@@ -377,10 +379,10 @@ func TestListAPIKeys_Success_UserKeys(t *testing.T) {
 	// Mock API keys for specific user
 	rows := sqlmock.NewRows([]string{
 		"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
+		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "created_by",
 	}).
-		AddRow(1, "sk_test1", "production-key", "Prod key", "user123", `["sessions:read","sessions:write"]`, 1000, nil, now, 50, true, now, now).
-		AddRow(2, "sk_test2", "development-key", "Dev key", "user123", `["sessions:read"]`, 500, nil, nil, 0, true, now, now)
+		AddRow(1, "sk_test1", "production-key", "Prod key", "user123", pq.Array([]string{"sessions:read", "sessions:write"}), 1000, nil, now, 50, true, now, "user123").
+		AddRow(2, "sk_test2", "development-key", "Dev key", "user123", pq.Array([]string{"sessions:read"}), 500, nil, nil, 0, true, now, "user123")
 
 	mock.ExpectQuery(`SELECT .+ FROM api_keys WHERE user_id = \$1 ORDER BY created_at DESC`).
 		WithArgs("user123").
@@ -397,14 +399,18 @@ func TestListAPIKeys_Success_UserKeys(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 
-	var apiKeys []APIKey
-	err := json.Unmarshal(w.Body.Bytes(), &apiKeys)
+	var response struct {
+		Keys  []APIKey `json:"keys"`
+		Total int      `json:"total"`
+	}
+	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Len(t, apiKeys, 2)
-	assert.Equal(t, "production-key", apiKeys[0].Name)
-	assert.Equal(t, 50, apiKeys[0].UseCount)
-	assert.Equal(t, "development-key", apiKeys[1].Name)
-	assert.Equal(t, 0, apiKeys[1].UseCount)
+	assert.Len(t, response.Keys, 2)
+	assert.Equal(t, 2, response.Total)
+	assert.Equal(t, "production-key", response.Keys[0].Name)
+	assert.Equal(t, 50, response.Keys[0].UseCount)
+	assert.Equal(t, "development-key", response.Keys[1].Name)
+	assert.Equal(t, 0, response.Keys[1].UseCount)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

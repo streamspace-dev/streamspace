@@ -3,7 +3,6 @@ package main
 import (
 	"encoding/json"
 	"testing"
-	"time"
 
 	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
 )
@@ -158,10 +157,10 @@ func TestAgentMessageParsing(t *testing.T) {
 
 // TestCommandMessageParsing tests parsing of command messages
 func TestCommandMessageParsing(t *testing.T) {
-	json := `{"commandId":"cmd-123","action":"start_session","payload":{"sessionId":"sess-123","user":"alice","template":"firefox"}}`
+	jsonData := `{"commandId":"cmd-123","action":"start_session","payload":{"sessionId":"sess-123","user":"alice","template":"firefox"}}`
 
 	var cmd CommandMessage
-	err := json.Unmarshal([]byte(json), &cmd)
+	err := json.Unmarshal([]byte(jsonData), &cmd)
 	if err != nil {
 		t.Fatalf("Failed to parse command: %v", err)
 	}
