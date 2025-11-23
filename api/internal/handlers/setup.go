@@ -127,9 +127,9 @@ func (h *SetupHandler) isSetupRequired() (bool, bool, bool) {
 
 // SetupAdminRequest is the request body for admin setup
 type SetupAdminRequest struct {
-	Password        string `json:"password" binding:"required"`
-	PasswordConfirm string `json:"passwordConfirm" binding:"required"`
-	Email           string `json:"email" binding:"required,email"`
+	Password        string `json:"password" binding:"required" validate:"required,password"`
+	PasswordConfirm string `json:"passwordConfirm" binding:"required" validate:"required,eqfield=Password"`
+	Email           string `json:"email" binding:"required,email" validate:"required,email"`
 }
 
 // SetupAdminResponse is the response after successful setup

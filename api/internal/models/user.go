@@ -411,12 +411,12 @@ type GroupMembership struct {
 //	  "provider": "local"
 //	}
 type CreateUserRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	FullName string `json:"fullName" binding:"required"`
-	Password string `json:"password"` // Required for local auth, validated in handler
-	Role     string `json:"role"`     // user, admin, operator
-	Provider string `json:"provider"` // local, saml, oidc
+	Username string `json:"username" binding:"required" validate:"required,username"`
+	Email    string `json:"email" binding:"required,email" validate:"required,email"`
+	FullName string `json:"fullName" binding:"required" validate:"required,min=1,max=200"`
+	Password string `json:"password" validate:"omitempty,password"` // Required for local auth, validated in handler
+	Role     string `json:"role" validate:"omitempty,oneof=user admin operator"` // user, admin, operator
+	Provider string `json:"provider" validate:"omitempty,oneof=local saml oidc"` // local, saml, oidc
 }
 
 // UpdateUserRequest represents a request to update an existing user.
@@ -430,9 +430,9 @@ type CreateUserRequest struct {
 //	  "role": "admin"
 //	}
 type UpdateUserRequest struct {
-	Email    *string `json:"email,omitempty"`
-	FullName *string `json:"fullName,omitempty"`
-	Role     *string `json:"role,omitempty"`
+	Email    *string `json:"email,omitempty" validate:"omitempty,email"`
+	FullName *string `json:"fullName,omitempty" validate:"omitempty,min=1,max=200"`
+	Role     *string `json:"role,omitempty" validate:"omitempty,oneof=user admin operator"`
 	Active   *bool   `json:"active,omitempty"`
 }
 

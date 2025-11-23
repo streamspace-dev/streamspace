@@ -59,6 +59,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // UserHandler handles user-related API requests
@@ -159,30 +160,22 @@ func (h *UserHandler) ListUsers(c *gin.Context) {
 // @Router /api/v1/users [post]
 func (h *UserHandler) CreateUser(c *gin.Context) {
 	var req models.CreateUserRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, ErrorResponse{
-			Error:   "Invalid request",
-			Message: err.Error(),
-		})
-		return
+
+	// Bind and validate request using validator utility
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
-	// Validate password for local auth users
+	// Validate password for local auth users (custom business logic)
 	if req.Provider == "" || req.Provider == "local" {
 		if req.Password == "" {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "Invalid request",
-				Message: "Password is required for local authentication",
+			c.JSON(http.StatusBadRequest, gin.H{
+				"error":  "Validation failed",
+				"fields": map[string]string{"password": "Password is required for local authentication"},
 			})
 			return
 		}
-		if len(req.Password) < 8 {
-			c.JSON(http.StatusBadRequest, ErrorResponse{
-				Error:   "Invalid request",
-				Message: "Password must be at least 8 characters",
-			})
-			return
-		}
+		// Password complexity validated by validator.password tag
 	}
 
 	user, err := h.userDB.CreateUser(c.Request.Context(), &req)
