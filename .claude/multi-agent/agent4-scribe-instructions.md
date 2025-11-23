@@ -154,21 +154,78 @@ gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues,
 - Update affected documentation
 - Maintain CHANGELOG.md
 
-### 2. CHANGELOG Maintenance (Priority 2)
+### 2. Website Maintenance (Priority 2)
+
+**Website Location**: `site/` directory (HTML website)
+- `site/index.html` - Homepage
+- `site/features.html` - Features page
+- `site/docs.html` - Documentation page
+- `site/getting-started.html` - Getting started guide
+- `site/templates.html` - Templates catalog
+- `site/plugins.html` - Plugins catalog
+
+**When to Update:**
+- New features added → Update `features.html`
+- Architecture changes → Update `docs.html`
+- New templates/plugins → Update respective catalogs
+- Major releases → Update homepage
+- Getting started changes → Update `getting-started.html`
+
+### 3. Wiki Maintenance (Priority 2)
+
+**Wiki Location**: `../streamspace.wiki/` (separate git repo)
+- `Home.md` - Wiki homepage
+- `Project-Overview.md` - Project description
+- `Architecture.md` - System architecture
+- `Getting-Started.md` - Quick start guide
+- `Development-Guide.md` - Developer guide
+- `Deployment-and-Operations.md` - Ops guide
+- `Templates-Catalog.md` - Available templates
+- `Plugins-Catalog.md` - Available plugins
+- `Roadmap-and-Releases.md` - Roadmap
+- `Security-and-Compliance.md` - Security docs
+- `Testing-and-QA.md` - Testing guide
+
+**When to Update:**
+- Architecture changes → `Architecture.md`
+- New features → `Project-Overview.md`, `Roadmap-and-Releases.md`
+- Deployment changes → `Deployment-and-Operations.md`
+- Security updates → `Security-and-Compliance.md`
+- Testing improvements → `Testing-and-QA.md`
+- New templates/plugins → Update catalogs
+
+**Wiki Workflow:**
+```bash
+# Navigate to wiki repo
+cd /Users/s0v3r1gn/streamspace/streamspace.wiki
+
+# Make updates
+# ... edit files ...
+
+# Commit changes
+git add .
+git commit -m "docs: [description of wiki updates]"
+git push origin master
+
+# Return to main repo
+cd /Users/s0v3r1gn/streamspace/streamspace
+```
+
+### 4. CHANGELOG Maintenance (Priority 3)
 
 - Update CHANGELOG.md with refactor milestones
 - Document architectural changes
 - Track breaking changes
 - Note performance improvements
 
-### 3. Documentation Updates (Priority 3)
+### 5. Documentation Updates (Priority 4)
 
 - Update existing docs as code changes
 - Fix outdated information
 - Improve clarity and examples
 - Maintain consistency
 
-### 4. Agent Coordination Documentation (Ongoing)
+### 6. Agent Coordination Documentation (Ongoing)
 
 - Document integration milestones
 - Track multi-agent achievements
@@ -177,12 +234,34 @@ gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues,
 
 ## Key Files You Work With
 
+**Main Repository:**
 - `CHANGELOG.md` - Version history (your primary responsibility)
 - `MULTI_AGENT_PLAN.md` - READ for coordination updates
-- `/docs/` - All documentation files
 - `README.md` - Main project README
+- `/docs/` - All documentation files
 - `/api/API_REFERENCE.md` - API documentation
 - Architecture and implementation guides
+
+**Website (`site/`):**
+- `site/index.html` - Homepage
+- `site/features.html` - Features page
+- `site/docs.html` - Documentation page
+- `site/getting-started.html` - Getting started
+- `site/templates.html` - Templates catalog
+- `site/plugins.html` - Plugins catalog
+
+**Wiki (`../streamspace.wiki/`):**
+- `Home.md` - Wiki homepage
+- `Project-Overview.md` - Project description
+- `Architecture.md` - System architecture
+- `Getting-Started.md` - Quick start guide
+- `Development-Guide.md` - Developer guide
+- `Deployment-and-Operations.md` - Operations
+- `Templates-Catalog.md` - Templates
+- `Plugins-Catalog.md` - Plugins
+- `Roadmap-and-Releases.md` - Roadmap
+- `Security-and-Compliance.md` - Security
+- `Testing-and-QA.md` - Testing
 
 ## Working with Other Agents
 

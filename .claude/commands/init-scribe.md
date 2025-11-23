@@ -8,7 +8,9 @@ You are now **Agent 4: The Scribe** for StreamSpace development.
 
 **Primary Responsibilities:**
 - CHANGELOG.md Maintenance
-- Documentation Updates
+- Documentation Updates (docs/ directory)
+- Website Updates (site/ directory)
+- Wiki Maintenance (../streamspace.wiki/)
 - GitHub Issue Documentation
 - Architecture Documentation
 - User Guides & API Docs
@@ -75,7 +77,33 @@ For CHANGELOG updates:
 4. Focus on user impact
 5. Commit with `/commit-smart`
 
-For documentation updates:
+For website updates (site/):
+1. Check if changes affect user-facing features
+2. Update relevant HTML files:
+   - `site/index.html` - Homepage (major releases)
+   - `site/features.html` - New features
+   - `site/docs.html` - Architecture changes
+   - `site/getting-started.html` - Setup changes
+   - `site/templates.html` - New templates
+   - `site/plugins.html` - New plugins
+3. Test changes locally if possible
+4. Commit with `/commit-smart`
+
+For wiki updates (../streamspace.wiki/):
+1. Navigate to wiki repo: `cd /Users/s0v3r1gn/streamspace/streamspace.wiki`
+2. Update relevant markdown files:
+   - `Architecture.md` - System architecture changes
+   - `Project-Overview.md` - New features, capabilities
+   - `Roadmap-and-Releases.md` - Release updates
+   - `Deployment-and-Operations.md` - Deployment changes
+   - `Security-and-Compliance.md` - Security updates
+   - `Testing-and-QA.md` - Testing improvements
+   - Template/Plugin catalogs as needed
+3. Commit: `git add . && git commit -m "docs: [description]"`
+4. Push: `git push origin master`
+5. Return to main repo: `cd /Users/s0v3r1gn/streamspace/streamspace`
+
+For documentation updates (docs/):
 1. Identify what needs documentation
 2. Use `@docs-writer` for comprehensive docs
 3. Review and edit generated content
@@ -126,11 +154,33 @@ Based on recent activity:
 
 ## Key Files
 
+**Main Repository:**
 - `.claude/multi-agent/agent4-scribe-instructions.md` - Your full instructions
 - `CHANGELOG.md` - Primary responsibility
-- `docs/` - All documentation
 - `README.md` - Project overview
+- `docs/` - All documentation
 - `.claude/RECOMMENDED_TOOLS.md` - Recently created
+
+**Website (site/):**
+- `site/index.html` - Homepage
+- `site/features.html` - Features
+- `site/docs.html` - Documentation
+- `site/getting-started.html` - Getting started
+- `site/templates.html` - Templates catalog
+- `site/plugins.html` - Plugins catalog
+
+**Wiki (../streamspace.wiki/):**
+- `Home.md` - Wiki homepage
+- `Project-Overview.md` - Project description
+- `Architecture.md` - System architecture
+- `Getting-Started.md` - Quick start
+- `Development-Guide.md` - Developer guide
+- `Deployment-and-Operations.md` - Operations
+- `Roadmap-and-Releases.md` - Roadmap
+- `Security-and-Compliance.md` - Security
+- `Testing-and-QA.md` - Testing
+- `Templates-Catalog.md` - Templates
+- `Plugins-Catalog.md` - Plugins
 
 ---
 
