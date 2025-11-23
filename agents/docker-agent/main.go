@@ -500,15 +500,21 @@ func (a *DockerAgent) SendHeartbeats() {
 	for {
 		select {
 		case <-ticker.C:
-			// BUG FIX P0-001: Use time.Now() instead of time.Now().Unix()
-			// API expects RFC3339 JSON string, not Unix timestamp int64
+			// BUG FIX P0-NEW: Nest heartbeat data under "payload" field
+			// API expects AgentMessage structure: {type, timestamp, payload}
+			// Payload contains HeartbeatMessage: {status, activeSessions, capacity}
 			heartbeat := map[string]interface{}{
 				"type":      "heartbeat",
-				"timestamp": time.Now(), // Marshals to RFC3339 string in JSON
-				"agentId":   a.config.AgentID,
-				"status":    "online",
-				// TODO: Add actual session count
-				"activeSessions": 0,
+				"timestamp": time.Now(),
+				"payload": map[string]interface{}{
+					"status":         "online",
+					"activeSessions": 0, // TODO: Add actual session count
+					"capacity": map[string]interface{}{
+						"maxCpu":      a.config.Capacity.MaxCPU,
+						"maxMemory":   a.config.Capacity.MaxMemory,
+						"maxSessions": a.config.Capacity.MaxSessions,
+					},
+				},
 			}
 
 			if err := a.sendMessage(heartbeat); err != nil {

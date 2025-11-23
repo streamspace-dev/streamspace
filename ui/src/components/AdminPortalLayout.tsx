@@ -24,6 +24,8 @@ import {
   Groups as GroupsIcon,
   Storage as StorageIcon,
   Extension as ExtensionIcon,
+  ShoppingCart as PluginCatalogIcon,
+  Widgets as InstalledPluginsIcon,
   Hub as IntegrationIcon,
   TrendingUp as ScalingIcon,
   Policy as ComplianceIcon,
@@ -33,6 +35,14 @@ import {
   Dashboard as DashboardIcon,
   Schedule as ScheduleIcon,
   Security as SecurityIcon,
+  Assessment as AuditIcon,
+  Settings as SettingsIcon,
+  CardMembership as LicenseIcon,
+  VpnKey as APIKeysIcon,
+  Notifications as MonitoringIcon,
+  DeviceHub as ControllersIcon,
+  VideoLibrary as RecordingsIcon,
+  Dns as AgentsIcon,
 } from '@mui/icons-material';
 import { useNavigate, useLocation } from 'react-router-dom';
 import { useUserStore } from '../store/userStore';
@@ -123,8 +133,15 @@ function AdminPortalLayout({ children }: AdminPortalLayoutProps) {
       title: 'Content Management',
       items: [
         { text: 'Applications', icon: <AppsIcon />, path: '/admin/applications' },
-        { text: 'Plugins', icon: <ExtensionIcon />, path: '/admin/plugins' },
         { text: 'Repositories', icon: <FolderIcon />, path: '/admin/repositories' },
+      ],
+    },
+    {
+      title: 'Plugin Management',
+      items: [
+        { text: 'Plugin Catalog', icon: <PluginCatalogIcon />, path: '/admin/plugin-catalog' },
+        { text: 'Installed Plugins', icon: <InstalledPluginsIcon />, path: '/admin/installed-plugins' },
+        { text: 'Plugin Administration', icon: <ExtensionIcon />, path: '/admin/plugins' },
       ],
     },
     {
@@ -135,13 +152,36 @@ function AdminPortalLayout({ children }: AdminPortalLayoutProps) {
       ],
     },
     {
-      title: 'System',
+      title: 'Platform Management',
       items: [
+        { text: 'Agents', icon: <AgentsIcon />, path: '/admin/agents' },
+        { text: 'Controllers', icon: <ControllersIcon />, path: '/admin/controllers' },
         { text: 'Cluster Nodes', icon: <StorageIcon />, path: '/admin/nodes' },
+      ],
+    },
+    {
+      title: 'Monitoring & Operations',
+      items: [
+        { text: 'Monitoring & Alerts', icon: <MonitoringIcon />, path: '/admin/monitoring' },
+        { text: 'Audit Logs', icon: <AuditIcon />, path: '/admin/audit' },
+        { text: 'Recordings', icon: <RecordingsIcon />, path: '/admin/recordings' },
+      ],
+    },
+    {
+      title: 'Configuration',
+      items: [
+        { text: 'System Settings', icon: <SettingsIcon />, path: '/admin/settings' },
+        { text: 'License Management', icon: <LicenseIcon />, path: '/admin/license' },
+        { text: 'API Keys', icon: <APIKeysIcon />, path: '/admin/api-keys' },
         { text: 'Integrations', icon: <IntegrationIcon />, path: '/admin/integrations' },
+        { text: 'Security Settings', icon: <SecurityIcon />, path: '/admin/security' },
+      ],
+    },
+    {
+      title: 'Advanced',
+      items: [
         { text: 'Scaling', icon: <ScalingIcon />, path: '/admin/scaling' },
         { text: 'Scheduling', icon: <ScheduleIcon />, path: '/admin/scheduling' },
-        { text: 'Security Settings', icon: <SecurityIcon />, path: '/admin/security' },
         { text: 'Compliance', icon: <ComplianceIcon />, path: '/admin/compliance' },
       ],
     },
