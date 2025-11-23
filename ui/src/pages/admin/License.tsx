@@ -88,7 +88,7 @@ export default function License() {
   const [usageHistoryDays, setUsageHistoryDays] = useState<number>(30);
 
   // Fetch current license
-  const { data: licenseData, isLoading: licenseLoading, refetch: refetchLicense } = useQuery({
+  const { data: licenseData, isLoading: licenseLoading, error: licenseError, refetch: refetchLicense } = useQuery({
     queryKey: ['license'],
     queryFn: async () => {
       const response = await fetch('/api/v1/admin/license', {
@@ -98,6 +98,10 @@ export default function License() {
       });
 
       if (!response.ok) {
+        // BUG FIX P0-2: Don't throw on 401, return null to show Community Edition
+        if (response.status === 401 || response.status === 404) {
+          return null;
+        }
         throw new Error('Failed to fetch license');
       }
 
@@ -268,11 +272,37 @@ export default function License() {
     );
   }
 
-  const license = licenseData?.license;
-  const usage = licenseData?.usage;
+  // BUG FIX P0-2: Provide default values for Community Edition when no license data
+  const license = licenseData?.license || {
+    tier: 'Community',
+    license_key: 'COMMUNITY-EDITION',
+    issued_at: new Date().toISOString(),
+    activated_at: null,
+    expires_at: null,
+    features: {
+      basic_auth: true,
+      saml_sso: false,
+      oidc_sso: false,
+      mfa: false,
+      session_recording: false,
+      audit_logs: false,
+      rbac: false,
+    },
+  };
+  const usage = licenseData?.usage || {
+    current_users: 0,
+    max_users: 10,
+    user_percent: 0,
+    current_sessions: 0,
+    max_sessions: 20,
+    session_percent: 0,
+    current_nodes: 0,
+    max_nodes: 3,
+    node_percent: 0,
+  };
   const warnings = licenseData?.limit_warnings || [];
-  const isExpired = licenseData?.is_expired;
-  const isExpiringSoon = licenseData?.is_expiring_soon;
+  const isExpired = licenseData?.is_expired || false;
+  const isExpiringSoon = licenseData?.is_expiring_soon || false;
   const daysUntilExpiry = licenseData?.days_until_expiry;
 
   return (
@@ -308,10 +338,17 @@ export default function License() {
           </Box>
         </Box>
 
+        {/* Community Edition info banner */}
+        {!licenseData && (
+          <Alert severity="info" sx={{ mb: 2 }}>
+            You are running StreamSpace <strong>Community Edition</strong>. Activate a Pro or Enterprise license to unlock advanced features and remove limits.
+          </Alert>
+        )}
+
         {/* Expiration alerts */}
         {isExpired && (
           <Alert severity="error" sx={{ mb: 2 }}>
-            Your license expired {Math.abs(daysUntilExpiry)} day(s) ago. Please renew your license to continue using premium features.
+            Your license expired {Math.abs(daysUntilExpiry || 0)} day(s) ago. Please renew your license to continue using premium features.
           </Alert>
         )}
         {isExpiringSoon && !isExpired && (
@@ -354,14 +391,16 @@ export default function License() {
                       secondary={
                         <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
                           <Typography variant="body2" sx={{ fontFamily: 'monospace' }}>
-                            {showLicenseKey ? license?.license_key : maskLicenseKey(license?.license_key || '')}
+                            {showLicenseKey ? license.license_key : maskLicenseKey(license.license_key || '')}
                           </Typography>
-                          <IconButton
-                            size="small"
-                            onClick={() => setShowLicenseKey(!showLicenseKey)}
-                          >
-                            {showLicenseKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
-                          </IconButton>
+                          {license.tier !== 'Community' && (
+                            <IconButton
+                              size="small"
+                              onClick={() => setShowLicenseKey(!showLicenseKey)}
+                            >
+                              {showLicenseKey ? <VisibilityOffIcon fontSize="small" /> : <VisibilityIcon fontSize="small" />}
+                            </IconButton>
+                          )}
                         </Box>
                       }
                     />
@@ -369,29 +408,33 @@ export default function License() {
                   <ListItem>
                     <ListItemText
                       primary="Issued"
-                      secondary={new Date(license?.issued_at).toLocaleDateString()}
+                      secondary={license.issued_at ? new Date(license.issued_at).toLocaleDateString() : 'N/A'}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText
                       primary="Activated"
-                      secondary={license?.activated_at ? new Date(license.activated_at).toLocaleDateString() : 'N/A'}
+                      secondary={license.activated_at ? new Date(license.activated_at).toLocaleDateString() : 'N/A'}
                     />
                   </ListItem>
                   <ListItem>
                     <ListItemText
                       primary="Expires"
                       secondary={
-                        <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
-                          {new Date(license?.expires_at).toLocaleDateString()}
-                          {!isExpired && daysUntilExpiry !== undefined && (
-                            <Chip
-                              label={`${daysUntilExpiry} days left`}
-                              size="small"
-                              color={isExpiringSoon ? 'warning' : 'success'}
-                            />
-                          )}
-                        </Box>
+                        license.expires_at ? (
+                          <Box sx={{ display: 'flex', alignItems: 'center', gap: 1 }}>
+                            {new Date(license.expires_at).toLocaleDateString()}
+                            {!isExpired && daysUntilExpiry !== undefined && (
+                              <Chip
+                                label={`${daysUntilExpiry} days left`}
+                                size="small"
+                                color={isExpiringSoon ? 'warning' : 'success'}
+                              />
+                            )}
+                          </Box>
+                        ) : (
+                          'Never'
+                        )
                       }
                     />
                   </ListItem>
