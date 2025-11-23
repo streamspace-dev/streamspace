@@ -24,6 +24,8 @@ import {
   Groups as GroupsIcon,
   Storage as StorageIcon,
   Extension as ExtensionIcon,
+  ShoppingCart as PluginCatalogIcon,
+  Widgets as InstalledPluginsIcon,
   Hub as IntegrationIcon,
   TrendingUp as ScalingIcon,
   Policy as ComplianceIcon,
@@ -131,8 +133,15 @@ function AdminPortalLayout({ children }: AdminPortalLayoutProps) {
       title: 'Content Management',
       items: [
         { text: 'Applications', icon: <AppsIcon />, path: '/admin/applications' },
-        { text: 'Plugins', icon: <ExtensionIcon />, path: '/admin/plugins' },
         { text: 'Repositories', icon: <FolderIcon />, path: '/admin/repositories' },
+      ],
+    },
+    {
+      title: 'Plugin Management',
+      items: [
+        { text: 'Plugin Catalog', icon: <PluginCatalogIcon />, path: '/admin/plugin-catalog' },
+        { text: 'Installed Plugins', icon: <InstalledPluginsIcon />, path: '/admin/installed-plugins' },
+        { text: 'Plugin Administration', icon: <ExtensionIcon />, path: '/admin/plugins' },
       ],
     },
     {
