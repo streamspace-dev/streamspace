@@ -1,0 +1,123 @@
+name: Sprint Planning
+description: Create a sprint planning issue (Architect use only)
+title: "Sprint Planning - Week of "
+labels: ["sprint-planning", "agent:architect"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **For Architect Agent (Agent 1) use only**
+
+        Use this template to plan weekly/bi-weekly sprints.
+
+  - type: input
+    id: sprint_start
+    attributes:
+      label: Sprint Start Date
+      description: When does this sprint start?
+      placeholder: "2025-11-25"
+    validations:
+      required: true
+
+  - type: input
+    id: sprint_end
+    attributes:
+      label: Sprint End Date
+      description: When does this sprint end?
+      placeholder: "2025-12-01"
+    validations:
+      required: true
+
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Primary Milestone
+      description: Which milestone is this sprint focused on?
+      options:
+        - v2.0-beta.1
+        - v2.0-beta.2
+        - v2.1.0
+        - v2.2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: goals
+    attributes:
+      label: Sprint Goals
+      description: What are we trying to achieve this sprint?
+      placeholder: |
+        ## Primary Goal
+        Complete integration testing for v2.0-beta.1
+
+        ## Secondary Goals
+        - Fix P0 UI bugs
+        - Begin v2.0-beta.2 planning
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: builder_tasks
+    attributes:
+      label: Builder (Agent 2) Tasks
+      description: Issues assigned to Builder
+      placeholder: |
+        - [ ] #123 - Fix session list bug
+        - [ ] #124 - Fix VNC connection issue
+        - [ ] #125 - Fix template selector bug
+      render: markdown
+
+  - type: textarea
+    id: validator_tasks
+    attributes:
+      label: Validator (Agent 3) Tasks
+      description: Issues assigned to Validator
+      placeholder: |
+        - [ ] #157 - Complete integration testing
+        - [ ] Test all P0 bug fixes
+      render: markdown
+
+  - type: textarea
+    id: scribe_tasks
+    attributes:
+      label: Scribe (Agent 4) Tasks
+      description: Issues assigned to Scribe
+      placeholder: |
+        - [ ] Update CHANGELOG.md for beta.1
+        - [ ] Document integration test results
+      render: markdown
+
+  - type: textarea
+    id: success_criteria
+    attributes:
+      label: Success Criteria
+      description: How will we know this sprint was successful?
+      placeholder: |
+        - [ ] All P0 issues closed
+        - [ ] Integration tests pass
+        - [ ] v2.0-beta.1 ready for release
+      render: markdown
+    validations:
+      required: true
+
+  - type: textarea
+    id: risks
+    attributes:
+      label: Risks & Dependencies
+      description: What could block this sprint?
+      placeholder: |
+        - Risk: Integration testing may uncover new bugs
+        - Dependency: Waiting for user feedback on #123
+      render: markdown
+
+  - type: textarea
+    id: capacity
+    attributes:
+      label: Team Capacity
+      description: Estimated capacity for this sprint
+      placeholder: |
+        - Builder: 40 hours (full capacity)
+        - Validator: 20 hours (part-time)
+        - Scribe: 10 hours (documentation only)
+      render: markdown

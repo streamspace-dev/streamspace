@@ -1,0 +1,136 @@
+name: Agent Task
+description: Task assignment for multi-agent development (Architect use only)
+title: "[TASK] "
+labels: ["task"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        **For Architect Agent (Agent 1) use only**
+
+        This template is for creating coordinated tasks for the multi-agent development workflow.
+
+  - type: dropdown
+    id: agent
+    attributes:
+      label: Assigned Agent
+      description: Which agent should work on this task?
+      options:
+        - Agent 1 - Architect (Research & Planning)
+        - Agent 2 - Builder (Implementation)
+        - Agent 3 - Validator (Testing & Validation)
+        - Agent 4 - Scribe (Documentation)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      options:
+        - P0 - Critical
+        - P1 - High
+        - P2 - Low
+    validations:
+      required: true
+
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Milestone
+      options:
+        - v2.0-beta.1
+        - v2.0-beta.2
+        - v2.1.0
+        - v2.2.0
+    validations:
+      required: true
+
+  - type: textarea
+    id: objective
+    attributes:
+      label: Task Objective
+      description: What needs to be accomplished?
+      placeholder: |
+        Implement VNC tunnel support for Docker Agent
+    validations:
+      required: true
+
+  - type: textarea
+    id: requirements
+    attributes:
+      label: Requirements
+      description: Detailed requirements and specifications
+      placeholder: |
+        - [ ] Create VNC tunnel using Docker port mapping
+        - [ ] Send tunnel status to Control Plane
+        - [ ] Handle tunnel lifecycle (create/close)
+        - [ ] Support multiple concurrent tunnels
+    validations:
+      required: true
+
+  - type: textarea
+    id: files
+    attributes:
+      label: Files to Create/Modify
+      description: Which files will be affected?
+      placeholder: |
+        agents/docker-agent/pkg/vnc/tunnel.go (NEW)
+        agents/docker-agent/pkg/vnc/handler.go (NEW)
+
+  - type: textarea
+    id: dependencies
+    attributes:
+      label: Dependencies
+      description: What tasks must be completed first?
+      placeholder: |
+        Depends on #151 (Docker Agent Core Implementation)
+        Blocks #154 (Docker Agent Deployment)
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated Effort
+      options:
+        - size:xs (< 2 hours)
+        - size:s (2-4 hours)
+        - size:m (4-8 hours)
+        - size:l (1-2 days)
+        - size:xl (2-5 days)
+    validations:
+      required: true
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this is complete?
+      placeholder: |
+        - [ ] VNC tunnel created successfully
+        - [ ] Control Plane receives tunnel ready notification
+        - [ ] Browser can access VNC stream
+        - [ ] Unit tests pass (80%+ coverage)
+        - [ ] Integration test validates E2E flow
+    validations:
+      required: true
+
+  - type: textarea
+    id: deliverables
+    attributes:
+      label: Deliverables
+      description: What should be delivered when complete?
+      placeholder: |
+        - Working code in feature branch
+        - Unit tests with 80%+ coverage
+        - Integration test script
+        - Documentation/comments in code
+        - Comment on this issue with completion details
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Architecture notes, design decisions, references
+      placeholder: |
+        Architecture: Use Docker port mapping (not K8s port-forward)
+        Reference: K8s agent VNC implementation in agents/k8s-agent/pkg/vnc/

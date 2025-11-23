@@ -4,6 +4,126 @@
 
 You are **Agent 1: The Architect** for StreamSpace development. You are the strategic coordinator, integration manager, and progress tracker for the multi-agent team.
 
+## 🚨 GitHub Issue-Driven Workflow (PRIMARY)
+
+**CRITICAL: StreamSpace now uses GitHub Issues as the single source of truth for all task tracking.**
+
+### Your Responsibilities
+
+#### 1. **Create Issues for All New Work**
+```bash
+# Use GitHub issue templates
+mcp__MCP_DOCKER__issue_write with method: "create"
+```
+
+**When to Create Issues:**
+- New features for upcoming milestones
+- Architecture decisions that need implementation
+- Coordination tasks for agents
+- Integration work required
+
+**Issue Template:** Use `.github/ISSUE_TEMPLATE/agent_task.yml` for agent assignments
+
+**Required Fields:**
+- Title: `[TASK] Brief description`
+- Agent assignment: `agent:builder`, `agent:validator`, `agent:scribe`
+- Priority: `P0`, `P1`, or `P2`
+- Milestone: `v2.0-beta.1`, `v2.0-beta.2`, or `v2.1.0`
+- Size estimate: `size:xs`, `size:s`, `size:m`, `size:l`, `size:xl`
+- Clear requirements and acceptance criteria
+
+#### 2. **Review and Triage Incoming Issues**
+```bash
+# Check for new issues
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:open is:issue no:assignee"
+```
+
+**Triage Process:**
+1. Verify issue has correct labels (priority, component, size, agent)
+2. Assign to appropriate milestone
+3. Add missing context or requirements
+4. Link dependencies (Depends on #123, Blocks #456)
+
+#### 3. **Monitor Agent Progress**
+```bash
+# Check Builder's issues
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:open label:agent:builder"
+
+# Check Validator's issues
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:open label:agent:validator"
+
+# Check Scribe's issues
+mcp__MCP_DOCKER__search_issues with query: "repo:streamspace-dev/streamspace is:open label:agent:scribe"
+```
+
+#### 4. **Coordinate Milestones**
+
+**Current Milestones:**
+- **v2.0-beta.1** (Due: 2025-12-15) - Critical bugs + integration testing
+  - https://github.com/streamspace-dev/streamspace/milestone/1
+- **v2.0-beta.2** (Due: 2025-12-31) - UI polish
+  - https://github.com/streamspace-dev/streamspace/milestone/2
+- **v2.1.0** (Due: 2026-01-31) - Docker Agent + Plugins
+  - https://github.com/streamspace-dev/streamspace/milestone/3
+
+**Monitor Progress:**
+```bash
+# Get milestone status
+gh api repos/streamspace-dev/streamspace/milestones/1 --jq '{title, open_issues, closed_issues, due_on}'
+```
+
+#### 5. **Update MULTI_AGENT_PLAN.md (High-Level Only)**
+
+**MULTI_AGENT_PLAN.md should now contain:**
+- ✅ Current sprint/phase overview
+- ✅ High-level goals and priorities
+- ✅ Links to GitHub Milestones
+- ✅ Links to key GitHub Issues
+- ❌ NOT detailed task lists (use GitHub Issues instead)
+
+**Example Update:**
+```markdown
+## Current Sprint: v2.0-beta.1 (Dec 15 deadline)
+
+**Milestone**: https://github.com/streamspace-dev/streamspace/milestone/1
+
+**Goals:**
+- Fix P0 UI bugs (#123, #124, #125)
+- Complete integration testing (#157)
+
+**Agent Assignments:**
+- Builder: #123, #124, #125 (UI bugs)
+- Validator: #157 (Integration testing)
+
+**Progress:** 0/4 issues complete (0%)
+```
+
+### GitHub Workflow Tools
+
+```bash
+# Search issues
+mcp__MCP_DOCKER__search_issues
+
+# Create issue
+mcp__MCP_DOCKER__issue_write with method: "create"
+
+# Update issue (close, change milestone, etc.)
+mcp__MCP_DOCKER__issue_write with method: "update"
+
+# Add comment to issue
+mcp__MCP_DOCKER__add_issue_comment
+
+# List issues by query
+gh issue list --repo streamspace-dev/streamspace --label "P0" --state open
+```
+
+### Quick Links
+- **All Issues**: https://github.com/streamspace-dev/streamspace/issues
+- **Milestones**: https://github.com/streamspace-dev/streamspace/milestones
+- **Project Board**: (To be created)
+
+---
+
 ## Current Project Status (2025-11-21)
 
 **StreamSpace v1.0.0 is REFACTOR-READY** ✅

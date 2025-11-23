@@ -1,0 +1,132 @@
+name: Bug Report
+description: File a bug report for StreamSpace
+title: "[BUG] "
+labels: ["bug"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for taking the time to report a bug! Please fill out the form below.
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: Severity
+      description: How critical is this bug?
+      options:
+        - P0 - Critical (Blocking production/release)
+        - P1 - High (Important functionality broken)
+        - P2 - Low (Minor issue, workaround available)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component is affected?
+      options:
+        - UI - Frontend/React
+        - Backend - API/Go
+        - K8s Agent
+        - Docker Agent
+        - Database
+        - WebSocket
+        - VNC Proxy
+        - Plugin System
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: input
+    id: page
+    attributes:
+      label: Page/Endpoint (if UI/API bug)
+      description: e.g., /admin/plugins/installed or POST /api/v1/sessions
+      placeholder: /admin/plugins/installed
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Bug Description
+      description: Clear description of the bug
+      placeholder: When I click X, Y happens instead of Z
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error Message
+      description: Paste any error messages or stack traces
+      render: shell
+      placeholder: |
+        TypeError: Cannot read properties of null (reading 'filter')
+        at useEnterpriseWebSocket.ts:45
+
+  - type: textarea
+    id: steps
+    attributes:
+      label: Steps to Reproduce
+      description: How can we reproduce this bug?
+      placeholder: |
+        1. Go to '/admin/plugins/installed'
+        2. Wait for page to load
+        3. See error
+    validations:
+      required: true
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: Expected Behavior
+      description: What should happen?
+      placeholder: Page should load and display list of installed plugins
+
+  - type: textarea
+    id: actual
+    attributes:
+      label: Actual Behavior
+      description: What actually happens?
+      placeholder: Page crashes with error boundary
+
+  - type: textarea
+    id: impact
+    attributes:
+      label: Impact
+      description: Who is affected and how?
+      placeholder: |
+        - Admins cannot manage installed plugins
+        - Page is completely unusable
+
+  - type: textarea
+    id: fix
+    attributes:
+      label: Suggested Fix (Optional)
+      description: If you have an idea for how to fix this
+      placeholder: |
+        Add null check before calling .filter():
+        const plugins = data?.filter(...) ?? []
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated Effort
+      description: How long do you think this will take to fix?
+      options:
+        - size:xs (< 2 hours)
+        - size:s (2-4 hours)
+        - size:m (4-8 hours)
+        - size:l (1-2 days)
+        - size:xl (2-5 days)
+        - Unknown
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, screenshots, or related issues
+      placeholder: |
+        Related to #123
+        Screenshot: [attach file]

@@ -1,0 +1,133 @@
+name: Feature Request
+description: Suggest a new feature for StreamSpace
+title: "[FEATURE] "
+labels: ["enhancement"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Thanks for suggesting a new feature! Please describe what you'd like to see.
+
+  - type: dropdown
+    id: priority
+    attributes:
+      label: Priority
+      description: How important is this feature?
+      options:
+        - P0 - Critical (Must have for release)
+        - P1 - High (Important for users)
+        - P2 - Low (Nice to have)
+    validations:
+      required: true
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component does this relate to?
+      options:
+        - UI - Frontend/React
+        - Backend - API/Go
+        - K8s Agent
+        - Docker Agent
+        - Database
+        - WebSocket
+        - VNC Proxy
+        - Plugin System
+        - Documentation
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: problem
+    attributes:
+      label: Problem Statement
+      description: What problem does this feature solve?
+      placeholder: |
+        Currently, users cannot X, which makes it difficult to Y.
+        This is a problem because Z.
+    validations:
+      required: true
+
+  - type: textarea
+    id: solution
+    attributes:
+      label: Proposed Solution
+      description: How should this feature work?
+      placeholder: |
+        Add a new button/endpoint/feature that allows users to X.
+        When they click/call it, Y happens.
+    validations:
+      required: true
+
+  - type: textarea
+    id: alternatives
+    attributes:
+      label: Alternatives Considered
+      description: What other solutions have you considered?
+      placeholder: |
+        - Option A: Do X (pros/cons)
+        - Option B: Do Y (pros/cons)
+
+  - type: textarea
+    id: mockup
+    attributes:
+      label: UI Mockup (if applicable)
+      description: Attach screenshots or describe the UI
+      placeholder: |
+        [Attach mockup image]
+
+        Or describe:
+        - Add "Export" button in top-right corner
+        - Opens modal with export options
+
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Target Milestone
+      description: When should this be implemented?
+      options:
+        - v2.0-beta.1
+        - v2.0-beta.2
+        - v2.1.0
+        - v2.2.0
+        - Future
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated Effort
+      description: How complex is this feature?
+      options:
+        - size:xs (< 2 hours)
+        - size:s (2-4 hours)
+        - size:m (4-8 hours)
+        - size:l (1-2 days)
+        - size:xl (2-5 days)
+        - Unknown
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we know this feature is complete?
+      placeholder: |
+        - [ ] User can click Export button
+        - [ ] Export modal opens with format options
+        - [ ] Data exports in selected format
+        - [ ] Success notification shown
+        - [ ] Unit tests added
+        - [ ] Documentation updated
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Any other context, dependencies, or related issues
+      placeholder: |
+        Depends on #123
+        Related to #456
+        Requested by enterprise customers

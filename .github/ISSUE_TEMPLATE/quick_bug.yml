@@ -1,0 +1,52 @@
+name: Quick Bug Report
+description: Fast bug report for simple issues (minimal fields)
+title: "[BUG] "
+labels: ["bug", "needs-triage"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Quick bug report for simple, obvious bugs. For complex bugs, use the full Bug Report template.
+
+  - type: input
+    id: page
+    attributes:
+      label: Where?
+      description: Page/endpoint where the bug occurs
+      placeholder: "/admin/sessions or POST /api/v1/sessions"
+    validations:
+      required: true
+
+  - type: textarea
+    id: what_wrong
+    attributes:
+      label: What's wrong?
+      description: Brief description of the bug
+      placeholder: "When I click X, Y happens instead of Z"
+    validations:
+      required: true
+
+  - type: textarea
+    id: error
+    attributes:
+      label: Error message (if any)
+      description: Paste any error messages
+      render: shell
+
+  - type: textarea
+    id: expected
+    attributes:
+      label: What should happen?
+      description: Expected behavior
+      placeholder: "Page should load and display data"
+
+  - type: dropdown
+    id: severity
+    attributes:
+      label: How bad is it?
+      options:
+        - P0 - Critical (blocks release/production)
+        - P1 - High (important feature broken)
+        - P2 - Low (minor issue)
+    validations:
+      required: true

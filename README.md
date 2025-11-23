@@ -18,20 +18,25 @@
 ---
 
 > [!IMPORTANT]
-> **Current Version: v2.0-beta**
+> **Current Version: v2.0-beta (Integration Testing)**
 >
-> StreamSpace has completed a major architectural transformation to a multi-platform Control Plane + Agent model. v2.0-beta development is complete with integration testing underway.
+> StreamSpace has completed a major architectural transformation to a multi-platform Control Plane + Agent model. The Kubernetes agent is fully functional with VNC proxy tunneling. We're currently in the production hardening phase with 57 tracked improvements across observability, security, performance, and UX.
+>
+> **📋 Project Board**: [StreamSpace v2.0 Development](https://github.com/orgs/streamspace-dev/projects/2)
 
 ## 🚀 Overview
 
-StreamSpace delivers browser-based access to containerized applications. It features a central **Control Plane** (API/WebUI) that manages distributed **Controllers** across various platforms (Kubernetes, Docker, Hyper-V, vCenter, etc.).
+StreamSpace delivers browser-based access to containerized applications. It features a central **Control Plane** (API/WebUI) that manages distributed **Agents** across various platforms (Kubernetes, Docker - planned for v2.1).
 
 ### What's New in v2.0-beta
 
-- **Multi-Platform Architecture**: Control Plane + Agent model.
-- **End-to-End VNC Proxy**: Secure, firewall-friendly traffic flow.
-- **K8s Agent**: Fully functional Kubernetes agent with VNC tunneling.
-- **Modern UI**: Real-time agent monitoring and modernized VNC viewer.
+- **✅ Multi-Platform Architecture**: Control Plane + Agent model
+- **✅ Secure VNC Proxy**: WebSocket-based VNC tunneling through Control Plane
+- **✅ K8s Agent**: Fully functional Kubernetes agent with session lifecycle management
+- **✅ Modern UI**: Real-time agent monitoring with noVNC integration
+- **🚧 Production Hardening** (v2.0-beta.1): Health checks, metrics, security improvements
+- **🚧 Performance & UX** (v2.0-beta.2): Caching, code splitting, accessibility
+- **📋 Future Roadmap**: Plugin marketplace, webhooks, multi-cloud support ([View Roadmap](.github/RECOMMENDATIONS_ROADMAP.md))
 
 ## ✨ Features
 
@@ -94,31 +99,74 @@ StreamSpace delivers browser-based access to containerized applications. It feat
 > [!TIP]
 > **Production Setup**: Before deploying to production, ensure you update the default secrets. See the [Deployment Guide](DEPLOYMENT.md) for details.
 
+## 🎯 Production Readiness (v2.0-beta.1)
+
+StreamSpace is currently undergoing production hardening. The following features are being implemented:
+
+**🔒 Security** (P0 - Critical):
+- Rate limiting to prevent abuse
+- Comprehensive API input validation
+- Security headers (HSTS, CSP, etc.)
+
+**📊 Observability**:
+- Health check endpoints for K8s probes
+- Structured logging with trace IDs
+- Prometheus metrics exposure
+- Grafana dashboards
+
+**⚡ Performance** (v2.0-beta.2):
+- Database query optimization with indexes
+- Redis caching layer
+- Frontend code splitting
+- Virtual scrolling for large lists
+
+See the [complete roadmap](.github/RECOMMENDATIONS_ROADMAP.md) for all 57 tracked improvements across security, performance, testing, and features.
+
 ## 🏗️ Architecture
 
-StreamSpace uses a split architecture separating the Control Plane from the Execution Agents.
+StreamSpace uses a **Control Plane + Agent** architecture for multi-platform support and scalability.
 
 ```mermaid
 graph TD
-    User[User / Browser] -->|HTTPS/WSS| UI[Web UI]
-    User -->|HTTPS/WSS| API[Control Plane API]
-    
+    User[User / Browser] -->|HTTPS| Ingress[Load Balancer]
+    Ingress -->|HTTPS| UI[Web UI]
+    Ingress -->|HTTPS/WSS| API[Control Plane API]
+
     subgraph "Control Plane"
         UI
         API
+        Hub[WebSocket Hub]
+        VNCProxy[VNC Proxy]
         DB[(PostgreSQL)]
+
         API --> DB
+        API --> Hub
+        API --> VNCProxy
     end
-    
-    subgraph "Execution Plane (Kubernetes)"
-        Agent[K8s Agent]
-        Agent -->|WebSocket| API
-        Agent -->|Manage| Pods[Session Pods]
-        
-        API -.->|VNC Proxy| Agent
-        Agent -.->|Tunnel| Pods
+
+    subgraph "Execution Plane - Kubernetes"
+        K8sAgent[K8s Agent]
+        K8sAgent <-->|WebSocket| Hub
+        K8sAgent -->|Manage| Pods[Session Pods]
+        VNCProxy <-.->|VNC Tunnel| K8sAgent
+        K8sAgent <-.->|VNC| Pods
+    end
+
+    subgraph "Execution Plane - Docker (v2.1)"
+        DockerAgent[Docker Agent]
+        DockerAgent <-->|WebSocket| Hub
+        DockerAgent -->|Manage| Containers[Session Containers]
     end
 ```
+
+**Key Components**:
+- **Control Plane**: Central management, authentication, VNC proxy
+- **WebSocket Hub**: Real-time agent communication and coordination
+- **VNC Proxy**: Secure tunneling of VNC traffic through Control Plane
+- **K8s Agent**: Manages Kubernetes pods and sessions
+- **Session Pods**: Isolated containerized environments with VNC
+
+For detailed architecture, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
 
 ## 📚 Available Applications
 
@@ -155,11 +203,20 @@ See [TESTING.md](TESTING.md) for detailed testing guides.
 
 ## 📖 Documentation
 
-- **[FEATURES.md](FEATURES.md)**: Feature list & status
-- **[ROADMAP.md](ROADMAP.md)**: Future plans
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Deep dive into system design
+### User Guides
+- **[FEATURES.md](FEATURES.md)**: Complete feature list & implementation status
 - **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment guide
+- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Deep dive into system design
+
+### Development
 - **[CONTRIBUTING.md](CONTRIBUTING.md)**: How to contribute
+- **[TESTING.md](TESTING.md)**: Testing guides
+- **[.github/RECOMMENDATIONS_ROADMAP.md](.github/RECOMMENDATIONS_ROADMAP.md)**: v2.0-v2.2 roadmap with 57 tracked improvements
+
+### Project Management
+- **[Project Board](https://github.com/orgs/streamspace-dev/projects/2)**: Live progress tracking
+- **[Milestones](https://github.com/streamspace-dev/streamspace/milestones)**: Release planning
+- **[Issues](https://github.com/streamspace-dev/streamspace/issues)**: Bug reports & feature requests
 
 ## 🤝 Contributing
 
