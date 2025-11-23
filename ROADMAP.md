@@ -2,18 +2,23 @@
 
 # 🗺️ StreamSpace Roadmap
 
-**Current Version**: v2.0-beta • **Last Updated**: 2025-11-21
+**Current Version**: v2.0-beta • **Last Updated**: 2025-11-23
 
-[![Status](https://img.shields.io/badge/Status-v2.0--beta-success.svg)](CHANGELOG.md)
+[![Status](https://img.shields.io/badge/Status-v2.0--beta--testing-yellow.svg)](CHANGELOG.md)
 
 </div>
 
 ---
 
-> [!IMPORTANT]
-> **Current Status: v2.0-beta (Integration Testing)**
+> [!WARNING]
+> **Current Status: v2.0-beta (Testing Phase - NOT Production Ready)**
 >
-> StreamSpace has completed the major architectural transformation to a multi-platform Control Plane + Agent model. We are currently in the integration testing phase.
+> StreamSpace has completed the v2.0 architecture implementation (Control Plane + Multi-Platform Agents) but is experiencing a **test coverage crisis**. See [TEST_STATUS.md](TEST_STATUS.md) for details and remediation plan.
+>
+> **Critical**: API at 4% coverage, both agents at 0% coverage, 136 UI tests failing.
+
+> [!NOTE]
+> For detailed production hardening roadmap with 57 tracked improvements, see [.github/RECOMMENDATIONS_ROADMAP.md](.github/RECOMMENDATIONS_ROADMAP.md)
 
 ## 📅 Release Timeline
 
@@ -42,40 +47,59 @@ gantt
 
 ## 🎯 Priorities
 
-### 1. Integration Testing (Immediate)
+### 1. Fix Broken Test Infrastructure (P0 - CRITICAL)
 
-- **Focus**: Validate the new v2.0 Control Plane + Agent architecture.
+- **Current**: Test suites failing, blocking all validation
+- **Issues**: [#157](https://github.com/streamspace-dev/streamspace/issues/157), [#200-207](https://github.com/streamspace-dev/streamspace/issues)
+- **Timeline**: 1-2 days
 - **Tasks**:
-  - [ ] E2E VNC streaming validation
-  - [ ] Multi-agent session creation
-  - [ ] Failover and reconnection tests
-  - [ ] Performance benchmarking
+  - [ ] Fix API handler test panics ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
+  - [ ] Fix K8s agent test compilation ([#203](https://github.com/streamspace-dev/streamspace/issues/203))
+  - [ ] Fix UI component import errors ([#207](https://github.com/streamspace-dev/streamspace/issues/207))
+  - [ ] Fix WebSocket & Services test builds ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
 
-### 2. Test Coverage Expansion (High)
+### 2. Critical Test Coverage (P0 - High Priority)
 
-- **Current**: ~70% on new v2.0 code, ~20% overall.
-- **Target**: 80%+ overall.
-- **Plan**:
-  - [ ] Expand API handler tests
-  - [ ] Add UI component tests
-  - [ ] Increase controller test coverage
+- **Current**: API 4%, K8s Agent 0%, Docker Agent 0%, UI 32%
+- **Target v2.0-beta.1**: API 40%, Agents 60%, UI 60%
+- **Timeline**: 10-15 days (Phases 2-4 from TEST_STATUS.md)
+- **Tasks**:
+  - [ ] Docker Agent test suite - 2,100 lines untested ([#201](https://github.com/streamspace-dev/streamspace/issues/201))
+  - [ ] K8s Agent test suite - Leader election, VNC tunneling ([#203](https://github.com/streamspace-dev/streamspace/issues/203))
+  - [ ] AgentHub multi-pod tests - Redis, cross-pod routing ([#202](https://github.com/streamspace-dev/streamspace/issues/202))
+  - [ ] API handler tests - Session, VNC proxy, template endpoints ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
 
-### 3. Plugin Implementation (Medium)
+### 3. Integration & E2E Testing (P1 - High Priority)
 
-- **Current**: Framework complete, 28 stub plugins.
-- **Target**: Working implementations for top 10 plugins.
+- **Focus**: Validate complete v2.0 architecture end-to-end
+- **Timeline**: 3-4 days (Phase 5 from TEST_STATUS.md)
+- **Tasks**:
+  - [ ] VNC streaming E2E (Browser → Proxy → Agent → Container) ([#157](https://github.com/streamspace-dev/streamspace/issues/157))
+  - [ ] Multi-pod API failover scenarios
+  - [ ] Agent leader election and failover
+  - [ ] Cross-platform session management (K8s + Docker)
+  - [ ] Performance benchmarking (session creation, VNC latency)
+
+### 4. Production Hardening (v2.0-beta.1 - P1)
+
+- **Current**: 57 improvements tracked in [RECOMMENDATIONS_ROADMAP.md](.github/RECOMMENDATIONS_ROADMAP.md)
+- **Target v2.0-beta.1**: Security + Observability basics
+- **Timeline**: ~20 hours after tests fixed
+- **Priority Tasks**:
+  - [ ] Health check endpoints ([#158](https://github.com/streamspace-dev/streamspace/issues/158))
+  - [ ] Security headers ([#165](https://github.com/streamspace-dev/streamspace/issues/165))
+  - [ ] Rate limiting ([#163](https://github.com/streamspace-dev/streamspace/issues/163))
+  - [ ] Structured logging ([#159](https://github.com/streamspace-dev/streamspace/issues/159))
+  - [ ] Prometheus metrics ([#160](https://github.com/streamspace-dev/streamspace/issues/160))
+
+### 5. Plugin Implementation (P2 - Medium Priority)
+
+- **Current**: Framework complete, 28 stub plugins, 0% tested
+- **Target**: Working implementations for top 10 plugins
+- **Priority**: Deferred until after test coverage fixed
 - **Top Plugins**:
   - Calendar, Slack, Teams, Discord, PagerDuty
   - Compliance, DLP, Analytics
-
-### 4. Docker Support (v2.1)
-
-- **Current**: Planned.
-- **Target**: Functional Docker Agent.
-- **Scope**:
-  - Container lifecycle management
-  - Local volume management
-  - Network configuration
 
 ## 🛤️ Detailed Roadmap
 
@@ -86,18 +110,44 @@ gantt
 - **Admin**: Full admin UI and configuration
 - **Security**: Production-hardened (Audit logs, RBAC, Security headers)
 
-### v2.0-beta (Current) 🚧
+### v2.0-beta (Current - Testing Phase) ⚠️
 
-- **Architecture**: Multi-platform Control Plane + Agent
-- **Connectivity**: Secure VNC Proxy (Firewall-friendly)
-- **Agent**: Kubernetes Agent implementation
-- **UI**: Real-time agent monitoring
+**Status**: Architecture complete, test coverage crisis
 
-### v2.1 (Planned) 📝
+**Completed**:
+- ✅ Multi-platform Control Plane + Agent architecture
+- ✅ Secure VNC Proxy (WebSocket tunneling, firewall-friendly)
+- ✅ Kubernetes Agent (session lifecycle, leader election, VNC tunneling)
+- ✅ Docker Agent (container lifecycle, HA backends)
+- ✅ Multi-pod API (Redis-backed AgentHub)
+- ✅ Real-time agent monitoring UI
 
-- **Platform**: Docker Agent support
-- **Deployment**: Docker Compose support
-- **Storage**: Local volume management
+**Blocked**:
+- ❌ **Test Infrastructure** - Multiple test suites broken ([#200](https://github.com/streamspace-dev/streamspace/issues/200))
+- ❌ **Test Coverage** - 4% API, 0% agents, 32% UI ([TEST_STATUS.md](TEST_STATUS.md))
+- ❌ **Production Readiness** - Cannot deploy without tests
+
+**Next**: Fix broken tests (1-2 days) → Comprehensive test coverage (10-15 days) → Production hardening (~20 hours)
+
+### v2.0-beta.1 (Target: After Test Coverage) 📝
+
+**Prerequisites**:
+- Test infrastructure fixed
+- API 40%+ coverage
+- Agents 60%+ coverage
+- Integration tests passing
+
+**Goals**:
+- Production-ready security (rate limiting, input validation, security headers)
+- Observability basics (health checks, structured logging, Prometheus metrics)
+- Validated HA features (multi-pod API, agent leader election)
+- Performance benchmarks documented
+
+### v2.1 (Future) 🔮
+
+- **Performance**: Redis caching, database optimization, frontend code splitting
+- **UX**: Accessibility improvements, virtual scrolling, bulk operations
+- **Features**: Plugin marketplace, advanced webhooks, multi-cloud support
 
 ### v3.0 (Future) 🔮
 

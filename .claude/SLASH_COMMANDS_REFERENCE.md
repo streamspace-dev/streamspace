@@ -8,7 +8,9 @@
 ## 🎯 Agent Coordination (NEW)
 
 ### `/check-work`
-**Check for assigned work by role/priority**
+
+#### Check for assigned work by role/priority
+
 - Shows issues assigned to your agent
 - Filters by priority (P0 → P1 → P2)
 - Lists ready-for-testing items (Validator)
@@ -19,7 +21,9 @@
 ---
 
 ### `/signal-ready`
-**Signal work ready for testing**
+
+#### Signal work ready for testing
+
 - Builder → Validator handoff mechanism
 - Commits and pushes your work
 - Posts GitHub comment with testing instructions
@@ -32,7 +36,9 @@
 ---
 
 ### `/update-issue`
-**Update GitHub issue with progress**
+
+#### Update GitHub issue with progress
+
 - Progress updates
 - Report blockers
 - Ask questions
@@ -46,7 +52,9 @@
 ---
 
 ### `/create-issue`
-**Create new GitHub issue**
+
+#### Create new GitHub issue
+
 - Bugs discovered during work
 - New tasks identified
 - Feature requests
@@ -59,7 +67,9 @@
 ---
 
 ### `/sync-integration`
-**Sync integration branch to your agent branch**
+
+#### Sync integration branch to your agent branch
+
 - Merges `feature/streamspace-v2-agent-refactor` into your branch
 - Shows what's new
 - Handles conflicts
@@ -72,7 +82,9 @@
 ---
 
 ### `/agent-status`
-**Generate status report**
+
+#### Generate status report
+
 - Work completed today/week
 - Issues closed/in-progress
 - Blockers
@@ -88,7 +100,9 @@
 ## 🔨 Code Quality
 
 ### `/review-pr`
-**Automated PR review**
+
+#### Automated PR review
+
 - Uses `@pr-reviewer` subagent
 - Code quality checks (Go, TypeScript)
 - Security analysis (SQL injection, XSS, secrets)
@@ -102,7 +116,9 @@
 ---
 
 ### `/quick-fix`
-**Fast workflow for small bug fixes**
+
+#### Fast workflow for small bug fixes
+
 - Interactive fix session
 - Automated quality checks
 - Auto-commit with semantic message
@@ -115,7 +131,9 @@
 ---
 
 ### `/coverage-report`
-**Comprehensive test coverage analysis**
+
+#### Comprehensive test coverage analysis
+
 - All components (API, Agents, UI)
 - Per-package breakdown
 - Coverage trends
@@ -129,7 +147,9 @@
 ---
 
 ### `/verify-all`
-**Complete pre-commit verification**
+
+#### Complete pre-commit verification
+
 - Go tests with coverage
 - UI tests with coverage
 - Linting (Go, TypeScript)
@@ -142,7 +162,9 @@
 ---
 
 ### `/commit-smart`
-**Generate semantic commit messages**
+
+#### Generate semantic commit messages
+
 - Analyzes staged changes
 - Generates conventional commit format
 - Includes issue references
@@ -153,7 +175,9 @@
 ---
 
 ### `/pr-description`
-**Auto-generate PR descriptions**
+
+#### Auto-generate PR descriptions
+
 - Analyzes branch changes
 - Lists files changed
 - Summarizes modifications
@@ -166,7 +190,9 @@
 ## 🧪 Testing Commands
 
 ### `/test-go [package]`
-**Run Go tests with coverage**
+
+#### Run Go tests with coverage
+
 - Runs tests for specified package (or all)
 - Generates coverage report
 - Shows coverage percentage
@@ -177,7 +203,9 @@
 ---
 
 ### `/test-ui`
-**Run UI tests with coverage**
+
+#### Run UI tests with coverage
+
 - Runs Jest/React Testing Library tests
 - Generates coverage report
 - Shows component coverage
@@ -186,7 +214,9 @@
 ---
 
 ### `/test-integration`
-**Run integration tests**
+
+#### Run integration tests
+
 - Full E2E test suite
 - Database setup
 - API + Agent + UI testing
@@ -195,7 +225,9 @@
 ---
 
 ### `/test-agent-lifecycle`
-**Test agent lifecycle**
+
+#### Test agent lifecycle
+
 - Agent registration
 - Heartbeat mechanism
 - Command processing
@@ -204,7 +236,9 @@
 ---
 
 ### `/test-ha-failover`
-**Test HA failover**
+
+#### Test HA failover
+
 - Multi-pod API failover
 - Agent reconnection
 - Leader election
@@ -213,7 +247,9 @@
 ---
 
 ### `/test-vnc-e2e`
-**Test VNC streaming E2E**
+
+#### Test VNC streaming E2E
+
 - Session creation
 - VNC tunnel establishment
 - Port-forward validation
@@ -221,10 +257,23 @@
 
 ---
 
+### `/test-e2e`
+
+#### Run Playwright E2E tests
+
+- Full browser automation
+- UI interaction testing
+- Cross-browser testing (Chromium, Firefox, WebKit)
+- Visual regression testing
+
+---
+
 ## ☸️ Kubernetes Commands
 
 ### `/k8s-deploy`
-**Deploy to Kubernetes**
+
+#### Deploy to Kubernetes
+
 - Applies manifests
 - Helm chart deployment
 - Waits for rollout
@@ -233,7 +282,9 @@
 ---
 
 ### `/k8s-logs [component]`
-**Fetch component logs**
+
+#### Fetch component logs
+
 - API logs
 - Agent logs
 - Database logs
@@ -244,7 +295,9 @@
 ---
 
 ### `/k8s-debug`
-**Debug Kubernetes issues**
+
+#### Debug Kubernetes issues
+
 - Pod status
 - Events
 - Resource usage
@@ -255,7 +308,9 @@
 ## 🐳 Docker Commands
 
 ### `/docker-build`
-**Build all Docker images**
+
+#### Build all Docker images
+
 - API image
 - K8s Agent image
 - Docker Agent image
@@ -265,7 +320,9 @@
 ---
 
 ### `/docker-test`
-**Test Docker Agent locally**
+
+#### Test Docker Agent locally
+
 - Runs Docker Agent in container
 - Connects to local API
 - Creates test sessions
@@ -276,7 +333,9 @@
 ## 🔐 Security & Maintenance
 
 ### `/security-audit`
-**Run security scans**
+
+#### Run security scans
+
 - Dependency vulnerability scan
 - Secret detection
 - SAST analysis
@@ -285,7 +344,9 @@
 ---
 
 ### `/fix-imports`
-**Fix Go/TypeScript imports**
+
+#### Fix Go/TypeScript imports
+
 - Organizes imports
 - Removes unused imports
 - Groups by type (stdlib, external, internal)
@@ -296,7 +357,9 @@
 ## 🏗️ Workflow Commands
 
 ### `/integrate-agents`
-**Integrate multi-agent work (Architect only)**
+
+#### Integrate multi-agent work (Architect only)
+
 - Fetches all agent branches
 - Shows changes from each agent
 - Merges in order (Scribe → Builder → Validator)
@@ -307,7 +370,9 @@
 ---
 
 ### `/wave-summary`
-**Generate integration summary (Architect only)**
+
+#### Generate integration summary (Architect only)
+
 - Summarizes wave changes
 - Lists files changed per agent
 - Calculates metrics
@@ -320,7 +385,9 @@
 ## 🎭 Agent Initialization
 
 ### `/init-architect`
-**Initialize Architect agent (Agent 1)**
+
+#### Initialize Architect agent (Agent 1)
+
 - Loads coordination role
 - Checks agent branches
 - Reviews issues and milestones
@@ -329,7 +396,9 @@
 ---
 
 ### `/init-builder`
-**Initialize Builder agent (Agent 2)**
+
+#### Initialize Builder agent (Agent 2)
+
 - Loads implementation role
 - Checks assigned issues
 - Reviews MULTI_AGENT_PLAN priorities
@@ -338,7 +407,9 @@
 ---
 
 ### `/init-validator`
-**Initialize Validator agent (Agent 3)**
+
+#### Initialize Validator agent (Agent 3)
+
 - Loads testing/validation role
 - Checks ready-for-testing issues
 - Reviews test coverage
@@ -347,7 +418,9 @@
 ---
 
 ### `/init-scribe`
-**Initialize Scribe agent (Agent 4)**
+
+#### Initialize Scribe agent (Agent 4)
+
 - Loads documentation role
 - Checks documentation needs
 - Reviews feature completions
@@ -360,6 +433,7 @@
 ### Agent Workflows
 
 **Builder Workflow**:
+
 1. `/check-work` - Find assigned issues
 2. Work on fix/feature
 3. `/verify-all` - Validate changes
@@ -367,6 +441,7 @@
 5. `/agent-status` - Report progress
 
 **Validator Workflow**:
+
 1. `/check-work` - Find ready-for-testing items
 2. `/test-*` commands - Run tests
 3. `/coverage-report` - Check coverage
@@ -374,12 +449,14 @@
 5. Create validation reports in `.claude/reports/`
 
 **Scribe Workflow**:
+
 1. `/check-work` - Find documentation needs
 2. Update docs based on completed features
 3. `/commit-smart` - Commit documentation
 4. `/agent-status` - Report progress
 
 **Architect Workflow**:
+
 1. `/check-work` - Review all agent work
 2. `/integrate-agents` - Merge agent branches
 3. `/wave-summary` - Document integration
@@ -391,27 +468,33 @@
 ## 🎯 Quick Reference by Task
 
 **Starting Work:**
+
 - `/check-work` - What should I work on?
 - `/sync-integration` - Get latest from other agents
 
 **During Work:**
+
 - `/update-issue` - Report progress/blockers
 - `/create-issue` - Track new bugs/tasks
 
 **Completing Work:**
+
 - `/verify-all` - Validate quality
 - `/signal-ready` - Hand off to Validator
 - `/agent-status` - Report completion
 
 **Testing:**
+
 - `/test-go`, `/test-ui`, `/test-integration` - Run tests
 - `/coverage-report` - Check coverage
 
 **Code Review:**
+
 - `/review-pr` - Review pull request
 - `/security-audit` - Check security
 
 **Deployment:**
+
 - `/k8s-deploy` - Deploy to cluster
 - `/docker-build` - Build images
 
@@ -419,7 +502,7 @@
 
 ## 📝 Notes
 
-- All commands use MCP GitHub tools when available
+- All commands use native CLI tools (`gh`, `git`, `kubectl`) instead of MCP servers
 - Commands generate reports in `.claude/reports/`
 - Semantic commit messages follow conventional commits spec
 - Test commands use appropriate models (haiku for speed)

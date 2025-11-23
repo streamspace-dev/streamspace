@@ -12,16 +12,27 @@ Example: `/signal-ready 200` (for Issue #200)
 
 ## What This Does
 
-1. **Commits your work** (if uncommitted changes exist)
-2. **Pushes to your agent branch**
-3. **Adds GitHub comment** with ready-for-testing notice
-4. **Updates MULTI_AGENT_PLAN.md** with status
+ 1. **Commits your work** (if uncommitted changes exist)
+ 2. **Pushes to your agent branch**: `git push`
+ 3. **Adds GitHub comment**:
+
+    ```bash
+    gh issue comment <number> --body "..."
+    ```
+
+ 4. **Updates labels**:
+
+    ```bash
+    gh issue edit <number> --add-label "ready-for-testing"
+    ```
+
+ 5. **Updates MULTI_AGENT_PLAN.md** with status
 
 ## Template Comment
 
 The command will post:
 
-```
+```markdown
 ## ✅ Fix Ready for Testing
 
 **Agent**: [Builder/Validator/Scribe]
