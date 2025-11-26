@@ -332,7 +332,8 @@ func TestGetCurrentLicense_NoActiveLicense(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "No active license", response.Error)
+	// Fix: The handler returns "No active license found" not "No active license"
+	assert.Equal(t, "No active license found", response.Error)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -710,18 +711,15 @@ func TestGetUsageHistory_Success_DefaultDays(t *testing.T) {
 
 	now := time.Now()
 
-	// Mock license query
-	featuresJSON := `{}`
-	metadataJSON := `{}`
-	licenseRow := sqlmock.NewRows([]string{
-		"id", "license_key", "tier", "features", "max_users", "max_sessions", "max_nodes",
-		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
-	}).AddRow(1, "PRO-1234", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
-
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
-		WillReturnRows(licenseRow)
+	// Mock license ID query - the handler runs:
+	// SELECT id FROM licenses WHERE status = 'active' ORDER BY activated_at DESC LIMIT 1
+	licenseIDRow := sqlmock.NewRows([]string{"id"}).AddRow(1)
+	mock.ExpectQuery(`SELECT id FROM licenses WHERE status = 'active' ORDER BY activated_at DESC LIMIT 1`).
+		WillReturnRows(licenseIDRow)
 
 	// Mock usage history (30 days default)
+	// Query: SELECT id, license_id, snapshot_date, active_users, active_sessions, active_nodes, created_at
+	//        FROM license_usage WHERE license_id = $1 AND snapshot_date >= CURRENT_DATE - $2
 	historyRows := sqlmock.NewRows([]string{
 		"id", "license_id", "snapshot_date", "active_users", "active_sessions", "active_nodes", "created_at",
 	}).
@@ -729,8 +727,8 @@ func TestGetUsageHistory_Success_DefaultDays(t *testing.T) {
 		AddRow(2, 1, now.AddDate(0, 0, -1).Format("2006-01-02"), 45, 90, 5, now).
 		AddRow(3, 1, now.Format("2006-01-02"), 50, 100, 5, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM license_usage WHERE license_id = \$1 AND snapshot_date >= \$2`).
-		WithArgs(1, sqlmock.AnyArg()).
+	mock.ExpectQuery(`SELECT .+ FROM license_usage WHERE license_id = \$1 AND snapshot_date >= CURRENT_DATE - \$2`).
+		WithArgs(1, 30).
 		WillReturnRows(historyRows)
 
 	// Create test context
@@ -760,16 +758,10 @@ func TestGetUsageHistory_Success_CustomDays(t *testing.T) {
 
 	now := time.Now()
 
-	// Mock license query
-	featuresJSON := `{}`
-	metadataJSON := `{}`
-	licenseRow := sqlmock.NewRows([]string{
-		"id", "license_key", "tier", "features", "max_users", "max_sessions", "max_nodes",
-		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
-	}).AddRow(1, "PRO-1234", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
-
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
-		WillReturnRows(licenseRow)
+	// Mock license ID query
+	licenseIDRow := sqlmock.NewRows([]string{"id"}).AddRow(1)
+	mock.ExpectQuery(`SELECT id FROM licenses WHERE status = 'active' ORDER BY activated_at DESC LIMIT 1`).
+		WillReturnRows(licenseIDRow)
 
 	// Mock usage history (7 days)
 	historyRows := sqlmock.NewRows([]string{
@@ -777,8 +769,8 @@ func TestGetUsageHistory_Success_CustomDays(t *testing.T) {
 	}).
 		AddRow(1, 1, now.Format("2006-01-02"), 50, 100, 5, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM license_usage WHERE license_id = \$1 AND snapshot_date >= \$2`).
-		WithArgs(1, sqlmock.AnyArg()).
+	mock.ExpectQuery(`SELECT .+ FROM license_usage WHERE license_id = \$1 AND snapshot_date >= CURRENT_DATE - \$2`).
+		WithArgs(1, 7).
 		WillReturnRows(historyRows)
 
 	// Create test context with custom days parameter
@@ -804,8 +796,7 @@ func TestGetUsageHistory_NoActiveLicense(t *testing.T) {
 	defer cleanup()
 
 	// Mock no active license
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT id FROM licenses WHERE status = 'active' ORDER BY activated_at DESC LIMIT 1`).
 		WillReturnError(sql.ErrNoRows)
 
 	// Create test context
@@ -822,8 +813,13 @@ func TestGetUsageHistory_NoActiveLicense(t *testing.T) {
 }
 
 func TestGetUsageHistory_InvalidDaysParameter(t *testing.T) {
-	handler, _, cleanup := setupLicenseTest(t)
+	handler, mock, cleanup := setupLicenseTest(t)
 	defer cleanup()
+
+	// When days parameter is invalid, the handler defaults to 30 days and queries the database
+	// We need to mock the DB call since it will try to fetch license ID
+	mock.ExpectQuery(`SELECT id FROM licenses WHERE status = 'active' ORDER BY activated_at DESC LIMIT 1`).
+		WillReturnError(sql.ErrNoRows)
 
 	// Create test context with invalid days parameter
 	w := httptest.NewRecorder()
@@ -833,7 +829,8 @@ func TestGetUsageHistory_InvalidDaysParameter(t *testing.T) {
 
 	handler.GetUsageHistory(c)
 
-	// Should default to 30 days and continue, but might return error depending on implementation
-	// For now, let's just verify it doesn't panic
-	assert.NotEqual(t, http.StatusInternalServerError, w.Code)
+	// With invalid days param, handler defaults to 30 days and continues
+	// Since no license exists, it returns 404
+	assert.Equal(t, http.StatusNotFound, w.Code)
+	assert.NoError(t, mock.ExpectationsWereMet())
 }
