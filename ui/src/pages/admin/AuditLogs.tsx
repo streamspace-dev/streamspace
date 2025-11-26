@@ -282,7 +282,7 @@ export default function AuditLogs() {
               </Button>
             </Tooltip>
             <Tooltip title="Refresh">
-              <IconButton onClick={() => refetch()}>
+              <IconButton onClick={() => refetch()} aria-label="Refresh">
                 <RefreshIcon />
               </IconButton>
             </Tooltip>
@@ -468,6 +468,7 @@ export default function AuditLogs() {
                       <IconButton
                         size="small"
                         onClick={() => handleViewDetails(log)}
+                        aria-label="View Details"
                       >
                         <VisibilityIcon />
                       </IconButton>

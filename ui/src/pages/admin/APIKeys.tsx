@@ -479,6 +479,7 @@ export default function APIKeys() {
                               size="small"
                               onClick={() => handleRevokeKey(key.id)}
                               disabled={revokeMutation.isPending}
+                              aria-label="Revoke"
                             >
                               <RevokeIcon fontSize="small" />
                             </IconButton>
@@ -492,6 +493,7 @@ export default function APIKeys() {
                               setSelectedKeyId(key.id);
                               setDeleteConfirmOpen(true);
                             }}
+                            aria-label="Delete"
                           >
                             <DeleteIcon fontSize="small" />
                           </IconButton>
