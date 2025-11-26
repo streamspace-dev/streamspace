@@ -559,7 +559,7 @@ func createSessionPVC(client *kubernetes.Clientset, namespace string, spec *Sess
 				corev1.ReadWriteOnce,
 			},
 			StorageClassName: &storageClass,
-			Resources: corev1.ResourceRequirements{
+			Resources: corev1.VolumeResourceRequirements{
 				Requests: corev1.ResourceList{
 					corev1.ResourceStorage: storage,
 				},
