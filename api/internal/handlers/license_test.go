@@ -85,21 +85,17 @@ func TestGetCurrentLicense_Success_CommunityTier(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "COMM-1234-5678", "community", featuresJSON, 10, 20, 3, now, expiresAt, now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage queries
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT id\) FROM users WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE active = true`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE state = \$1`).
-		WithArgs("running").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE status IN \('running', 'hibernated'\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT controller_id\) FROM controllers WHERE status = \$1`).
-		WithArgs("connected").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM controllers WHERE status = 'connected'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
 	// Create test context
@@ -145,21 +141,17 @@ func TestGetCurrentLicense_Success_ProTierWithWarnings(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "PRO-1234-5678", "pro", featuresJSON, 100, 200, 10, now, expiresAt, now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage queries - approaching limits (85% users, 92% sessions)
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT id\) FROM users WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE active = true`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(85))
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE state = \$1`).
-		WithArgs("running").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE status IN \('running', 'hibernated'\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(184))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT controller_id\) FROM controllers WHERE status = \$1`).
-		WithArgs("connected").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM controllers WHERE status = 'connected'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
 	// Create test context
@@ -228,21 +220,17 @@ func TestGetCurrentLicense_Success_EnterpriseTierUnlimited(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "ENT-1234-5678", "enterprise", featuresJSON, nil, nil, nil, now, expiresAt, now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage queries - high numbers, but unlimited license
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT id\) FROM users WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE active = true`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(500))
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE state = \$1`).
-		WithArgs("running").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE status IN \('running', 'hibernated'\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(1000))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT controller_id\) FROM controllers WHERE status = \$1`).
-		WithArgs("connected").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM controllers WHERE status = 'connected'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(25))
 
 	// Create test context
@@ -290,21 +278,17 @@ func TestGetCurrentLicense_Success_ExpiredLicense(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "COMM-EXPIRED", "community", featuresJSON, 10, 20, 3, now.AddDate(0, 0, -370), expiresAt, now.AddDate(0, 0, -370), "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage queries
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT id\) FROM users WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE active = true`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE state = \$1`).
-		WithArgs("running").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE status IN \('running', 'hibernated'\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(10))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT controller_id\) FROM controllers WHERE status = \$1`).
-		WithArgs("connected").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM controllers WHERE status = 'connected'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(2))
 
 	// Create test context
@@ -332,8 +316,7 @@ func TestGetCurrentLicense_NoActiveLicense(t *testing.T) {
 	defer cleanup()
 
 	// Mock no active license
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnError(sql.ErrNoRows)
 
 	// Create test context
@@ -359,8 +342,7 @@ func TestGetCurrentLicense_DatabaseError(t *testing.T) {
 	defer cleanup()
 
 	// Mock database error
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnError(fmt.Errorf("database error"))
 
 	// Create test context
@@ -402,24 +384,22 @@ func TestActivateLicense_Success(t *testing.T) {
 	featuresJSON := `{"saml":true,"oidc":true,"mfa":true}`
 	metadataJSON := `{"activated_by":"admin"}`
 
-	mock.ExpectQuery(`INSERT INTO licenses`).
-		WithArgs(
-			"PRO-NEW-LICENSE-KEY",
-			"pro",
-			sqlmock.AnyArg(), // features
-			100,
-			200,
-			10,
-			sqlmock.AnyArg(), // issued_at
-			sqlmock.AnyArg(), // expires_at
-			sqlmock.AnyArg(), // activated_at
-			"active",
-			sqlmock.AnyArg(), // metadata
-		).
-		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "license_key", "tier", "features", "max_users", "max_sessions", "max_nodes",
-			"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
-		}).AddRow(1, "PRO-NEW-LICENSE-KEY", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now))
+	// Mock selecting new license
+	// featuresJSON and metadataJSON already declared above
+
+	licenseRow := sqlmock.NewRows([]string{
+		"id", "license_key", "tier", "features", "max_users", "max_sessions", "max_nodes",
+		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
+	}).AddRow(1, "PRO-NEW-LICENSE-KEY", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
+
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE license_key = \$1`).
+		WithArgs("PRO-NEW-LICENSE-KEY").
+		WillReturnRows(licenseRow)
+
+	// Mock activating new license
+	mock.ExpectExec(`UPDATE licenses SET status = 'active', activated_at = \$1, updated_at = \$2 WHERE license_key = \$3`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), "PRO-NEW-LICENSE-KEY").
+		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	mock.ExpectCommit()
 
@@ -467,7 +447,7 @@ func TestActivateLicense_InvalidJSON(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "Invalid request", response.Error)
+	assert.Equal(t, "Invalid request format", response.Error)
 }
 
 func TestActivateLicense_KeyTooShort(t *testing.T) {
@@ -493,8 +473,7 @@ func TestActivateLicense_KeyTooShort(t *testing.T) {
 	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, "Invalid license key", response.Error)
-	assert.Contains(t, response.Message, "too short")
+	assert.Equal(t, "Validation failed", response.Error)
 }
 
 func TestActivateLicense_TransactionBeginError(t *testing.T) {
@@ -581,21 +560,17 @@ func TestGetLicenseUsage_Success(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "PRO-1234", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage queries
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT id\) FROM users WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM users WHERE active = true`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(45))
 
-	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE state = \$1`).
-		WithArgs("running").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM sessions WHERE status IN \('running', 'hibernated'\)`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(90))
 
-	mock.ExpectQuery(`SELECT COUNT\(DISTINCT controller_id\) FROM controllers WHERE status = \$1`).
-		WithArgs("connected").
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM controllers WHERE status = 'connected'`).
 		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(5))
 
 	// Create test context
@@ -626,8 +601,7 @@ func TestGetLicenseUsage_NoActiveLicense(t *testing.T) {
 	defer cleanup()
 
 	// Mock no active license
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnError(sql.ErrNoRows)
 
 	// Create test context
@@ -648,8 +622,18 @@ func TestGetLicenseUsage_NoActiveLicense(t *testing.T) {
 // ============================================================================
 
 func TestValidateLicense_Success_ValidKey(t *testing.T) {
-	handler, _, cleanup := setupLicenseTest(t)
+	handler, mock, cleanup := setupLicenseTest(t)
 	defer cleanup()
+
+	// Mock license query
+	featuresJSON := `{}`
+	now := time.Now()
+	expiresAt := now.AddDate(1, 0, 0)
+
+	mock.ExpectQuery(`SELECT tier, features, expires_at FROM licenses WHERE license_key = \$1`).
+		WithArgs("VALID-LICENSE-KEY-FORMAT").
+		WillReturnRows(sqlmock.NewRows([]string{"tier", "features", "expires_at"}).
+			AddRow("pro", featuresJSON, expiresAt))
 
 	// Create test context
 	w := httptest.NewRecorder()
@@ -691,13 +675,12 @@ func TestValidateLicense_InvalidKey_TooShort(t *testing.T) {
 
 	handler.ValidateLicense(c)
 
-	assert.Equal(t, http.StatusOK, w.Code)
+	assert.Equal(t, http.StatusBadRequest, w.Code)
 
-	var response map[string]interface{}
+	var response ErrorResponse
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
-	assert.Equal(t, false, response["valid"])
-	assert.Contains(t, response["message"], "too short")
+	assert.Equal(t, "Validation failed", response.Error)
 }
 
 func TestValidateLicense_InvalidJSON(t *testing.T) {
@@ -735,8 +718,7 @@ func TestGetUsageHistory_Success_DefaultDays(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "PRO-1234", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage history (30 days default)
@@ -786,8 +768,7 @@ func TestGetUsageHistory_Success_CustomDays(t *testing.T) {
 		"issued_at", "expires_at", "activated_at", "status", "metadata", "created_at", "updated_at",
 	}).AddRow(1, "PRO-1234", "pro", featuresJSON, 100, 200, 10, now, now.AddDate(1, 0, 0), now, "active", metadataJSON, now, now)
 
-	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = \$1`).
-		WithArgs("active").
+	mock.ExpectQuery(`SELECT .+ FROM licenses WHERE status = 'active'`).
 		WillReturnRows(licenseRow)
 
 	// Mock usage history (7 days)

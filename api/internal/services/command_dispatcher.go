@@ -41,6 +41,7 @@ package services
 import (
 	"fmt"
 	"log"
+	"sync"
 	"time"
 
 	"github.com/streamspace-dev/streamspace/api/internal/db"
@@ -68,6 +69,9 @@ type CommandDispatcher struct {
 
 	// stopChan signals workers to stop
 	stopChan chan struct{}
+
+	// stopOnce ensures Stop is called only once
+	stopOnce sync.Once
 }
 
 // NewCommandDispatcher creates a new CommandDispatcher.
@@ -132,7 +136,9 @@ func (d *CommandDispatcher) Start() {
 // This closes the stopChan, causing Start() to exit.
 // Workers will finish processing their current commands before exiting.
 func (d *CommandDispatcher) Stop() {
-	close(d.stopChan)
+	d.stopOnce.Do(func() {
+		close(d.stopChan)
+	})
 }
 
 // DispatchCommand queues a command for dispatch to an agent.

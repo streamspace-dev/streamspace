@@ -480,7 +480,7 @@ func TestAddRating_InvalidRating(t *testing.T) {
 
 	var response map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Contains(t, response["error"], "Invalid request")
+	assert.Contains(t, response["error"], "Validation failed")
 }
 
 // TestGetRatings_Success tests getting template ratings

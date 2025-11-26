@@ -350,6 +350,9 @@ export default function APIKeys() {
                       </InputAdornment>
                     ),
                   }}
+                  inputProps={{
+                    'aria-label': 'Search API keys',
+                  }}
                 />
               </Grid>
               <Grid item xs={12} md={3}>

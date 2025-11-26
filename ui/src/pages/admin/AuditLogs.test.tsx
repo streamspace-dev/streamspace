@@ -41,7 +41,7 @@ vi.mock('@mui/x-date-pickers/LocalizationProvider', () => ({
 }));
 
 vi.mock('@mui/x-date-pickers/AdapterDateFns', () => ({
-  AdapterDateFns: class {},
+  AdapterDateFns: class { },
 }));
 
 // Mock audit log data
@@ -208,9 +208,6 @@ describe('AuditLogs Page', () => {
       const userIdInput = screen.getByLabelText(/user id/i);
       fireEvent.change(userIdInput, { target: { value: 'user-123' } });
 
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      fireEvent.click(searchButton);
-
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(
           expect.stringContaining('user_id=user-123'),
@@ -224,9 +221,6 @@ describe('AuditLogs Page', () => {
 
       const actionFilter = screen.getByLabelText(/action/i);
       fireEvent.change(actionFilter, { target: { value: 'POST' } });
-
-      const searchButton = screen.getByRole('button', { name: /search/i });
-      fireEvent.click(searchButton);
 
       await waitFor(() => {
         expect(api.get).toHaveBeenCalledWith(
@@ -596,9 +590,6 @@ describe('AuditLogs Integration', () => {
     const actionFilter = screen.getByLabelText(/action/i);
     fireEvent.change(actionFilter, { target: { value: 'POST' } });
 
-    const searchButton = screen.getByRole('button', { name: /search/i });
-    fireEvent.click(searchButton);
-
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledWith(
         expect.stringContaining('user_id=user-123'),
@@ -625,9 +616,6 @@ describe('AuditLogs Integration', () => {
     // Apply filter
     const userIdInput = screen.getByLabelText(/user id/i);
     fireEvent.change(userIdInput, { target: { value: 'user-123' } });
-
-    const searchButton = screen.getByRole('button', { name: /search/i });
-    fireEvent.click(searchButton);
 
     await waitFor(() => {
       expect(api.get).toHaveBeenCalledWith(

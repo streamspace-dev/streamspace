@@ -762,19 +762,19 @@ func TestBulkUpdateConfigurations_Success_AllValid(t *testing.T) {
 	// Mock transaction
 	mock.ExpectBegin()
 
-	// Mock type checks for each config
+	// Mock type check and update for first config (features.hibernation)
 	mock.ExpectQuery(`SELECT type FROM configuration WHERE key = \$1`).
 		WithArgs("features.hibernation").
 		WillReturnRows(sqlmock.NewRows([]string{"type"}).AddRow("boolean"))
 
-	mock.ExpectQuery(`SELECT type FROM configuration WHERE key = \$1`).
-		WithArgs("session.idle_timeout").
-		WillReturnRows(sqlmock.NewRows([]string{"type"}).AddRow("duration"))
-
-	// Mock updates
 	mock.ExpectExec(`UPDATE configuration SET value = \$1, updated_at = \$2, updated_by = \$3 WHERE key = \$4`).
 		WithArgs("true", sqlmock.AnyArg(), "", "features.hibernation").
 		WillReturnResult(sqlmock.NewResult(1, 1))
+
+	// Mock type check and update for second config (session.idle_timeout)
+	mock.ExpectQuery(`SELECT type FROM configuration WHERE key = \$1`).
+		WithArgs("session.idle_timeout").
+		WillReturnRows(sqlmock.NewRows([]string{"type"}).AddRow("duration"))
 
 	mock.ExpectExec(`UPDATE configuration SET value = \$1, updated_at = \$2, updated_by = \$3 WHERE key = \$4`).
 		WithArgs("45m", sqlmock.AnyArg(), "", "session.idle_timeout").
@@ -788,7 +788,7 @@ func TestBulkUpdateConfigurations_Success_AllValid(t *testing.T) {
 
 	reqBody := BulkUpdateRequest{
 		Updates: map[string]string{
-			"features.hibernation":   "true",
+			"features.hibernation": "true",
 			"session.idle_timeout": "45m",
 		},
 	}
