@@ -22,6 +22,7 @@ func TestCreateSession_Success(t *testing.T) {
 	session := &Session{
 		ID:           "session123",
 		UserID:       "user123",
+		OrgID:        "org123",
 		TemplateName: "ubuntu-22.04",
 		State:        "pending",
 		AppType:      "desktop",
@@ -31,12 +32,12 @@ func TestCreateSession_Success(t *testing.T) {
 		Platform:     "kubernetes",
 	}
 
-	// Expect INSERT with all session fields (21 parameters including timestamps)
+	// Expect INSERT with all session fields (25 parameters including org_id and timestamps)
 	mock.ExpectExec("INSERT INTO sessions").
-		WithArgs(sqlmock.AnyArg(), session.UserID, sqlmock.AnyArg(), session.TemplateName, session.State, session.AppType,
-			sqlmock.AnyArg(), sqlmock.AnyArg(), session.Namespace, session.Platform, sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
-			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs(sqlmock.AnyArg(), session.UserID, session.OrgID, sqlmock.AnyArg(), session.TemplateName, session.State, session.AppType,
+			sqlmock.AnyArg(), sqlmock.AnyArg(), session.Namespace, session.Platform, sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(),
+			sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	err = sessionDB.CreateSession(ctx, session)
@@ -55,15 +56,15 @@ func TestGetSession_Success(t *testing.T) {
 
 	sessionID := "session123"
 
-	// Match the 21 columns from the actual GetSession query
-	rows := sqlmock.NewRows([]string{"id", "user_id", "team_id", "template_name", "state", "app_type",
-		"active_connections", "url", "namespace", "platform", "pod_name",
+	// Match the 25 columns from the actual GetSession query (including org_id, agent_id, cluster_id)
+	rows := sqlmock.NewRows([]string{"id", "user_id", "org_id", "team_id", "template_name", "state", "app_type",
+		"active_connections", "url", "namespace", "platform", "agent_id", "cluster_id", "pod_name",
 		"memory", "cpu", "persistent_home", "idle_timeout", "max_session_duration",
-		"created_at", "updated_at", "last_connection", "last_disconnect", "last_activity"}).
-		AddRow("session123", "user123", "", "ubuntu-22.04", "running", "desktop",
-			0, "https://session123.example.com", "streamspace", "kubernetes", "pod-123",
+		"tags", "created_at", "updated_at", "last_connection", "last_disconnect", "last_activity"}).
+		AddRow("session123", "user123", "org123", "", "ubuntu-22.04", "running", "desktop",
+			0, "https://session123.example.com", "streamspace", "kubernetes", "", "", "pod-123",
 			"2Gi", "1000m", false, "3600", "28800",
-			time.Now(), time.Now(), nil, nil, nil)
+			nil, time.Now(), time.Now(), nil, nil, nil)
 
 	mock.ExpectQuery("SELECT (.+) FROM sessions WHERE id").
 		WithArgs(sessionID).
@@ -75,6 +76,7 @@ func TestGetSession_Success(t *testing.T) {
 	assert.NotNil(t, session)
 	assert.Equal(t, "session123", session.ID)
 	assert.Equal(t, "user123", session.UserID)
+	assert.Equal(t, "org123", session.OrgID)
 	assert.Equal(t, "running", session.State)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
@@ -111,9 +113,13 @@ func TestListSessions_ByUser(t *testing.T) {
 
 	userID := "user123"
 
-	rows := sqlmock.NewRows([]string{"id", "user_id", "team_id", "template_name", "state", "app_type", "active_connections", "url", "namespace", "platform", "pod_name", "memory", "cpu", "persistent_home", "idle_timeout", "max_session_duration", "created_at", "updated_at", "last_connection", "last_disconnect", "last_activity"}).
-		AddRow("session1", userID, "", "ubuntu", "running", "desktop", 0, "", "streamspace", "kubernetes", "", "2Gi", "1000m", false, "", "", time.Now(), time.Now(), nil, nil, nil).
-		AddRow("session2", userID, "", "debian", "stopped", "desktop", 0, "", "streamspace", "kubernetes", "", "1Gi", "500m", false, "", "", time.Now(), time.Now(), nil, nil, nil)
+	// Match the 25 columns from the actual query (including org_id, agent_id, cluster_id, tags)
+	rows := sqlmock.NewRows([]string{"id", "user_id", "org_id", "team_id", "template_name", "state", "app_type",
+		"active_connections", "url", "namespace", "platform", "agent_id", "cluster_id", "pod_name",
+		"memory", "cpu", "persistent_home", "idle_timeout", "max_session_duration",
+		"tags", "created_at", "updated_at", "last_connection", "last_disconnect", "last_activity"}).
+		AddRow("session1", userID, "org123", "", "ubuntu", "running", "desktop", 0, "", "streamspace", "kubernetes", "", "", "", "2Gi", "1000m", false, "", "", nil, time.Now(), time.Now(), nil, nil, nil).
+		AddRow("session2", userID, "org123", "", "debian", "stopped", "desktop", 0, "", "streamspace", "kubernetes", "", "", "", "1Gi", "500m", false, "", "", nil, time.Now(), time.Now(), nil, nil, nil)
 
 	mock.ExpectQuery("SELECT (.+) FROM sessions WHERE user_id").
 		WithArgs(userID).

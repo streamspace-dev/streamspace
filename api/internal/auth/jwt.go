@@ -151,8 +151,12 @@ type JWTConfig struct {
 // SECURITY WARNING: Do not include sensitive information in claims!
 // - ❌ DON'T include passwords, API keys, credit card numbers
 // - ❌ DON'T include SSNs, health data, or other PII beyond what's necessary
-// - ✅ DO include user IDs, roles, and group memberships
+// - ✅ DO include user IDs, org IDs, roles, and group memberships
 // - ✅ DO keep claim data minimal to reduce token size
+//
+// MULTI-TENANCY: The OrgID field is CRITICAL for tenant isolation.
+// All API handlers MUST extract org_id from claims and use it to filter
+// database queries. Never trust client-provided org_id values.
 //
 // Token payload is visible to anyone with the token (it's only base64-encoded).
 // Only the signature prevents tampering, not visibility.
@@ -162,6 +166,20 @@ type Claims struct {
 	// Also set in the standard "sub" (subject) claim.
 	UserID string `json:"user_id"`
 
+	// OrgID is the organization this user belongs to.
+	// SECURITY CRITICAL: This field enables multi-tenancy isolation.
+	// All API handlers MUST filter queries by org_id to prevent
+	// cross-tenant data access.
+	OrgID string `json:"org_id"`
+
+	// OrgName is the human-readable organization name.
+	// Used for display purposes only.
+	OrgName string `json:"org_name,omitempty"`
+
+	// K8sNamespace is the Kubernetes namespace for this org's resources.
+	// Used by WebSocket handlers to scope session/metrics queries.
+	K8sNamespace string `json:"k8s_namespace,omitempty"`
+
 	// Username is the user's login name.
 	// Used for display purposes and audit logs.
 	Username string `json:"username"`
@@ -170,12 +188,20 @@ type Claims struct {
 	// Used for notifications and account recovery.
 	Email string `json:"email"`
 
-	// Role defines the user's permission level.
+	// Role defines the user's system-wide permission level.
 	// Values: "admin", "operator", "user"
 	// - admin: Full system access (all APIs, all users)
 	// - operator: Platform management (view all, manage resources)
 	// - user: Standard access (own sessions only)
 	Role string `json:"role"`
+
+	// OrgRole defines the user's role within their organization.
+	// Values: "org_admin", "maintainer", "user", "viewer"
+	// - org_admin: Manage users/roles, templates, org settings
+	// - maintainer: Manage templates, sessions (no user admin)
+	// - user: Manage own sessions, list org templates
+	// - viewer: Read-only access to lists/metrics
+	OrgRole string `json:"org_role,omitempty"`
 
 	// Groups lists the teams/groups the user belongs to.
 	// Used for team-based resource sharing and quotas.
@@ -227,6 +253,22 @@ func (m *JWTManager) GetSessionStore() *SessionStore {
 	return m.sessionStore
 }
 
+// OrgInfo contains organization information for token generation.
+// This is used to include org context in JWT claims.
+type OrgInfo struct {
+	// OrgID is the organization's unique identifier.
+	OrgID string
+
+	// OrgName is the human-readable organization name.
+	OrgName string
+
+	// K8sNamespace is the Kubernetes namespace for this org.
+	K8sNamespace string
+
+	// OrgRole is the user's role within this organization.
+	OrgRole string
+}
+
 // GenerateToken generates a new JWT token for a user.
 //
 // This function creates a cryptographically signed JWT token containing user
@@ -237,7 +279,8 @@ func (m *JWTManager) GetSessionStore() *SessionStore {
 //
 // 1. Create Claims:
 //   - User identity: UserID, Username, Email
-//   - Permissions: Role (admin/operator/user), Groups
+//   - Organization: OrgID, OrgName, K8sNamespace (CRITICAL for multi-tenancy)
+//   - Permissions: Role (admin/operator/user), OrgRole, Groups
 //   - Standard claims: Issuer, Subject, IssuedAt, ExpiresAt, NotBefore
 //
 // 2. Create Token:
@@ -268,6 +311,12 @@ func (m *JWTManager) GetSessionStore() *SessionStore {
 // - Includes issuer (iss claim)
 //   - Identifies the token creator
 //   - Prevents tokens from other systems being accepted
+//
+// MULTI-TENANCY:
+//
+// - Includes org_id in claims (CRITICAL for tenant isolation)
+// - All API handlers MUST extract org_id and use it to filter queries
+// - Never trust client-provided org_id values
 //
 // USAGE EXAMPLE:
 //
@@ -307,13 +356,42 @@ func (m *JWTManager) GetSessionStore() *SessionStore {
 //
 // NOTE: The generated token contains sensitive information (user identity, role).
 // Always transmit tokens over HTTPS to prevent interception.
+//
+// DEPRECATED: Use GenerateTokenWithOrg for multi-tenant deployments.
 func (m *JWTManager) GenerateToken(userID, username, email, role string, groups []string) (string, error) {
 	// Use background context for backward compatibility
+	// Default to "default-org" for backward compatibility with existing tokens
 	return m.GenerateTokenWithContext(context.Background(), userID, username, email, role, groups, "", "")
 }
 
-// GenerateTokenWithContext generates a new JWT token with session tracking
+// GenerateTokenWithOrg generates a JWT token with organization context.
+//
+// This is the preferred method for multi-tenant deployments. It includes
+// org_id in the token claims, which is CRITICAL for tenant isolation.
+//
+// SECURITY: All API handlers MUST extract org_id from claims and use it
+// to filter database queries. Never trust client-provided org_id values.
+func (m *JWTManager) GenerateTokenWithOrg(ctx context.Context, userID, username, email, role string, groups []string, orgInfo *OrgInfo, ipAddress, userAgent string) (string, error) {
+	return m.generateTokenInternal(ctx, userID, username, email, role, groups, orgInfo, ipAddress, userAgent)
+}
+
+// GenerateTokenWithContext generates a new JWT token with session tracking.
+// DEPRECATED: Use GenerateTokenWithOrg for multi-tenant deployments.
+// This function is kept for backward compatibility and defaults to "default-org".
 func (m *JWTManager) GenerateTokenWithContext(ctx context.Context, userID, username, email, role string, groups []string, ipAddress, userAgent string) (string, error) {
+	// Default to "default-org" for backward compatibility
+	defaultOrg := &OrgInfo{
+		OrgID:        "default-org",
+		OrgName:      "Default Organization",
+		K8sNamespace: "streamspace",
+		OrgRole:      "user",
+	}
+	return m.generateTokenInternal(ctx, userID, username, email, role, groups, defaultOrg, ipAddress, userAgent)
+}
+
+// generateTokenInternal is the internal token generation function.
+// It includes full org context support for multi-tenancy.
+func (m *JWTManager) generateTokenInternal(ctx context.Context, userID, username, email, role string, groups []string, orgInfo *OrgInfo, ipAddress, userAgent string) (string, error) {
 	// Get current time for timestamp claims
 	now := time.Now()
 	expiresAt := now.Add(m.config.TokenDuration)
@@ -322,6 +400,16 @@ func (m *JWTManager) GenerateTokenWithContext(ctx context.Context, userID, usern
 	sessionID, err := GenerateSessionID()
 	if err != nil {
 		return "", fmt.Errorf("failed to generate session ID: %w", err)
+	}
+
+	// Default org info if not provided
+	if orgInfo == nil {
+		orgInfo = &OrgInfo{
+			OrgID:        "default-org",
+			OrgName:      "Default Organization",
+			K8sNamespace: "streamspace",
+			OrgRole:      "user",
+		}
 	}
 
 	// STEP 1: Build Claims structure
@@ -333,6 +421,13 @@ func (m *JWTManager) GenerateTokenWithContext(ctx context.Context, userID, usern
 		Email:    email,
 		Role:     role,
 		Groups:   groups,
+
+		// Organization context - CRITICAL for multi-tenancy isolation
+		// SECURITY: All API handlers MUST extract org_id and filter queries
+		OrgID:        orgInfo.OrgID,
+		OrgName:      orgInfo.OrgName,
+		K8sNamespace: orgInfo.K8sNamespace,
+		OrgRole:      orgInfo.OrgRole,
 
 		// Standard JWT claims - defined by RFC 7519
 		RegisteredClaims: jwt.RegisteredClaims{
@@ -385,6 +480,7 @@ func (m *JWTManager) GenerateTokenWithContext(ctx context.Context, userID, usern
 			UserID:    userID,
 			Username:  username,
 			Role:      role,
+			OrgID:     orgInfo.OrgID, // Include org_id in session data
 			CreatedAt: now,
 			ExpiresAt: expiresAt,
 			IPAddress: ipAddress,

@@ -58,6 +58,7 @@ type SessionData struct {
 	UserID    string    `json:"user_id"`
 	Username  string    `json:"username"`
 	Role      string    `json:"role"`
+	OrgID     string    `json:"org_id"` // Organization ID for multi-tenancy
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	IPAddress string    `json:"ip_address,omitempty"`

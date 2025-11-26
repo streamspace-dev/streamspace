@@ -31,18 +31,24 @@ import (
 //
 // Each user has:
 //   - A unique ID (UUID)
+//   - An organization membership (org_id for multi-tenancy)
 //   - Authentication credentials (provider-specific)
 //   - Resource quotas (sessions, CPU, memory, storage)
 //   - Group memberships (for team-based access control)
+//
+// SECURITY: All API handlers MUST filter queries by org_id from the
+// authenticated user's JWT claims to prevent cross-tenant data access.
 //
 // Example:
 //
 //	{
 //	  "id": "550e8400-e29b-41d4-a716-446655440000",
+//	  "orgId": "org-acme",
 //	  "username": "alice",
 //	  "email": "alice@example.com",
 //	  "fullName": "Alice Smith",
 //	  "role": "user",
+//	  "orgRole": "user",
 //	  "provider": "local",
 //	  "active": true,
 //	  "quota": {
@@ -56,6 +62,11 @@ type User struct {
 	// ID is a unique identifier for this user (UUID v4).
 	// Generated automatically when the user is created.
 	ID string `json:"id" db:"id"`
+
+	// OrgID is the organization this user belongs to.
+	// SECURITY: This field is critical for multi-tenancy isolation.
+	// All queries MUST filter by org_id to prevent cross-tenant access.
+	OrgID string `json:"orgId" db:"org_id"`
 
 	// Username is a unique identifier used for authentication and display.
 	// Requirements:
@@ -79,7 +90,7 @@ type User struct {
 	// Example: "Alice Smith", "Bob Jones"
 	FullName string `json:"fullName" db:"full_name"`
 
-	// Role defines the user's permission level.
+	// Role defines the user's system-wide permission level.
 	//
 	// Valid roles:
 	//   - "user": Standard user (can manage own sessions)
@@ -88,6 +99,17 @@ type User struct {
 	//
 	// Default: "user"
 	Role string `json:"role" db:"role"`
+
+	// OrgRole defines the user's role within their organization.
+	//
+	// Valid org roles:
+	//   - "org_admin": Manage users/roles, templates, org settings
+	//   - "maintainer": Manage templates, sessions (no user admin)
+	//   - "user": Manage own sessions, list org templates
+	//   - "viewer": Read-only access to lists/metrics
+	//
+	// Default: "user"
+	OrgRole string `json:"orgRole,omitempty" db:"org_role"`
 
 	// Provider indicates how this user authenticates.
 	//
