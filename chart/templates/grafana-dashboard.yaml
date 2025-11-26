@@ -1,8 +1,14 @@
 {{- if and .Values.monitoring.enabled .Values.monitoring.grafanaDashboard.enabled }}
+# StreamSpace Grafana Dashboards
+# Provides comprehensive observability dashboards aligned with SLOs:
+# 1. Control Plane Health - API, DB, Cache, System metrics
+# 2. Session Lifecycle - Session start latency, states, VNC, WebSocket
+# 3. Agents - Heartbeat freshness, capacity, errors
+---
 apiVersion: v1
 kind: ConfigMap
 metadata:
-  name: {{ include "streamspace.fullname" . }}-dashboard
+  name: {{ include "streamspace.fullname" . }}-control-plane-dashboard
   namespace: {{ .Values.monitoring.grafanaDashboard.namespace | default .Release.Namespace }}
   labels:
     {{- include "streamspace.labels" . | nindent 4 }}
@@ -11,7 +17,7 @@ metadata:
     {{- end }}
     grafana_dashboard: "1"
 data:
-  streamspace-overview.json: |-
+  streamspace-control-plane.json: |-
     {
       "annotations": {
         "list": [
@@ -26,223 +32,179 @@ data:
           }
         ]
       },
+      "description": "StreamSpace Control Plane Health - API latency, error rates, database, system metrics",
       "editable": true,
       "gnetId": null,
       "graphTooltip": 0,
       "id": null,
-      "links": [],
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": ["streamspace"],
+          "title": "StreamSpace Dashboards",
+          "type": "dashboards"
+        }
+      ],
       "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 100,
+          "title": "API Health Overview",
+          "type": "row"
+        },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
+              "color": { "mode": "thresholds" },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "yellow",
-                    "value": 50
-                  },
-                  {
-                    "color": "red",
-                    "value": 100
-                  }
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 99 },
+                  { "color": "green", "value": 99.5 }
                 ]
-              }
+              },
+              "unit": "percent"
             }
           },
-          "gridPos": {
-            "h": 4,
-            "w": 6,
-            "x": 0,
-            "y": 0
-          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 1 },
           "id": 1,
           "options": {
             "colorMode": "value",
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            }
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "streamspace_sessions_total",
+              "expr": "100 * (1 - sum(rate(http_requests_total{job=~\".*streamspace.*api.*\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=~\".*streamspace.*api.*\"}[5m])))",
+              "legendFormat": "Success Rate",
               "refId": "A"
             }
           ],
-          "title": "Total Active Sessions",
+          "title": "API Availability (SLO: 99.5%)",
           "type": "stat"
         },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
+              "color": { "mode": "thresholds" },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.3 },
+                  { "color": "red", "value": 0.8 }
                 ]
-              }
+              },
+              "unit": "s"
             }
           },
-          "gridPos": {
-            "h": 4,
-            "w": 6,
-            "x": 6,
-            "y": 0
-          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 1 },
           "id": 2,
           "options": {
             "colorMode": "value",
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            }
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "streamspace_sessions_total{state=\"running\"}",
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\".*streamspace.*api.*\"}[5m])) by (le))",
+              "legendFormat": "p99 Latency",
               "refId": "A"
             }
           ],
-          "title": "Running Sessions",
+          "title": "API p99 Latency (SLO: <800ms)",
           "type": "stat"
         },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
+              "color": { "mode": "thresholds" },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  {
-                    "color": "blue",
-                    "value": null
-                  }
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.01 },
+                  { "color": "red", "value": 0.02 }
                 ]
-              }
+              },
+              "unit": "percentunit"
             }
           },
-          "gridPos": {
-            "h": 4,
-            "w": 6,
-            "x": 12,
-            "y": 0
-          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 1 },
           "id": 3,
           "options": {
             "colorMode": "value",
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            }
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "streamspace_sessions_total{state=\"hibernated\"}",
+              "expr": "sum(rate(http_requests_total{job=~\".*streamspace.*api.*\",status=~\"5..\"}[5m])) / sum(rate(http_requests_total{job=~\".*streamspace.*api.*\"}[5m]))",
+              "legendFormat": "5xx Rate",
               "refId": "A"
             }
           ],
-          "title": "Hibernated Sessions",
+          "title": "5xx Error Rate (Alert: >2%)",
           "type": "stat"
         },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "thresholds"
-              },
+              "color": { "mode": "thresholds" },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
                 "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "red", "value": 500 }
                 ]
-              }
+              },
+              "unit": "reqps"
             }
           },
-          "gridPos": {
-            "h": 4,
-            "w": 6,
-            "x": 18,
-            "y": 0
-          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 1 },
           "id": 4,
           "options": {
             "colorMode": "value",
             "graphMode": "area",
             "justifyMode": "auto",
             "orientation": "auto",
-            "reduceOptions": {
-              "calcs": [
-                "lastNotNull"
-              ],
-              "fields": "",
-              "values": false
-            }
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "count(count by (user) (streamspace_sessions_total))",
+              "expr": "sum(rate(http_requests_total{job=~\".*streamspace.*api.*\"}[5m]))",
+              "legendFormat": "RPS",
               "refId": "A"
             }
           ],
-          "title": "Active Users",
+          "title": "Request Rate",
           "type": "stat"
         },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
+              "color": { "mode": "palette-classic" },
               "custom": {
                 "axisLabel": "",
                 "axisPlacement": "auto",
@@ -250,77 +212,53 @@ data:
                 "drawStyle": "line",
                 "fillOpacity": 20,
                 "gradientMode": "none",
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
                 "lineInterpolation": "linear",
                 "lineWidth": 1,
                 "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
+                "scaleDistribution": { "type": "linear" },
                 "showPoints": "never",
                 "spanNulls": true
               },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
-              }
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "s"
             }
           },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 4
-          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
           "id": 5,
           "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single"
-            }
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "streamspace_sessions_total{state=\"running\"}",
-              "legendFormat": "Running",
+              "expr": "histogram_quantile(0.50, sum(rate(http_request_duration_seconds_bucket{job=~\".*streamspace.*api.*\"}[5m])) by (le))",
+              "legendFormat": "p50",
               "refId": "A"
             },
             {
-              "expr": "streamspace_sessions_total{state=\"hibernated\"}",
-              "legendFormat": "Hibernated",
+              "expr": "histogram_quantile(0.90, sum(rate(http_request_duration_seconds_bucket{job=~\".*streamspace.*api.*\"}[5m])) by (le))",
+              "legendFormat": "p90",
               "refId": "B"
             },
             {
-              "expr": "streamspace_sessions_total",
-              "legendFormat": "Total",
+              "expr": "histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~\".*streamspace.*api.*\"}[5m])) by (le))",
+              "legendFormat": "p99",
               "refId": "C"
             }
           ],
-          "title": "Session Count Over Time",
+          "title": "API Latency Distribution",
           "type": "timeseries"
         },
         {
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
+              "color": { "mode": "palette-classic" },
               "custom": {
                 "axisLabel": "",
                 "axisPlacement": "auto",
@@ -328,60 +266,1236 @@ data:
                 "drawStyle": "line",
                 "fillOpacity": 20,
                 "gradientMode": "none",
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
                 "lineInterpolation": "linear",
                 "lineWidth": 1,
                 "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
+                "scaleDistribution": { "type": "linear" },
                 "showPoints": "never",
                 "spanNulls": true
               },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "reqps"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+          "id": 6,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(http_requests_total{job=~\".*streamspace.*api.*\",status=~\"2..\"}[5m]))",
+              "legendFormat": "2xx",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=~\".*streamspace.*api.*\",status=~\"4..\"}[5m]))",
+              "legendFormat": "4xx",
+              "refId": "B"
+            },
+            {
+              "expr": "sum(rate(http_requests_total{job=~\".*streamspace.*api.*\",status=~\"5..\"}[5m]))",
+              "legendFormat": "5xx",
+              "refId": "C"
+            }
+          ],
+          "title": "Request Rate by Status",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "id": 101,
+          "title": "Database Health",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
                 "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 50 },
+                  { "color": "red", "value": 100 }
+                ]
+              },
+              "unit": "ms"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
+          "id": 7,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_db_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+              "legendFormat": "p99",
+              "refId": "A"
+            }
+          ],
+          "title": "DB Query p99 Latency",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 70 },
+                  { "color": "red", "value": 90 }
                 ]
               },
               "unit": "short"
             }
           },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 4
-          },
-          "id": 6,
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 14 },
+          "id": 8,
           "options": {
-            "legend": {
-              "calcs": [],
-              "displayMode": "list",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single"
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "pg_stat_database_numbackends{datname=~\"streamspace.*\"}",
+              "legendFormat": "Connections",
+              "refId": "A"
+            }
+          ],
+          "title": "DB Connections",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 50 }
+                ]
+              },
+              "unit": "short"
             }
           },
-          "pluginVersion": "8.0.0",
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 14 },
+          "id": 9,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(streamspace_db_query_errors_total[5m])) * 60",
+              "legendFormat": "Errors/min",
+              "refId": "A"
+            }
+          ],
+          "title": "DB Errors/min",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 1 },
+                  { "color": "red", "value": 5 }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 14 },
+          "id": 10,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "count(streamspace_db_slow_queries_total > 0)",
+              "legendFormat": "Slow Queries",
+              "refId": "A"
+            }
+          ],
+          "title": "Slow Queries (>1s)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "ms"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "id": 11,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(streamspace_db_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(streamspace_db_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_db_query_duration_seconds_bucket[5m])) by (le)) * 1000",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "title": "DB Query Latency Over Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "id": 12,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "pg_stat_database_numbackends{datname=~\"streamspace.*\"}",
+              "legendFormat": "Active Connections",
+              "refId": "A"
+            },
+            {
+              "expr": "pg_stat_database_xact_commit{datname=~\"streamspace.*\"}",
+              "legendFormat": "Commits",
+              "refId": "B"
+            },
+            {
+              "expr": "pg_stat_database_xact_rollback{datname=~\"streamspace.*\"}",
+              "legendFormat": "Rollbacks",
+              "refId": "C"
+            }
+          ],
+          "title": "DB Connection Pool",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+          "id": 102,
+          "title": "System Health",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 500 },
+                  { "color": "red", "value": 1000 }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 27 },
+          "id": 13,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_api_goroutines",
+              "legendFormat": "Goroutines",
+              "refId": "A"
+            }
+          ],
+          "title": "Goroutines",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 536870912 },
+                  { "color": "red", "value": 1073741824 }
+                ]
+              },
+              "unit": "decbytes"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 27 },
+          "id": 14,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_api_memory_bytes",
+              "legendFormat": "Memory",
+              "refId": "A"
+            }
+          ],
+          "title": "Memory Usage",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 10 },
+                  { "color": "red", "value": 50 }
+                ]
+              },
+              "unit": "ms"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 27 },
+          "id": 15,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "rate(go_gc_duration_seconds_sum{job=~\".*streamspace.*api.*\"}[5m]) / rate(go_gc_duration_seconds_count{job=~\".*streamspace.*api.*\"}[5m]) * 1000",
+              "legendFormat": "Avg GC Pause",
+              "refId": "A"
+            }
+          ],
+          "title": "Avg GC Pause",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 27 },
+          "id": 16,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "time() - process_start_time_seconds{job=~\".*streamspace.*api.*\"}",
+              "legendFormat": "Uptime",
+              "refId": "A"
+            }
+          ],
+          "title": "API Uptime",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "decbytes"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 31 },
+          "id": 17,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "go_memstats_heap_inuse_bytes{job=~\".*streamspace.*api.*\"}",
+              "legendFormat": "Heap In Use",
+              "refId": "A"
+            },
+            {
+              "expr": "go_memstats_heap_alloc_bytes{job=~\".*streamspace.*api.*\"}",
+              "legendFormat": "Heap Alloc",
+              "refId": "B"
+            },
+            {
+              "expr": "go_memstats_stack_inuse_bytes{job=~\".*streamspace.*api.*\"}",
+              "legendFormat": "Stack",
+              "refId": "C"
+            }
+          ],
+          "title": "Memory Usage Over Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 31 },
+          "id": 18,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "go_goroutines{job=~\".*streamspace.*api.*\"}",
+              "legendFormat": "Goroutines",
+              "refId": "A"
+            },
+            {
+              "expr": "rate(go_gc_duration_seconds_count{job=~\".*streamspace.*api.*\"}[5m]) * 60",
+              "legendFormat": "GC/min",
+              "refId": "B"
+            }
+          ],
+          "title": "Goroutines & GC",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 27,
+      "style": "dark",
+      "tags": ["streamspace", "control-plane", "api", "slo"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "",
+      "title": "StreamSpace - Control Plane Health",
+      "uid": "streamspace-control-plane",
+      "version": 1
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "streamspace.fullname" . }}-session-dashboard
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "streamspace.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    grafana_dashboard: "1"
+data:
+  streamspace-sessions.json: |-
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "StreamSpace Session Lifecycle - Start latency, states, VNC, WebSocket metrics",
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": ["streamspace"],
+          "title": "StreamSpace Dashboards",
+          "type": "dashboards"
+        }
+      ],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 200,
+          "title": "Session Overview",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 50 },
+                  { "color": "red", "value": 100 }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "id": 21,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_sessions_total",
+              "legendFormat": "Total",
+              "refId": "A"
+            }
+          ],
+          "title": "Total Sessions",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "id": 22,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_sessions_running",
+              "legendFormat": "Running",
+              "refId": "A"
+            }
+          ],
+          "title": "Running",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "blue", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "id": 23,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_sessions_hibernated",
+              "legendFormat": "Hibernated",
+              "refId": "A"
+            }
+          ],
+          "title": "Hibernated",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 12 },
+                  { "color": "red", "value": 25 }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "id": 24,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"warm\"}[5m])) by (le))",
+              "legendFormat": "p99 Warm",
+              "refId": "A"
+            }
+          ],
+          "title": "Session Start p99 (Warm, SLO: <12s)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 25 },
+                  { "color": "red", "value": 40 }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "id": 25,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"cold\"}[5m])) by (le))",
+              "legendFormat": "p99 Cold",
+              "refId": "A"
+            }
+          ],
+          "title": "Session Start p99 (Cold, SLO: <25s)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 0.03 },
+                  { "color": "red", "value": 0.05 }
+                ]
+              },
+              "unit": "percentunit"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "id": 26,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(streamspace_session_creation_failures_total[5m])) / (sum(rate(streamspace_session_creations_total[5m])) + sum(rate(streamspace_session_creation_failures_total[5m])))",
+              "legendFormat": "Failure Rate",
+              "refId": "A"
+            }
+          ],
+          "title": "Session Failure Rate (SLO: <2%)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+          "id": 27,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"warm\"}[5m])) by (le))",
+              "legendFormat": "Warm p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"warm\"}[5m])) by (le))",
+              "legendFormat": "Warm p90",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"warm\"}[5m])) by (le))",
+              "legendFormat": "Warm p99",
+              "refId": "C"
+            },
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"cold\"}[5m])) by (le))",
+              "legendFormat": "Cold p50",
+              "refId": "D"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"cold\"}[5m])) by (le))",
+              "legendFormat": "Cold p90",
+              "refId": "E"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type=\"cold\"}[5m])) by (le))",
+              "legendFormat": "Cold p99",
+              "refId": "F"
+            }
+          ],
+          "title": "Session Start Latency (Warm vs Cold)",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+          "id": 28,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum by (state) (streamspace_sessions_by_state)",
+              "legendFormat": "{{ "{{" }} state {{ "}}" }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Sessions by State",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "id": 201,
+          "title": "VNC & WebSocket",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 95 },
+                  { "color": "green", "value": 98 }
+                ]
+              },
+              "unit": "percent"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 0, "y": 14 },
+          "id": 29,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "100 * sum(rate(streamspace_vnc_connect_success_total[5m])) / (sum(rate(streamspace_vnc_connect_success_total[5m])) + sum(rate(streamspace_vnc_connect_failure_total[5m])))",
+              "legendFormat": "Success Rate",
+              "refId": "A"
+            }
+          ],
+          "title": "VNC Connect Success (SLO: >98%)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 6, "y": 14 },
+          "id": 30,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_websocket_connections_active",
+              "legendFormat": "Active WS",
+              "refId": "A"
+            }
+          ],
+          "title": "Active WebSocket Connections",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 12, "y": 14 },
+          "id": 31,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_vnc_sessions_active",
+              "legendFormat": "Active VNC",
+              "refId": "A"
+            }
+          ],
+          "title": "Active VNC Sessions",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 100 },
+                  { "color": "red", "value": 500 }
+                ]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 4, "w": 6, "x": 18, "y": 14 },
+          "id": 32,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(streamspace_websocket_disconnects_total[5m])) * 60",
+              "legendFormat": "Disconnects/min",
+              "refId": "A"
+            }
+          ],
+          "title": "WS Disconnects/min",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 18 },
+          "id": 33,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "streamspace_websocket_connections_active",
+              "legendFormat": "WebSocket",
+              "refId": "A"
+            },
+            {
+              "expr": "streamspace_vnc_sessions_active",
+              "legendFormat": "VNC",
+              "refId": "B"
+            }
+          ],
+          "title": "Connection Counts Over Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 18 },
+          "id": 34,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum by (reason) (rate(streamspace_websocket_disconnects_total[5m])) * 60",
+              "legendFormat": "{{ "{{" }} reason {{ "}}" }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Disconnect Reasons",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 26 },
+          "id": 202,
+          "title": "Session Operations",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 27 },
+          "id": 35,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
           "targets": [
             {
               "expr": "rate(streamspace_session_creations_total[5m]) * 60",
-              "legendFormat": "Creations/min",
+              "legendFormat": "Creates/min",
               "refId": "A"
             },
             {
               "expr": "rate(streamspace_session_deletions_total[5m]) * 60",
-              "legendFormat": "Deletions/min",
+              "legendFormat": "Deletes/min",
               "refId": "B"
             },
             {
@@ -402,9 +1516,7 @@ data:
           "datasource": "Prometheus",
           "fieldConfig": {
             "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
+              "color": { "mode": "palette-classic" },
               "custom": {
                 "axisLabel": "",
                 "axisPlacement": "auto",
@@ -412,175 +1524,621 @@ data:
                 "drawStyle": "line",
                 "fillOpacity": 20,
                 "gradientMode": "none",
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
                 "lineInterpolation": "linear",
                 "lineWidth": 1,
                 "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
+                "scaleDistribution": { "type": "linear" },
                 "showPoints": "never",
                 "spanNulls": true
               },
               "mappings": [],
               "thresholds": {
                 "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  }
-                ]
+                "steps": [{ "color": "green", "value": null }]
               },
-              "unit": "s"
+              "unit": "short"
             }
           },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 0,
-            "y": 12
-          },
-          "id": 7,
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 27 },
+          "id": 36,
           "options": {
-            "legend": {
-              "calcs": [
-                "mean",
-                "max"
-              ],
-              "displayMode": "table",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single"
-            }
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
           },
-          "pluginVersion": "8.0.0",
           "targets": [
             {
-              "expr": "histogram_quantile(0.50, rate(streamspace_reconciliation_duration_seconds_bucket[5m]))",
-              "legendFormat": "p50",
+              "expr": "sum by (reason) (rate(streamspace_session_creation_failures_total[5m])) * 60",
+              "legendFormat": "{{ "{{" }} reason {{ "}}" }}",
               "refId": "A"
-            },
-            {
-              "expr": "histogram_quantile(0.90, rate(streamspace_reconciliation_duration_seconds_bucket[5m]))",
-              "legendFormat": "p90",
-              "refId": "B"
-            },
-            {
-              "expr": "histogram_quantile(0.99, rate(streamspace_reconciliation_duration_seconds_bucket[5m]))",
-              "legendFormat": "p99",
-              "refId": "C"
             }
           ],
-          "title": "Reconciliation Duration",
-          "type": "timeseries"
-        },
-        {
-          "datasource": "Prometheus",
-          "fieldConfig": {
-            "defaults": {
-              "color": {
-                "mode": "palette-classic"
-              },
-              "custom": {
-                "axisLabel": "",
-                "axisPlacement": "auto",
-                "barAlignment": 0,
-                "drawStyle": "line",
-                "fillOpacity": 20,
-                "gradientMode": "none",
-                "hideFrom": {
-                  "tooltip": false,
-                  "viz": false,
-                  "legend": false
-                },
-                "lineInterpolation": "linear",
-                "lineWidth": 1,
-                "pointSize": 5,
-                "scaleDistribution": {
-                  "type": "linear"
-                },
-                "showPoints": "never",
-                "spanNulls": true
-              },
-              "mappings": [],
-              "thresholds": {
-                "mode": "absolute",
-                "steps": [
-                  {
-                    "color": "green",
-                    "value": null
-                  },
-                  {
-                    "color": "red",
-                    "value": 0.01
-                  }
-                ]
-              },
-              "unit": "percentunit"
-            }
-          },
-          "gridPos": {
-            "h": 8,
-            "w": 12,
-            "x": 12,
-            "y": 12
-          },
-          "id": 8,
-          "options": {
-            "legend": {
-              "calcs": [
-                "mean",
-                "max"
-              ],
-              "displayMode": "table",
-              "placement": "bottom"
-            },
-            "tooltip": {
-              "mode": "single"
-            }
-          },
-          "pluginVersion": "8.0.0",
-          "targets": [
-            {
-              "expr": "rate(streamspace_session_creation_failures_total[5m]) / (rate(streamspace_session_creations_total[5m]) + rate(streamspace_session_creation_failures_total[5m]))",
-              "legendFormat": "Creation Failures",
-              "refId": "A"
-            },
-            {
-              "expr": "rate(streamspace_hibernation_failures_total[5m]) / (rate(streamspace_hibernation_triggered_total[5m]) + rate(streamspace_hibernation_failures_total[5m]))",
-              "legendFormat": "Hibernation Failures",
-              "refId": "B"
-            }
-          ],
-          "title": "Error Rate",
+          "title": "Session Failures by Reason",
           "type": "timeseries"
         }
       ],
       "refresh": "30s",
       "schemaVersion": 27,
       "style": "dark",
-      "tags": [
-        "streamspace",
-        "kubernetes",
-        "sessions"
-      ],
-      "templating": {
-        "list": []
-      },
-      "time": {
-        "from": "now-1h",
-        "to": "now"
-      },
+      "tags": ["streamspace", "sessions", "vnc", "slo"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
       "timepicker": {},
       "timezone": "",
-      "title": "StreamSpace Overview",
-      "uid": "streamspace-overview",
+      "title": "StreamSpace - Session Lifecycle",
+      "uid": "streamspace-sessions",
+      "version": 1
+    }
+---
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: {{ include "streamspace.fullname" . }}-agents-dashboard
+  namespace: {{ .Values.monitoring.grafanaDashboard.namespace | default .Release.Namespace }}
+  labels:
+    {{- include "streamspace.labels" . | nindent 4 }}
+    {{- with .Values.monitoring.grafanaDashboard.labels }}
+    {{- toYaml . | nindent 4 }}
+    {{- end }}
+    grafana_dashboard: "1"
+data:
+  streamspace-agents.json: |-
+    {
+      "annotations": {
+        "list": [
+          {
+            "builtIn": 1,
+            "datasource": "-- Grafana --",
+            "enable": true,
+            "hide": true,
+            "iconColor": "rgba(0, 211, 255, 1)",
+            "name": "Annotations & Alerts",
+            "type": "dashboard"
+          }
+        ]
+      },
+      "description": "StreamSpace Agents - Heartbeat freshness, capacity, errors",
+      "editable": true,
+      "gnetId": null,
+      "graphTooltip": 0,
+      "id": null,
+      "links": [
+        {
+          "asDropdown": true,
+          "icon": "external link",
+          "includeVars": true,
+          "keepTime": true,
+          "tags": ["streamspace"],
+          "title": "StreamSpace Dashboards",
+          "type": "dashboards"
+        }
+      ],
+      "panels": [
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 0 },
+          "id": 300,
+          "title": "Agent Overview",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 0, "y": 1 },
+          "id": 41,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds < 120)",
+              "legendFormat": "Online",
+              "refId": "A"
+            }
+          ],
+          "title": "Agents Online",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "yellow", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 4, "y": 1 },
+          "id": 42,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds >= 120 and streamspace_agent_heartbeat_age_seconds < 300)",
+              "legendFormat": "Degraded",
+              "refId": "A"
+            }
+          ],
+          "title": "Agents Degraded",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 8, "y": 1 },
+          "id": 43,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds >= 300)",
+              "legendFormat": "Offline",
+              "refId": "A"
+            }
+          ],
+          "title": "Agents Offline",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "red", "value": null },
+                  { "color": "yellow", "value": 95 },
+                  { "color": "green", "value": 99 }
+                ]
+              },
+              "unit": "percent"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 12, "y": 1 },
+          "id": 44,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "100 * count(streamspace_agent_heartbeat_age_seconds < 120) / count(streamspace_agent_heartbeat_age_seconds)",
+              "legendFormat": "Healthy %",
+              "refId": "A"
+            }
+          ],
+          "title": "Agent Health (SLO: 99%)",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null },
+                  { "color": "yellow", "value": 60 },
+                  { "color": "red", "value": 120 }
+                ]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 16, "y": 1 },
+          "id": 45,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_agent_heartbeat_age_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p99",
+              "refId": "A"
+            }
+          ],
+          "title": "Heartbeat Age p99",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "thresholds" },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [
+                  { "color": "green", "value": null }
+                ]
+              }
+            }
+          },
+          "gridPos": { "h": 4, "w": 4, "x": 20, "y": 1 },
+          "id": 46,
+          "options": {
+            "colorMode": "value",
+            "graphMode": "area",
+            "justifyMode": "auto",
+            "orientation": "auto",
+            "reduceOptions": { "calcs": ["lastNotNull"], "fields": "", "values": false }
+          },
+          "targets": [
+            {
+              "expr": "sum(streamspace_agent_capacity_max)",
+              "legendFormat": "Total Capacity",
+              "refId": "A"
+            }
+          ],
+          "title": "Total Capacity",
+          "type": "stat"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 5 },
+          "id": 47,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds < 120)",
+              "legendFormat": "Online",
+              "refId": "A"
+            },
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds >= 120 and streamspace_agent_heartbeat_age_seconds < 300)",
+              "legendFormat": "Degraded",
+              "refId": "B"
+            },
+            {
+              "expr": "count(streamspace_agent_heartbeat_age_seconds >= 300)",
+              "legendFormat": "Offline",
+              "refId": "C"
+            }
+          ],
+          "title": "Agent Status Over Time",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "s"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 5 },
+          "id": 48,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "histogram_quantile(0.50, sum(rate(streamspace_agent_heartbeat_age_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p50",
+              "refId": "A"
+            },
+            {
+              "expr": "histogram_quantile(0.90, sum(rate(streamspace_agent_heartbeat_age_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p90",
+              "refId": "B"
+            },
+            {
+              "expr": "histogram_quantile(0.99, sum(rate(streamspace_agent_heartbeat_age_seconds_bucket[5m])) by (le))",
+              "legendFormat": "p99",
+              "refId": "C"
+            }
+          ],
+          "title": "Heartbeat Freshness Distribution",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 13 },
+          "id": 301,
+          "title": "Capacity & Utilization",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 14 },
+          "id": 49,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(streamspace_agent_sessions_active) by (agent_id)",
+              "legendFormat": "{{ "{{" }} agent_id {{ "}}" }} - Active",
+              "refId": "A"
+            },
+            {
+              "expr": "sum(streamspace_agent_capacity_max) by (agent_id)",
+              "legendFormat": "{{ "{{" }} agent_id {{ "}}" }} - Capacity",
+              "refId": "B"
+            }
+          ],
+          "title": "Sessions per Agent vs Capacity",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "percentunit"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 14 },
+          "id": 50,
+          "options": {
+            "legend": { "calcs": ["mean", "max"], "displayMode": "table", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(streamspace_agent_sessions_active) by (agent_id) / sum(streamspace_agent_capacity_max) by (agent_id)",
+              "legendFormat": "{{ "{{" }} agent_id {{ "}}" }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Agent Utilization %",
+          "type": "timeseries"
+        },
+        {
+          "collapsed": false,
+          "gridPos": { "h": 1, "w": 24, "x": 0, "y": 22 },
+          "id": 302,
+          "title": "Agent Errors",
+          "type": "row"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 0, "y": 23 },
+          "id": 51,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(streamspace_agent_schedule_failures_total[5m])) by (agent_id) * 60",
+              "legendFormat": "{{ "{{" }} agent_id {{ "}}" }} - Schedule Failures/min",
+              "refId": "A"
+            }
+          ],
+          "title": "Schedule Failures by Agent",
+          "type": "timeseries"
+        },
+        {
+          "datasource": "Prometheus",
+          "fieldConfig": {
+            "defaults": {
+              "color": { "mode": "palette-classic" },
+              "custom": {
+                "axisLabel": "",
+                "axisPlacement": "auto",
+                "barAlignment": 0,
+                "drawStyle": "line",
+                "fillOpacity": 20,
+                "gradientMode": "none",
+                "hideFrom": { "tooltip": false, "viz": false, "legend": false },
+                "lineInterpolation": "linear",
+                "lineWidth": 1,
+                "pointSize": 5,
+                "scaleDistribution": { "type": "linear" },
+                "showPoints": "never",
+                "spanNulls": true
+              },
+              "mappings": [],
+              "thresholds": {
+                "mode": "absolute",
+                "steps": [{ "color": "green", "value": null }]
+              },
+              "unit": "short"
+            }
+          },
+          "gridPos": { "h": 8, "w": 12, "x": 12, "y": 23 },
+          "id": 52,
+          "options": {
+            "legend": { "calcs": [], "displayMode": "list", "placement": "bottom" },
+            "tooltip": { "mode": "multi" }
+          },
+          "targets": [
+            {
+              "expr": "sum(rate(streamspace_agent_image_pull_failures_total[5m])) by (image) * 60",
+              "legendFormat": "{{ "{{" }} image {{ "}}" }}",
+              "refId": "A"
+            }
+          ],
+          "title": "Image Pull Failures by Image",
+          "type": "timeseries"
+        }
+      ],
+      "refresh": "30s",
+      "schemaVersion": 27,
+      "style": "dark",
+      "tags": ["streamspace", "agents", "slo"],
+      "templating": { "list": [] },
+      "time": { "from": "now-1h", "to": "now" },
+      "timepicker": {},
+      "timezone": "",
+      "title": "StreamSpace - Agents",
+      "uid": "streamspace-agents",
       "version": 1
     }
 {{- end }}

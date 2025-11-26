@@ -471,6 +471,81 @@ monitoring:
       grafana_dashboard: "1"
 ```
 
+### Observability Dashboards
+
+When monitoring is enabled, the chart deploys three Grafana dashboards and comprehensive Prometheus alert rules aligned with SLOs:
+
+#### Grafana Dashboards
+
+1. **Control Plane Health** (`streamspace-control-plane`)
+   - API availability (SLO: 99.5%)
+   - API latency p50/p90/p99 (SLO: p99 < 800ms)
+   - 5xx error rate (Alert: > 2%)
+   - Database query latency and connections
+   - System metrics (goroutines, memory, GC)
+
+2. **Session Lifecycle** (`streamspace-sessions`)
+   - Session start latency warm/cold (SLO: p99 < 12s warm, < 25s cold)
+   - Session counts by state
+   - VNC connect success rate (SLO: > 98%)
+   - WebSocket connection counts
+   - Session operations rate and failures
+
+3. **Agents** (`streamspace-agents`)
+   - Agent health (online/degraded/offline)
+   - Heartbeat freshness (SLO: 99% within 2x interval)
+   - Capacity utilization per agent
+   - Schedule and image pull failures
+
+#### Prometheus Alert Rules
+
+The chart includes alert rules for:
+
+| Alert | Severity | Condition |
+|-------|----------|-----------|
+| `StreamSpaceAPIHighErrorRate` | Critical | 5xx rate > 2% for 5m |
+| `StreamSpaceAPIHighLatency` | Critical | p99 > 800ms for 10m |
+| `StreamSpaceSessionStartLatencyHigh` | Critical | p99 > 12s (warm) for 15m |
+| `StreamSpaceVNCConnectSuccessLow` | Critical | Success < 98% for 10m |
+| `StreamSpaceAgentHeartbeatStale` | Critical | > 5% stale for 5m |
+| `StreamSpaceWebhookFailureRateHigh` | Warning | Failure rate > 10% for 15m |
+| `StreamSpaceErrorBudgetBurnRateHigh` | Critical | 25% monthly budget in 1 day |
+
+#### Installing Dashboards Manually
+
+If Grafana's sidecar isn't configured to auto-discover dashboards, import them manually:
+
+```bash
+# Extract dashboard JSON from ConfigMaps
+kubectl get configmap -n streamspace \
+  streamspace-control-plane-dashboard \
+  -o jsonpath='{.data.streamspace-control-plane\.json}' > control-plane.json
+
+kubectl get configmap -n streamspace \
+  streamspace-session-dashboard \
+  -o jsonpath='{.data.streamspace-sessions\.json}' > sessions.json
+
+kubectl get configmap -n streamspace \
+  streamspace-agents-dashboard \
+  -o jsonpath='{.data.streamspace-agents\.json}' > agents.json
+
+# Import via Grafana UI: Dashboards > Import > Upload JSON file
+```
+
+#### Configuring Grafana Sidecar
+
+For automatic dashboard discovery, configure Grafana's sidecar:
+
+```yaml
+# Grafana Helm values
+sidecar:
+  dashboards:
+    enabled: true
+    label: grafana_dashboard
+    labelValue: "1"
+    searchNamespace: ALL
+```
+
 ### Network Policies
 
 Enable network policies for enhanced security:
