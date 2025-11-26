@@ -138,6 +138,50 @@ StreamSpace exposes Prometheus metrics.
 3. **Access Grafana**:
    Login with default credentials (`admin` / `prom-operator`) and import the StreamSpace dashboard.
 
+## 💾 Backup & Disaster Recovery
+
+> [!IMPORTANT]
+> **Production Requirement**: Configure backups BEFORE going to production.
+> See [DISASTER_RECOVERY.md](DISASTER_RECOVERY.md) for complete procedures.
+
+### Backup Checklist
+
+- [ ] **Database**: Configure automated PostgreSQL backups (daily, 30-day retention)
+- [ ] **Storage**: Enable CSI VolumeSnapshots for home directories (daily, 14-day retention)
+- [ ] **Secrets**: Export and encrypt Kubernetes secrets to secure storage
+- [ ] **Monitoring**: Set up backup success/failure alerts
+
+### Quick Backup Commands
+
+```bash
+# PostgreSQL backup
+pg_dump -h $DB_HOST -U streamspace -d streamspace | gzip > backup.sql.gz
+
+# Create storage snapshot
+kubectl apply -f - <<EOF
+apiVersion: snapshot.storage.k8s.io/v1
+kind: VolumeSnapshot
+metadata:
+  name: streamspace-homes-$(date +%Y%m%d)
+  namespace: streamspace
+spec:
+  volumeSnapshotClassName: csi-snapclass
+  source:
+    persistentVolumeClaimName: streamspace-homes
+EOF
+
+# Export secrets (encrypt before storing!)
+kubectl get secrets -n streamspace -o yaml > secrets-backup.yaml
+```
+
+### Recovery Targets
+
+| Component | RPO | RTO |
+| :--- | :--- | :--- |
+| Database | 15 min (WAL) / 24h (daily) | < 1 hour |
+| Storage | 24 hours | < 4 hours |
+| Secrets | 0 (versioned) | < 30 min |
+
 ## 🔍 Troubleshooting
 
 | Issue | Check | Command |
