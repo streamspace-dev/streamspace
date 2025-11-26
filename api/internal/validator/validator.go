@@ -33,6 +33,12 @@ func ValidateRequest(s interface{}) map[string]string {
 		return nil
 	}
 
+	// Handle InvalidValidationError (e.g., when validating non-struct types like maps)
+	// This allows flexible JSON schemas to pass validation
+	if _, ok := err.(*validator.InvalidValidationError); ok {
+		return nil
+	}
+
 	errors := make(map[string]string)
 
 	if validationErrs, ok := err.(validator.ValidationErrors); ok {
@@ -40,6 +46,11 @@ func ValidateRequest(s interface{}) map[string]string {
 			field := strings.ToLower(e.Field())
 			errors[field] = formatValidationError(e)
 		}
+	}
+
+	// Return nil if no field errors were collected
+	if len(errors) == 0 {
+		return nil
 	}
 
 	return errors

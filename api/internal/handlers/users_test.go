@@ -157,11 +157,12 @@ func TestCreateUser_Success(t *testing.T) {
 	reqBody := models.CreateUserRequest{
 		Username: "charlie",
 		Email:    "charlie@example.com",
-		Password: "securepassword123",
+		Password: "SecurePass123!", // Must meet password complexity requirements
 		FullName: "Charlie Brown",
 	}
 	bodyBytes, _ := json.Marshal(reqBody)
 	req := httptest.NewRequest("POST", "/api/v1/users", bytes.NewBuffer(bodyBytes))
+	req.Header.Set("Content-Type", "application/json")
 	c.Request = req
 
 	handler.CreateUser(c)

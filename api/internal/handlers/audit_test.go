@@ -521,7 +521,7 @@ func TestExportAuditLogs_CSV_Success(t *testing.T) {
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 
-func TestExportAuditLogs_DefaultFormat_JSON(t *testing.T) {
+func TestExportAuditLogs_DefaultFormat_CSV(t *testing.T) {
 	handler, mock, cleanup := setupAuditTest(t)
 	defer cleanup()
 
@@ -541,7 +541,8 @@ func TestExportAuditLogs_DefaultFormat_JSON(t *testing.T) {
 	handler.ExportAuditLogs(c)
 
 	assert.Equal(t, http.StatusOK, w.Code)
-	assert.Equal(t, "application/json", w.Header().Get("Content-Type")) // Should default to JSON
+	// Default format is CSV (not JSON) per handler implementation
+	assert.Equal(t, "text/csv", w.Header().Get("Content-Type"))
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

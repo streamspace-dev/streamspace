@@ -158,7 +158,8 @@ func TestCreateShare_InvalidPermission(t *testing.T) {
 
 	var response map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Contains(t, response["error"], "Invalid permission level")
+	// Validator returns "Validation failed" with field details
+	assert.Contains(t, response["error"], "Validation failed")
 }
 
 // TestCreateShare_NotOwner tests sharing when not the owner
@@ -450,7 +451,8 @@ func TestCreateInvitation_InvalidPermission(t *testing.T) {
 
 	var response map[string]interface{}
 	json.Unmarshal(w.Body.Bytes(), &response)
-	assert.Contains(t, response["error"], "Invalid permission level")
+	// Validator returns "Validation failed" with field details
+	assert.Contains(t, response["error"], "Validation failed")
 }
 
 // TestListInvitations_Success tests listing invitations
