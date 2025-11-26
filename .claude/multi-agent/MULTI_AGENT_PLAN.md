@@ -20,82 +20,173 @@
 - **New release target**: 2025-11-28 or 2025-11-29 (2-3 day slip)
 
 ---
-### 📦 Integration Wave 27 - CRITICAL: Multi-Tenancy Security + Test Fixes (2025-11-26 → 2025-11-28)
+### 📦 Integration Wave 28 - P0 BLOCKERS: Security Vulnerabilities + UI Tests (2025-11-26 → 2025-11-29)
 
-**Wave Start:** 2025-11-26 11:00
-**Target Completion:** 2025-11-28 EOD
-**Status:** 🔴 **IN PROGRESS** - P0 Security Work
+**Wave Start:** 2025-11-26 14:00
+**Target Completion:** 2025-11-29 EOD
+**Status:** 🔴 **ACTIVE** - P0 Blockers for v2.0-beta.1
 
 **Wave Goals:**
-1. ✅ Fix P0 multi-tenancy security vulnerabilities (#211, #212)
-2. ✅ Complete broken test suite fixes (#200)
-3. ✅ Add backup/DR documentation (#217)
-4. ✅ Create observability dashboards (#218)
-5. ✅ Unblock v2.0-beta.1 release
+1. 🔄 Fix security vulnerabilities (Issue #220) - 15 Dependabot alerts
+2. 🔄 Complete UI test suite fixes (Issue #200) - 19 test files failing
+3. 🔄 Manual testing of multi-tenancy org isolation
+4. 🔄 Prepare v2.0-beta.1 release
+5. 🔄 Unblock v2.0-beta.1 release
 
 **Agent Assignments:**
 
 #### Builder (Agent 2) - P0 CRITICAL 🚨
 **Branch:** `claude/v2-builder`
-**Timeline:** 2 days (2025-11-26 → 2025-11-28)
-**Status:** Active - Security implementation
+**Timeline:** 2-3 days (2025-11-26 → 2025-11-29)
+**Status:** 🔴 **ASSIGNED** - Ready to start
 
 **Tasks:**
-1. **Issue #212: Org Context & RBAC Plumbing (P0)** - 1-2 days
-   - Update JWT claims to include `org_id`
-   - Update auth middleware to populate org in request context
-   - Update all API handlers to enforce org-scoped access
-   - Update all WebSocket handlers to check org authorization
-   - **Deliverable:** `.claude/reports/P0_ORG_CONTEXT_IMPLEMENTATION.md`
+1. **Issue #220: Security Vulnerabilities (P0)** - 2-3 days
+   - Update golang.org/x/crypto (fixes 2 Critical, 1 High)
+   - Migrate from jwt-go to golang-jwt/jwt (fixes 1 High - unmaintained package)
+   - Update golang.org/x/net (fixes XSS, HTTP proxy bypass)
+   - Update Docker/Moby dependencies (fixes 10 Moderate)
+   - Run security scan to verify all fixed
+   - **Deliverable:** `.claude/reports/SECURITY_VULNERABILITIES_FIXED_ISSUE_220.md`
 
-2. **Issue #211: WebSocket Org Scoping (P0)** - 4-8 hours
-   - Add auth guard to WebSocket subscription handlers
-   - Filter session/metrics broadcasts by org
-   - Replace hardcoded `"streamspace"` namespace with org-aware mapping
-   - Use cancellable contexts for WebSocket goroutines
-   - **Deliverable:** `.claude/reports/P0_WEBSOCKET_ORG_SCOPING.md`
-
-3. **Issue #218: Observability Dashboards (P1)** - 6-8 hours
-   - Create Grafana dashboard configs (control plane, sessions, agents)
-   - Add alert rules for critical SLOs (API latency, session start, agent heartbeat)
-   - Add to `manifests/observability/` or `chart/dashboards/`
-   - **Deliverable:** Grafana JSON configs + alert rules
-
-**Critical Path:** Issues #212 → #211 (sequential, #211 depends on #212)
+**Acceptance Criteria:**
+- [ ] All Critical vulnerabilities resolved (2/2)
+- [ ] All High vulnerabilities resolved (2/2)
+- [ ] jwt-go → golang-jwt/jwt migration complete
+- [ ] All backend tests passing
+- [ ] No new vulnerabilities introduced
+- [ ] Security scan: 0 Critical/High issues
 
 #### Validator (Agent 3) - P0 CRITICAL 🚨
 **Branch:** `claude/v2-validator`
-**Timeline:** 2 days (2025-11-26 → 2025-11-28)
-**Status:** Active - Testing & validation
+**Timeline:** 2-3 days (2025-11-26 → 2025-11-29)
+**Status:** 🔴 **ASSIGNED** - Ready to continue
 
 **Tasks:**
-1. **Issue #200: Fix Broken Test Suites (P0)** - 4-8 hours
-   - Fix API handler tests (currently failing)
-   - Fix K8s agent tests
-   - Fix UI component tests
-   - **Deliverable:** `.claude/reports/P0_TEST_SUITE_FIXES.md`
+1. **Issue #200: Fix UI Test Suites (P0)** - 2-3 days (~40% remaining)
+   - Fix 19 failing UI test files (admin pages + components)
+   - Update deprecated component APIs (onHibernate → onStateChange)
+   - Fix mock data structure mismatches
+   - Resolve async timing issues (waitFor timeouts)
+   - Add missing user/auth context to tests
+   - **Deliverable:** `.claude/reports/UI_TEST_FIXES_COMPLETE_ISSUE_200.md`
 
-2. **Validate Issue #212 (Org Context)** - 4-6 hours
-   - Test org isolation: users cannot access other orgs' resources
-   - Test unauthorized org access blocked (403 Forbidden)
-   - Test JWT claims include org_id correctly
-   - Test all API endpoints enforce org scoping
-   - **Deliverable:** `.claude/reports/P0_ORG_CONTEXT_VALIDATION.md`
+**Acceptance Criteria:**
+- [ ] All UI test files passing (21/21)
+- [ ] Test results: 277+ passing, 0 failing
+- [ ] Full test suite runs successfully
+- [ ] CI/CD green checkmark
+- [ ] Final validation report delivered
 
-3. **Validate Issue #211 (WebSocket Scoping)** - 4-6 hours
-   - Test WebSocket session broadcasts filtered by org
-   - Test metrics broadcasts scoped to org
-   - Test unauthorized WebSocket subscriptions blocked
-   - Test namespace selection per org (no hardcoded "streamspace")
-   - Test context cancellation on client disconnect
-   - **Deliverable:** `.claude/reports/P0_WEBSOCKET_VALIDATION.md`
-
-**Critical Path:** Issue #200 → Validate #212 → Validate #211 (sequential)
-
-#### Scribe (Agent 4) - P1 URGENT 📝
+#### Scribe (Agent 4) - STANDBY 📝
 **Branch:** `claude/v2-scribe`
-**Timeline:** 1 day (2025-11-26 → 2025-11-27)
-**Status:** ✅ **COMPLETE** - All Wave 27 tasks done
+**Status:** ⏸️ **STANDBY** - Available for documentation
+
+**Potential Tasks (if time permits):**
+- Update CHANGELOG.md with Wave 27+28 changes
+- Refine release notes for v2.0-beta.1
+- Document vulnerability remediation process (Issue #220)
+- Update FEATURES.md with new capabilities
+
+**Priority:** Low - Only if Builder/Validator need documentation support
+
+#### Architect (Agent 1) - Coordination 🏗️
+**Status:** 🟢 **ACTIVE** - Wave 28 coordination
+
+**Tasks:**
+1. ✅ Assigned Issue #220 to Builder (agent:builder label)
+2. ✅ Assigned Issue #200 to Validator (agent:validator label)
+3. ✅ Added Wave 28 context comments to both issues
+4. ⏳ Monitor daily progress
+5. ⏳ Integrate agent branches when ready
+6. ⏳ Prepare v2.0-beta.1 release (after blockers resolved)
+
+---
+
+### 📦 Integration Wave 27 - COMPLETE: Multi-Tenancy Security + Observability (2025-11-26)
+
+**Wave Start:** 2025-11-26 11:00
+**Integration Complete:** 2025-11-26 13:45
+**Status:** ✅ **COMPLETE** - All agents merged successfully
+
+**Wave Goals:**
+1. ✅ Fix P0 multi-tenancy security vulnerabilities (#211, #212)
+2. 🔄 Complete broken test suite fixes (#200) - 60% complete
+3. ✅ Add backup/DR documentation (#217) - DR guide complete
+4. ✅ Create observability dashboards (#218)
+5. 🔄 Unblock v2.0-beta.1 release - Blocked by #220, #200
+
+**Integration Results:**
+
+#### Builder (Agent 2) - ✅ COMPLETE ⭐⭐⭐⭐⭐
+**Branch:** `claude/v2-builder` (merged to feature branch)
+**Completion:** 2025-11-26 13:42
+**Status:** ✅ All 3 issues completed
+
+**Tasks Completed:**
+1. ✅ **Issue #212: Org Context & RBAC Plumbing** - COMPLETE
+   - JWT claims enhanced with org_id and org_name
+   - OrgContext middleware (304 lines) with comprehensive tests (265 lines)
+   - Database schema: organizations table + user-org relationships
+   - Org-scoped database queries across sessions/templates
+   - **Commits:** 0d3cd84, eb7f950, 7e8814f
+
+2. ✅ **Issue #211: WebSocket Org Scoping** - COMPLETE
+   - Authorization guard preventing cross-org access
+   - Broadcast filtering by organization
+   - Dynamic namespace: org-{orgID} (no hardcoded "streamspace")
+   - **Commits:** eb7f950
+
+3. ✅ **Issue #218: Observability Dashboards** - COMPLETE
+   - 3 Grafana dashboards (Control Plane, Sessions, Agents)
+   - 12 Prometheus alert rules (Critical/High/Medium)
+   - SLO-aligned metrics and monitoring
+   - **Commits:** 7e8814f
+
+**Deliverables:**
+- +3,830 lines added (implementation + observability)
+- 12 new files (middleware, models, migrations, dashboards)
+- ADR-004 compliance verified
+- All backend tests passing
+
+**Grade:** A+ (Excellent - all tasks complete, high quality)
+
+#### Validator (Agent 3) - ✅ COMPLETE ⭐⭐⭐⭐
+**Branch:** `claude/v2-validator` (merged to feature branch)
+**Completion:** 2025-11-26 13:42
+**Status:** ✅ Partial - validation complete, tests 60% done
+
+**Tasks Completed:**
+1. 🔄 **Issue #200: Fix Broken Test Suites** - 60% COMPLETE
+   - ✅ Backend tests: All passing (9/9 packages)
+   - ✅ Test infrastructure improvements
+   - ⚠️ UI tests: 19/21 files still failing
+   - **Commits:** 2f71888, fab95e3, f520e77, 92ed4d3
+
+2. ✅ **Validate Issue #212 (Org Context)** - COMPLETE
+   - Validation report delivered (288 lines)
+   - Org isolation confirmed
+   - JWT claims verified
+   - **Report:** VALIDATION_REPORT_WAVE27_ISSUES_211_212_218.md
+
+3. ✅ **Validate Issue #211 (WebSocket Scoping)** - COMPLETE
+   - WebSocket validation report (781 lines)
+   - Org scoping confirmed functional
+   - No cross-org data leakage detected
+   - **Report:** WEBSOCKET_ORG_SCOPING_VALIDATION_#211.md
+
+**Deliverables:**
+- +1,645 lines (validation reports + test fixes)
+- 3 validation reports delivered
+- Test infrastructure created
+- Backend tests passing
+
+**Grade:** A (Very Good - validation complete, UI tests in progress)
+
+#### Scribe (Agent 4) - ✅ COMPLETE ⭐⭐⭐⭐⭐
+**Branch:** `claude/v2-scribe` (merged to feature branch)
+**Completion:** 2025-11-26 13:41
+**Status:** ✅ All tasks completed
 
 **Tasks Completed:**
 1. ✅ **Issue #217: Backup & DR Guide (P1)** - CLOSED
