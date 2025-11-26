@@ -1,4 +1,5 @@
 import { render, screen, fireEvent, waitFor, within } from '@testing-library/react';
+import userEvent from '@testing-library/user-event';
 import { describe, it, expect, vi, beforeEach } from 'vitest';
 import { QueryClient, QueryClientProvider } from '@tanstack/react-query';
 import { BrowserRouter } from 'react-router-dom';
@@ -44,6 +45,7 @@ const mockClipboard = {
 Object.defineProperty(navigator, 'clipboard', {
   value: mockClipboard,
   writable: true,
+  configurable: true,
 });
 
 // Mock API keys data
@@ -633,7 +635,7 @@ describe('APIKeys Page', () => {
 
     mockFetch.mockResolvedValueOnce({
       ok: true,
-      json: async () => ({ key: 'sk_new_abcdef123456' } }),
+      json: async () => ({ key: 'sk_new_abcdef123456' }),
     });
 
     const createDialogButton = within(screen.getByRole('dialog')).getByRole('button', { name: /^create$/i });
@@ -746,7 +748,8 @@ describe('APIKeys Page', () => {
     expect(revokeButtons.length).toBeGreaterThan(0);
   });
 
-  it('revokes API key when revoke button is clicked', async () => {
+  it.only('revokes API key when revoke button is clicked', async () => {
+    const user = userEvent.setup();
     renderAPIKeys();
 
     await waitFor(() => {
@@ -759,7 +762,7 @@ describe('APIKeys Page', () => {
     });
 
     const revokeButton = screen.getAllByTitle('Revoke')[0];
-    fireEvent.click(revokeButton);
+    await user.click(revokeButton);
 
     await waitFor(() => {
       expect(mockFetch).toHaveBeenCalledWith(

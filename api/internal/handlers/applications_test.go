@@ -7,6 +7,7 @@ import (
 	"net/http"
 	"net/http/httptest"
 	"testing"
+	"time"
 
 	"github.com/DATA-DOG/go-sqlmock"
 	"github.com/gin-gonic/gin"
@@ -97,19 +98,23 @@ func TestGetApplication_Success(t *testing.T) {
 
 	appID := "app1"
 
-	mock.ExpectQuery(`SELECT .+ FROM installed_applications WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT .+ FROM installed_applications ia .+ WHERE ia.id = \$1`).
 		WithArgs(appID).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "name", "display_name", "description", "version", "icon_url",
-			"catalog_id", "template_id", "enabled", "install_status",
-			"created_at", "updated_at",
-		}).AddRow(appID, "vscode", "VS Code", "Code editor", "1.0.0", "/icon.png",
-			"catalog1", "template1", true, "ready", "2024-01-01", "2024-01-01"))
+			"id", "catalog_template_id", "name", "display_name", "folder_path",
+			"enabled", "configuration", "created_by", "created_at", "updated_at",
+			"template_name", "template_display_name", "description", "category",
+			"app_type", "icon_url", "manifest", "install_status", "install_message",
+		}).AddRow(appID, int64(1), "vscode", "VS Code", "/apps/vscode",
+			true, "{}", "user1", time.Now(), time.Now(),
+			"vscode-template", "VS Code Template", "Code editor", "Dev",
+			"web", "/icon.png", "{}", "ready", ""))
 
 	// Mock group access query
-	mock.ExpectQuery(`SELECT .+ FROM application_group_access WHERE application_id = \$1`).
+	mock.ExpectQuery(`SELECT .+ FROM application_group_access aga .+ WHERE aga.application_id = \$1`).
 		WithArgs(appID).
-		WillReturnRows(sqlmock.NewRows([]string{"group_id"}).AddRow("group1"))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "application_id", "group_id", "access_level", "created_at", "name", "display_name"}).
+			AddRow("access1", appID, "group1", "launch", "2024-01-01", "developers", "Developers"))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -129,7 +134,7 @@ func TestGetApplication_NotFound(t *testing.T) {
 
 	appID := "nonexistent"
 
-	mock.ExpectQuery(`SELECT .+ FROM installed_applications WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT .+ FROM installed_applications ia .+ WHERE ia.id = \$1`).
 		WithArgs(appID).
 		WillReturnError(sql.ErrNoRows)
 
@@ -156,23 +161,26 @@ func TestUpdateApplication_Success(t *testing.T) {
 	appID := "app1"
 	newDisplayName := "VS Code Updated"
 
-	mock.ExpectExec(`UPDATE installed_applications SET display_name = \$1, updated_at = .+ WHERE id = \$2`).
-		WithArgs(newDisplayName, appID).
+	mock.ExpectExec(`UPDATE installed_applications SET display_name = \$1, updated_at = .+ WHERE id = \$3`).
+		WithArgs(newDisplayName, sqlmock.AnyArg(), appID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	// Mock GET after update
-	mock.ExpectQuery(`SELECT .+ FROM installed_applications WHERE id = \$1`).
+	mock.ExpectQuery(`SELECT .+ FROM installed_applications ia .+ WHERE ia.id = \$1`).
 		WithArgs(appID).
 		WillReturnRows(sqlmock.NewRows([]string{
-			"id", "name", "display_name", "description", "version", "icon_url",
-			"catalog_id", "template_id", "enabled", "install_status",
-			"created_at", "updated_at",
-		}).AddRow(appID, "vscode", newDisplayName, "Code editor", "1.0.0", "/icon.png",
-			"catalog1", "template1", true, "ready", "2024-01-01", "2024-01-02"))
+			"id", "catalog_template_id", "name", "display_name", "folder_path",
+			"enabled", "configuration", "created_by", "created_at", "updated_at",
+			"template_name", "template_display_name", "description", "category",
+			"app_type", "icon_url", "manifest", "install_status", "install_message",
+		}).AddRow(appID, int64(1), "vscode", newDisplayName, "/apps/vscode",
+			true, "{}", "user1", time.Now(), time.Now(),
+			"vscode-template", "VS Code Template", "Code editor", "Dev",
+			"web", "/icon.png", "{}", "ready", ""))
 
-	mock.ExpectQuery(`SELECT .+ FROM application_group_access WHERE application_id = \$1`).
+	mock.ExpectQuery(`SELECT .+ FROM application_group_access aga .+ WHERE aga.application_id = \$1`).
 		WithArgs(appID).
-		WillReturnRows(sqlmock.NewRows([]string{"group_id"}))
+		WillReturnRows(sqlmock.NewRows([]string{"id", "application_id", "group_id", "access_level", "created_at", "name", "display_name"}))
 
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
@@ -201,6 +209,19 @@ func TestDeleteApplication_Success(t *testing.T) {
 	defer cleanup()
 
 	appID := "app1"
+
+	// Mock GetApplication (required for uninstall event)
+	mock.ExpectQuery(`SELECT .+ FROM installed_applications ia .+ WHERE ia.id = \$1`).
+		WithArgs(appID).
+		WillReturnRows(sqlmock.NewRows([]string{
+			"id", "catalog_template_id", "name", "display_name", "folder_path",
+			"enabled", "configuration", "created_by", "created_at", "updated_at",
+			"template_name", "template_display_name", "description", "category",
+			"app_type", "icon_url", "manifest", "install_status", "install_message",
+		}).AddRow(appID, int64(1), "vscode", "VS Code", "/apps/vscode",
+			true, "{}", "user1", time.Now(), time.Now(),
+			"vscode-template", "VS Code Template", "Code editor", "Dev",
+			"web", "/icon.png", "{}", "ready", ""))
 
 	// Mock delete group access
 	mock.ExpectExec(`DELETE FROM application_group_access WHERE application_id = \$1`).
@@ -234,8 +255,8 @@ func TestSetApplicationEnabled_Success(t *testing.T) {
 
 	appID := "app1"
 
-	mock.ExpectExec(`UPDATE installed_applications SET enabled = \$1, updated_at = .+ WHERE id = \$2`).
-		WithArgs(false, appID).
+	mock.ExpectExec(`UPDATE installed_applications SET enabled = \$1, updated_at = .+ WHERE id = \$3`).
+		WithArgs(false, sqlmock.AnyArg(), appID).
 		WillReturnResult(sqlmock.NewResult(0, 1))
 
 	w := httptest.NewRecorder()

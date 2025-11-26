@@ -8,12 +8,171 @@
 
 ---
 
-## 📊 CURRENT STATUS: Production Hardening Phase (2025-11-23)
+## 📊 CURRENT STATUS: Critical Security Hardening (2025-11-26)
 
 **Updated by:** Agent 1 (Architect)
-**Date:** 2025-11-23 17:00
+**Date:** 2025-11-26 11:00
+
+**🚨 CRITICAL PRIORITY SHIFT**: Design & governance review identified **P0 security vulnerabilities** (#211, #212)
+- Multi-tenancy gaps: WebSocket cross-org data leakage
+- Missing org-scoping in auth/RBAC
+- **BLOCKS v2.0-beta.1 release** until fixed
+- **New release target**: 2025-11-28 or 2025-11-29 (2-3 day slip)
 
 ---
+### 📦 Integration Wave 27 - CRITICAL: Multi-Tenancy Security + Test Fixes (2025-11-26 → 2025-11-28)
+
+**Wave Start:** 2025-11-26 11:00
+**Target Completion:** 2025-11-28 EOD
+**Status:** 🔴 **IN PROGRESS** - P0 Security Work
+
+**Wave Goals:**
+1. ✅ Fix P0 multi-tenancy security vulnerabilities (#211, #212)
+2. ✅ Complete broken test suite fixes (#200)
+3. ✅ Add backup/DR documentation (#217)
+4. ✅ Create observability dashboards (#218)
+5. ✅ Unblock v2.0-beta.1 release
+
+**Agent Assignments:**
+
+#### Builder (Agent 2) - P0 CRITICAL 🚨
+**Branch:** `claude/v2-builder`
+**Timeline:** 2 days (2025-11-26 → 2025-11-28)
+**Status:** Active - Security implementation
+
+**Tasks:**
+1. **Issue #212: Org Context & RBAC Plumbing (P0)** - 1-2 days
+   - Update JWT claims to include `org_id`
+   - Update auth middleware to populate org in request context
+   - Update all API handlers to enforce org-scoped access
+   - Update all WebSocket handlers to check org authorization
+   - **Deliverable:** `.claude/reports/P0_ORG_CONTEXT_IMPLEMENTATION.md`
+
+2. **Issue #211: WebSocket Org Scoping (P0)** - 4-8 hours
+   - Add auth guard to WebSocket subscription handlers
+   - Filter session/metrics broadcasts by org
+   - Replace hardcoded `"streamspace"` namespace with org-aware mapping
+   - Use cancellable contexts for WebSocket goroutines
+   - **Deliverable:** `.claude/reports/P0_WEBSOCKET_ORG_SCOPING.md`
+
+3. **Issue #218: Observability Dashboards (P1)** - 6-8 hours
+   - Create Grafana dashboard configs (control plane, sessions, agents)
+   - Add alert rules for critical SLOs (API latency, session start, agent heartbeat)
+   - Add to `manifests/observability/` or `chart/dashboards/`
+   - **Deliverable:** Grafana JSON configs + alert rules
+
+**Critical Path:** Issues #212 → #211 (sequential, #211 depends on #212)
+
+#### Validator (Agent 3) - P0 CRITICAL 🚨
+**Branch:** `claude/v2-validator`
+**Timeline:** 2 days (2025-11-26 → 2025-11-28)
+**Status:** Active - Testing & validation
+
+**Tasks:**
+1. **Issue #200: Fix Broken Test Suites (P0)** - 4-8 hours
+   - Fix API handler tests (currently failing)
+   - Fix K8s agent tests
+   - Fix UI component tests
+   - **Deliverable:** `.claude/reports/P0_TEST_SUITE_FIXES.md`
+
+2. **Validate Issue #212 (Org Context)** - 4-6 hours
+   - Test org isolation: users cannot access other orgs' resources
+   - Test unauthorized org access blocked (403 Forbidden)
+   - Test JWT claims include org_id correctly
+   - Test all API endpoints enforce org scoping
+   - **Deliverable:** `.claude/reports/P0_ORG_CONTEXT_VALIDATION.md`
+
+3. **Validate Issue #211 (WebSocket Scoping)** - 4-6 hours
+   - Test WebSocket session broadcasts filtered by org
+   - Test metrics broadcasts scoped to org
+   - Test unauthorized WebSocket subscriptions blocked
+   - Test namespace selection per org (no hardcoded "streamspace")
+   - Test context cancellation on client disconnect
+   - **Deliverable:** `.claude/reports/P0_WEBSOCKET_VALIDATION.md`
+
+**Critical Path:** Issue #200 → Validate #212 → Validate #211 (sequential)
+
+#### Scribe (Agent 4) - P1 URGENT 📝
+**Branch:** `claude/v2-scribe`
+**Timeline:** 1 day (2025-11-26 → 2025-11-27)
+**Status:** Active - Documentation
+
+**Tasks:**
+1. **Issue #217: Backup & DR Guide (P1)** - 4-6 hours
+   - Create `docs/BACKUP_AND_DR_GUIDE.md`
+   - Document RPO/RTO targets (RPO: 1 hour, RTO: 4 hours)
+   - Document backup procedures: PostgreSQL, Redis, persistent storage
+   - Document restore procedures and validation steps
+   - Add to release checklist
+   - **Deliverable:** `docs/BACKUP_AND_DR_GUIDE.md`
+
+2. **Update MULTI_AGENT_PLAN Documentation** - 2-4 hours
+   - Document Wave 27 integration when complete
+   - Update v2.0-beta.1 release timeline
+   - Document design & governance docs strategy (private repo)
+   - **Deliverable:** Updated `MULTI_AGENT_PLAN.md`
+
+3. **Document Design Docs Strategy** - 2-3 hours
+   - Create `docs/DESIGN_DOCS_STRATEGY.md`
+   - Document private GitHub repo setup for design docs
+   - Link from main repo README
+   - **Deliverable:** `docs/DESIGN_DOCS_STRATEGY.md`
+
+#### Architect (Agent 1) - Documentation Sprint + Coordination 🏗️
+**Branch:** `feature/streamspace-v2-agent-refactor` (docs merged to `main`)
+**Timeline:** 2025-11-26 (1 day documentation sprint)
+**Status:** ✅ **Documentation Complete** + Active coordination
+
+**Documentation Sprint Completed:**
+1. ✅ **9 ADRs Created** (~2,800 lines)
+   - ADR-001 to ADR-003: Updated to Accepted status
+   - ADR-004: Multi-Tenancy via Org-Scoped RBAC (CRITICAL - documents #211, #212)
+   - ADR-005: WebSocket Command Dispatch vs NATS
+   - ADR-006: Database as Source of Truth
+   - ADR-007: Agent Outbound WebSocket
+   - ADR-008: VNC Proxy via Control Plane
+   - ADR-009: Helm Chart Deployment (No Operator)
+
+2. ✅ **Phase 1 Design Docs** (~2,750 lines)
+   - C4 Architecture Diagrams (6 Mermaid diagrams)
+   - Coding Standards (Go + React/TypeScript + SQL + Git)
+   - Acceptance Criteria Guide (Given-When-Then)
+   - Information Architecture (25+ pages)
+   - Component Library Inventory (15+ components)
+   - Retrospective Template
+
+3. ✅ **Phase 2 Enterprise Docs** (~2,050 lines)
+   - Load Balancing & Scaling (1,000+ sessions capacity)
+   - Industry Compliance Matrix (SOC 2, HIPAA, FedRAMP)
+   - Product Lifecycle Management (API versioning, deprecation)
+   - Vendor Assessment Template
+
+4. ✅ **Documentation Merged to Main** (6 commits cherry-picked)
+   - All ADRs and design docs now available on main branch
+   - Total: 19 documents, ~7,600 lines added
+
+**Coordination Tasks:**
+1. ✅ Design & governance review completed
+2. ✅ Issues #211-#219 reassigned to correct milestones
+3. ✅ Documentation sprint (ADRs + design docs)
+4. ✅ Cherry-picked docs to main branch
+5. ⏳ Daily coordination of P0 security work
+6. ⏳ Wave 27 integration (target: 2025-11-28 EOD)
+7. ⏳ Update release timeline and checklist
+
+**Deliverables:**
+- **Location:** `docs/design/architecture/adr-*.md`, `docs/design/`, `.claude/reports/`
+- **Commits:** bb63044, 3d3f6ae, f0160dc, 5983174, 6fefa70, 1147857 (on main)
+- **Reports:** SESSION_HANDOFF_2025-11-26.md, DESIGN_DOCS_GAP_ANALYSIS_2025-11-26.md
+
+**Impact:**
+- Developer onboarding: 2-3 weeks → 1 week (visual diagrams + standards)
+- Enterprise readiness: SOC 2 76% ready, HIPAA 65% ready
+- Production scalability: 1,000+ sessions capacity documented
+- Critical security: ADR-004 documents multi-tenancy fixes for #211, #212
+
+---
+
 ### 📦 Integration Wave 26 - MAJOR: API Validation + Docker Tests + Docs (2025-11-23)
 
 **Integration Date:** 2025-11-23 17:00
@@ -800,15 +959,69 @@ Merge To:   feature/streamspace-v2-agent-refactor
 
 ---
 
-## 📅 v2.0-beta.1 Release Timeline
+## 📅 v2.0-beta.1 Release Timeline (UPDATED 2025-11-26)
 
-| Day | Date | Focus | Agents |
-|-----|------|-------|--------|
-| **Day 1** | 2025-11-22 | HA Testing + Release Docs | Validator (HA tests), Scribe (release notes, changelog) |
-| **Day 2** | 2025-11-23 | Multi-user + Performance | Validator (Tests 1.3, 4.1-4.2), Scribe (deployment guide, migration) |
-| **Day 3** | 2025-11-24 | Load Testing + Final Docs | Validator (load tests), Scribe (API docs, final review), Builder (bug fixes) |
-| **Day 4** | 2025-11-25 | Integration + Release | Architect (final integration, release prep) |
-| **Release** | 2025-11-25/26 | v2.0-beta.1 Published | All agents (celebration! 🎉) |
+**🚨 TIMELINE UPDATE**: Design & governance review identified P0 security gaps requiring immediate attention.
+
+**Previous Release Target**: 2025-11-25 or 2025-11-26
+**New Release Target**: **2025-11-28 or 2025-11-29** (2-3 day slip)
+
+**Reason for Delay**: Critical multi-tenancy security vulnerabilities (#211, #212) must be fixed before production release.
+
+### Updated Timeline
+
+| Day | Date | Focus | Agents | Status |
+|-----|------|-------|--------|--------|
+| **Day 1** | 2025-11-22 | HA Testing + Release Docs | Validator (HA tests), Scribe (release notes) | ✅ COMPLETE |
+| **Day 2** | 2025-11-23 | API Validation + Docker Tests | Builder (validation), Validator (Docker tests) | ✅ COMPLETE (Wave 26) |
+| **Day 3** | 2025-11-26 | **P0 Security Start** | Builder (#212 org context), Validator (#200 tests) | 🔴 IN PROGRESS |
+| **Day 4** | 2025-11-27 | **P0 Security Continue** | Builder (#211 WebSocket), Validator (validation), Scribe (#217 backup) | ⏳ PLANNED |
+| **Day 5** | 2025-11-28 | **Security Validation + Integration** | Builder (#218 dashboards), Validator (final validation), Architect (Wave 27 integration) | ⏳ PLANNED |
+| **Day 6** | 2025-11-29 | **Final Testing + Release** | All agents (final validation, release prep) | ⏳ PLANNED |
+| **Release** | **2025-11-28 or 2025-11-29** | **v2.0-beta.1 Published** | All agents (celebration! 🎉) | ⏳ TARGET |
+
+### Release Blockers (P0 - Must Complete)
+
+**Security (Critical)**:
+- ✅ #164: API Input Validation Framework (COMPLETE - Wave 26)
+- ✅ #201: Docker Agent Test Suite (COMPLETE - Wave 26)
+- ⏳ #212: Org Context & RBAC Plumbing (IN PROGRESS - Wave 27)
+- ⏳ #211: WebSocket Org Scoping (PLANNED - Wave 27)
+- ⏳ #200: Fix Broken Test Suites (IN PROGRESS - Wave 27)
+
+**Documentation (Critical)**:
+- ⏳ #217: Backup & DR Guide (PLANNED - Wave 27)
+- ⏳ #218: Observability Dashboards (PLANNED - Wave 27)
+
+### Release Criteria (Must Pass Before v2.0-beta.1)
+
+**Security:**
+- ✅ API input validation framework implemented
+- ✅ Docker Agent test coverage ≥ 65%
+- ⏳ Multi-tenancy org-scoping implemented
+- ⏳ WebSocket broadcasts org-filtered
+- ⏳ No cross-org data leakage (validated)
+
+**Testing:**
+- ✅ Session lifecycle E2E validated
+- ✅ Agent failover validated (23s reconnection, 100% survival)
+- ✅ Command retry validated
+- ⏳ All test suites passing (API, K8s Agent, Docker Agent, UI)
+- ⏳ Org isolation validated
+
+**Documentation:**
+- ✅ FEATURES.md realistic status
+- ✅ ROADMAP.md updated
+- ⏳ Backup & DR guide complete
+- ⏳ Observability dashboards deployed
+- ⏳ Release notes finalized
+
+**Operational Readiness:**
+- ✅ K8s Agent: Production ready
+- ✅ Docker Agent: Production ready
+- ✅ API: Input validation hardened
+- ⏳ API: Multi-tenancy secured
+- ⏳ Monitoring: Dashboards & alerts deployed
 
 ---
 

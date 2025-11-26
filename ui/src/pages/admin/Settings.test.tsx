@@ -375,8 +375,8 @@ describe('Settings Page', () => {
       expect(screen.getByText(/Type: string/i)).toBeInTheDocument();
     });
 
-    expect(screen.getByText(/Last updated:/i)).toBeInTheDocument();
-    expect(screen.getByText(/by admin/i)).toBeInTheDocument();
+    expect(screen.getAllByText(/Last updated:/i)[0]).toBeInTheDocument();
+    expect(screen.getAllByText(/by admin/i)[0]).toBeInTheDocument();
   });
 
   // ===== TAB NAVIGATION TESTS =====
@@ -732,30 +732,32 @@ describe('Settings Page', () => {
 
   it('exports configuration to JSON file', async () => {
     const createElementSpy = vi.spyOn(document, 'createElement');
-    const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any);
-    const removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any);
+    const appendChildSpy = vi.spyOn(document.body, 'appendChild');
+    const removeChildSpy = vi.spyOn(document.body, 'removeChild');
 
-    renderSettings();
+    try {
+      renderSettings();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+      });
 
-    const exportButton = screen.getByRole('button', { name: /export/i });
-    fireEvent.click(exportButton);
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
 
-    await waitFor(() => {
-      expect(createElementSpy).toHaveBeenCalledWith('a');
-    });
+      await waitFor(() => {
+        expect(createElementSpy).toHaveBeenCalledWith('a');
+      });
 
-    expect(global.URL.createObjectURL).toHaveBeenCalled();
-    expect(appendChildSpy).toHaveBeenCalled();
-    expect(removeChildSpy).toHaveBeenCalled();
-    expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
-
-    createElementSpy.mockRestore();
-    appendChildSpy.mockRestore();
-    removeChildSpy.mockRestore();
+      expect(global.URL.createObjectURL).toHaveBeenCalled();
+      expect(appendChildSpy).toHaveBeenCalled();
+      expect(removeChildSpy).toHaveBeenCalled();
+      expect(global.URL.revokeObjectURL).toHaveBeenCalledWith('blob:mock-url');
+    } finally {
+      createElementSpy.mockRestore();
+      appendChildSpy.mockRestore();
+      removeChildSpy.mockRestore();
+    }
   });
 
   it('creates correct JSON structure for export', async () => {
@@ -765,34 +767,41 @@ describe('Settings Page', () => {
       return 'blob:mock-url';
     });
 
-    const appendChildSpy = vi.spyOn(document.body, 'appendChild').mockImplementation(() => null as any);
-    const removeChildSpy = vi.spyOn(document.body, 'removeChild').mockImplementation(() => null as any);
+    const appendChildSpy = vi.spyOn(document.body, 'appendChild');
+    const removeChildSpy = vi.spyOn(document.body, 'removeChild');
 
-    renderSettings();
+    try {
+      renderSettings();
 
-    await waitFor(() => {
-      expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
-    });
+      await waitFor(() => {
+        expect(screen.getByRole('button', { name: /export/i })).toBeInTheDocument();
+      });
 
-    const exportButton = screen.getByRole('button', { name: /export/i });
-    fireEvent.click(exportButton);
+      const exportButton = screen.getByRole('button', { name: /export/i });
+      fireEvent.click(exportButton);
 
-    await waitFor(() => {
-      expect(capturedBlob).toBeDefined();
-    });
+      await waitFor(() => {
+        expect(capturedBlob).toBeDefined();
+      });
 
-    if (capturedBlob) {
-      const text = await capturedBlob.text();
-      const json = JSON.parse(text);
+      if (capturedBlob) {
+        const text = await new Promise<string>((resolve, reject) => {
+          const reader = new FileReader();
+          reader.onload = () => resolve(reader.result as string);
+          reader.onerror = reject;
+          reader.readAsText(capturedBlob!);
+        });
+        const json = JSON.parse(text);
 
-      expect(json['ingress.domain']).toBe('streamspace.local');
-      expect(json['ingress.tls_enabled']).toBe('true');
-      expect(json['storage.class']).toBe('nfs-client');
-      expect(json['compliance.retention_days']).toBe('90');
+        expect(json['ingress.domain']).toBe('streamspace.local');
+        expect(json['ingress.tls_enabled']).toBe('true');
+        expect(json['storage.class']).toBe('nfs-client');
+        expect(json['compliance.retention_days']).toBe('90');
+      }
+    } finally {
+      appendChildSpy.mockRestore();
+      removeChildSpy.mockRestore();
     }
-
-    appendChildSpy.mockRestore();
-    removeChildSpy.mockRestore();
   });
 
   // ===== REFRESH TESTS =====

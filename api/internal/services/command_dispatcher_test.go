@@ -18,8 +18,7 @@ func setupDispatcherTest(t *testing.T) (*CommandDispatcher, *internalWebsocket.A
 		t.Fatalf("Failed to create mock database: %v", err)
 	}
 
-	database := &db.Database{}
-	database.SetDB(mockDB)
+	database := db.NewDatabaseForTesting(mockDB)
 
 	hub := internalWebsocket.NewAgentHub(database)
 	go hub.Run()

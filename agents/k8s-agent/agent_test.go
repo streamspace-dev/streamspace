@@ -22,6 +22,7 @@ func TestAgentConfig(t *testing.T) {
 				Platform:        "kubernetes",
 				Region:          "us-east-1",
 				Namespace:       "streamspace",
+				APIKey:          "test-api-key",
 			},
 			wantErr: false,
 		},
@@ -44,6 +45,7 @@ func TestAgentConfig(t *testing.T) {
 			config: &config.AgentConfig{
 				AgentID:         "k8s-test-local",
 				ControlPlaneURL: "ws://localhost:8000",
+				APIKey:          "test-api-key",
 			},
 			wantErr: false,
 		},

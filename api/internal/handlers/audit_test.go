@@ -70,7 +70,8 @@ func TestListAuditLogs_Success_DefaultPagination(t *testing.T) {
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{"old":"val1"}`, timestamp, "192.168.1.1").
 		AddRow(2, "user2", "POST", "/api/users", "user2", `{"new":"val2"}`, timestamp, "192.168.1.2")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1 OFFSET \$2`).
+		WithArgs(100, 0).
 		WillReturnRows(rows)
 
 	// Create test context
@@ -110,7 +111,7 @@ func TestListAuditLogs_Success_CustomPagination(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(51, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log LIMIT \$1 OFFSET \$2`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1 OFFSET \$2`).
 		WithArgs(50, 50). // page 2 with page_size 50 = offset 50
 		WillReturnRows(rows)
 
@@ -149,8 +150,8 @@ func TestListAuditLogs_Success_WithUserIDFilter(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "testuser", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE user_id = \$1`).
-		WithArgs("testuser").
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE user_id = \$1 ORDER BY timestamp DESC LIMIT \$2 OFFSET \$3`).
+		WithArgs("testuser", 100, 0).
 		WillReturnRows(rows)
 
 	// Create test context with filter
@@ -187,8 +188,8 @@ func TestListAuditLogs_Success_WithActionFilter(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "user1", "POST", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE action = \$1`).
-		WithArgs("POST").
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE action = \$1 ORDER BY timestamp DESC LIMIT \$2 OFFSET \$3`).
+		WithArgs("POST", 100, 0).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -226,8 +227,8 @@ func TestListAuditLogs_Success_WithDateRangeFilter(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE timestamp >= \$1 AND timestamp <= \$2`).
-		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg()).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE timestamp >= \$1 AND timestamp <= \$2 ORDER BY timestamp DESC LIMIT \$3 OFFSET \$4`).
+		WithArgs(sqlmock.AnyArg(), sqlmock.AnyArg(), 100, 0).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -261,8 +262,8 @@ func TestListAuditLogs_Success_WithMultipleFilters(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "testuser", "POST", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE user_id = \$1 AND action = \$2 AND resource_type = \$3`).
-		WithArgs("testuser", "POST", "/api/sessions").
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log WHERE user_id = \$1 AND action = \$2 AND resource_type = \$3 ORDER BY timestamp DESC LIMIT \$4 OFFSET \$5`).
+		WithArgs("testuser", "POST", "/api/sessions", 100, 0).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -297,7 +298,8 @@ func TestListAuditLogs_EdgeCase_InvalidPage(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1 OFFSET \$2`).
+		WithArgs(100, 0).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -329,7 +331,8 @@ func TestListAuditLogs_EdgeCase_PageSizeExceedsMax(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1 OFFSET \$2`).
+		WithArgs(100, 0).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -455,7 +458,8 @@ func TestExportAuditLogs_JSON_Success(t *testing.T) {
 		AddRow(2, "user2", "POST", "/api/users", "user2", `{}`, timestamp, "192.168.1.2")
 
 	// Export has max limit of 100,000 records
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log LIMIT 100000`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1`).
+		WithArgs(10000).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -488,7 +492,8 @@ func TestExportAuditLogs_CSV_Success(t *testing.T) {
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1").
 		AddRow(2, "user2", "POST", "/api/users", "user2", `{}`, timestamp, "192.168.1.2")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log LIMIT 100000`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1`).
+		WithArgs(10000).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -522,7 +527,8 @@ func TestExportAuditLogs_DefaultFormat_JSON(t *testing.T) {
 	rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 		AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log LIMIT 100000`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1`).
+		WithArgs(10000).
 		WillReturnRows(rows)
 
 	w := httptest.NewRecorder()
@@ -556,7 +562,8 @@ func TestExportAuditLogs_Error_DatabaseFailure(t *testing.T) {
 	handler, mock, cleanup := setupAuditTest(t)
 	defer cleanup()
 
-	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log LIMIT 100000`).
+	mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1`).
+		WithArgs(10000).
 		WillReturnError(sql.ErrConnDone)
 
 	w := httptest.NewRecorder()
@@ -588,7 +595,8 @@ func BenchmarkListAuditLogs(b *testing.B) {
 			WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(100))
 		rows := sqlmock.NewRows([]string{"id", "user_id", "action", "resource_type", "resource_id", "changes", "timestamp", "ip_address"}).
 			AddRow(1, "user1", "GET", "/api/sessions", "sess1", `{}`, timestamp, "192.168.1.1")
-		mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log`).
+		mock.ExpectQuery(`SELECT id, user_id, action, resource_type, resource_id, changes, timestamp, ip_address FROM audit_log ORDER BY timestamp DESC LIMIT \$1 OFFSET \$2`).
+			WithArgs(100, 0).
 			WillReturnRows(rows)
 
 		w := httptest.NewRecorder()

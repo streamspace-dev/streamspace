@@ -177,7 +177,11 @@ func (h *SessionTemplatesHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // ListSessionTemplates returns user's session templates
 func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	visibility := c.Query("visibility") // private, team, public, all
@@ -276,7 +280,11 @@ type CreateSessionTemplateRequest struct {
 
 // CreateSessionTemplate creates a new session template
 func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req CreateSessionTemplateRequest
@@ -324,7 +332,11 @@ func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
 // GetSessionTemplate retrieves a specific template
 func (h *SessionTemplatesHandler) GetSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -394,7 +406,11 @@ type UpdateSessionTemplateRequest struct {
 // UpdateSessionTemplate updates a template
 func (h *SessionTemplatesHandler) UpdateSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req UpdateSessionTemplateRequest
@@ -432,7 +448,11 @@ func (h *SessionTemplatesHandler) UpdateSessionTemplate(c *gin.Context) {
 // DeleteSessionTemplate deletes a template
 func (h *SessionTemplatesHandler) DeleteSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -455,7 +475,11 @@ func (h *SessionTemplatesHandler) DeleteSessionTemplate(c *gin.Context) {
 // CloneSessionTemplate creates a copy of a template
 func (h *SessionTemplatesHandler) CloneSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -506,7 +530,11 @@ func (h *SessionTemplatesHandler) CloneSessionTemplate(c *gin.Context) {
 // UseSessionTemplate creates a session from a template
 func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := c.Request.Context()
@@ -639,7 +667,11 @@ func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 // CreateTemplateFromSession creates a template from an existing session
 func (h *SessionTemplatesHandler) CreateTemplateFromSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -693,7 +725,11 @@ func (h *SessionTemplatesHandler) CreateTemplateFromSession(c *gin.Context) {
 // SetAsDefaultTemplate sets a template as the user's default
 func (h *SessionTemplatesHandler) SetAsDefaultTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -719,7 +755,11 @@ func (h *SessionTemplatesHandler) SetAsDefaultTemplate(c *gin.Context) {
 
 // GetDefaultTemplates returns user's default templates
 func (h *SessionTemplatesHandler) GetDefaultTemplates(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -765,7 +805,11 @@ func (h *SessionTemplatesHandler) GetDefaultTemplates(c *gin.Context) {
 // PublishSessionTemplate makes a template public
 func (h *SessionTemplatesHandler) PublishSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -788,7 +832,11 @@ func (h *SessionTemplatesHandler) PublishSessionTemplate(c *gin.Context) {
 // UnpublishSessionTemplate makes a template private
 func (h *SessionTemplatesHandler) UnpublishSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()

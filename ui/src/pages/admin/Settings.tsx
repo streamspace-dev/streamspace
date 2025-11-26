@@ -18,6 +18,7 @@ import {
   Typography,
   Alert,
   CircularProgress,
+  FormHelperText,
 } from '@mui/material';
 import {
   Save as SaveIcon,
@@ -287,15 +288,18 @@ export default function Settings() {
     switch (config.type) {
       case 'boolean':
         return (
-          <FormControlLabel
-            control={
-              <Switch
-                checked={currentValue === 'true'}
-                onChange={(e) => handleValueChange(config.key, e.target.checked ? 'true' : 'false')}
-              />
-            }
-            label={currentValue === 'true' ? 'Enabled' : 'Disabled'}
-          />
+          <Box>
+            <FormControlLabel
+              control={
+                <Switch
+                  checked={currentValue === 'true'}
+                  onChange={(e) => handleValueChange(config.key, e.target.checked ? 'true' : 'false')}
+                />
+              }
+              label={currentValue === 'true' ? 'Enabled' : 'Disabled'}
+            />
+            <FormHelperText>{config.description}</FormHelperText>
+          </Box>
         );
 
       case 'number':

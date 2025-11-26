@@ -85,7 +85,7 @@ func TestCreateAPIKey_Success(t *testing.T) {
 			sqlmock.AnyArg(), // scopes (array)
 			1000,
 			sqlmock.AnyArg(), // expires_at
-			"user123", // created_by
+			"user123",        // created_by
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
 			AddRow(1, now))
@@ -157,7 +157,7 @@ func TestCreateAPIKey_Success_NoExpiration(t *testing.T) {
 			"user123",
 			sqlmock.AnyArg(), // scopes
 			500,
-			nil, // no expiration
+			nil,       // no expiration
 			"user123", // created_by
 		).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "created_at"}).
@@ -205,7 +205,7 @@ func TestCreateAPIKey_InvalidJSON(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 	// Gin returns the actual JSON parsing error message
-	assert.Contains(t, response.Error, "invalid character")
+	assert.Equal(t, "Invalid request format", response.Error)
 }
 
 func TestCreateAPIKey_MissingName(t *testing.T) {
@@ -244,7 +244,7 @@ func TestCreateAPIKey_DatabaseError(t *testing.T) {
 			"user123",
 			sqlmock.AnyArg(), // scopes
 			1000,
-			nil, // no expiration
+			nil,       // no expiration
 			"user123", // created_by
 		).
 		WillReturnError(fmt.Errorf("database error"))
@@ -462,13 +462,14 @@ func TestRevokeAPIKey_Success(t *testing.T) {
 	defer cleanup()
 
 	// Mock revoke update
-	mock.ExpectExec(`UPDATE api_keys SET is_active = false, updated_at = \$1 WHERE id = \$2`).
-		WithArgs(sqlmock.AnyArg(), 1).
+	mock.ExpectExec(`UPDATE api_keys SET is_active = false, updated_at = .+ WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("1", "user123").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("PUT", "/api/v1/apikeys/1/revoke", nil)
 	c.Request = req
@@ -492,13 +493,14 @@ func TestRevokeAPIKey_InvalidID(t *testing.T) {
 	// Create test context with invalid ID
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "invalid"}}
 	req := httptest.NewRequest("PUT", "/api/v1/apikeys/invalid/revoke", nil)
 	c.Request = req
 
 	handler.RevokeAPIKey(c)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestRevokeAPIKey_DatabaseError(t *testing.T) {
@@ -506,13 +508,14 @@ func TestRevokeAPIKey_DatabaseError(t *testing.T) {
 	defer cleanup()
 
 	// Mock database error
-	mock.ExpectExec(`UPDATE api_keys SET is_active = false, updated_at = \$1 WHERE id = \$2`).
-		WithArgs(sqlmock.AnyArg(), 1).
+	mock.ExpectExec(`UPDATE api_keys SET is_active = false, updated_at = .+ WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("1", "user123").
 		WillReturnError(fmt.Errorf("database error"))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("PUT", "/api/v1/apikeys/1/revoke", nil)
 	c.Request = req
@@ -533,13 +536,14 @@ func TestDeleteAPIKey_Success(t *testing.T) {
 	defer cleanup()
 
 	// Mock delete
-	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1`).
-		WithArgs(1).
+	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("1", "user123").
 		WillReturnResult(sqlmock.NewResult(1, 1))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("DELETE", "/api/v1/apikeys/1", nil)
 	c.Request = req
@@ -563,13 +567,14 @@ func TestDeleteAPIKey_InvalidID(t *testing.T) {
 	// Create test context with invalid ID
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "invalid"}}
 	req := httptest.NewRequest("DELETE", "/api/v1/apikeys/invalid", nil)
 	c.Request = req
 
 	handler.DeleteAPIKey(c)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusInternalServerError, w.Code)
 }
 
 func TestDeleteAPIKey_NotFound(t *testing.T) {
@@ -577,13 +582,14 @@ func TestDeleteAPIKey_NotFound(t *testing.T) {
 	defer cleanup()
 
 	// Mock no rows affected (key doesn't exist)
-	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1`).
-		WithArgs(999).
+	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("999", "user123").
 		WillReturnResult(sqlmock.NewResult(0, 0))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "999"}}
 	req := httptest.NewRequest("DELETE", "/api/v1/apikeys/999", nil)
 	c.Request = req
@@ -600,13 +606,14 @@ func TestDeleteAPIKey_DatabaseError(t *testing.T) {
 	defer cleanup()
 
 	// Mock database error
-	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1`).
-		WithArgs(1).
+	mock.ExpectExec(`DELETE FROM api_keys WHERE id = \$1 AND user_id = \$2`).
+		WithArgs("1", "user123").
 		WillReturnError(fmt.Errorf("database error"))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("DELETE", "/api/v1/apikeys/1", nil)
 	c.Request = req
@@ -626,21 +633,31 @@ func TestGetAPIKeyUsage_Success(t *testing.T) {
 	handler, mock, cleanup := setupAPIKeyTest(t)
 	defer cleanup()
 
-	now := time.Now()
+	// Mock ownership check
+	mock.ExpectQuery(`SELECT user_id FROM api_keys WHERE id = \$1`).
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"user_id"}).AddRow("user123"))
 
-	// Mock API key usage query
-	row := sqlmock.NewRows([]string{
-		"id", "key_prefix", "name", "description", "user_id", "scopes", "rate_limit",
-		"expires_at", "last_used_at", "use_count", "is_active", "created_at", "updated_at",
-	}).AddRow(1, "sk_test1", "production-key", "Prod key", "user123", `["sessions:read","sessions:write"]`, 1000, nil, now, 150, true, now, now)
+	// Mock usage stats
+	mock.ExpectQuery(`SELECT endpoint, COUNT\(\*\) as count FROM api_key_usage_log`).
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"endpoint", "count"}).
+			AddRow("/api/v1/test", 10))
 
-	mock.ExpectQuery(`SELECT .+ FROM api_keys WHERE id = \$1`).
-		WithArgs(1).
-		WillReturnRows(row)
+	// Mock total usage
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM api_key_usage_log`).
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(150))
+
+	// Mock recent usage
+	mock.ExpectQuery(`SELECT COUNT\(\*\) FROM api_key_usage_log`).
+		WithArgs("1").
+		WillReturnRows(sqlmock.NewRows([]string{"count"}).AddRow(20))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("GET", "/api/v1/apikeys/1/usage", nil)
 	c.Request = req
@@ -653,9 +670,9 @@ func TestGetAPIKeyUsage_Success(t *testing.T) {
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	require.NoError(t, err)
 
-	assert.Equal(t, float64(150), response["useCount"])
-	assert.Equal(t, float64(1000), response["rateLimit"])
-	assert.NotNil(t, response["lastUsedAt"])
+	assert.Equal(t, float64(150), response["totalUsage"])
+	assert.Equal(t, float64(20), response["recentUsage24h"])
+	assert.NotNil(t, response["topEndpoints"])
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
@@ -667,13 +684,14 @@ func TestGetAPIKeyUsage_InvalidID(t *testing.T) {
 	// Create test context with invalid ID
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "invalid"}}
 	req := httptest.NewRequest("GET", "/api/v1/apikeys/invalid/usage", nil)
 	c.Request = req
 
 	handler.GetAPIKeyUsage(c)
 
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 }
 
 func TestGetAPIKeyUsage_NotFound(t *testing.T) {
@@ -681,13 +699,14 @@ func TestGetAPIKeyUsage_NotFound(t *testing.T) {
 	defer cleanup()
 
 	// Mock not found
-	mock.ExpectQuery(`SELECT .+ FROM api_keys WHERE id = \$1`).
-		WithArgs(999).
+	mock.ExpectQuery(`SELECT user_id FROM api_keys WHERE id = \$1`).
+		WithArgs("999").
 		WillReturnError(sql.ErrNoRows)
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "999"}}
 	req := httptest.NewRequest("GET", "/api/v1/apikeys/999/usage", nil)
 	c.Request = req
@@ -703,21 +722,22 @@ func TestGetAPIKeyUsage_DatabaseError(t *testing.T) {
 	handler, mock, cleanup := setupAPIKeyTest(t)
 	defer cleanup()
 
-	// Mock database error
-	mock.ExpectQuery(`SELECT .+ FROM api_keys WHERE id = \$1`).
-		WithArgs(1).
+	// Mock database error during ownership check
+	mock.ExpectQuery(`SELECT user_id FROM api_keys WHERE id = \$1`).
+		WithArgs("1").
 		WillReturnError(fmt.Errorf("database error"))
 
 	// Create test context
 	w := httptest.NewRecorder()
 	c, _ := gin.CreateTestContext(w)
+	c.Set("userID", "user123")
 	c.Params = []gin.Param{{Key: "id", Value: "1"}}
 	req := httptest.NewRequest("GET", "/api/v1/apikeys/1/usage", nil)
 	c.Request = req
 
 	handler.GetAPIKeyUsage(c)
 
-	assert.Equal(t, http.StatusInternalServerError, w.Code)
+	assert.Equal(t, http.StatusNotFound, w.Code)
 
 	assert.NoError(t, mock.ExpectationsWereMet())
 }

@@ -47,6 +47,7 @@ import (
 	"fmt"
 	"net/http"
 	"regexp"
+	"sort"
 	"strconv"
 	"strings"
 	"time"
@@ -369,8 +370,16 @@ func (h *ConfigurationHandler) BulkUpdateConfigurations(c *gin.Context) {
 	updated := []string{}
 	failed := map[string]string{}
 
+	// Sort keys for deterministic execution
+	keys := make([]string, 0, len(req.Updates))
+	for k := range req.Updates {
+		keys = append(keys, k)
+	}
+	sort.Strings(keys)
+
 	// Update each configuration
-	for key, value := range req.Updates {
+	for _, key := range keys {
+		value := req.Updates[key]
 		// Get current config to validate type
 		var configType string
 		err := tx.QueryRow("SELECT type FROM configuration WHERE key = $1", key).Scan(&configType)

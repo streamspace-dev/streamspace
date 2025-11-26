@@ -142,7 +142,7 @@ function SessionCard({
   };
 
   return (
-    <Card>
+    <Card component="article">
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
           <Box>
@@ -154,8 +154,18 @@ function SessionCard({
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-            <Chip label={session.state} size="small" color={getStateColor(session.state)} />
-            <Chip label={session.status.phase} size="small" color={getPhaseColor(session.status.phase)} />
+            <Chip
+              label={session.state}
+              size="small"
+              color={getStateColor(session.state)}
+              aria-label={`Session state: ${session.state}`}
+            />
+            <Chip
+              label={session.status.phase}
+              size="small"
+              color={getPhaseColor(session.status.phase)}
+              aria-label={`Session phase: ${session.status.phase}`}
+            />
             <ActivityIndicator
               isActive={session.isActive}
               isIdle={session.isIdle}
@@ -257,7 +267,7 @@ function SessionCard({
                 size="small"
                 startIcon={<OpenIcon />}
                 onClick={() => onConnect(session)}
-                disabled={session.status.phase !== 'Running'}
+                disabled={session.status.phase !== 'Running' || !session.status.url}
               >
                 Connect
               </Button>
@@ -266,6 +276,8 @@ function SessionCard({
                 color="warning"
                 onClick={() => onStateChange(session.name, 'hibernated')}
                 disabled={isUpdating}
+                aria-label="Hibernate Session"
+                title="Hibernate Session"
               >
                 <PauseIcon />
               </IconButton>
@@ -276,6 +288,8 @@ function SessionCard({
               color="success"
               onClick={() => onStateChange(session.name, 'running')}
               disabled={isUpdating}
+              aria-label="Resume Session"
+              title="Resume Session"
             >
               <PlayIcon />
             </IconButton>
@@ -287,6 +301,7 @@ function SessionCard({
             color="primary"
             onClick={() => onShare(session)}
             title="Share with User"
+            aria-label="Share with User"
           >
             <ShareIcon />
           </IconButton>
@@ -295,6 +310,7 @@ function SessionCard({
             color="primary"
             onClick={() => onInvitation(session)}
             title="Create Invitation Link"
+            aria-label="Create Invitation Link"
           >
             <LinkIcon />
           </IconButton>
@@ -303,6 +319,7 @@ function SessionCard({
             color="primary"
             onClick={() => onManageTags(session)}
             title="Manage Tags"
+            aria-label="Manage Tags"
           >
             <TagIcon />
           </IconButton>
@@ -311,6 +328,7 @@ function SessionCard({
             color="error"
             onClick={() => onDelete(session.name)}
             title="Delete Session"
+            aria-label="Delete Session"
           >
             <DeleteIcon />
           </IconButton>
