@@ -569,6 +569,12 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 	router.GET("/health", h.Health)
 	router.GET("/version", h.Version)
 
+	// API Documentation (public - no auth required)
+	// Serves OpenAPI spec and Swagger UI at /api/docs
+	docsHandler := handlers.NewDocsHandler()
+	apiDocs := router.Group("/api")
+	docsHandler.RegisterRoutes(apiDocs)
+
 	// API v1
 	v1 := router.Group("/api/v1")
 	{
