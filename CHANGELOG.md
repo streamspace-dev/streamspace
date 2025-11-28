@@ -9,7 +9,23 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 *No unreleased changes - see v2.0.0-beta.1 below*
 
-## [2.0.0-beta.1] - 2025-11-28
+## [2.0.0-beta.1] - 2025-11-29
+
+### Fixed (Wave 30) 🚨 **CRITICAL**
+
+#### Agent Registration Bug (Issue #226)
+- **[CRITICAL] Fixed agent registration chicken-and-egg problem**
+  - Problem: Agents could not self-register because AgentAuth middleware required agents to exist in database first
+  - Solution: Added `AGENT_BOOTSTRAP_KEY` environment variable for first-time agent registration
+  - Agents can now self-register without manual database provisioning
+  - Each agent receives a unique API key after bootstrap registration
+  - Bootstrap key is auto-generated and stored in Kubernetes secrets
+- **Files changed:**
+  - `api/internal/middleware/agent_auth.go`: Bootstrap key check in RequireAPIKey() and RequireAuth()
+  - `api/internal/handlers/agents.go`: API key generation and storage on first registration
+  - `chart/values.yaml`: Added `api.agentAuth.bootstrapKey` configuration
+  - `chart/templates/api-deployment.yaml`: Added AGENT_BOOTSTRAP_KEY environment variable
+  - `chart/templates/app-secrets.yaml`: Auto-generated bootstrap key in secrets
 
 ### 🚀 PRODUCTION-READY RELEASE: Multi-Platform + Enterprise Security
 

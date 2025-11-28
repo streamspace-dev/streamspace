@@ -270,6 +270,14 @@ api:
       secret: "" # Set via existingSecret or auto-generate
       expiration: 24h
 
+  # Agent authentication configuration
+  agentAuth:
+    # Bootstrap key for first-time agent registration (Issue #226)
+    # This key allows agents to self-register without manual database provisioning.
+    # Generate with: openssl rand -base64 32
+    # SECURITY: Use a strong key (32+ characters), store in Kubernetes secret, rotate every 90 days
+    bootstrapKey: "" # Set via --set or existingSecret
+
   # Service
   service:
     type: ClusterIP

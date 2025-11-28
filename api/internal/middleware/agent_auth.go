@@ -27,6 +27,7 @@ import (
 	"database/sql"
 	"log"
 	"net/http"
+	"os"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -128,9 +129,24 @@ func (a *AgentAuth) RequireAPIKey() gin.HandlerFunc {
 		`, agentID).Scan(&agentIDFromDB, &apiKeyHash)
 
 		if err == sql.ErrNoRows {
+			// ISSUE #226 FIX: Check if using bootstrap key for first-time registration
+			// This allows agents to self-register without requiring manual database provisioning
+			bootstrapKey := os.Getenv("AGENT_BOOTSTRAP_KEY")
+			if bootstrapKey != "" && apiKey == bootstrapKey {
+				// Bootstrap key matches - allow first-time registration
+				log.Printf("[AgentAuth] Agent %s using bootstrap key for first-time registration from IP %s", agentID, c.ClientIP())
+				c.Set("isBootstrapAuth", true)
+				c.Set("agentAPIKey", apiKey) // Pass API key to handler for hashing/storage
+				c.Set("authenticated_agent_id", agentID)
+				c.Set("auth_method", "bootstrap_key")
+				c.Next()
+				return
+			}
+
+			// No bootstrap key or key doesn't match - reject
 			c.JSON(http.StatusNotFound, gin.H{
 				"error":   "Agent not found",
-				"details": "Agent must be pre-registered with an API key before connecting",
+				"details": "Agent must be pre-registered with an API key before connecting, or use a valid bootstrap key for first-time registration",
 				"agentId": agentID,
 			})
 			c.Abort()
@@ -394,8 +410,21 @@ func (a *AgentAuth) RequireAuth() gin.HandlerFunc {
 		`, agentID).Scan(&apiKeyHash)
 
 		if err == sql.ErrNoRows {
+			// ISSUE #226 FIX: Check if using bootstrap key for first-time registration
+			bootstrapKey := os.Getenv("AGENT_BOOTSTRAP_KEY")
+			if bootstrapKey != "" && apiKey == bootstrapKey {
+				log.Printf("[AgentAuth] Agent %s using bootstrap key for first-time registration from IP %s", agentID, c.ClientIP())
+				c.Set("isBootstrapAuth", true)
+				c.Set("agentAPIKey", apiKey)
+				c.Set("authenticated_agent_id", agentID)
+				c.Set("auth_method", "bootstrap_key")
+				c.Next()
+				return
+			}
+
 			c.JSON(http.StatusNotFound, gin.H{
-				"error": "Agent not found",
+				"error":   "Agent not found",
+				"details": "Agent must be pre-registered or use a valid bootstrap key",
 				"agentId": agentID,
 			})
 			c.Abort()

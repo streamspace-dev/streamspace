@@ -127,6 +127,28 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		return
 	}
 
+	// ISSUE #226 FIX: Check if this is a first-time registration via bootstrap key
+	// If so, we need to generate and store a unique API key for this agent
+	isBootstrapAuth, _ := c.Get("isBootstrapAuth")
+	var apiKeyHash string
+	var newAPIKey string
+
+	if isBootstrapAuth == true {
+		// Generate a new unique API key for this agent
+		keyMetadata, err := auth.GenerateAPIKeyWithMetadata()
+		if err != nil {
+			log.Printf("[AgentHandler] Failed to generate API key for agent %s: %v", req.AgentID, err)
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to generate API key",
+				"details": err.Error(),
+			})
+			return
+		}
+		apiKeyHash = keyMetadata.Hash
+		newAPIKey = keyMetadata.PlaintextKey
+		log.Printf("[AgentHandler] Generated new API key for agent %s via bootstrap registration", req.AgentID)
+	}
+
 	// Check if agent already exists
 	var existingID string
 	err := h.database.DB().QueryRow(
@@ -140,23 +162,44 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 
 	if err == sql.ErrNoRows {
 		// Agent doesn't exist - create new
-		err = h.database.DB().QueryRow(`
-			INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, created_at, updated_at)
-			VALUES ($1, $2, $3, 'online', $4, $5, $6, $7, $7)
-			RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
-		`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, now).Scan(
-			&agent.ID,
-			&agent.AgentID,
-			&agent.Platform,
-			&agent.Region,
-			&agent.Status,
-			&agent.Capacity,
-			&agent.LastHeartbeat,
-			&agent.WebSocketID,
-			&agent.Metadata,
-			&agent.CreatedAt,
-			&agent.UpdatedAt,
-		)
+		// Include API key hash if this is a bootstrap registration
+		if apiKeyHash != "" {
+			err = h.database.DB().QueryRow(`
+				INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, api_key_hash, api_key_created_at, created_at, updated_at)
+				VALUES ($1, $2, $3, 'online', $4, $5, $6, $7, $8, $8, $8)
+				RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
+			`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, apiKeyHash, now).Scan(
+				&agent.ID,
+				&agent.AgentID,
+				&agent.Platform,
+				&agent.Region,
+				&agent.Status,
+				&agent.Capacity,
+				&agent.LastHeartbeat,
+				&agent.WebSocketID,
+				&agent.Metadata,
+				&agent.CreatedAt,
+				&agent.UpdatedAt,
+			)
+		} else {
+			err = h.database.DB().QueryRow(`
+				INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, created_at, updated_at)
+				VALUES ($1, $2, $3, 'online', $4, $5, $6, $7, $7)
+				RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
+			`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, now).Scan(
+				&agent.ID,
+				&agent.AgentID,
+				&agent.Platform,
+				&agent.Region,
+				&agent.Status,
+				&agent.Capacity,
+				&agent.LastHeartbeat,
+				&agent.WebSocketID,
+				&agent.Metadata,
+				&agent.CreatedAt,
+				&agent.UpdatedAt,
+			)
+		}
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Failed to register agent",
@@ -199,6 +242,17 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 			})
 			return
 		}
+	}
+
+	// ISSUE #226 FIX: Return the new API key if this was a bootstrap registration
+	// The agent must save this key and use it for all future requests
+	if newAPIKey != "" {
+		c.JSON(statusCode, gin.H{
+			"agent":   agent,
+			"apiKey":  newAPIKey,
+			"message": "Agent registered successfully. IMPORTANT: Save this API key - it will not be shown again. Use it for all future requests.",
+		})
+		return
 	}
 
 	c.JSON(statusCode, agent)

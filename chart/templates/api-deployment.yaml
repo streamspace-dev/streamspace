@@ -126,6 +126,13 @@ spec:
           # Set this to reset the admin password, then remove after restart
           # - name: ADMIN_PASSWORD_RESET
           #   value: "new-secure-password"
+          # Agent bootstrap key for first-time agent registration (Issue #226)
+          # This allows agents to self-register without manual database provisioning
+          - name: AGENT_BOOTSTRAP_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "streamspace.fullname" . }}-secrets
+                key: agent-bootstrap-key
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:
