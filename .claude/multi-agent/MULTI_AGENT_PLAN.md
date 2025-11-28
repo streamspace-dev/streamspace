@@ -8,30 +8,145 @@
 
 ---
 
-## 📊 CURRENT STATUS: Final v2.0-beta.1 Cleanup (2025-11-26)
+## 📊 CURRENT STATUS: P0 Release Blocker - Wave 30 (2025-11-28)
 
 **Updated by:** Agent 1 (Architect)
-**Date:** 2025-11-26 EOD
+**Date:** 2025-11-28
 
-**✅ MILESTONE CLEANUP COMPLETE**: v2.0-beta.1 scope reduced from 16 issues → 4 issues
+**🚨 P0 RELEASE BLOCKER IDENTIFIED**: Issue #226 - Agent registration chicken-and-egg bug
 - Wave 27 (Multi-tenancy): ✅ COMPLETE
 - Wave 28 (Security + Tests): ✅ COMPLETE
-- Wave 29 (Final Bugs): 🔴 **ACTIVE**
-- **Release target**: 2025-11-28 or 2025-11-29 (1-2 days remaining)
+- Wave 29 (Final Bugs): ✅ COMPLETE
+- Wave 30 (Critical Bug Fix): 🔴 **ACTIVE** - Issue #226
+- **Release target**: 2025-11-29 EOD (1 day delay for critical fix)
 
 ---
-### 📦 Integration Wave 29 - FINAL PUSH: Integration Testing Only (2025-11-27 → 2025-11-28)
+### 📦 Integration Wave 30 - CRITICAL BUG FIX: Agent Registration (2025-11-28)
+
+**Wave Start:** 2025-11-28 14:00
+**Target Completion:** 2025-11-28 EOD
+**Status:** 🔴 **ACTIVE** - P0 Release Blocker
+
+**Wave Goals:**
+1. 🔄 Fix agent registration chicken-and-egg bug (Issue #226) - CRITICAL
+2. 🔄 Re-run integration tests (Issue #157 validation)
+3. ⏳ Release v2.0-beta.1 (after #226 fixed)
+
+**Context:**
+Issue #226 discovered by Validator during Wave 29 integration testing. AgentAuth middleware requires agents to exist in database before registration endpoint can be called, creating a chicken-and-egg problem. Agents cannot deploy in v2.0 without this fix.
+
+**Agent Assignments:**
+
+#### Builder (Agent 2) - P0 CRITICAL 🚨🚨🚨
+**Branch:** `claude/v2-builder`
+**Timeline:** 4-5 hours (2025-11-28)
+**Status:** 🔴 **ASSIGNED** - Ready to start immediately
+
+**Task: Issue #226 - Fix Agent Registration Chicken-and-Egg Bug**
+
+**Implementation: Shared Bootstrap Key Pattern**
+
+1. **Update AgentAuth Middleware** (`api/internal/middleware/agent_auth.go`)
+   - Add bootstrap key check when agent doesn't exist in database
+   - If `AGENT_BOOTSTRAP_KEY` env var set and matches provided API key, allow registration
+   - Set `isBootstrapAuth` and `agentAPIKey` in context
+   - Code: ~15 lines added
+
+2. **Update RegisterAgent Handler** (`api/internal/handlers/agents.go`)
+   - Extract API key from context
+   - Hash API key using bcrypt
+   - Store `api_key_hash` during agent creation
+   - Code: ~25 lines modified
+
+3. **Add Environment Variables**
+   - `.env.example`: Document `AGENT_BOOTSTRAP_KEY`
+   - Helm chart: Add bootstrap key to values.yaml
+   - Deployment: Add secret reference
+   - Code: ~10 lines added
+
+4. **Add Unit Tests** (`api/internal/middleware/agent_auth_test.go`)
+   - Test bootstrap key allows registration
+   - Test invalid bootstrap key is rejected
+   - Test existing agents use their own API keys
+   - Code: ~50 lines added
+
+5. **Update Documentation**
+   - `docs/V2_DEPLOYMENT_GUIDE.md`: Bootstrap key instructions
+   - `CHANGELOG.md`: Document fix
+   - Security best practices
+   - Code: ~25 lines added
+
+**Deliverables:**
+- Updated middleware with bootstrap key check
+- Updated handler with API key hashing
+- Environment variable configuration
+- Unit tests (3+ test cases)
+- Integration test validation
+- Documentation updates
+- Report: `.claude/reports/ISSUE_226_FIX_COMPLETE.md`
+
+**Acceptance Criteria:**
+- ✅ Agent can register with bootstrap key
+- ✅ API key hash stored in database
+- ✅ Subsequent requests use agent's unique API key
+- ✅ All unit tests passing
+- ✅ Integration test: Deploy agent end-to-end successfully
+- ✅ Documentation complete
+
+**Total Changes:** ~130 lines across 9 files
+
+#### Validator (Agent 3) - STANDBY 🧪
+**Branch:** `claude/v2-validator`
+**Status:** ⏸️ **STANDBY** - Ready to validate fix
+
+**Tasks:**
+1. Wait for Builder to complete Issue #226
+2. Re-run integration tests with fixed agent registration
+3. Verify agents can deploy and register automatically
+4. Verify `api_key_hash` stored correctly
+5. Update integration test report
+6. Final GO/NO-GO recommendation
+
+**Timeline:** 1 hour after Builder completes
+
+#### Scribe (Agent 4) - STANDBY 📝
+**Branch:** `claude/v2-scribe`
+**Status:** ⏸️ **STANDBY** - May assist with documentation
+
+**Potential Tasks:**
+- Review and enhance deployment documentation
+- Update release notes with critical fix
+- Clarify bootstrap key security best practices
+
+**Priority:** Low - Builder has documentation covered
+
+#### Architect (Agent 1) - Coordination 🏗️
+**Status:** 🟢 **ACTIVE** - Wave 30 coordination
+
+**Tasks:**
+1. ✅ Identified P0 release blocker (Issue #226)
+2. ✅ Created architectural analysis (600+ lines)
+3. ✅ Assigned Issue #226 to Builder with detailed instructions
+4. ✅ Updated MULTI_AGENT_PLAN with Wave 30
+5. ⏳ Monitor Builder progress
+6. ⏳ Integrate Builder's fix when ready
+7. ⏳ Wait for Validator's final GO recommendation
+8. ⏳ Merge to main and tag v2.0.0-beta.1
+
+---
+
+### 📦 Integration Wave 29 - COMPLETE: Integration Testing (2025-11-27 → 2025-11-28)
 
 **Wave Start:** 2025-11-27 09:00
-**Target Completion:** 2025-11-28 EOD
-**Status:** 🟡 **IN PROGRESS** - Only 1 issue remaining
+**Integration Complete:** 2025-11-28 08:30
+**Status:** ✅ **COMPLETE** - Found P0 blocker (Issue #226)
 
 **Wave Goals:**
 1. ✅ Fix Plugins page crash (Issue #123) - COMPLETE (Wave 23)
 2. ✅ Fix License page crash (Issue #124) - COMPLETE (Wave 23)
 3. ✅ Add security headers middleware (Issue #165) - COMPLETE (Wave 24)
-4. 🔄 Run integration tests (Issue #157) - IN PROGRESS
-5. ⏳ Release v2.0-beta.1 (after #157 complete)
+4. ✅ Run integration tests (Issue #157) - COMPLETE (GO recommendation)
+5. ⛔ Release v2.0-beta.1 - BLOCKED by Issue #226
 
 **Agent Assignments:**
 
