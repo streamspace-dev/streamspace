@@ -29,6 +29,11 @@ UI_IMAGE="streamspace/streamspace-ui"
 K8S_AGENT_IMAGE="streamspace/streamspace-k8s-agent"
 DOCKER_CONTROLLER_IMAGE="streamspace/streamspace-docker-controller"
 
+# GHCR image names (for local K8s deployment compatibility)
+GHCR_API_IMAGE="ghcr.io/streamspace-dev/streamspace-api"
+GHCR_UI_IMAGE="ghcr.io/streamspace-dev/streamspace-ui"
+GHCR_K8S_AGENT_IMAGE="ghcr.io/streamspace-dev/streamspace-k8s-agent"
+
 # Build arguments
 BUILD_ARGS="--build-arg VERSION=${VERSION} --build-arg COMMIT=${GIT_COMMIT} --build-arg BUILD_DATE=${BUILD_DATE}"
 
@@ -82,6 +87,8 @@ build_api() {
     docker build ${BUILD_ARGS} \
         -t "${API_IMAGE}:${VERSION}" \
         -t "${API_IMAGE}:latest" \
+        -t "${GHCR_API_IMAGE}:${VERSION}" \
+        -t "${GHCR_API_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/api/Dockerfile" \
         "${PROJECT_ROOT}/api/"
 
@@ -97,6 +104,8 @@ build_ui() {
     docker build ${BUILD_ARGS} \
         -t "${UI_IMAGE}:${VERSION}" \
         -t "${UI_IMAGE}:latest" \
+        -t "${GHCR_UI_IMAGE}:${VERSION}" \
+        -t "${GHCR_UI_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/ui/Dockerfile" \
         "${PROJECT_ROOT}/ui/"
 
@@ -118,6 +127,8 @@ build_k8s_agent() {
     docker build ${BUILD_ARGS} \
         -t "${K8S_AGENT_IMAGE}:${VERSION}" \
         -t "${K8S_AGENT_IMAGE}:latest" \
+        -t "${GHCR_K8S_AGENT_IMAGE}:${VERSION}" \
+        -t "${GHCR_K8S_AGENT_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/agents/k8s-agent/Dockerfile" \
         "${PROJECT_ROOT}/agents/k8s-agent/"
 

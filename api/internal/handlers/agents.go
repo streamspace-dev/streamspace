@@ -77,15 +77,14 @@ func NewAgentHandler(database *db.Database, hub *websocket.AgentHub, dispatcher 
 
 // RegisterRoutes registers agent routes (for agent self-service - requires API key)
 // These routes are used by agents themselves, not by admin UI
+// Note: router is already prefixed with /agents from main.go
 func (h *AgentHandler) RegisterRoutes(router *gin.RouterGroup) {
-	agents := router.Group("/agents")
-	{
-		// Agent self-registration (requires API key via middleware)
-		agents.POST("/register", h.RegisterAgent)
+	// Agent self-registration (requires API key via middleware)
+	// BUG: See Issue #226 - Agent must be pre-registered before calling this endpoint
+	router.POST("/register", h.RegisterAgent)
 
-		// Agent heartbeat (optional API key for backward compatibility)
-		agents.POST("/:agent_id/heartbeat", h.UpdateHeartbeat)
-	}
+	// Agent heartbeat (optional API key for backward compatibility)
+	router.POST("/:agent_id/heartbeat", h.UpdateHeartbeat)
 }
 
 // RegisterAdminRoutes registers admin-only agent management routes (requires JWT admin auth)
