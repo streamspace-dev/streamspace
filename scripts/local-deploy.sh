@@ -64,27 +64,7 @@ check_prerequisites() {
     local helm_version=$(helm version --short 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
     log_info "Helm version: ${helm_version}"
 
-    # Block Helm v4.0.x (known broken chart loading)
-    if [[ "${helm_version}" == v4.0.* ]]; then
-        log_error "Helm ${helm_version} detected - THIS VERSION IS BROKEN"
-        log_error "Chart loading is broken in Helm v4.0.x due to upstream regression"
-        log_error ""
-        log_error "Please downgrade Helm to v3.18.0:"
-        log_error "  brew uninstall helm"
-        log_error "  brew install helm@3.18.0"
-        log_error ""
-        log_error "Or wait for Helm v4.0.1+ patch release"
-        log_error ""
-        log_error "See: BUG_REPORT_P0_HELM_v4.md for details"
-        exit 1
-    fi
-
-    # Warn about Helm v3.19.x (has chart loading bugs)
-    if [[ "${helm_version}" == v3.19.* ]]; then
-        log_warning "Helm ${helm_version} has known bugs, consider downgrading to v3.18.0"
-    fi
-
-    log_success "Helm version OK: ${helm_version}"
+    log_success "Helm version: ${helm_version}"
 
     if ! kubectl cluster-info &> /dev/null; then
         log_error "Cannot connect to Kubernetes cluster"
