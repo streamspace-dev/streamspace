@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (Wave 30) 🚨 **CRITICAL**
 
+#### Agent Ignores New API Key After Bootstrap (Issue #232)
+- **[CRITICAL] Fixed agent not using new API key after bootstrap registration**
+  - Problem: Agent ignored the `apiKey` field in registration response
+  - Caused: WebSocket connection failed with 403 (still using bootstrap key)
+  - Solution: Update agent's config.APIKey when new key is received
+  - Added `APIKey` and `Message` fields to AgentRegistrationResponse struct
+- **Files changed:**
+  - `agents/k8s-agent/main.go`: Parse and use new API key from registration response
+
 #### Request Body Consumed by Middleware (Issue #231)
 - **[CRITICAL] Fixed middleware consuming request body causing EOF in handlers**
   - Problem: `c.ShouldBindJSON()` in auth middleware consumed body, leaving nothing for handler

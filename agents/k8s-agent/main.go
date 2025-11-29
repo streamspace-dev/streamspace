@@ -449,12 +449,28 @@ type AgentRegistrationRequest struct {
 }
 
 // AgentRegistrationResponse is the response from agent registration.
+// For bootstrap registrations (Issue #226), the response includes a new API key.
 type AgentRegistrationResponse struct {
+	// Agent is the nested agent object (bootstrap registration response)
+	Agent *struct {
+		ID        string    `json:"id"`
+		AgentID   string    `json:"agentId"`
+		Platform  string    `json:"platform"`
+		Status    string    `json:"status"`
+		CreatedAt time.Time `json:"createdAt"`
+	} `json:"agent,omitempty"`
+
+	// Direct fields (non-bootstrap registration response)
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agentId"`
 	Platform  string    `json:"platform"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
+
+	// APIKey is the new API key issued during bootstrap registration (Issue #226)
+	// IMPORTANT: Agent must save this and use it for all future requests
+	APIKey  string `json:"apiKey,omitempty"`
+	Message string `json:"message,omitempty"`
 }
 
 // Connect establishes connection to the Control Plane.
@@ -531,7 +547,24 @@ func (a *K8sAgent) registerAgent() error {
 		return fmt.Errorf("failed to decode response: %w", err)
 	}
 
-	log.Printf("[K8sAgent] Registered successfully: %s (status: %s)", regResp.AgentID, regResp.Status)
+	// ISSUE #232 FIX: Update API key if a new one was issued (bootstrap registration)
+	// The API generates a unique key for each agent during bootstrap registration.
+	// We must use this new key for all subsequent requests (WebSocket, heartbeats, etc.)
+	if regResp.APIKey != "" {
+		log.Printf("[K8sAgent] Received new API key from Control Plane (bootstrap registration)")
+		log.Printf("[K8sAgent] IMPORTANT: Using new API key for all future requests")
+		a.config.APIKey = regResp.APIKey
+	}
+
+	// Get agent ID from response (handle both nested and direct formats)
+	agentID := regResp.AgentID
+	status := regResp.Status
+	if regResp.Agent != nil {
+		agentID = regResp.Agent.AgentID
+		status = regResp.Agent.Status
+	}
+
+	log.Printf("[K8sAgent] Registered successfully: %s (status: %s)", agentID, status)
 	return nil
 }
 
