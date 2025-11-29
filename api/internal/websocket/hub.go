@@ -41,6 +41,7 @@ package websocket
 
 import (
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -288,6 +289,18 @@ func (c *Client) readPump() {
 	c.conn.SetPongHandler(func(string) error {
 		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
+	})
+
+	// Set ping handler to automatically respond with pongs
+	c.conn.SetPingHandler(func(appData string) error {
+		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		err := c.conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
+		if err == websocket.ErrCloseSent {
+			return nil
+		} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			return nil
+		}
+		return err
 	})
 
 	for {

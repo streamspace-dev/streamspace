@@ -801,18 +801,22 @@ func (h *Handler) CreateSession(c *gin.Context) {
 	log.Printf("Created agent command %s for session %s", commandID, sessionName)
 
 	// Step 10: Dispatch command to agent via WebSocket
+	// IMPORTANT: Session is already created in database (line 726), so we return success
+	// even if command dispatch fails. The CommandDispatcher has retry logic to handle
+	// temporary WebSocket issues, and agents poll for pending commands.
 	if h.dispatcher != nil {
 		if err := h.dispatcher.DispatchCommand(&command); err != nil {
-			log.Printf("Failed to dispatch command %s: %v", commandID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Failed to dispatch command to agent",
-				"message": fmt.Sprintf("Failed to dispatch command: %v", err),
-			})
-			return
+			// BUG FIX: Don't return error here - session is already created in DB
+			// Returning error causes false "No agents available" messages in UI
+			// while sessions are actually created (reported by user: duplicate sessions)
+			log.Printf("Warning: Failed to dispatch command %s to agent %s: %v (session %s created, agent will retry)",
+				commandID, agentID, err, sessionName)
+		} else {
+			log.Printf("Dispatched command %s to agent %s for session %s", commandID, agentID, sessionName)
 		}
-		log.Printf("Dispatched command %s to agent %s for session %s", commandID, agentID, sessionName)
 	} else {
-		log.Printf("Warning: CommandDispatcher is nil, command %s not dispatched", commandID)
+		log.Printf("Warning: CommandDispatcher is nil, command %s not dispatched (session %s created, agent will poll)",
+			commandID, sessionName)
 	}
 
 	// Step 11: Return the session info immediately

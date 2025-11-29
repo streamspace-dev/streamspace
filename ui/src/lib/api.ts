@@ -2039,6 +2039,40 @@ class APIClient {
     const response = await this.client.delete(`/preferences/favorites/${encodeURIComponent(templateName)}`);
     return response.data;
   }
+
+  // ============================================================================
+  // Agent Management (Admin)
+  // ============================================================================
+
+  async listAgents(params?: {
+    platform?: string;
+    status?: string;
+    approval_status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ agents: any[]; total: number; page: number; limit: number }> {
+    const queryParams = new URLSearchParams();
+    if (params?.platform) queryParams.append('platform', params.platform);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.approval_status) queryParams.append('approval_status', params.approval_status);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+
+    const response = await this.client.get(`/admin/agents?${queryParams.toString()}`);
+    return response.data;
+  }
+
+  async deleteAgent(agentId: string): Promise<void> {
+    await this.client.delete(`/admin/agents/${agentId}`);
+  }
+
+  async approveAgent(agentId: string): Promise<void> {
+    await this.client.post(`/admin/agents/${agentId}/approve`);
+  }
+
+  async rejectAgent(agentId: string): Promise<void> {
+    await this.client.post(`/admin/agents/${agentId}/reject`);
+  }
 }
 
 // Export singleton instance

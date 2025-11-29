@@ -2343,6 +2343,27 @@ func (d *Database) Migrate() error {
 		// Update existing sessions to belong to default org (if org_id is null)
 		`UPDATE sessions SET org_id = 'default-org' WHERE org_id IS NULL`,
 
+		// Migration 007: Add approval_status to agents table (Issue #234)
+		// This migration adds agent approval workflow support
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approval_status') THEN
+				ALTER TABLE agents ADD COLUMN approval_status VARCHAR(20) DEFAULT 'approved';
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approved_at') THEN
+				ALTER TABLE agents ADD COLUMN approved_at TIMESTAMP;
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approved_by') THEN
+				ALTER TABLE agents ADD COLUMN approved_by VARCHAR(255);
+			END IF;
+		END $$`,
+
+		// Create index for approval_status for fast filtering
+		`CREATE INDEX IF NOT EXISTS idx_agents_approval_status ON agents(approval_status)`,
+
 		// Indexes for agents table
 		`CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_platform ON agents(platform)`,

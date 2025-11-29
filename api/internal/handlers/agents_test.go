@@ -74,10 +74,11 @@ func TestRegisterAgent_Success_New(t *testing.T) {
 	capacity := models.AgentCapacity{MaxSessions: 100, CPU: "64 cores", Memory: "256Gi"}
 	capacityJSON, _ := json.Marshal(capacity)
 
+	// ISSUE #234: INSERT now includes approval_status
 	mock.ExpectQuery(`INSERT INTO agents`).
-		WithArgs("k8s-prod-us-east-1", "kubernetes", "us-east-1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg()).
+		WithArgs("k8s-prod-us-east-1", "kubernetes", "us-east-1", sqlmock.AnyArg(), sqlmock.AnyArg(), sqlmock.AnyArg(), "pending", sqlmock.AnyArg()).
 		WillReturnRows(sqlmock.NewRows([]string{"id", "agent_id", "platform", "region", "status", "capacity", "last_heartbeat", "websocket_id", "metadata", "created_at", "updated_at"}).
-			AddRow("uuid-123", "k8s-prod-us-east-1", "kubernetes", "us-east-1", "online", capacityJSON, timestamp, nil, nil, timestamp, timestamp))
+			AddRow("uuid-123", "k8s-prod-us-east-1", "kubernetes", "us-east-1", "offline", capacityJSON, timestamp, nil, nil, timestamp, timestamp))
 
 	// Create request
 	reqBody := models.AgentRegistrationRequest{
@@ -107,7 +108,8 @@ func TestRegisterAgent_Success_New(t *testing.T) {
 	require.NoError(t, err)
 	assert.Equal(t, "k8s-prod-us-east-1", agent.AgentID)
 	assert.Equal(t, "kubernetes", agent.Platform)
-	assert.Equal(t, "online", agent.Status)
+	// ISSUE #234: New agents are created with 'offline' status until they connect
+	assert.Equal(t, "offline", agent.Status)
 	assert.NoError(t, mock.ExpectationsWereMet())
 }
 

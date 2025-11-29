@@ -737,19 +737,51 @@ func (h *BatchHandler) executeBatchTerminate(jobID, userID string, sessionIDs []
 	var errors []string
 
 	for _, sessionID := range sessionIDs {
-		// Update session state to terminated
+		// Get agent_id for the session before deleting
+		var agentID string
+		err := h.db.DB().QueryRowContext(ctx, `
+			SELECT agent_id FROM sessions WHERE id = $1 AND user_id = $2
+		`, sessionID, userID).Scan(&agentID)
+
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+			// Update progress
+			h.db.DB().ExecContext(ctx, `
+				UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+			`, successCount, failureCount, jobID)
+			continue
+		}
+
+		// Send stop_session command to agent to clean up Kubernetes resources
+		if agentID != "" {
+			cmdID := fmt.Sprintf("cmd-%x", time.Now().UnixNano())
+			cmdPayload := fmt.Sprintf(`{"sessionId":"%s"}`, sessionID)
+
+			_, err = h.db.DB().ExecContext(ctx, `
+				INSERT INTO agent_commands (command_id, agent_id, action, payload, status, created_at)
+				VALUES ($1, $2, 'stop_session', $3, 'pending', CURRENT_TIMESTAMP)
+			`, cmdID, agentID, cmdPayload)
+
+			if err != nil {
+				log.Printf("[BatchHandler] Warning: Failed to create stop command for session %s: %v", sessionID, err)
+			}
+		}
+
+		// Delete session from database
 		result, err := h.db.DB().ExecContext(ctx, `
-			UPDATE sessions SET state = 'terminated' WHERE id = $1 AND user_id = $2
+			DELETE FROM sessions WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
 		if err != nil {
 			failureCount++
-			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+			errors = append(errors, fmt.Sprintf("session %s: delete failed: %v", sessionID, err))
 		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
 			failureCount++
-			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+			errors = append(errors, fmt.Sprintf("session %s: not found", sessionID))
 		} else {
 			successCount++
+			log.Printf("[BatchHandler] Terminated session %s (agent: %s)", sessionID, agentID)
 		}
 
 		// Update progress

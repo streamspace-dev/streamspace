@@ -388,21 +388,14 @@ func (s *SyncService) updateCatalog(ctx context.Context, repoID int, templates [
 	}
 	defer tx.Rollback()
 
-	// Delete existing templates for this repository
-	_, err = tx.ExecContext(ctx, `
-		DELETE FROM catalog_templates WHERE repository_id = $1
-	`, repoID)
-	if err != nil {
-		return fmt.Errorf("failed to delete old templates: %w", err)
-	}
-
 	// Deduplicate templates by name (keep the last occurrence)
 	templateMap := make(map[string]*ParsedTemplate)
 	for _, template := range templates {
 		templateMap[template.Name] = template
 	}
 
-	// Insert deduplicated templates
+	// UPSERT templates to preserve IDs and prevent orphaning installed_applications
+	// This is critical - deleting templates orphans all installed_applications due to ON DELETE SET NULL
 	for _, template := range templateMap {
 		// Convert manifest to JSON string for storage
 		manifestJSON := template.Manifest
@@ -412,12 +405,40 @@ func (s *SyncService) updateCatalog(ctx context.Context, repoID int, templates [
 				repository_id, name, display_name, description, category,
 				app_type, icon_url, manifest, tags, created_at, updated_at
 			) VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
+			ON CONFLICT (repository_id, name)
+			DO UPDATE SET
+				display_name = EXCLUDED.display_name,
+				description = EXCLUDED.description,
+				category = EXCLUDED.category,
+				app_type = EXCLUDED.app_type,
+				icon_url = EXCLUDED.icon_url,
+				manifest = EXCLUDED.manifest,
+				tags = EXCLUDED.tags,
+				updated_at = EXCLUDED.updated_at
 		`, repoID, template.Name, template.DisplayName, template.Description,
 			template.Category, template.AppType, template.Icon, manifestJSON,
 			pq.Array(template.Tags), time.Now(), time.Now())
 
 		if err != nil {
-			return fmt.Errorf("failed to insert template %s: %w", template.Name, err)
+			return fmt.Errorf("failed to upsert template %s: %w", template.Name, err)
+		}
+	}
+
+	// Delete templates that are no longer in the repository
+	// Only delete templates not in the current sync to avoid orphaning apps unnecessarily
+	templateNames := make([]string, 0, len(templateMap))
+	for name := range templateMap {
+		templateNames = append(templateNames, name)
+	}
+
+	if len(templateNames) > 0 {
+		_, err = tx.ExecContext(ctx, `
+			DELETE FROM catalog_templates
+			WHERE repository_id = $1 AND name != ALL($2)
+		`, repoID, pq.Array(templateNames))
+
+		if err != nil {
+			return fmt.Errorf("failed to delete removed templates: %w", err)
 		}
 	}
 

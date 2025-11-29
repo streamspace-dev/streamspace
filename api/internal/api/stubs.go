@@ -796,54 +796,23 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 
 	// Initialize default values
 	var err error
-	var nodes *corev1.NodeList
-	var pods *corev1.PodList
-	totalNodes := 0
-	readyNodes := 0
-	totalCPU := int64(0)
-	totalMemory := int64(0)
-	usedPods := 0
-	totalPods := 0
+	totalAgents := 0
+	readyAgents := 0
 
-	// Get cluster nodes (handle nil k8sClient gracefully)
-	if h.k8sClient != nil {
-		nodes, err = h.k8sClient.GetNodes(ctx)
-		if err != nil {
-			log.Printf("Failed to get cluster nodes: %v", err)
-			// Continue with default values instead of failing
-		} else {
-			totalNodes = len(nodes.Items)
+	// ISSUE #234: Query agents table instead of K8s cluster nodes
+	// The dashboard should show registered agents, not K8s infrastructure nodes
+	err = h.db.DB().QueryRowContext(ctx, `
+		SELECT
+			COUNT(*) FILTER (WHERE approval_status = 'approved') as total,
+			COUNT(*) FILTER (WHERE approval_status = 'approved' AND status = 'online') as ready
+		FROM agents
+	`).Scan(&totalAgents, &readyAgents)
 
-			// Count ready nodes and sum resources
-			for _, node := range nodes.Items {
-				// Check if node is ready
-				for _, condition := range node.Status.Conditions {
-					if condition.Type == corev1.NodeReady && condition.Status == corev1.ConditionTrue {
-						readyNodes++
-						break
-					}
-				}
-
-				// Sum up allocatable resources
-				if cpu, ok := node.Status.Allocatable[corev1.ResourceCPU]; ok {
-					totalCPU += cpu.MilliValue()
-				}
-				if memory, ok := node.Status.Allocatable[corev1.ResourceMemory]; ok {
-					totalMemory += memory.Value()
-				}
-				if pods, ok := node.Status.Allocatable[corev1.ResourcePods]; ok {
-					totalPods += int(pods.Value())
-				}
-			}
-
-			// Get all pods to calculate resource usage
-			pods, err = h.k8sClient.GetPods(ctx, h.namespace)
-			if err == nil {
-				usedPods = len(pods.Items)
-			}
-		}
-	} else {
-		log.Printf("Warning: k8sClient is nil, returning metrics without cluster data")
+	if err != nil {
+		log.Printf("Failed to get agent counts: %v", err)
+		// Use zeros if query fails
+		totalAgents = 0
+		readyAgents = 0
 	}
 
 	// Get session counts from database
@@ -890,33 +859,26 @@ func (h *Handler) GetMetrics(c *gin.Context) {
 		userCounts = struct{ Total, Active int }{0, 0}
 	}
 
-	// Calculate resource usage (simplified - in production you'd query metrics-server)
-	// For now, estimate based on running sessions
-	usedCPU := int64(sessionCounts.Running * 1000)                      // 1000m per session estimate
-	usedMemory := int64(sessionCounts.Running * 2 * 1024 * 1024 * 1024) // 2GiB per session estimate
-
+	// ISSUE #234: Resource metrics are not available without K8s client
+	// For now, return zeros. In the future, could aggregate agent capacity.
+	totalCPU := int64(0)
+	usedCPU := int64(0)
+	totalMemory := int64(0)
+	usedMemory := int64(0)
+	totalPods := 0
+	usedPods := 0
 	cpuPercent := float64(0)
-	if totalCPU > 0 {
-		cpuPercent = float64(usedCPU) / float64(totalCPU) * 100
-	}
-
 	memoryPercent := float64(0)
-	if totalMemory > 0 {
-		memoryPercent = float64(usedMemory) / float64(totalMemory) * 100
-	}
-
 	podsPercent := float64(0)
-	if totalPods > 0 {
-		podsPercent = float64(usedPods) / float64(totalPods) * 100
-	}
 
-	// Return cluster metrics in the format expected by AdminDashboard
+	// ISSUE #234: Return agent metrics in the format expected by AdminDashboard
+	// Dashboard now shows approved agents instead of K8s cluster nodes
 	c.JSON(http.StatusOK, gin.H{
 		"cluster": gin.H{
 			"nodes": gin.H{
-				"total":    totalNodes,
-				"ready":    readyNodes,
-				"notReady": totalNodes - readyNodes,
+				"total":    totalAgents,
+				"ready":    readyAgents,
+				"notReady": totalAgents - readyAgents,
 			},
 			"sessions": gin.H{
 				"total":      sessionCounts.Total,

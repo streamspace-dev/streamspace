@@ -178,6 +178,20 @@ type Agent struct {
 	// Used for anomaly detection and security auditing.
 	APIKeyLastUsedAt *time.Time `json:"-" db:"api_key_last_used_at"`
 
+	// ApprovalStatus indicates the approval state of the agent (Issue #234).
+	//
+	// Valid values:
+	//   - "pending": Agent awaiting administrator approval
+	//   - "approved": Agent approved and operational
+	//   - "rejected": Agent rejected by administrator
+	ApprovalStatus string `json:"approvalStatus" db:"approval_status"`
+
+	// ApprovedAt is when this agent was approved (or rejected).
+	ApprovedAt *time.Time `json:"approvedAt,omitempty" db:"approved_at"`
+
+	// ApprovedBy is the user ID of the administrator who approved/rejected the agent.
+	ApprovedBy *string `json:"approvedBy,omitempty" db:"approved_by"`
+
 	// CreatedAt is when this agent was first registered.
 	CreatedAt time.Time `json:"createdAt" db:"created_at"`
 

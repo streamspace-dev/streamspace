@@ -313,70 +313,103 @@ func (m *Manager) broadcastSessionUpdates() {
 		orgs := m.sessionsHub.GetUniqueOrgs()
 
 		for _, orgID := range orgs {
-			// Get K8s namespace for this org
-			namespace := m.sessionsHub.GetK8sNamespaceForOrg(orgID)
+			// v2.0 ARCHITECTURE: Read from database (source of truth), not Kubernetes
+			// The database is populated by agents via WebSocket commands
+			// This ensures platform-agnostic operation (K8s, Docker, VM, Cloud)
 
-			// Fetch sessions for this org's namespace
-			sessions, err := m.k8sClient.ListSessions(ctx, namespace)
+			// Fetch sessions from database for this org
+			rows, err := m.db.DB().QueryContext(ctx, `
+				SELECT id, user_id, template_name, state, namespace, created_at,
+				       active_connections, url, pod_name, memory, cpu,
+				       idle_timeout, last_activity, platform, agent_id
+				FROM sessions
+				WHERE org_id = $1 AND state != 'terminated'
+				ORDER BY created_at DESC
+			`, orgID)
 			if err != nil {
-				log.Printf("Failed to fetch sessions for org %s (namespace %s): %v", orgID, namespace, err)
+				log.Printf("Failed to fetch sessions for org %s from database: %v", orgID, err)
 				continue
 			}
 
-			// Enrich with database info (active connections) and activity status
-			enrichedSessions := make([]map[string]interface{}, 0, len(sessions))
-			for _, session := range sessions {
-				// Get active connections count from database, filtered by org
-				var activeConns int
-				if err := m.db.DB().QueryRowContext(ctx, `
-					SELECT active_connections FROM sessions WHERE id = $1 AND org_id = $2
-				`, session.Name, orgID).Scan(&activeConns); err != nil {
-					// If query fails, default to 0
-					activeConns = 0
+			// Build enriched session list
+			enrichedSessions := make([]map[string]interface{}, 0)
+			for rows.Next() {
+				var (
+					id, userID, templateName, state, namespace string
+					createdAt                                   time.Time
+					activeConns                                 int
+					url, podName, memory, cpu, idleTimeout      *string
+					lastActivity                                *time.Time
+					platform, agentID                           *string
+				)
+
+				if err := rows.Scan(&id, &userID, &templateName, &state, &namespace,
+					&createdAt, &activeConns, &url, &podName, &memory, &cpu,
+					&idleTimeout, &lastActivity, &platform, &agentID); err != nil {
+					log.Printf("Failed to scan session row: %v", err)
+					continue
 				}
 
 				sessionData := map[string]interface{}{
-					"name":      session.Name,
-					"namespace": session.Namespace,
-					"user":      session.User,
-					"template":  session.Template,
-					"state":     session.State,
-					// Convert status to proper JSON format with lowercase keys
-					"status": map[string]interface{}{
-						"phase":   session.Status.Phase,
-						"podName": session.Status.PodName,
-						"url":     session.Status.URL,
-					},
-					"createdAt":         session.CreatedAt,
+					"name":              id,
+					"namespace":         namespace,
+					"user":              userID,
+					"template":          templateName,
+					"state":             state,
+					"createdAt":         createdAt.Format(time.RFC3339),
 					"activeConnections": activeConns,
 				}
 
-				if session.Resources.Memory != "" || session.Resources.CPU != "" {
-					sessionData["resources"] = map[string]string{
-						"memory": session.Resources.Memory,
-						"cpu":    session.Resources.CPU,
+				// Add status info
+				status := make(map[string]interface{})
+				status["phase"] = state
+				if podName != nil {
+					status["podName"] = *podName
+				}
+				if url != nil {
+					status["url"] = *url
+				}
+				sessionData["status"] = status
+
+				// Add resources if present
+				if (memory != nil && *memory != "") || (cpu != nil && *cpu != "") {
+					resources := make(map[string]string)
+					if memory != nil {
+						resources["memory"] = *memory
 					}
+					if cpu != nil {
+						resources["cpu"] = *cpu
+					}
+					sessionData["resources"] = resources
+				}
+
+				// Add platform info (v2.0)
+				if platform != nil {
+					sessionData["platform"] = *platform
+				}
+				if agentID != nil {
+					sessionData["agent_id"] = *agentID
 				}
 
 				// Add activity status
-				if session.Status.LastActivity != nil {
-					sessionData["lastActivity"] = session.Status.LastActivity.Format(time.RFC3339)
+				if lastActivity != nil {
+					sessionData["lastActivity"] = lastActivity.Format(time.RFC3339)
 
 					// Calculate idle status
-					if session.IdleTimeout != "" {
-						idleThreshold, err := time.ParseDuration(session.IdleTimeout)
-						if err == nil && idleThreshold > 0 {
-							idleDuration := time.Since(*session.Status.LastActivity)
+					if idleTimeout != nil && *idleTimeout != "" {
+						if threshold, err := time.ParseDuration(*idleTimeout); err == nil && threshold > 0 {
+							idleDuration := time.Since(*lastActivity)
 							sessionData["idleDuration"] = int64(idleDuration.Seconds())
-							sessionData["idleThreshold"] = int64(idleThreshold.Seconds())
-							sessionData["isIdle"] = idleDuration >= idleThreshold
-							sessionData["isActive"] = idleDuration < idleThreshold
+							sessionData["idleThreshold"] = int64(threshold.Seconds())
+							sessionData["isIdle"] = idleDuration >= threshold
+							sessionData["isActive"] = idleDuration < threshold
 						}
 					}
 				}
 
 				enrichedSessions = append(enrichedSessions, sessionData)
 			}
+			rows.Close()
 
 			// Broadcast to clients in this org only
 			message := map[string]interface{}{
@@ -384,7 +417,6 @@ func (m *Manager) broadcastSessionUpdates() {
 				"sessions":  enrichedSessions,
 				"count":     len(enrichedSessions),
 				"org_id":    orgID,
-				"namespace": namespace,
 				"timestamp": time.Now().Format(time.RFC3339),
 			}
 
@@ -484,7 +516,7 @@ func (m *Manager) broadcastMetrics() {
 					"repositories":      repoCount,
 					"templates":         templateCount,
 				},
-				"timestamp": time.Now().Format(time.RFC3339),
+			"timestamp": time.Now().Format(time.RFC3339),
 			}
 
 			data, err := json.Marshal(message)

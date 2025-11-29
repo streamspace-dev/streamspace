@@ -105,6 +105,10 @@ func (h *AgentHandler) RegisterAdminRoutes(router *gin.RouterGroup) {
 		// API key management (admin only)
 		agents.POST("/:agent_id/generate-key", h.GenerateAPIKey)
 		agents.POST("/:agent_id/rotate-key", h.RotateAPIKey)
+
+		// Agent approval workflow (Issue #234)
+		agents.POST("/:agent_id/approve", h.ApproveAgent)
+		agents.POST("/:agent_id/reject", h.RejectAgent)
 	}
 }
 
@@ -127,25 +131,14 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	}
 
 	// ISSUE #226 FIX: Check if this is a first-time registration via bootstrap key
-	// If so, we need to generate and store a unique API key for this agent
+	// ISSUE #234: Support pending approval workflow
 	isBootstrapAuth, _ := c.Get("isBootstrapAuth")
-	var apiKeyHash string
-	var newAPIKey string
+	approvalStatus := "pending" // Default to pending for new agents
 
 	if isBootstrapAuth == true {
-		// Generate a new unique API key for this agent
-		keyMetadata, err := auth.GenerateAPIKeyWithMetadata()
-		if err != nil {
-			log.Printf("[AgentHandler] Failed to generate API key for agent %s: %v", req.AgentID, err)
-			c.JSON(http.StatusInternalServerError, gin.H{
-				"error":   "Failed to generate API key",
-				"details": err.Error(),
-			})
-			return
-		}
-		apiKeyHash = keyMetadata.Hash
-		newAPIKey = keyMetadata.PlaintextKey
-		log.Printf("[AgentHandler] Generated new API key for agent %s via bootstrap registration", req.AgentID)
+		// Bootstrap registration - agent waits for approval
+		// Don't generate API key yet - only after approval
+		log.Printf("[AgentHandler] New agent %s requesting registration (status: pending approval)", req.AgentID)
 	}
 
 	// Check if agent already exists
@@ -160,45 +153,24 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	statusCode := http.StatusCreated
 
 	if err == sql.ErrNoRows {
-		// Agent doesn't exist - create new
-		// Include API key hash if this is a bootstrap registration
-		if apiKeyHash != "" {
-			err = h.database.DB().QueryRow(`
-				INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, api_key_hash, api_key_created_at, created_at, updated_at)
-				VALUES ($1, $2, $3, 'online', $4, $5, $6, $7, $8, $8, $8)
-				RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
-			`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, apiKeyHash, now).Scan(
-				&agent.ID,
-				&agent.AgentID,
-				&agent.Platform,
-				&agent.Region,
-				&agent.Status,
-				&agent.Capacity,
-				&agent.LastHeartbeat,
-				&agent.WebSocketID,
-				&agent.Metadata,
-				&agent.CreatedAt,
-				&agent.UpdatedAt,
-			)
-		} else {
-			err = h.database.DB().QueryRow(`
-				INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, created_at, updated_at)
-				VALUES ($1, $2, $3, 'online', $4, $5, $6, $7, $7)
-				RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
-			`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, now).Scan(
-				&agent.ID,
-				&agent.AgentID,
-				&agent.Platform,
-				&agent.Region,
-				&agent.Status,
-				&agent.Capacity,
-				&agent.LastHeartbeat,
-				&agent.WebSocketID,
-				&agent.Metadata,
-				&agent.CreatedAt,
-				&agent.UpdatedAt,
-			)
-		}
+		// Agent doesn't exist - create new with pending approval status
+		err = h.database.DB().QueryRow(`
+			INSERT INTO agents (agent_id, platform, region, status, capacity, last_heartbeat, metadata, approval_status, created_at, updated_at)
+			VALUES ($1, $2, $3, 'offline', $4, $5, $6, $7, $8, $8)
+			RETURNING id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at
+		`, req.AgentID, req.Platform, req.Region, req.Capacity, now, req.Metadata, approvalStatus, now).Scan(
+			&agent.ID,
+			&agent.AgentID,
+			&agent.Platform,
+			&agent.Region,
+			&agent.Status,
+			&agent.Capacity,
+			&agent.LastHeartbeat,
+			&agent.WebSocketID,
+			&agent.Metadata,
+			&agent.CreatedAt,
+			&agent.UpdatedAt,
+		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
 				"error":   "Failed to register agent",
@@ -243,17 +215,51 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		}
 	}
 
-	// ISSUE #226 FIX: Return the new API key if this was a bootstrap registration
-	// The agent must save this key and use it for all future requests
-	if newAPIKey != "" {
-		c.JSON(statusCode, gin.H{
-			"agent":   agent,
-			"apiKey":  newAPIKey,
-			"message": "Agent registered successfully. IMPORTANT: Save this API key - it will not be shown again. Use it for all future requests.",
-		})
-		return
+	// ISSUE #234: Return approval status to agent
+	if isBootstrapAuth == true {
+		// Check actual approval status from database
+		var approvalStatus string
+		var apiKeyHash *string
+		err := h.database.DB().QueryRow(
+			"SELECT approval_status, api_key_hash FROM agents WHERE agent_id = $1",
+			agent.AgentID,
+		).Scan(&approvalStatus, &apiKeyHash)
+
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error": "Failed to check approval status",
+			})
+			return
+		}
+
+		if approvalStatus == "approved" && apiKeyHash != nil {
+			// Agent approved - return success (agent should switch to using its API key)
+			c.JSON(http.StatusOK, gin.H{
+				"agent":          agent,
+				"approvalStatus": "approved",
+				"message":        "Agent approved. Use your configured API key for subsequent requests.",
+			})
+			return
+		} else if approvalStatus == "pending" {
+			// Agent pending approval
+			c.JSON(http.StatusAccepted, gin.H{
+				"agent":          agent,
+				"approvalStatus": "pending",
+				"message":        "Agent registration request received. Waiting for administrator approval. Please retry registration periodically.",
+			})
+			return
+		} else {
+			// Agent rejected
+			c.JSON(http.StatusForbidden, gin.H{
+				"agent":          agent,
+				"approvalStatus": "rejected",
+				"message":        "Agent registration has been rejected by administrator.",
+			})
+			return
+		}
 	}
 
+	// Existing agent re-registering
 	c.JSON(statusCode, agent)
 }
 
@@ -276,7 +282,7 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 	region := c.Query("region")
 
 	// Build query
-	query := "SELECT id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at FROM agents WHERE 1=1"
+	query := "SELECT id, agent_id, platform, region, status, capacity, last_heartbeat, websocket_id, metadata, created_at, updated_at, approval_status, approved_at, approved_by FROM agents WHERE 1=1"
 	var args []interface{}
 	argIdx := 1
 
@@ -323,6 +329,9 @@ func (h *AgentHandler) ListAgents(c *gin.Context) {
 			&agent.Metadata,
 			&agent.CreatedAt,
 			&agent.UpdatedAt,
+			&agent.ApprovalStatus,
+			&agent.ApprovedAt,
+			&agent.ApprovedBy,
 		)
 		if err != nil {
 			c.JSON(http.StatusInternalServerError, gin.H{
@@ -806,4 +815,130 @@ func (h *AgentHandler) RotateAPIKey(c *gin.Context) {
 		action = "rotated"
 	}
 	log.Printf("[AgentHandler] API key %s for agent %s by admin from IP %s", action, agentID, c.ClientIP())
+}
+
+// ApproveAgent godoc
+// @Summary Approve pending agent
+// @Description Approves a pending agent and generates API key
+// @Tags agents
+// @Accept json
+// @Produce json
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{} "Agent approved"
+// @Failure 404 {object} map[string]interface{} "Agent not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /agents/{agent_id}/approve [post]
+// @Security ApiKeyAuth
+func (h *AgentHandler) ApproveAgent(c *gin.Context) {
+	agentID := c.Param("agent_id")
+	userID := c.GetString("userID")
+
+	// Generate API key for approved agent
+	keyMetadata, err := auth.GenerateAPIKeyWithMetadata()
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to generate API key",
+		})
+		return
+	}
+
+	// Update agent status to approved and add API key
+	now := time.Now()
+	result, err := h.database.DB().Exec(`
+		UPDATE agents
+		SET approval_status = 'approved',
+		    approved_at = $1,
+		    approved_by = $2,
+		    api_key_hash = $3,
+		    api_key_created_at = $1,
+		    updated_at = $1
+		WHERE agent_id = $4 AND approval_status = 'pending'
+	`, now, userID, keyMetadata.Hash, agentID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to approve agent",
+		})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Agent not found or not in pending status",
+		})
+		return
+	}
+
+	log.Printf("[AgentHandler] Agent %s approved by %s", agentID, userID)
+
+	// CRITICAL: Run self-healing after agent approval
+	// This fixes any orphaned applications that lost their catalog_template_id
+	// when previous agents were replaced/restarted
+	log.Println("[AgentHandler] Running application catalog link self-heal after agent approval...")
+	appDB := db.NewApplicationDB(h.database.DB())
+	healedCount, err := appDB.HealApplicationCatalogLinks(c.Request.Context())
+	if err != nil {
+		log.Printf("[AgentHandler] Warning: Application self-heal encountered error (continuing): %v", err)
+	} else if healedCount > 0 {
+		log.Printf("[AgentHandler] Application self-heal complete: Repaired %d applications", healedCount)
+	} else {
+		log.Printf("[AgentHandler] Application self-heal complete: No broken applications found")
+	}
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent approved successfully",
+		"agentId": agentID,
+		"apiKey":  keyMetadata.PlaintextKey,
+		"warning": "Provide this API key to the agent - it will not be shown again",
+	})
+}
+
+// RejectAgent godoc
+// @Summary Reject pending agent
+// @Description Rejects a pending agent registration
+// @Tags agents
+// @Accept json
+// @Produce json
+// @Param agent_id path string true "Agent ID"
+// @Success 200 {object} map[string]interface{} "Agent rejected"
+// @Failure 404 {object} map[string]interface{} "Agent not found"
+// @Failure 500 {object} map[string]interface{} "Internal server error"
+// @Router /agents/{agent_id}/reject [post]
+// @Security ApiKeyAuth
+func (h *AgentHandler) RejectAgent(c *gin.Context) {
+	agentID := c.Param("agent_id")
+	userID := c.GetString("userID")
+
+	now := time.Now()
+	result, err := h.database.DB().Exec(`
+		UPDATE agents
+		SET approval_status = 'rejected',
+		    approved_at = $1,
+		    approved_by = $2,
+		    updated_at = $1
+		WHERE agent_id = $3 AND approval_status = 'pending'
+	`, now, userID, agentID)
+
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{
+			"error": "Failed to reject agent",
+		})
+		return
+	}
+
+	rowsAffected, _ := result.RowsAffected()
+	if rowsAffected == 0 {
+		c.JSON(http.StatusNotFound, gin.H{
+			"error": "Agent not found or not in pending status",
+		})
+		return
+	}
+
+	log.Printf("[AgentHandler] Agent %s rejected by %s", agentID, userID)
+
+	c.JSON(http.StatusOK, gin.H{
+		"message": "Agent rejected",
+		"agentId": agentID,
+	})
 }

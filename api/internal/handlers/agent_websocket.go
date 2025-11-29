@@ -40,6 +40,7 @@ import (
 	"database/sql"
 	"encoding/json"
 	"log"
+	"net"
 	"net/http"
 	"time"
 
@@ -234,6 +235,18 @@ func (h *AgentWebSocketHandler) readPump(conn *wsocket.AgentConnection) {
 	conn.Conn.SetPongHandler(func(string) error {
 		conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
 		return nil
+	})
+
+	// Set ping handler to automatically respond with pongs when agent sends pings
+	conn.Conn.SetPingHandler(func(appData string) error {
+		conn.Conn.SetReadDeadline(time.Now().Add(pongWait))
+		err := conn.Conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(writeWait))
+		if err == websocket.ErrCloseSent {
+			return nil
+		} else if e, ok := err.(net.Error); ok && e.Temporary() {
+			return nil
+		}
+		return err
 	})
 
 	for {
@@ -465,7 +478,37 @@ func (h *AgentWebSocketHandler) handleStatus(conn *wsocket.AgentConnection, msg 
 	log.Printf("[AgentWebSocket] Agent %s status update for session %s: state=%s, vncReady=%v, vncPort=%d",
 		conn.AgentID, status.SessionID, status.State, status.VNCReady, status.VNCPort)
 
-	// TODO: Update session status in database when session table is added
-	// For now, just log the status update
-	// In Phase 4, this will update the sessions table with the new state
+	// Update session in database
+	now := time.Now()
+
+	// Extract pod name from platform metadata if available
+	podName := ""
+	if podNameVal, ok := status.PlatformMetadata["podName"]; ok {
+		if podNameStr, ok := podNameVal.(string); ok {
+			podName = podNameStr
+		}
+	}
+
+	// Construct VNC URL if VNC is ready
+	vncURL := ""
+	if status.VNCReady && status.VNCPort > 0 {
+		// VNC URL will be proxied through the API server
+		// Format: /api/v1/sessions/{sessionID}/vnc
+		vncURL = "/api/v1/sessions/" + status.SessionID + "/vnc"
+	}
+
+	query := `
+		UPDATE sessions
+		SET state = $1, pod_name = $2, url = $3, updated_at = $4
+		WHERE id = $5
+	`
+
+	_, err := h.database.DB().Exec(query, status.State, podName, vncURL, now, status.SessionID)
+	if err != nil {
+		log.Printf("[AgentWebSocket] Failed to update session %s status: %v", status.SessionID, err)
+		return
+	}
+
+	log.Printf("[AgentWebSocket] Updated session %s: state=%s, pod=%s, url=%s",
+		status.SessionID, status.State, podName, vncURL)
 }

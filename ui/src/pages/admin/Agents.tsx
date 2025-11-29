@@ -44,11 +44,13 @@ import {
   CloudQueue as VMIcon,
   CloudCircle as CloudIcon,
   Computer as AgentIcon,
+  CheckCircleOutline as ApproveIcon,
+  Block as RejectIcon,
 } from '@mui/icons-material';
 import { useQuery, useMutation, useQueryClient } from '@tanstack/react-query';
 import { useNotificationQueue } from '../../components/NotificationQueue';
 import AdminPortalLayout from '../../components/AdminPortalLayout';
-import axios from 'axios';
+import { api } from '../../lib/api';
 import { formatDistanceToNow } from 'date-fns';
 
 /**
@@ -92,8 +94,11 @@ export default function Agents() {
   const [platformFilter, setPlatformFilter] = useState<string>('all');
   const [statusFilter, setStatusFilter] = useState<string>('all');
   const [regionFilter, setRegionFilter] = useState<string>('all');
+  const [approvalFilter, setApprovalFilter] = useState<string>('all');
   const [detailsDialogOpen, setDetailsDialogOpen] = useState(false);
   const [deleteConfirmOpen, setDeleteConfirmOpen] = useState(false);
+  const [approveConfirmOpen, setApproveConfirmOpen] = useState(false);
+  const [rejectConfirmOpen, setRejectConfirmOpen] = useState(false);
   const [selectedAgent, setSelectedAgent] = useState<any>(null);
 
   // Fetch agents with filters
@@ -105,13 +110,12 @@ export default function Agents() {
   } = useQuery({
     queryKey: ['agents', platformFilter, statusFilter, regionFilter],
     queryFn: async () => {
-      const params = new URLSearchParams();
-      if (platformFilter !== 'all') params.append('platform', platformFilter);
-      if (statusFilter !== 'all') params.append('status', statusFilter);
-      if (regionFilter !== 'all') params.append('region', regionFilter);
+      const params: any = {};
+      if (platformFilter !== 'all') params.platform = platformFilter;
+      if (statusFilter !== 'all') params.status = statusFilter;
+      if (regionFilter !== 'all') params.region = regionFilter;
 
-      const response = await axios.get(`/api/v1/agents?${params.toString()}`);
-      return response.data;
+      return await api.listAgents(params);
     },
     refetchInterval: 10000, // Auto-refresh every 10 seconds
   });
@@ -124,7 +128,7 @@ export default function Agents() {
   // Delete agent mutation
   const deleteAgent = useMutation({
     mutationFn: async (agentId: string) => {
-      await axios.delete(`/api/v1/agents/${agentId}`);
+      await api.deleteAgent(agentId);
     },
     onSuccess: () => {
       addNotification({
@@ -143,15 +147,63 @@ export default function Agents() {
     },
   });
 
-  // Filter agents by search query
+  // Approve agent mutation (Issue #234)
+  const approveAgent = useMutation({
+    mutationFn: async (agentId: string) => {
+      await api.approveAgent(agentId);
+    },
+    onSuccess: (_, agentId) => {
+      addNotification({
+        message: `Agent ${agentId} approved successfully`,
+        severity: 'success',
+      });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setApproveConfirmOpen(false);
+      setSelectedAgent(null);
+    },
+    onError: (error: any) => {
+      addNotification({
+        message: error.response?.data?.error || 'Failed to approve agent',
+        severity: 'error',
+      });
+    },
+  });
+
+  // Reject agent mutation (Issue #234)
+  const rejectAgent = useMutation({
+    mutationFn: async (agentId: string) => {
+      await api.rejectAgent(agentId);
+    },
+    onSuccess: (_, agentId) => {
+      addNotification({
+        message: `Agent ${agentId} rejected successfully`,
+        severity: 'success',
+      });
+      queryClient.invalidateQueries({ queryKey: ['agents'] });
+      setRejectConfirmOpen(false);
+      setSelectedAgent(null);
+    },
+    onError: (error: any) => {
+      addNotification({
+        message: error.response?.data?.error || 'Failed to reject agent',
+        severity: 'error',
+      });
+    },
+  });
+
+  // Filter agents by search query and approval status
   const filteredAgents = agents.filter((agent: any) => {
     const matchesSearch =
       searchQuery === '' ||
-      agent.agent_id.toLowerCase().includes(searchQuery.toLowerCase()) ||
+      agent.agentId.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.platform?.toLowerCase().includes(searchQuery.toLowerCase()) ||
       agent.region?.toLowerCase().includes(searchQuery.toLowerCase());
 
-    return matchesSearch;
+    const matchesApproval =
+      approvalFilter === 'all' ||
+      (agent.approvalStatus || 'approved') === approvalFilter;
+
+    return matchesSearch && matchesApproval;
   });
 
   // Get agent status based on last heartbeat
@@ -183,19 +235,36 @@ export default function Agents() {
     }
   };
 
-  // Get status icon and color
+  // Get status icon and color - uses database status field, not calculated
   const getStatusBadge = (agent: any) => {
-    const status = getAgentStatus(agent.last_heartbeat);
+    // Use status from database instead of calculating from lastHeartbeat
+    const status = agent.status || 'offline';
 
-    switch (status) {
+    switch (status.toLowerCase()) {
       case 'online':
         return <Chip icon={<OnlineIcon />} label="Online" color="success" size="small" />;
-      case 'warning':
-        return <Chip icon={<WarningIcon />} label="Warning" color="warning" size="small" />;
+      case 'draining':
+        return <Chip icon={<WarningIcon />} label="Draining" color="warning" size="small" />;
       case 'offline':
         return <Chip icon={<OfflineIcon />} label="Offline" color="error" size="small" />;
       default:
         return <Chip label="Unknown" size="small" />;
+    }
+  };
+
+  // Get approval status badge (Issue #234)
+  const getApprovalBadge = (approvalStatus: string | undefined) => {
+    const status = approvalStatus || 'approved'; // Default to approved for backward compatibility
+
+    switch (status) {
+      case 'approved':
+        return <Chip label="Approved" color="success" size="small" />;
+      case 'pending':
+        return <Chip label="Pending Approval" color="warning" size="small" />;
+      case 'rejected':
+        return <Chip label="Rejected" color="error" size="small" />;
+      default:
+        return <Chip label={status} size="small" />;
     }
   };
 
@@ -234,7 +303,30 @@ export default function Agents() {
 
   const handleDeleteConfirm = () => {
     if (selectedAgent) {
-      deleteAgent.mutate(selectedAgent.agent_id);
+      deleteAgent.mutate(selectedAgent.agentId);
+    }
+  };
+
+  // Issue #234: Agent approval handlers
+  const handleApproveClick = (agent: any) => {
+    setSelectedAgent(agent);
+    setApproveConfirmOpen(true);
+  };
+
+  const handleApproveConfirm = () => {
+    if (selectedAgent) {
+      approveAgent.mutate(selectedAgent.agentId);
+    }
+  };
+
+  const handleRejectClick = (agent: any) => {
+    setSelectedAgent(agent);
+    setRejectConfirmOpen(true);
+  };
+
+  const handleRejectConfirm = () => {
+    if (selectedAgent) {
+      rejectAgent.mutate(selectedAgent.agentId);
     }
   };
 
@@ -305,7 +397,7 @@ export default function Agents() {
           <Card sx={{ mb: 3 }}>
             <CardContent>
               <Grid container spacing={2} alignItems="center">
-                <Grid item xs={12} sm={6} md={4}>
+                <Grid item xs={12} sm={6} md={3}>
                   <TextField
                     fullWidth
                     placeholder="Search agents..."
@@ -320,7 +412,7 @@ export default function Agents() {
                     }}
                   />
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={2}>
                   <FormControl fullWidth>
                     <InputLabel>Platform</InputLabel>
                     <Select
@@ -350,7 +442,7 @@ export default function Agents() {
                     </Select>
                   </FormControl>
                 </Grid>
-                <Grid item xs={12} sm={6} md={3}>
+                <Grid item xs={12} sm={6} md={2}>
                   <FormControl fullWidth>
                     <InputLabel>Region</InputLabel>
                     <Select
@@ -363,6 +455,21 @@ export default function Agents() {
                           {region === 'all' ? 'All Regions' : region}
                         </MenuItem>
                       ))}
+                    </Select>
+                  </FormControl>
+                </Grid>
+                <Grid item xs={12} sm={6} md={3}>
+                  <FormControl fullWidth>
+                    <InputLabel>Approval Status</InputLabel>
+                    <Select
+                      value={approvalFilter}
+                      label="Approval Status"
+                      onChange={(e) => setApprovalFilter(e.target.value)}
+                    >
+                      <MenuItem value="all">All Statuses</MenuItem>
+                      <MenuItem value="approved">Approved</MenuItem>
+                      <MenuItem value="pending">Pending Approval</MenuItem>
+                      <MenuItem value="rejected">Rejected</MenuItem>
                     </Select>
                   </FormControl>
                 </Grid>
@@ -396,6 +503,7 @@ export default function Agents() {
                         <TableCell>Platform</TableCell>
                         <TableCell>Region</TableCell>
                         <TableCell>Status</TableCell>
+                        <TableCell>Approval</TableCell>
                         <TableCell>Sessions</TableCell>
                         <TableCell>Capacity</TableCell>
                         <TableCell>Last Heartbeat</TableCell>
@@ -405,14 +513,14 @@ export default function Agents() {
                     <TableBody>
                       {filteredAgents.map((agent: any) => (
                         <TableRow
-                          key={agent.agent_id}
+                          key={agent.agentId}
                           hover
                           sx={{ cursor: 'pointer' }}
                           onClick={() => handleViewDetails(agent)}
                         >
                           <TableCell>
                             <Typography variant="body2" fontFamily="monospace">
-                              {agent.agent_id}
+                              {agent.agentId}
                             </Typography>
                           </TableCell>
                           <TableCell>
@@ -427,6 +535,7 @@ export default function Agents() {
                             <Typography variant="body2">{agent.region || 'N/A'}</Typography>
                           </TableCell>
                           <TableCell>{getStatusBadge(agent)}</TableCell>
+                          <TableCell>{getApprovalBadge(agent.approvalStatus)}</TableCell>
                           <TableCell>
                             <Typography variant="body2">
                               {agent.capacity?.active_sessions || 0} /{' '}
@@ -442,22 +551,52 @@ export default function Agents() {
                           </TableCell>
                           <TableCell>
                             <Typography variant="body2" color="textSecondary">
-                              {getTimeAgo(agent.last_heartbeat)}
+                              {getTimeAgo(agent.lastHeartbeat)}
                             </Typography>
                           </TableCell>
                           <TableCell align="right">
-                            <Tooltip title="Remove Agent">
-                              <IconButton
-                                size="small"
-                                color="error"
-                                onClick={(e) => {
-                                  e.stopPropagation();
-                                  handleDeleteClick(agent);
-                                }}
-                              >
-                                <DeleteIcon />
-                              </IconButton>
-                            </Tooltip>
+                            <Stack direction="row" spacing={1} justifyContent="flex-end">
+                              {(agent.approvalStatus || 'approved') === 'pending' && (
+                                <>
+                                  <Tooltip title="Approve Agent">
+                                    <IconButton
+                                      size="small"
+                                      color="success"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleApproveClick(agent);
+                                      }}
+                                    >
+                                      <ApproveIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                  <Tooltip title="Reject Agent">
+                                    <IconButton
+                                      size="small"
+                                      color="warning"
+                                      onClick={(e) => {
+                                        e.stopPropagation();
+                                        handleRejectClick(agent);
+                                      }}
+                                    >
+                                      <RejectIcon />
+                                    </IconButton>
+                                  </Tooltip>
+                                </>
+                              )}
+                              <Tooltip title="Remove Agent">
+                                <IconButton
+                                  size="small"
+                                  color="error"
+                                  onClick={(e) => {
+                                    e.stopPropagation();
+                                    handleDeleteClick(agent);
+                                  }}
+                                >
+                                  <DeleteIcon />
+                                </IconButton>
+                              </Tooltip>
+                            </Stack>
                           </TableCell>
                         </TableRow>
                       ))}
@@ -620,6 +759,54 @@ export default function Agents() {
               disabled={deleteAgent.isPending}
             >
               {deleteAgent.isPending ? 'Removing...' : 'Remove'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Approve Confirmation Dialog (Issue #234) */}
+        <Dialog open={approveConfirmOpen} onClose={() => setApproveConfirmOpen(false)}>
+          <DialogTitle>Approve Agent</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to approve agent <strong>{selectedAgent?.agent_id}</strong>?
+            </Typography>
+            <Alert severity="info" sx={{ mt: 2 }}>
+              The agent will be granted access to the platform and will be able to manage sessions.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setApproveConfirmOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleApproveConfirm}
+              color="success"
+              variant="contained"
+              disabled={approveAgent.isPending}
+            >
+              {approveAgent.isPending ? 'Approving...' : 'Approve'}
+            </Button>
+          </DialogActions>
+        </Dialog>
+
+        {/* Reject Confirmation Dialog (Issue #234) */}
+        <Dialog open={rejectConfirmOpen} onClose={() => setRejectConfirmOpen(false)}>
+          <DialogTitle>Reject Agent</DialogTitle>
+          <DialogContent>
+            <Typography>
+              Are you sure you want to reject agent <strong>{selectedAgent?.agent_id}</strong>?
+            </Typography>
+            <Alert severity="warning" sx={{ mt: 2 }}>
+              The agent will be denied access to the platform and will not be able to manage sessions.
+            </Alert>
+          </DialogContent>
+          <DialogActions>
+            <Button onClick={() => setRejectConfirmOpen(false)}>Cancel</Button>
+            <Button
+              onClick={handleRejectConfirm}
+              color="warning"
+              variant="contained"
+              disabled={rejectAgent.isPending}
+            >
+              {rejectAgent.isPending ? 'Rejecting...' : 'Reject'}
             </Button>
           </DialogActions>
         </Dialog>

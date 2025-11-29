@@ -40,9 +40,16 @@ spec:
         image: {{ include "streamspace.k8sAgent.image" . }}
         imagePullPolicy: {{ .Values.k8sAgent.image.pullPolicy }}
         env:
-          # Agent Identity
-          - name: AGENT_ID
+          # Agent Identity (unique per pod - includes pod name)
+          # Format: {agentId}-{podName} to ensure uniqueness across replicas
+          - name: AGENT_ID_PREFIX
             value: {{ .Values.k8sAgent.config.agentId | quote }}
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: AGENT_ID
+            value: "$(AGENT_ID_PREFIX)-$(POD_NAME)"
           - name: PLATFORM
             value: {{ .Values.k8sAgent.config.platform | quote }}
           - name: REGION
@@ -81,11 +88,7 @@ spec:
           # High Availability Settings (Leader Election)
           - name: ENABLE_HA
             value: {{ .Values.k8sAgent.ha.enabled | quote }}
-          # POD_NAME is required for leader election (identifies this replica)
-          - name: POD_NAME
-            valueFrom:
-              fieldRef:
-                fieldPath: metadata.name
+          # POD_NAME already defined above for AGENT_ID
 
           # Agent API Key for authentication (Issue #227)
           # Uses the bootstrap key from secrets for initial registration

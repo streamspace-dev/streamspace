@@ -77,6 +77,18 @@ func main() {
 		log.Fatalf("Failed to run migrations: %v", err)
 	}
 
+	// CRITICAL FIX: Self-heal broken application catalog links
+	// This fixes the architectural issue where applications lose their catalog_template_id
+	// when agents restart/scale. See: /api/internal/db/application_self_heal.go
+	log.Println("Running application catalog link self-heal...")
+	appDB := db.NewApplicationDB(database.DB())
+	healedCount, err := appDB.HealApplicationCatalogLinks(context.Background())
+	if err != nil {
+		log.Printf("Warning: Application self-heal encountered error (continuing): %v", err)
+	} else if healedCount > 0 {
+		log.Printf("Application self-heal complete: Repaired %d applications", healedCount)
+	}
+
 	// Initialize Redis cache (optional)
 	log.Println("Initializing Redis cache...")
 	cacheEnabled := getEnv("CACHE_ENABLED", "false") == "true"

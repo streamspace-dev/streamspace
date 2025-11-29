@@ -173,6 +173,18 @@ func (a *AgentAuth) RequireAPIKey() gin.HandlerFunc {
 
 		// Check if agent has an API key configured
 		if !apiKeyHash.Valid || apiKeyHash.String == "" {
+			// ISSUE #234: Allow bootstrap key for agents without API keys (pending approval)
+			bootstrapKey := os.Getenv("AGENT_BOOTSTRAP_KEY")
+			if bootstrapKey != "" && apiKey == bootstrapKey {
+				log.Printf("[AgentAuth] Agent %s using bootstrap key (no API key configured yet) from IP %s", agentID, c.ClientIP())
+				c.Set("isBootstrapAuth", true)
+				c.Set("agentAPIKey", apiKey)
+				c.Set("authenticated_agent_id", agentID)
+				c.Set("auth_method", "bootstrap_key")
+				c.Next()
+				return
+			}
+
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "No API key configured",
 				"details": "Agent API key has not been generated. Contact administrator.",
@@ -184,6 +196,18 @@ func (a *AgentAuth) RequireAPIKey() gin.HandlerFunc {
 
 		// Compare provided API key against stored hash
 		if !auth.CompareAPIKey(apiKey, apiKeyHash.String) {
+			// ISSUE #234: Allow bootstrap key for approved agents that haven't migrated to API key yet
+			bootstrapKey := os.Getenv("AGENT_BOOTSTRAP_KEY")
+			if bootstrapKey != "" && apiKey == bootstrapKey {
+				log.Printf("[AgentAuth] Agent %s using bootstrap key (has API key but still using bootstrap) from IP %s", agentID, c.ClientIP())
+				c.Set("isBootstrapAuth", true)
+				c.Set("agentAPIKey", apiKey)
+				c.Set("authenticated_agent_id", agentID)
+				c.Set("auth_method", "bootstrap_key")
+				c.Next()
+				return
+			}
+
 			log.Printf("[AgentAuth] Invalid API key for agent %s from IP %s", agentID, c.ClientIP())
 			c.JSON(http.StatusForbidden, gin.H{
 				"error":   "Invalid API key",
@@ -455,6 +479,18 @@ func (a *AgentAuth) RequireAuth() gin.HandlerFunc {
 		}
 
 		if !apiKeyHash.Valid || !auth.CompareAPIKey(apiKey, apiKeyHash.String) {
+			// ISSUE #234: Allow bootstrap key for agents without API keys or approved agents still using bootstrap
+			bootstrapKey := os.Getenv("AGENT_BOOTSTRAP_KEY")
+			if bootstrapKey != "" && apiKey == bootstrapKey {
+				log.Printf("[AgentAuth] Agent %s using bootstrap key (RequireAuth fallback) from IP %s", agentID, c.ClientIP())
+				c.Set("isBootstrapAuth", true)
+				c.Set("agentAPIKey", apiKey)
+				c.Set("authenticated_agent_id", agentID)
+				c.Set("auth_method", "bootstrap_key")
+				c.Next()
+				return
+			}
+
 			log.Printf("[AgentAuth] Invalid API key for agent %s from %s", agentID, c.ClientIP())
 			c.JSON(http.StatusForbidden, gin.H{
 				"error": "Invalid API key",
