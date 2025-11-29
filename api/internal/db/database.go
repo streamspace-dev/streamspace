@@ -2251,6 +2251,24 @@ func (d *Database) Migrate() error {
 			END IF;
 		END $$`,
 
+		// Migration 005: Add API key authentication columns to agents table (Issue #229)
+		// These columns support secure agent-to-API authentication
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_hash') THEN
+				ALTER TABLE agents ADD COLUMN api_key_hash VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_created_at') THEN
+				ALTER TABLE agents ADD COLUMN api_key_created_at TIMESTAMP;
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_last_used_at') THEN
+				ALTER TABLE agents ADD COLUMN api_key_last_used_at TIMESTAMP;
+			END IF;
+		END $$`,
+
 		// Indexes for agents table
 		`CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_platform ON agents(platform)`,
@@ -2259,6 +2277,7 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_agents_last_heartbeat ON agents(last_heartbeat)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_id ON agents(cluster_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_status ON agents(cluster_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_api_key_hash ON agents(api_key_hash)`,
 
 		// Indexes for agent_commands table
 		`CREATE INDEX IF NOT EXISTS idx_agent_commands_command_id ON agent_commands(command_id)`,

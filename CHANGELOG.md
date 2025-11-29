@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (Wave 30) 🚨 **CRITICAL**
 
+#### Migration 005 Missing (Issue #229)
+- **[CRITICAL] Added api_key_hash migration to database.go**
+  - Problem: Migration 005 existed as a file but was not included in the inline migrations array
+  - Caused: `pq: column "api_key_hash" does not exist` error breaking agent authentication
+  - Solution: Added DO $$ block to add api_key_hash, api_key_created_at, api_key_last_used_at columns
+  - Added index on api_key_hash for fast lookups
+- **Files changed:**
+  - `api/internal/db/database.go`: Added migration for api_key columns
+
 #### Agent Registration Bug (Issue #226)
 - **[CRITICAL] Fixed agent registration chicken-and-egg problem**
   - Problem: Agents could not self-register because AgentAuth middleware required agents to exist in database first
