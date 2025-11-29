@@ -68,6 +68,7 @@ import (
 	"fmt"
 	"io"
 	"log"
+	"strings"
 	"time"
 
 	"github.com/google/uuid"
@@ -362,7 +363,8 @@ func (m *Manager) broadcastSessionUpdates() {
 
 				// Add status info
 				status := make(map[string]interface{})
-				status["phase"] = state
+				// Capitalize first letter for UI compatibility (expects "Running", not "running")
+				status["phase"] = strings.Title(state)
 				if podName != nil {
 					status["podName"] = *podName
 				}
