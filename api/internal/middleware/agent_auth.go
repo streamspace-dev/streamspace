@@ -24,7 +24,10 @@
 package middleware
 
 import (
+	"bytes"
 	"database/sql"
+	"encoding/json"
+	"io"
 	"log"
 	"net/http"
 	"os"
@@ -98,15 +101,20 @@ func (a *AgentAuth) RequireAPIKey() gin.HandlerFunc {
 		}
 
 		// For registration endpoint, agent_id is in request body
+		// ISSUE #231 FIX: Read body without consuming it so handlers can still access it
 		if agentID == "" {
-			// Try to parse from JSON body
-			var body struct {
-				AgentID string `json:"agentId"`
-			}
-			if err := c.ShouldBindJSON(&body); err == nil {
-				agentID = body.AgentID
-				// Re-bind the body for downstream handlers
-				c.Set("gin.body.buffer", c.Request.Body)
+			// Read the entire body
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err == nil && len(bodyBytes) > 0 {
+				// Parse agentId from body
+				var body struct {
+					AgentID string `json:"agentId"`
+				}
+				if json.Unmarshal(bodyBytes, &body) == nil {
+					agentID = body.AgentID
+				}
+				// Restore the body for downstream handlers
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 
@@ -385,12 +393,18 @@ func (a *AgentAuth) RequireAuth() gin.HandlerFunc {
 		if agentID == "" {
 			agentID = c.Param("agent_id")
 		}
+		// ISSUE #231 FIX: Read body without consuming it so handlers can still access it
 		if agentID == "" {
-			var body struct {
-				AgentID string `json:"agentId"`
-			}
-			if err := c.ShouldBindJSON(&body); err == nil {
-				agentID = body.AgentID
+			bodyBytes, err := io.ReadAll(c.Request.Body)
+			if err == nil && len(bodyBytes) > 0 {
+				var body struct {
+					AgentID string `json:"agentId"`
+				}
+				if json.Unmarshal(bodyBytes, &body) == nil {
+					agentID = body.AgentID
+				}
+				// Restore the body for downstream handlers
+				c.Request.Body = io.NopCloser(bytes.NewBuffer(bodyBytes))
 			}
 		}
 

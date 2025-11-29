@@ -13,6 +13,15 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (Wave 30) 🚨 **CRITICAL**
 
+#### Request Body Consumed by Middleware (Issue #231)
+- **[CRITICAL] Fixed middleware consuming request body causing EOF in handlers**
+  - Problem: `c.ShouldBindJSON()` in auth middleware consumed body, leaving nothing for handler
+  - Caused: "EOF" error when handler tried to parse JSON body
+  - Solution: Use `io.ReadAll` + `io.NopCloser` to read and restore body
+  - Fixed in both `RequireAPIKey()` and `RequireAuth()` functions
+- **Files changed:**
+  - `api/internal/middleware/agent_auth.go`: Preserve request body after reading
+
 #### AgentCapacity Type Mismatch (Issue #230)
 - **[CRITICAL] Fixed agent/API AgentCapacity struct incompatibility**
   - Problem: Agent sent int fields (maxCpu, maxMemory), API expected string fields (cpu, memory)
