@@ -13,6 +13,17 @@ and this project adheres to [Semantic Versioning](https://semver.org/spec/v2.0.0
 
 ### Fixed (Wave 30) 🚨 **CRITICAL**
 
+#### AgentCapacity Type Mismatch (Issue #230)
+- **[CRITICAL] Fixed agent/API AgentCapacity struct incompatibility**
+  - Problem: Agent sent int fields (maxCpu, maxMemory), API expected string fields (cpu, memory)
+  - Caused: JSON parsing EOF error during registration
+  - Solution: Updated agent's AgentCapacity struct to match API format
+  - Changed capacity config from int to string format (e.g., "64 cores", "256Gi")
+- **Files changed:**
+  - `agents/k8s-agent/internal/config/config.go`: Changed MaxCPU/MaxMemory to CPU/Memory strings
+  - `agents/k8s-agent/main.go`: Updated flag parsing and heartbeat to use new format
+  - `chart/values.yaml`: Updated capacity defaults to string format
+
 #### Migration 005 Missing (Issue #229)
 - **[CRITICAL] Added api_key_hash migration to database.go**
   - Problem: Migration 005 existed as a file but was not included in the inline migrations array

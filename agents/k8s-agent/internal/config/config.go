@@ -51,18 +51,23 @@ type AgentConfig struct{
 }
 
 // AgentCapacity defines the maximum resources available on the agent.
+// This struct matches the API's expected format (api/internal/models/agent.go).
 type AgentCapacity struct {
-	// MaxCPU is the maximum CPU cores available (in millicores)
-	// Example: 100 cores = 100000 millicores
-	MaxCPU int `json:"maxCpu"`
-
-	// MaxMemory is the maximum memory available (in GB)
-	// Example: 128 GB
-	MaxMemory int `json:"maxMemory"`
-
 	// MaxSessions is the maximum number of concurrent sessions
 	// Example: 100 sessions
 	MaxSessions int `json:"maxSessions"`
+
+	// CPU is the maximum CPU available (formatted string)
+	// Example: "64 cores", "100000m"
+	CPU string `json:"cpu"`
+
+	// Memory is the maximum memory available (formatted string)
+	// Example: "256Gi", "128GB"
+	Memory string `json:"memory"`
+
+	// Storage is the maximum storage available (optional, formatted string)
+	// Example: "1Ti", "500Gi"
+	Storage string `json:"storage,omitempty"`
 }
 
 // Validate validates the agent configuration.

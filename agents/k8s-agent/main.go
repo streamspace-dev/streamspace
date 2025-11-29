@@ -252,9 +252,9 @@ func main() {
 	region := flag.String("region", os.Getenv("REGION"), "Deployment region")
 	namespace := flag.String("namespace", getEnvOrDefault("NAMESPACE", "streamspace"), "Kubernetes namespace for sessions")
 	kubeConfig := flag.String("kubeconfig", os.Getenv("KUBECONFIG"), "Path to kubeconfig file (empty for in-cluster)")
-	maxCPU := flag.Int("max-cpu", 100, "Maximum CPU cores available")
-	maxMemory := flag.Int("max-memory", 128, "Maximum memory in GB")
-	maxSessions := flag.Int("max-sessions", 100, "Maximum concurrent sessions")
+	maxCPU := flag.String("max-cpu", getEnvOrDefault("MAX_CPU", "64 cores"), "Maximum CPU available (e.g., '64 cores', '64000m')")
+	maxMemory := flag.String("max-memory", getEnvOrDefault("MAX_MEMORY", "256Gi"), "Maximum memory available (e.g., '256Gi', '128GB')")
+	maxSessions := flag.Int("max-sessions", getEnvIntOrDefault("MAX_SESSIONS", 100), "Maximum concurrent sessions")
 	heartbeatInterval := flag.Int("heartbeat-interval", getEnvIntOrDefault("HEALTH_CHECK_INTERVAL", 30), "Heartbeat interval in seconds")
 	enableHA := flag.Bool("enable-ha", getEnvOrDefault("ENABLE_HA", "false") == "true", "Enable high availability mode with leader election")
 
@@ -279,9 +279,9 @@ func main() {
 		KubeConfig:        *kubeConfig,
 		HeartbeatInterval: *heartbeatInterval,
 		Capacity: config.AgentCapacity{
-			MaxCPU:      *maxCPU,
-			MaxMemory:   *maxMemory,
 			MaxSessions: *maxSessions,
+			CPU:         *maxCPU,
+			Memory:      *maxMemory,
 		},
 	}
 
@@ -632,9 +632,9 @@ func (a *K8sAgent) sendHeartbeat() error {
 			"status":         "online",
 			"activeSessions": activeSessions,
 			"capacity": map[string]interface{}{
-				"maxCpu":      a.config.Capacity.MaxCPU,
-				"maxMemory":   a.config.Capacity.MaxMemory,
 				"maxSessions": a.config.Capacity.MaxSessions,
+				"cpu":         a.config.Capacity.CPU,
+				"memory":      a.config.Capacity.Memory,
 			},
 		},
 	}

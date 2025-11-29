@@ -150,10 +150,10 @@ k8sAgent:
     capacity:
       # Maximum number of concurrent sessions this agent can manage
       maxSessions: 100
-      # Maximum CPU cores this agent can allocate (0 = unlimited)
-      maxCPU: 0
-      # Maximum memory this agent can allocate (0 = unlimited, format: 100Gi)
-      maxMemory: "0"
+      # Maximum CPU this agent can allocate (string format, e.g., "64 cores", "64000m")
+      maxCPU: "64 cores"
+      # Maximum memory this agent can allocate (string format, e.g., "256Gi", "128GB")
+      maxMemory: "256Gi"
 
     # Health check settings
     health:
