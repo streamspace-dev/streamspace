@@ -2364,6 +2364,19 @@ func (d *Database) Migrate() error {
 		// Create index for approval_status for fast filtering
 		`CREATE INDEX IF NOT EXISTS idx_agents_approval_status ON agents(approval_status)`,
 
+		// Migration 008: Add streaming protocol support to sessions table
+		// Purpose: Support multiple streaming protocols (VNC, Selkies, Guacamole, etc.)
+		// This enables StreamSpace to support various streaming technologies beyond VNC.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_protocol VARCHAR(50) DEFAULT 'vnc'`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_port INTEGER DEFAULT 5900`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_path VARCHAR(255)`,
+
+		// Create index for streaming protocol queries
+		`CREATE INDEX IF NOT EXISTS idx_sessions_streaming_protocol ON sessions(streaming_protocol)`,
+
+		// Update existing sessions to have explicit VNC protocol
+		`UPDATE sessions SET streaming_protocol = 'vnc', streaming_port = 5900 WHERE streaming_protocol IS NULL`,
+
 		// Indexes for agents table
 		`CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id)`,
 		`CREATE INDEX IF NOT EXISTS idx_agents_platform ON agents(platform)`,
