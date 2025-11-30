@@ -185,6 +185,7 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -341,7 +342,16 @@ func SecurityHeaders() gin.HandlerFunc {
 
 		// X-Frame-Options
 		// Prevents clickjacking attacks
-		c.Header("X-Frame-Options", "DENY")
+		// Allow SAMEORIGIN for VNC proxy paths (they need to be embedded in iframes)
+		path := c.Request.URL.Path
+		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
+			strings.HasPrefix(path, "/api/v1/vnc/") ||
+			strings.HasPrefix(path, "/api/v1/websockify/")
+		if isVNCProxy {
+			c.Header("X-Frame-Options", "SAMEORIGIN")
+		} else {
+			c.Header("X-Frame-Options", "DENY")
+		}
 
 		// X-XSS-Protection
 		// Legacy XSS protection (for older browsers)
@@ -350,6 +360,12 @@ func SecurityHeaders() gin.HandlerFunc {
 		// Content-Security-Policy
 		// IMPROVED: Uses nonce-based CSP to eliminate unsafe-inline and unsafe-eval
 		// This significantly improves XSS protection while maintaining functionality
+		// VNC proxy paths use frame-ancestors 'self' to allow embedding in iframes
+		frameAncestors := "'none'"
+		if isVNCProxy {
+			frameAncestors = "'self'"
+		}
+
 		var csp string
 		if nonce != "" {
 			csp = "default-src 'self'; " +
@@ -358,7 +374,7 @@ func SecurityHeaders() gin.HandlerFunc {
 				"img-src 'self' data: https:; " +
 				"font-src 'self' data:; " +
 				"connect-src 'self'; " +
-				"frame-ancestors 'none'; " +
+				"frame-ancestors " + frameAncestors + "; " +
 				"base-uri 'self'; " +
 				"form-action 'self'; " +
 				"upgrade-insecure-requests; " +
@@ -371,7 +387,7 @@ func SecurityHeaders() gin.HandlerFunc {
 				"img-src 'self' data: https:; " +
 				"font-src 'self' data:; " +
 				"connect-src 'self'; " +
-				"frame-ancestors 'none'; " +
+				"frame-ancestors " + frameAncestors + "; " +
 				"base-uri 'self'; " +
 				"form-action 'self'"
 		}
