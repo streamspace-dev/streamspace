@@ -173,14 +173,12 @@ func (h *SelkiesProxyHandler) HandleHTTPProxy(c *gin.Context) {
 		return
 	}
 
-	// Verify agent is connected
-	if !h.agentHub.IsAgentConnected(agentID) {
-		log.Printf("[SelkiesProxy] Agent %s is not connected", agentID)
-		c.JSON(http.StatusServiceUnavailable, gin.H{
-			"error": fmt.Sprintf("Agent %s is not connected", agentID),
-		})
-		return
-	}
+	// NOTE: We intentionally do NOT check agentHub.IsAgentConnected() here.
+	// In multi-pod deployments without Redis, each pod has its own AgentHub.
+	// The agent may be connected to a different pod than the one handling this request.
+	// Since we're proxying directly to the session's Kubernetes Service (not through
+	// the agent), we don't need the agent to be connected to THIS pod.
+	// The session pod is accessible via Kubernetes DNS regardless of agent connectivity.
 
 	// Issue #239: Update last_activity for HTTP-based streaming sessions
 	// This tracks user activity through the HTTP proxy

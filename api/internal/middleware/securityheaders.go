@@ -360,21 +360,30 @@ func SecurityHeaders() gin.HandlerFunc {
 		// Content-Security-Policy
 		// IMPROVED: Uses nonce-based CSP to eliminate unsafe-inline and unsafe-eval
 		// This significantly improves XSS protection while maintaining functionality
-		// VNC proxy paths use frame-ancestors 'self' to allow embedding in iframes
-		frameAncestors := "'none'"
-		if isVNCProxy {
-			frameAncestors = "'self'"
-		}
-
+		// VNC/HTTP proxy paths need relaxed CSP because we're proxying third-party content
+		// (Selkies, Guacamole, etc.) which have their own inline scripts and styles
 		var csp string
-		if nonce != "" {
+		if isVNCProxy {
+			// Relaxed CSP for VNC/HTTP proxy paths
+			// These paths proxy content from trusted internal session pods (Selkies, etc.)
+			// The proxied content has its own scripts/styles that we can't add nonces to
+			csp = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+				"script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; " +
+				"style-src 'self' 'unsafe-inline'; " +
+				"img-src 'self' data: blob: https:; " +
+				"font-src 'self' data:; " +
+				"connect-src 'self' ws: wss:; " +
+				"media-src 'self' blob:; " +
+				"worker-src 'self' blob:; " +
+				"frame-ancestors 'self'"
+		} else if nonce != "" {
 			csp = "default-src 'self'; " +
 				"script-src 'self' 'nonce-" + nonce + "'; " +
 				"style-src 'self' 'nonce-" + nonce + "'; " +
 				"img-src 'self' data: https:; " +
 				"font-src 'self' data:; " +
 				"connect-src 'self'; " +
-				"frame-ancestors " + frameAncestors + "; " +
+				"frame-ancestors 'none'; " +
 				"base-uri 'self'; " +
 				"form-action 'self'; " +
 				"upgrade-insecure-requests; " +
@@ -387,7 +396,7 @@ func SecurityHeaders() gin.HandlerFunc {
 				"img-src 'self' data: https:; " +
 				"font-src 'self' data:; " +
 				"connect-src 'self'; " +
-				"frame-ancestors " + frameAncestors + "; " +
+				"frame-ancestors 'none'; " +
 				"base-uri 'self'; " +
 				"form-action 'self'"
 		}
