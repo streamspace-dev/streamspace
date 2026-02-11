@@ -9,11 +9,11 @@
     "@mui/icons-material": "^5.15.3",
     "@mui/material": "^5.15.3",
     "@tanstack/react-query": "^5.17.9",
-    "axios": "^1.6.5",
+    "axios": "^1.13.5",
     "qrcode.react": "^4.2.0",
     "react": "^18.2.0",
     "react-dom": "^18.2.0",
-    "react-router-dom": "^6.21.2",
+    "react-router-dom": "^6.30.3",
     "zustand": "^4.4.7"
   },
   "devDependencies": {
