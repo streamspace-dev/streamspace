@@ -226,7 +226,22 @@ func TestUpdateAgentHeartbeat(t *testing.T) {
 		t.Fatalf("Failed to register agent: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the registration UPDATE to be consumed by the Run() goroutine
+	// before declaring the next expectation. Calling mock.ExpectExec while
+	// the registration goroutine is still inside sqlmock.exec races on
+	// sqlmock's internal expected[] slice (go-sqlmock <=1.5.2 is not safe
+	// for concurrent ExpectExec/exec).
+	deadline := time.After(2 * time.Second)
+	for {
+		if mock.ExpectationsWereMet() == nil {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timeout waiting for registration UPDATE to be consumed")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 
 	// Mock database update for heartbeat (includes status update)
 	// Note: Query uses $1 for both last_heartbeat and updated_at, so only 2 args (timestamp, agentID)
