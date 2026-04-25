@@ -14,8 +14,10 @@
 
 - **Locations**:
   - Root: `README.md`, `CHANGELOG.md`, `CONTRIBUTING.md`.
-  - `docs/`: Permanent technical docs.
-  - `.claude/reports/`: Analysis/Test reports.
+  - `docs/`: Permanent technical (contributor-facing) docs.
+  - `docs/historical/`: Frozen architectural snapshots.
+  - streamspace.wiki sibling repo: end-user-facing docs.
+  - GitHub issues/PRs: ad-hoc analyses and test reports (do not commit them as `.md` files).
 - **Format**:
   - Headers: H1 (Title), H2 (Section), H3 (Subsection).
   - Code: Always specify language (e.g., `go`, `bash`).

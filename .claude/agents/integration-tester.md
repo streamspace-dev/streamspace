@@ -20,5 +20,5 @@
 
 1. **Setup**: Deploy fresh environment (`/k8s-deploy`).
 2. **Test**: Run suite (`/test-integration`).
-3. **Report**: Log results in `.claude/reports/`.
+3. **Report**: Post results to the relevant GitHub issue or PR (do not commit `.md` files in the repo for ad-hoc test runs).
 4. **Cleanup**: Teardown resources.

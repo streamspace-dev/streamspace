@@ -118,69 +118,41 @@ go run cmd/main.go
 
 ---
 
-## 📂 Documentation Standards
+## 📂 Documentation Layout
 
-**IMPORTANT**: All agents must follow these documentation standards:
+### End-user-facing — sibling wiki repo
 
-### Report Location
+User-facing high-level documentation lives in the **streamspace.wiki** sibling repo (Getting Started, Architecture overview, Plugin/Template catalogs, Roadmap). Keep that repo as the entry point for people deploying and operating StreamSpace.
 
-**All bug reports, test reports, validation reports, and analysis documents MUST be placed in `.claude/reports/`**
+### Contributor-facing — `docs/`
 
-- ✅ **Correct**: `.claude/reports/BUG_REPORT_P1_*.md`
-- ✅ **Correct**: `.claude/reports/INTEGRATION_TEST_*.md`
-- ✅ **Correct**: `.claude/reports/VALIDATION_RESULTS_*.md`
-- ❌ **Wrong**: `BUG_REPORT_*.md` (in project root)
-- ❌ **Wrong**: `TEST_REPORT_*.md` (in project root)
+Technical reference for people working ON the codebase:
 
-### Project Root Documentation
+- `docs/ARCHITECTURE.md` — system design
+- `docs/API_REFERENCE.md` — REST + WebSocket API
+- `docs/DEPLOYMENT.md` — deployment quick reference
+- `docs/MIGRATION_V1_TO_V2.md` — migration guide
+- `docs/design/architecture/` — ADRs
+- `docs/historical/` — point-in-time architectural snapshots (don't edit; they're frozen records)
 
-**Only essential, user-facing documentation belongs in the project root:**
+### Project root
 
-- `README.md` - Project overview
-- `FEATURES.md` - Feature status
-- `CONTRIBUTING.md` - Contribution guidelines
-- `CHANGELOG.md` - Version history
-- `DEPLOYMENT.md` - Deployment instructions
+Only top-level user-facing docs:
+- `README.md`, `QUICKSTART.md`, `CHANGELOG.md`, `CONTRIBUTING.md`, `CODE_OF_CONDUCT.md`, `SECURITY.md`, `FEATURES.md`, `ROADMAP.md`
 
-### docs/ Directory
+### Where ad-hoc agent work goes
 
-**Permanent, reference documentation:**
-
-- `docs/ARCHITECTURE.md` - System design
-- `docs/SCALABILITY.md` - Scaling guide
-- `docs/TROUBLESHOOTING.md` - Common issues
-- `docs/V2_DEPLOYMENT_GUIDE.md` - Deployment details
-- `docs/V2_BETA_RELEASE_NOTES.md` - Release notes
-
-### .claude/ Directory Structure
-
-```
-.claude/
-├── multi-agent/              # Multi-agent coordination
-│   ├── MULTI_AGENT_PLAN.md  # Agent coordination plan
-│   ├── agent*-instructions.md
-│   └── ...
-└── reports/                  # All bug/test/validation reports
-    ├── BUG_REPORT_*.md
-    ├── INTEGRATION_TEST_*.md
-    ├── VALIDATION_RESULTS_*.md
-    └── ...
-```
-
-### Why This Matters
-
-- **Clean Root**: Users see only essential docs when browsing repo
-- **Organized Reports**: All agent work tracked in one location
-- **Git History**: Cleaner commits without report noise
-- **Discoverability**: Easier to find specific reports
+Bug investigations, test runs, and validation reports should live in **GitHub issues / PR descriptions**, not as committed `.md` files. The previous practice of writing `.claude/reports/*.md` for every analysis cluttered the repo with ~150 stale files; the directory has been removed. If a finding has lasting architectural value, promote it to `docs/design/` or `docs/historical/` after review.
 
 ---
 
 ## 📚 Documentation Map
 
-- **[README.md](README.md)**: Project Overview
-- **[FEATURES.md](FEATURES.md)**: Feature Status
-- **[ROADMAP.md](ROADMAP.md)**: Future Plans
-- **[docs/ARCHITECTURE.md](docs/ARCHITECTURE.md)**: System Design
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Installation Guide
-- **[.claude/reports/](.claude/reports/)**: Bug Reports, Test Results, Validation Reports
+- [README.md](README.md) — project overview
+- [QUICKSTART.md](QUICKSTART.md) — get running locally
+- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) — system design
+- [docs/DEPLOYMENT.md](docs/DEPLOYMENT.md) — deployment quick reference
+- [docs/MIGRATION_V1_TO_V2.md](docs/MIGRATION_V1_TO_V2.md) — v1 → v2 migration
+- [docs/design/architecture/](docs/design/architecture/) — ADRs
+- [docs/historical/](docs/historical/) — frozen architectural snapshots
+- streamspace.wiki sibling repo — end-user docs
