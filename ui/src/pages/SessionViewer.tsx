@@ -197,9 +197,18 @@ export default function SessionViewer() {
 
       // v2.0: Store JWT token in sessionStorage for noVNC viewer
       // The token is needed by the noVNC viewer page to authenticate WebSocket connections
-      const token = localStorage.getItem('token');
-      if (token) {
-        sessionStorage.setItem('streamspace_token', token);
+      // Token is stored in Zustand persisted store ('streamspace-auth' key)
+      try {
+        const authState = localStorage.getItem('streamspace-auth');
+        if (authState) {
+          const parsed = JSON.parse(authState);
+          const token = parsed?.state?.token;
+          if (token) {
+            sessionStorage.setItem('streamspace_token', token);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse auth state for sessionStorage token:', e);
       }
 
       // Check if current user is the session owner
@@ -428,12 +437,21 @@ export default function SessionViewer() {
         {/* VNC: Load noVNC viewer through control plane proxy */}
         {/* Selkies/HTTP-based: Load through control plane HTTP proxy */}
         {/* Token is passed as query param for iframe auth (iframes can't send Authorization headers) */}
-        {/* FIX: Read from localStorage 'token' (the actual JWT) not 'streamspace_token' (sessionStorage copy) */}
         <iframe
           ref={iframeRef}
           src={(() => {
-            // Get token from localStorage (where auth stores it)
-            const token = localStorage.getItem('token');
+            // Get token from Zustand persisted store ('streamspace-auth' key in localStorage)
+            // The store structure is: {state: {token: "...", ...}}
+            let token: string | null = null;
+            try {
+              const authState = localStorage.getItem('streamspace-auth');
+              if (authState) {
+                const parsed = JSON.parse(authState);
+                token = parsed?.state?.token || null;
+              }
+            } catch (e) {
+              console.error('Failed to parse auth state for iframe token:', e);
+            }
             const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
             if (
               session.streamingProtocol === 'selkies' ||
@@ -442,7 +460,7 @@ export default function SessionViewer() {
             ) {
               return `/api/v1/http/${sessionId}/${tokenParam}`;
             }
-            return `/vnc-viewer/${sessionId}${tokenParam}`;
+            return `/api/v1/vnc-viewer/${sessionId}${tokenParam}`;
           })()}
           style={{
             width: '100%',

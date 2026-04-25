@@ -167,6 +167,7 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 		path := c.Request.URL.Path
 		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
 			strings.HasPrefix(path, "/api/v1/vnc/") ||
+			strings.HasPrefix(path, "/api/v1/vnc-viewer/") ||
 			strings.HasPrefix(path, "/api/v1/websockify/")
 
 		// For WebSocket connections or VNC proxy paths, try query parameter first

@@ -22,6 +22,7 @@ RUN go mod download
 # Copy source code
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY static/ static/
 
 # Tidy modules to ensure go.mod and go.sum are up to date
 RUN go mod tidy
@@ -47,6 +48,9 @@ WORKDIR /app
 
 # Copy binary from builder
 COPY --from=builder /workspace/api-server .
+
+# Copy static files for VNC viewer
+COPY --from=builder /workspace/static ./static
 
 # Create directory for repository clones
 RUN mkdir -p /tmp/streamspace-repos && chmod 777 /tmp/streamspace-repos

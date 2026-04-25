@@ -115,6 +115,15 @@ const createAppTheme = (mode: ThemeMode) =>
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const isTokenExpired = useUserStore((state) => state.isTokenExpired);
+  const clearAuth = useUserStore((state) => state.clearAuth);
+
+  // Check if token has expired
+  if (isAuthenticated && isTokenExpired()) {
+    // Clear the expired auth state and redirect to login
+    clearAuth();
+    return <Navigate to="/login" replace />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -126,7 +135,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Admin Route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const isTokenExpired = useUserStore((state) => state.isTokenExpired);
+  const clearAuth = useUserStore((state) => state.clearAuth);
   const user = useUserStore((state) => state.user);
+
+  // Check if token has expired
+  if (isAuthenticated && isTokenExpired()) {
+    // Clear the expired auth state and redirect to login
+    clearAuth();
+    return <Navigate to="/login" replace />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;

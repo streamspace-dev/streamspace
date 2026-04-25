@@ -638,7 +638,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			// VNC Viewer (noVNC static HTML page)
 			// Serves the noVNC client that connects to the Control Plane VNC proxy
 			protected.GET("/vnc-viewer/:sessionId", func(c *gin.Context) {
-				c.File("./api/static/vnc-viewer.html")
+				c.File("./static/vnc-viewer.html")
 			})
 
 			// Selkies/HTTP Proxy (v2.0 multi-protocol - authenticated users)

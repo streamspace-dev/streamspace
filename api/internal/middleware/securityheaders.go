@@ -346,6 +346,7 @@ func SecurityHeaders() gin.HandlerFunc {
 		path := c.Request.URL.Path
 		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
 			strings.HasPrefix(path, "/api/v1/vnc/") ||
+			strings.HasPrefix(path, "/api/v1/vnc-viewer/") ||
 			strings.HasPrefix(path, "/api/v1/websockify/")
 		if isVNCProxy {
 			c.Header("X-Frame-Options", "SAMEORIGIN")
