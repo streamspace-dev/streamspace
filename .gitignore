@@ -48,6 +48,7 @@ vendor/
 *.cover
 # Go compiled binaries (specific to this project)
 api/main
+api/streamspace-api
 agents/*/agent
 agents/docker-agent/docker-agent
 agents/k8s-agent/k8s-agent
@@ -71,3 +72,12 @@ temp/
 
 # Claude settings
 .claude/settings.local.json
+
+# Generated test artifacts (Playwright, Vitest, Go coverage)
+ui/playwright-report/
+ui/test-results/
+ui/coverage/
+tests/reports/
+
+# Other tools' working dirs
+.zencoder/
