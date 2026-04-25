@@ -45,9 +45,9 @@ export interface Session {
   agent_id?: string;  // ID of the agent running this session
   platform?: string;  // Platform type (kubernetes, docker, vm, cloud)
   region?: string;    // Region where session is running
-  // Multi-protocol streaming support
-  streamingProtocol?: string;  // Streaming protocol: vnc, selkies, guacamole, x2go, rdp
-  streamingPort?: number;      // Port for streaming service
+  // Selkies-only streaming
+  streamingProtocol?: string;  // Always "selkies" — kept for forward-compat
+  streamingPort?: number;      // Port for the streaming service (default 8080)
   streamingPath?: string;      // URL path for HTTP-based protocols
 }
 

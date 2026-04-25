@@ -73,9 +73,6 @@ type K8sAgent struct {
 	// restConfig is the REST config for Kubernetes API (needed for port-forward)
 	restConfig *rest.Config
 
-	// vncManager manages VNC tunnels for sessions
-	vncManager *VNCTunnelManager
-
 	// wsConn is the WebSocket connection to Control Plane
 	wsConn *websocket.Conn
 
@@ -121,9 +118,6 @@ func NewK8sAgent(config *config.AgentConfig) (*K8sAgent, error) {
 		stopChan:      make(chan struct{}),
 		doneChan:      make(chan struct{}),
 	}
-
-	// Initialize VNC tunnel manager
-	agent.vncManager = NewVNCTunnelManager(kubeClient, restConfig, config.Namespace, agent)
 
 	// Initialize command handlers
 	agent.initCommandHandlers()
@@ -217,12 +211,6 @@ func (a *K8sAgent) WaitForShutdown() {
 //
 // FIX P0-AGENT-001: Properly closes write channel to prevent goroutine leaks.
 func (a *K8sAgent) shutdown() {
-	// Close all VNC tunnels
-	if a.vncManager != nil {
-		log.Println("[K8sAgent] Closing all VNC tunnels...")
-		a.vncManager.CloseAll()
-	}
-
 	// Close write channel to signal writePump to drain and exit
 	// Note: stopChan was already closed by caller, so writePump will exit
 	close(a.writeChan)
@@ -749,7 +737,7 @@ func (a *K8sAgent) sendHeartbeat() error {
 //
 // This follows the agent protocol defined in api/internal/models/agent_protocol.go:
 // - Type: "status" (models.MessageTypeStatus)
-// - Payload: StatusMessage with sessionId, state, vncReady, vncPort, platformMetadata
+// - Payload: StatusMessage with sessionId, state, streamingReady, streamingPort, platformMetadata
 func (a *K8sAgent) sendSessionUpdate(sessionID, state, podName, podIP string) error {
 	// Build platform metadata with pod information
 	platformMetadata := map[string]interface{}{
@@ -763,8 +751,8 @@ func (a *K8sAgent) sendSessionUpdate(sessionID, state, podName, podIP string) er
 	payload := map[string]interface{}{
 		"sessionId":        sessionID,
 		"state":            state,
-		"vncReady":         state == "running", // VNC is ready when session is running
-		"vncPort":          3000,               // Standard VNC port in session pods
+		"streamingReady":   state == "running", // Selkies endpoint is ready when session is running
+		"streamingPort":    8080,               // Selkies-GStreamer default port in session pods
 		"platformMetadata": platformMetadata,
 	}
 
@@ -774,7 +762,7 @@ func (a *K8sAgent) sendSessionUpdate(sessionID, state, podName, podIP string) er
 		"payload": payload,
 	}
 
-	log.Printf("[K8sAgent] Sending session status update: %s -> %s (pod: %s, vncReady: %v)",
+	log.Printf("[K8sAgent] Sending session status update: %s -> %s (pod: %s, streamingReady: %v)",
 		sessionID, state, podName, state == "running")
 	return a.sendMessage(update)
 }

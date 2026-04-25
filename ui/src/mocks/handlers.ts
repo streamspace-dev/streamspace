@@ -50,35 +50,16 @@ export const MOCK_SESSIONS = {
   hibernated: {
     name: 'test-session-hibernated',
     user: 'admin',
-    template: 'firefox',
+    template: 'chrome-selkies',
     state: 'hibernated',
     platform: 'kubernetes',
     agent_id: 'k8s-agent-1',
-    streamingProtocol: 'vnc',
-    streamingPort: 5900,
+    streamingProtocol: 'selkies',
+    streamingPort: 8080,
     status: {
       phase: 'Hibernated',
     },
     activeConnections: 0,
-    resources: { cpu: '500m', memory: '2Gi' },
-    created_at: new Date().toISOString(),
-    last_activity: new Date().toISOString(),
-  },
-  vnc: {
-    name: 'test-session-vnc',
-    user: 'admin',
-    template: 'firefox',
-    state: 'running',
-    platform: 'kubernetes',
-    agent_id: 'k8s-agent-1',
-    streamingProtocol: 'vnc',
-    streamingPort: 5900,
-    status: {
-      phase: 'Running',
-      url: 'http://test-session-vnc.streamspace.svc.cluster.local:5900',
-      podName: 'test-session-vnc-def456',
-    },
-    activeConnections: 1,
     resources: { cpu: '500m', memory: '2Gi' },
     created_at: new Date().toISOString(),
     last_activity: new Date().toISOString(),
@@ -271,46 +252,7 @@ export const handlers = [
     return HttpResponse.json(MOCK_AGENTS);
   }),
 
-  // VNC proxy (returns session info for HTTP-based protocols)
-  http.get('/api/v1/vnc/:sessionId', ({ params, request }) => {
-    const url = new URL(request.url);
-    const token = url.searchParams.get('token');
-
-    if (!token) {
-      return HttpResponse.json({ error: 'Unauthorized' }, { status: 401 });
-    }
-
-    const { sessionId } = params;
-    const session = Object.values(MOCK_SESSIONS).find(s => s.name === sessionId);
-
-    if (!session) {
-      return HttpResponse.json({ error: 'Session not found' }, { status: 404 });
-    }
-
-    if (session.state !== 'running') {
-      return HttpResponse.json(
-        { error: `Session is not running (state: ${session.state})` },
-        { status: 409 }
-      );
-    }
-
-    // For HTTP-based protocols, return session info
-    if (['selkies', 'kasm', 'guacamole'].includes(session.streamingProtocol || '')) {
-      return HttpResponse.json({
-        type: 'http_session',
-        session_id: sessionId,
-        protocol: session.streamingProtocol,
-        url: session.status.url,
-        port: session.streamingPort,
-        path: session.streamingPath,
-      });
-    }
-
-    // For VNC, we'd normally upgrade to WebSocket
-    return HttpResponse.json({ error: 'WebSocket upgrade required' }, { status: 426 });
-  }),
-
-  // HTTP proxy for Selkies/Kasm/Guacamole
+  // HTTP proxy for Selkies
   http.all('/api/v1/http/:sessionId/*', ({ params, request }) => {
     const url = new URL(request.url);
     const token = url.searchParams.get('token');

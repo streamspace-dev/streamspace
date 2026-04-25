@@ -45,7 +45,7 @@ type Session struct {
 	LastConnection     *time.Time `json:"last_connection,omitempty"`
 	LastDisconnect     *time.Time `json:"last_disconnect,omitempty"`
 	LastActivity       *time.Time `json:"last_activity,omitempty"`
-	StreamingProtocol  string     `json:"streaming_protocol"` // vnc, selkies, guacamole, x2go, rdp
+	StreamingProtocol  string     `json:"streaming_protocol"` // selkies (only supported protocol)
 	StreamingPort      int        `json:"streaming_port"`     // Port for streaming service
 	StreamingPath      string     `json:"streaming_path,omitempty"` // URL path for HTTP-based protocols
 }
@@ -125,7 +125,7 @@ func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session,
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE id = $1
 	`
@@ -162,7 +162,7 @@ func (s *SessionDB) GetSessionByOrg(ctx context.Context, sessionID, orgID string
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE id = $1 AND org_id = $2
 	`
@@ -197,7 +197,7 @@ func (s *SessionDB) ListSessions(ctx context.Context) ([]*Session, error) {
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE state != 'deleted'
 		ORDER BY created_at DESC
@@ -218,7 +218,7 @@ func (s *SessionDB) ListSessionsByOrg(ctx context.Context, orgID string) ([]*Ses
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE org_id = $1 AND state != 'deleted'
 		ORDER BY created_at DESC
@@ -249,7 +249,7 @@ func (s *SessionDB) ListSessionsByUser(ctx context.Context, userID string) ([]*S
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE user_id = $1 AND state != 'deleted'
 		ORDER BY created_at DESC
@@ -280,7 +280,7 @@ func (s *SessionDB) ListSessionsByUserAndOrg(ctx context.Context, userID, orgID 
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE user_id = $1 AND org_id = $2 AND state != 'deleted'
 		ORDER BY created_at DESC
@@ -310,7 +310,7 @@ func (s *SessionDB) ListSessionsByState(ctx context.Context, state string) ([]*S
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE state = $1
 		ORDER BY created_at DESC
@@ -341,7 +341,7 @@ func (s *SessionDB) ListSessionsByStateAndOrg(ctx context.Context, state, orgID 
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
 			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity,
-			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+			COALESCE(streaming_protocol, 'selkies'), COALESCE(streaming_port, 8080), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE state = $1 AND org_id = $2
 		ORDER BY created_at DESC

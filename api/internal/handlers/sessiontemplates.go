@@ -622,9 +622,12 @@ func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 
 	// Add template configuration for Docker controller
 	if k8sTemplate != nil {
-		vncPort := 3000 // Default VNC port
+		// Selkies-GStreamer defaults to port 8080. Templates still carry a
+		// legacy VNC.Port field for backwards-compat with old fixtures; honor
+		// it when set so existing custom templates keep working.
+		streamingPort := 8080
 		if k8sTemplate.VNC != nil && k8sTemplate.VNC.Port > 0 {
-			vncPort = int(k8sTemplate.VNC.Port)
+			streamingPort = int(k8sTemplate.VNC.Port)
 		}
 
 		// Convert env vars to map
@@ -634,10 +637,10 @@ func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 		}
 
 		createEvent.TemplateConfig = &events.TemplateConfig{
-			Image:       k8sTemplate.BaseImage,
-			VNCPort:     vncPort,
-			DisplayName: k8sTemplate.DisplayName,
-			Env:         envMap,
+			Image:         k8sTemplate.BaseImage,
+			StreamingPort: streamingPort,
+			DisplayName:   k8sTemplate.DisplayName,
+			Env:           envMap,
 		}
 	}
 
