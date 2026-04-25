@@ -9,8 +9,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/docker/docker/api/types"
 	"github.com/docker/docker/api/types/container"
+	dockerimage "github.com/docker/docker/api/types/image"
 	"github.com/docker/docker/api/types/mount"
 	"github.com/docker/docker/api/types/network"
 	"github.com/docker/go-connections/nat"
@@ -189,7 +189,7 @@ func getBool(m map[string]interface{}, key string) bool {
 // ensureNetwork ensures the StreamSpace network exists.
 func (a *DockerAgent) ensureNetwork(ctx context.Context) error {
 	// Check if network exists
-	networks, err := a.dockerClient.NetworkList(ctx, types.NetworkListOptions{})
+	networks, err := a.dockerClient.NetworkList(ctx, network.ListOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to list networks: %w", err)
 	}
@@ -203,7 +203,7 @@ func (a *DockerAgent) ensureNetwork(ctx context.Context) error {
 
 	// Create network
 	log.Printf("[Docker] Creating network: %s", a.config.NetworkName)
-	_, err = a.dockerClient.NetworkCreate(ctx, a.config.NetworkName, types.NetworkCreate{
+	_, err = a.dockerClient.NetworkCreate(ctx, a.config.NetworkName, network.CreateOptions{
 		Driver: "bridge",
 		Labels: map[string]string{
 			"app":       "streamspace",
@@ -323,7 +323,7 @@ func (a *DockerAgent) pullImage(ctx context.Context, image string) error {
 
 	// Pull image
 	log.Printf("[Docker] Pulling image: %s", image)
-	reader, err := a.dockerClient.ImagePull(ctx, image, types.ImagePullOptions{})
+	reader, err := a.dockerClient.ImagePull(ctx, image, dockerimage.PullOptions{})
 	if err != nil {
 		return fmt.Errorf("failed to pull image: %w", err)
 	}
@@ -343,7 +343,7 @@ func (a *DockerAgent) pullImage(ctx context.Context, image string) error {
 func (a *DockerAgent) startContainer(ctx context.Context, containerID string) error {
 	log.Printf("[Docker] Starting container: %s", containerID[:12])
 
-	if err := a.dockerClient.ContainerStart(ctx, containerID, types.ContainerStartOptions{}); err != nil {
+	if err := a.dockerClient.ContainerStart(ctx, containerID, container.StartOptions{}); err != nil {
 		return fmt.Errorf("failed to start container: %w", err)
 	}
 
@@ -395,7 +395,7 @@ func (a *DockerAgent) stopContainer(ctx context.Context, containerID string) err
 func (a *DockerAgent) removeContainer(ctx context.Context, containerID string) error {
 	log.Printf("[Docker] Removing container: %s", containerID[:12])
 
-	if err := a.dockerClient.ContainerRemove(ctx, containerID, types.ContainerRemoveOptions{
+	if err := a.dockerClient.ContainerRemove(ctx, containerID, container.RemoveOptions{
 		Force:         true,
 		RemoveVolumes: false, // Keep volumes for now
 	}); err != nil {
@@ -408,7 +408,7 @@ func (a *DockerAgent) removeContainer(ctx context.Context, containerID string) e
 
 // getContainerBySession finds a container by session ID.
 func (a *DockerAgent) getContainerBySession(ctx context.Context, sessionID string) (string, error) {
-	containers, err := a.dockerClient.ContainerList(ctx, types.ContainerListOptions{
+	containers, err := a.dockerClient.ContainerList(ctx, container.ListOptions{
 		All: true,
 	})
 	if err != nil {
