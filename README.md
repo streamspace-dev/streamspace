@@ -9,7 +9,6 @@
 [![License: MIT](https://img.shields.io/badge/License-MIT-yellow.svg)](https://opensource.org/licenses/MIT)
 [![Kubernetes](https://img.shields.io/badge/kubernetes-1.19+-blue.svg)](https://kubernetes.io/)
 [![Go Report Card](https://goreportcard.com/badge/github.com/streamspace-dev/streamspace)](https://goreportcard.com/report/github.com/streamspace-dev/streamspace)
-[![Status](https://img.shields.io/badge/Status-v2.0--beta.1-success.svg)](CHANGELOG.md)
 
 [Features](#features) • [Quick Start](#quick-start) • [Architecture](#architecture) • [Documentation](#documentation) • [Contributing](#contributing)
 
@@ -17,247 +16,174 @@
 
 ---
 
-> [!NOTE]
-> **Current Version: v2.0-beta.1 - Production Ready**
->
-> StreamSpace v2.0-beta.1 is ready for production deployment with multi-tenancy, enterprise security, and comprehensive observability.
->
-> **📋 Project Board**: [StreamSpace v2.0 Development](https://github.com/orgs/streamspace-dev/projects/2)
+> [!WARNING]
+> **Active rebuild — April 2026.** The control plane and agents work, but the end-to-end streaming pipeline (image build, template catalog wiring, golden-path test) is being reconstructed. The historical v2.0-beta.1 docs are preserved under [`docs/historical/`](docs/historical/) for context.
 
-## 🚀 Overview
+## Overview
 
-StreamSpace delivers browser-based access to containerized applications. It features a central **Control Plane** (API/WebUI) that manages distributed **Agents** across various platforms (Kubernetes, Docker).
+StreamSpace delivers browser-based access to containerized applications. A central **Control Plane** (API + WebUI) brokers sessions to distributed **Agents** running on Kubernetes today and Docker next.
 
-### What's New in v2.0-beta.1
+Streaming uses **Selkies-GStreamer (WebRTC)** end-to-end. Earlier VNC code paths were removed in favor of a single, well-supported protocol.
 
-**Core Platform:**
-- ✅ **Multi-Platform Architecture**: Control Plane + Agent model
-- ✅ **Secure VNC Proxy**: WebSocket-based VNC tunneling (<100ms latency)
-- ✅ **K8s Agent**: Kubernetes agent with session lifecycle management
-- ✅ **Docker Agent**: Docker platform support with HA backends
-- ✅ **High Availability**: Multi-pod API, leader election, automatic failover
+## Repository topology
 
-**Enterprise Features:**
-- ✅ **Multi-Tenancy**: Org-scoped access control, JWT claims, cross-tenant prevention
-- ✅ **Observability**: 3 Grafana dashboards, 12 Prometheus alert rules
-- ✅ **API Documentation**: OpenAPI 3.0 spec with Swagger UI at `/api/docs`
-- ✅ **Security**: 15 CVEs fixed, security headers, 0 Critical/High vulnerabilities
+| Repo | What it owns |
+|---|---|
+| `streamspace-dev/streamspace` (this repo) | Control Plane API, K8s/Docker agents, Web UI, Helm chart |
+| `streamspace-dev/streamspace-templates` | Application templates (CRD manifests) **and** the source + build pipeline for custom container images (`ghcr.io/streamspace-dev/<image>`) |
+| `streamspace-dev/streamspace-plugins` | Optional plugins (auth, storage, observability, billing, …) |
+| `streamspace-dev/streamspace.wiki` | End-user documentation (Getting Started, Architecture overview, Plugin/Template catalogs) |
 
-**Test Coverage:**
-- ✅ **Backend**: 100% handler coverage (9/9 packages)
-- ✅ **UI**: 98% test passing (189/191 tests)
+## Features
 
-See [ROADMAP.md](ROADMAP.md) for future plans.
-
-## ✨ Features
-
-| Core Features | Enterprise Features |
+| Core | Enterprise |
 | :--- | :--- |
-| 🖥️ **Browser-based VNC** access | 🔐 **SSO**: SAML 2.0, OIDC, OAuth2 |
-| 👥 **Multi-tenancy** with org scoping | 🛡️ **MFA** with TOTP |
-| 💾 **Persistent** home directories | 📝 **Audit Logging** & Compliance |
-| 💤 **Auto-hibernation** (scale to zero) | 🌐 **IP Whitelisting** & Rate Limiting |
-| 📦 **200+ Apps** via templates | 🔌 **Webhooks** (16 event types) |
-| 📊 **Grafana Dashboards** | 🔔 **Prometheus Alerts** |
+| Browser-based streaming over WebRTC | SSO: SAML 2.0, OIDC, OAuth2 |
+| Multi-tenancy with org scoping | MFA with TOTP |
+| Persistent home directories | Audit logging & compliance |
+| Auto-hibernation (scale to zero) | IP allow-listing & rate limiting |
+| Custom image pipeline (cosign + SBOM) | Webhooks (16 event types) |
+| Grafana dashboards | Prometheus alerts |
 
-## 🛠️ Quick Start
+## Quick Start
+
+> [!NOTE]
+> This is the dev/contributor flow. For production deployment see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
 ### Prerequisites
 
-- Kubernetes 1.19+ (k3s recommended)
+- Kubernetes 1.19+ (k3s recommended for local dev)
 - Helm 3.0+
 - PostgreSQL database
-- NFS storage provisioner
+- A storage class for persistent home volumes
 
-### Installation
+### Install
 
-1. **Clone the repository**
+```bash
+git clone https://github.com/streamspace-dev/streamspace.git
+cd streamspace
+kubectl apply -f manifests/crds/
+helm install streamspace ./chart -n streamspace --create-namespace
+```
 
-    ```bash
-    git clone https://github.com/streamspace-dev/streamspace.git
-    cd streamspace
-    ```
+### Launch a session
 
-2. **Deploy CRDs**
+```bash
+kubectl apply -f - <<'EOF'
+apiVersion: stream.space/v1alpha1
+kind: Session
+metadata:
+  name: my-chrome
+  namespace: streamspace
+spec:
+  user: john
+  template: chrome-selkies
+  state: running
+  resources:
+    memory: 2Gi
+EOF
+```
 
-    ```bash
-    kubectl apply -f manifests/crds/
-    ```
-
-3. **Install via Helm**
-
-    ```bash
-    helm install streamspace ./chart -n streamspace --create-namespace
-    ```
-
-4. **Create a Session**
-
-    ```bash
-    kubectl apply -f - <<EOF
-    apiVersion: stream.space/v1alpha1
-    kind: Session
-    metadata:
-      name: my-firefox
-      namespace: streamspace
-    spec:
-      user: john
-      template: firefox-browser
-      state: running
-      resources:
-        memory: 2Gi
-    EOF
-    ```
+The `chrome-selkies` template is the seeded default. The control plane proxies `/api/v1/http/<session-id>/` to the session pod's Selkies endpoint on port 8080.
 
 > [!TIP]
-> **Production Setup**: Before deploying to production, ensure you update the default secrets. See the [Deployment Guide](DEPLOYMENT.md) for details.
+> Update default secrets before any production deployment — see [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md).
 
-## 🎯 Production Status (v2.0-beta.1)
-
-StreamSpace v2.0-beta.1 is **production ready** with comprehensive security, observability, and test coverage:
-
-### Test Coverage
-
-| Component | Coverage | Status |
-|-----------|----------|--------|
-| **API Backend** | 100% | ✅ All 9 handler packages |
-| **UI Components** | 98% | ✅ 189/191 tests passing |
-| **K8s Agent** | ~80% | ✅ Session lifecycle, VNC |
-| **Docker Agent** | ~60% | ✅ Platform support |
-
-### Security Status
-
-- ✅ **0 Critical/High CVEs** - All 15 vulnerabilities fixed
-- ✅ **Security Headers** - HSTS, CSP, X-Frame-Options
-- ✅ **Rate Limiting** - 60 req/min default
-- ✅ **Input Validation** - JSON schema validation
-
-### Observability
-
-- ✅ **3 Grafana Dashboards** - Control Plane, Sessions, Agents
-- ✅ **12 Prometheus Alerts** - Latency, errors, heartbeat
-- ✅ **Structured Logging** - With trace IDs
-
-### Performance
-
-| Metric | Target | Actual |
-|--------|--------|--------|
-| API Latency (p99) | < 800ms | ~200ms |
-| Session Startup | < 30s | ~6s |
-| VNC Latency | < 100ms | <100ms |
-| Agent Reconnection | < 60s | ~23s |
-
-## 🏗️ Architecture
-
-StreamSpace uses a **Control Plane + Agent** architecture for multi-platform support and scalability.
+## Architecture
 
 ```mermaid
 graph TD
     User[User / Browser] -->|HTTPS| Ingress[Load Balancer]
     Ingress -->|HTTPS| UI[Web UI]
-    Ingress -->|HTTPS/WSS| API[Control Plane API]
+    Ingress -->|HTTPS / WSS| API[Control Plane API]
 
     subgraph "Control Plane"
         UI
         API
-        Hub[WebSocket Hub]
-        VNCProxy[VNC Proxy]
+        Hub[Agent WebSocket Hub]
+        Selkies[Selkies HTTP/WebRTC Proxy]
         DB[(PostgreSQL)]
 
         API --> DB
         API --> Hub
-        API --> VNCProxy
+        API --> Selkies
     end
 
-    subgraph "Execution Plane - Kubernetes"
+    subgraph "Execution Plane — Kubernetes"
         K8sAgent[K8s Agent]
         K8sAgent <-->|WebSocket| Hub
         K8sAgent -->|Manage| Pods[Session Pods]
-        VNCProxy <-.->|VNC Tunnel| K8sAgent
-        K8sAgent <-.->|VNC| Pods
+        Selkies -.->|HTTP/WS| Pods
     end
 
-    subgraph "Execution Plane - Docker (v2.1)"
+    subgraph "Execution Plane — Docker"
         DockerAgent[Docker Agent]
         DockerAgent <-->|WebSocket| Hub
         DockerAgent -->|Manage| Containers[Session Containers]
     end
 ```
 
-**Key Components**:
-- **Control Plane**: Central management, authentication, VNC proxy
-- **WebSocket Hub**: Real-time agent communication and coordination
-- **VNC Proxy**: Secure tunneling of VNC traffic through Control Plane
-- **K8s Agent**: Manages Kubernetes pods and sessions
-- **Session Pods**: Isolated containerized environments with VNC
+**Components**
 
-For detailed architecture, see [ARCHITECTURE.md](docs/ARCHITECTURE.md).
+- **Control Plane API** — auth, multi-tenancy, session orchestration, exposes the Selkies HTTP/WebRTC proxy.
+- **Agent WebSocket Hub** — bidirectional command channel to agents (heartbeats, session start/stop, status updates).
+- **Selkies Proxy** — token-authenticated reverse proxy from `/api/v1/http/<session>/` to the in-cluster Selkies endpoint on the session pod (port 8080). Sessions stream over the same connection via WebRTC.
+- **K8s Agent** — manages Session/Template CRDs, deploys session pods, reports lifecycle.
+- **Docker Agent** — equivalent for Docker hosts (in flight).
 
-## 📚 Available Applications
+For the deeper technical reference, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md). Frozen v2 architecture snapshots live in [`docs/historical/`](docs/historical/).
 
-Templates are available via [streamspace-templates](https://github.com/StreamSpace-dev/streamspace-templates).
+## Available applications
 
-- **Browsers**: Firefox, Chromium, Brave, LibreWolf
-- **Development**: VS Code, GitHub Desktop
-- **Productivity**: LibreOffice, OnlyOffice
-- **Media**: GIMP, Blender, Audacity, Kdenlive
+Templates live in [`streamspace-templates`](https://github.com/streamspace-dev/streamspace-templates). The image-build pipeline in that repo publishes signed multi-arch images to `ghcr.io/streamspace-dev/<image>`. The current bootstrap image is:
 
-## 💻 Development
+- `ghcr.io/streamspace-dev/chrome-selkies` — Google Chrome streamed via Selkies-GStreamer
 
-### Build Components
+A Selkies-native catalog (Firefox, VS Code, full desktops, etc.) is being added on top of the build pipeline.
+
+## Development
 
 ```bash
 # Build K8s Agent
 cd agents/k8s-agent && go build -o k8s-agent .
 
 # Build API
-cd api && go build -o streamspace-api
+cd api && go build -o streamspace-api ./cmd
 
 # Build UI
 cd ui && npm install && npm run build
+
+# Run all Go tests under -race
+go test -race ./...
 ```
 
-### Run Tests
+See [`docs/TESTING.md`](docs/TESTING.md) for the full test guide.
 
-```bash
-# Run all integration tests
-cd tests && ./scripts/run-integration-tests.sh
-```
+## Documentation
 
-See [TESTING.md](TESTING.md) for detailed testing guides.
+### Contributor-facing (this repo)
 
-## 📖 Documentation
+- [`docs/ARCHITECTURE.md`](docs/ARCHITECTURE.md) — system design
+- [`docs/DEPLOYMENT.md`](docs/DEPLOYMENT.md) — production deployment
+- [`docs/MIGRATION_V1_TO_V2.md`](docs/MIGRATION_V1_TO_V2.md) — v1 → v2 migration
+- [`docs/design/architecture/`](docs/design/architecture/) — architecture decision records
+- [`docs/historical/`](docs/historical/) — frozen architectural snapshots
+- [`CONTRIBUTING.md`](CONTRIBUTING.md) · [`ROADMAP.md`](ROADMAP.md) · [`FEATURES.md`](FEATURES.md)
 
-### User Guides
-- **[FEATURES.md](FEATURES.md)**: Complete feature list & implementation status
-- **[DEPLOYMENT.md](DEPLOYMENT.md)**: Production deployment guide
-- **[ARCHITECTURE.md](docs/ARCHITECTURE.md)**: Deep dive into system design
-- **[DISASTER_RECOVERY.md](docs/DISASTER_RECOVERY.md)**: Backup & DR procedures
+### End-user-facing
 
-### API Documentation
-- **[Swagger UI](/api/docs)**: Interactive API explorer
-- **[OpenAPI Spec](/api/openapi.yaml)**: OpenAPI 3.0 specification
+- [streamspace.wiki](https://github.com/streamspace-dev/streamspace.wiki) — Getting Started, deployment, plugin/template catalogs
 
-### Development
-- **[CONTRIBUTING.md](CONTRIBUTING.md)**: How to contribute
-- **[TESTING.md](TESTING.md)**: Testing guides
-- **[ROADMAP.md](ROADMAP.md)**: Future development plans
+### API
 
-### Project Management
-- **[Project Board](https://github.com/orgs/streamspace-dev/projects/2)**: Live progress tracking
-- **[Milestones](https://github.com/streamspace-dev/streamspace/milestones)**: Release planning
-- **[Issues](https://github.com/streamspace-dev/streamspace/issues)**: Bug reports & feature requests
+- Swagger UI at `/api/docs` (when API is running)
+- [`docs/API_REFERENCE.md`](docs/API_REFERENCE.md)
 
-## 🤝 Contributing
+## Contributing
 
-Contributions are welcome! Please read [CONTRIBUTING.md](CONTRIBUTING.md) first.
+Contributions welcome — start with [`CONTRIBUTING.md`](CONTRIBUTING.md). The workflow is the standard fork → branch → PR pattern; see the project's [issue board](https://github.com/streamspace-dev/streamspace/issues) for triaged work.
 
-1. Fork the repository
-2. Create your feature branch (`git checkout -b feature/amazing-feature`)
-3. Commit your changes (`git commit -m 'Add some amazing feature'`)
-4. Push to the branch (`git push origin feature/amazing-feature`)
-5. Open a Pull Request
-
-## 📄 License
+## License
 
 StreamSpace is licensed under the [MIT License](LICENSE).
 

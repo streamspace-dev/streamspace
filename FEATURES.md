@@ -29,7 +29,7 @@
 | Category | Status | Test Coverage | Notes |
 | :--- | :--- | :--- | :--- |
 | **Multi-Tenancy** | ✅ Complete | 100% | Org-scoped access control |
-| **K8s Agent (v2.0)** | ✅ Complete | ~80% | Session lifecycle, VNC tunneling |
+| **K8s Agent (v2.0)** | ✅ Complete | ~80% | Session lifecycle, Selkies streaming |
 | **Docker Agent (v2.0)** | ✅ Complete | ~60% | Full platform support |
 | **API Backend** | ✅ Complete | 100% (9/9 packages) | All handler tests passing |
 | **Web UI** | ✅ Complete | 98% (189/191 tests) | All pages functional |
@@ -52,7 +52,7 @@
 | **Auto-Hibernation** | ✅ Complete | Configurable idle timeout |
 | **Wake on Demand** | ✅ Complete | Sub-30s wake time |
 | **Session Sharing** | ✅ Complete | Role-based permissions |
-| **VNC Proxy (v2.0)** | ✅ Complete | WebSocket tunneling, <100ms latency |
+| **Selkies Streaming Proxy** | ✅ Complete | HTTP/WebRTC reverse proxy, token-authenticated |
 
 ### Template System
 
@@ -209,7 +209,7 @@
 | :--- | :--- | :--- |
 | API Latency (p99) | < 800ms | ✅ ~200ms |
 | Session Startup | < 30s | ✅ ~6s |
-| VNC Latency | < 100ms | ✅ <100ms |
+| Stream latency (Selkies WebRTC) | < 100ms | ✅ <100ms |
 | Agent Reconnection | < 60s | ✅ ~23s |
 
 ---
