@@ -26,7 +26,13 @@ BUILD_DATE="$(date -u +"%Y-%m-%dT%H:%M:%SZ")"
 KUBERNETES_CONTROLLER_IMAGE="streamspace/streamspace-kubernetes-controller"
 API_IMAGE="streamspace/streamspace-api"
 UI_IMAGE="streamspace/streamspace-ui"
+K8S_AGENT_IMAGE="streamspace/streamspace-k8s-agent"
 DOCKER_CONTROLLER_IMAGE="streamspace/streamspace-docker-controller"
+
+# GHCR image names (for local K8s deployment compatibility)
+GHCR_API_IMAGE="ghcr.io/streamspace-dev/streamspace-api"
+GHCR_UI_IMAGE="ghcr.io/streamspace-dev/streamspace-ui"
+GHCR_K8S_AGENT_IMAGE="ghcr.io/streamspace-dev/streamspace-k8s-agent"
 
 # Build arguments
 BUILD_ARGS="--build-arg VERSION=${VERSION} --build-arg COMMIT=${GIT_COMMIT} --build-arg BUILD_DATE=${BUILD_DATE}"
@@ -69,20 +75,8 @@ check_prerequisites() {
     log_success "Docker is available and running"
 }
 
-# Build Kubernetes controller image
-build_kubernetes_controller() {
-    log "Building Kubernetes controller image..."
-    log_info "Image: ${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}"
-    log_info "Context: ${PROJECT_ROOT}/k8s-controller"
-
-    docker build ${BUILD_ARGS} \
-        -t "${KUBERNETES_CONTROLLER_IMAGE}:${VERSION}" \
-        -t "${KUBERNETES_CONTROLLER_IMAGE}:latest" \
-        -f "${PROJECT_ROOT}/k8s-controller/Dockerfile" \
-        "${PROJECT_ROOT}/k8s-controller/"
-
-    log_success "Kubernetes controller image built successfully"
-}
+# Kubernetes controller removed in v2.0 (replaced by k8s-agent)
+# Agent-based architecture replaces controller-based CRD approach
 
 # Build API image
 build_api() {
@@ -93,6 +87,8 @@ build_api() {
     docker build ${BUILD_ARGS} \
         -t "${API_IMAGE}:${VERSION}" \
         -t "${API_IMAGE}:latest" \
+        -t "${GHCR_API_IMAGE}:${VERSION}" \
+        -t "${GHCR_API_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/api/Dockerfile" \
         "${PROJECT_ROOT}/api/"
 
@@ -108,10 +104,35 @@ build_ui() {
     docker build ${BUILD_ARGS} \
         -t "${UI_IMAGE}:${VERSION}" \
         -t "${UI_IMAGE}:latest" \
+        -t "${GHCR_UI_IMAGE}:${VERSION}" \
+        -t "${GHCR_UI_IMAGE}:latest" \
         -f "${PROJECT_ROOT}/ui/Dockerfile" \
         "${PROJECT_ROOT}/ui/"
 
     log_success "UI image built successfully"
+}
+
+# Build K8s Agent image (v2.0)
+build_k8s_agent() {
+    log "Building K8s Agent image (v2.0)..."
+    log_info "Image: ${K8S_AGENT_IMAGE}:${VERSION}"
+    log_info "Context: ${PROJECT_ROOT}/agents/k8s-agent"
+
+    # Check if k8s-agent directory exists
+    if [ ! -d "${PROJECT_ROOT}/agents/k8s-agent" ]; then
+        log_warning "K8s Agent directory not found, skipping"
+        return 0
+    fi
+
+    docker build ${BUILD_ARGS} \
+        -t "${K8S_AGENT_IMAGE}:${VERSION}" \
+        -t "${K8S_AGENT_IMAGE}:latest" \
+        -t "${GHCR_K8S_AGENT_IMAGE}:${VERSION}" \
+        -t "${GHCR_K8S_AGENT_IMAGE}:latest" \
+        -f "${PROJECT_ROOT}/agents/k8s-agent/Dockerfile" \
+        "${PROJECT_ROOT}/agents/k8s-agent/"
+
+    log_success "K8s Agent image built successfully"
 }
 
 # Build Docker controller image
@@ -122,7 +143,7 @@ build_docker_controller() {
 
     # Check if docker-controller directory exists
     if [ ! -d "${PROJECT_ROOT}/docker-controller" ]; then
-        log_warning "Docker controller directory not found, skipping"
+        log_warning "Docker controller directory not found, skipping (deferred to v2.1)"
         return 0
     fi
 
@@ -140,7 +161,7 @@ list_images() {
     log "Built images:"
     echo ""
     docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}" | \
-        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|docker-controller)" || true
+        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|k8s-agent|docker-controller)" || true
     echo ""
 }
 
@@ -159,17 +180,18 @@ main() {
 
     # Allow building individual components
     if [ $# -eq 0 ]; then
-        # Build all components
-        build_kubernetes_controller
+        # v2.0-beta components only
         build_api
         build_ui
-        build_docker_controller
+        build_k8s_agent
     else
         # Build specific components
         for component in "$@"; do
             case "$component" in
                 controller|kubernetes-controller)
-                    build_kubernetes_controller
+                    log_error "Kubernetes controller has been replaced by k8s-agent in v2.0"
+                    log_info "The controller-based architecture is deprecated"
+                    exit 1
                     ;;
                 api)
                     build_api
@@ -177,12 +199,15 @@ main() {
                 ui)
                     build_ui
                     ;;
+                k8s-agent|agent)
+                    build_k8s_agent
+                    ;;
                 docker-controller)
                     build_docker_controller
                     ;;
                 *)
                     log_error "Unknown component: $component"
-                    log_info "Valid components: controller, kubernetes-controller, api, ui, docker-controller"
+                    log_info "Valid components: controller, api, ui, k8s-agent, docker-controller"
                     exit 1
                     ;;
             esac
@@ -195,6 +220,15 @@ main() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     log_success "All images built successfully!"
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
+    echo ""
+    log_info "v2.0-beta Components Built:"
+    echo "  ✓ API Server (Control Plane with VNC proxy)"
+    echo "  ✓ UI (Web interface)"
+    echo "  ✓ K8s Agent (Session management via WebSocket)"
+    echo ""
+
+    log_info "Deferred to v2.1:"
+    echo "  • Docker Agent (multi-platform support)"
     echo ""
     log_info "Next steps:"
     echo "  1. Deploy to local cluster: ./scripts/local-deploy.sh"

@@ -60,7 +60,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // IntegrationsHandler handles webhook and external integration requests.
@@ -122,48 +123,6 @@ func validateWebhookInput(webhook *Webhook) error {
 		if len(value) > 1000 {
 			return fmt.Errorf("header value must be 1000 characters or less")
 		}
-	}
-
-	return nil
-}
-
-// validateIntegrationInput validates integration creation/update input
-func validateIntegrationInput(integration *Integration) error {
-	// Name validation
-	if len(integration.Name) == 0 {
-		return fmt.Errorf("integration name is required")
-	}
-	if len(integration.Name) > 200 {
-		return fmt.Errorf("integration name must be 200 characters or less")
-	}
-
-	// Type validation
-	// Note: slack, teams, discord, pagerduty, and email are now handled by plugins
-	validTypes := []string{"custom"}
-	deprecatedTypes := []string{"slack", "teams", "discord", "pagerduty", "email"}
-
-	validType := false
-	for _, t := range validTypes {
-		if integration.Type == t {
-			validType = true
-			break
-		}
-	}
-
-	// Check if it's a deprecated type (now handled by plugins)
-	for _, t := range deprecatedTypes {
-		if integration.Type == t {
-			return fmt.Errorf("%s integration is now handled by plugins. Please install the streamspace-%s plugin from the plugin marketplace instead", integration.Type, integration.Type)
-		}
-	}
-
-	if !validType {
-		return fmt.Errorf("invalid integration type, must be one of: %s. Note: slack, teams, discord, pagerduty, and email are now plugins", strings.Join(validTypes, ", "))
-	}
-
-	// Description length
-	if len(integration.Description) > 1000 {
-		return fmt.Errorf("integration description must be 1000 characters or less")
 	}
 
 	return nil
@@ -274,24 +233,44 @@ var AvailableEvents = []string{
 	"alert.triggered",
 }
 
+// CreateWebhookRequest is the request body for creating a webhook
+type CreateWebhookRequest struct {
+	Name        string                 `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	URL         string                 `json:"url" binding:"required" validate:"required,url,max=2048"`
+	Secret      string                 `json:"secret" validate:"omitempty,min=16,max=256"`
+	Events      []string               `json:"events" binding:"required" validate:"required,min=1,max=50,dive,min=3,max=100"`
+	Headers     map[string]string      `json:"headers" validate:"omitempty,max=50,dive,keys,max=100,endkeys,max=1000"`
+	Enabled     bool                   `json:"enabled"`
+	RetryPolicy WebhookRetryPolicy     `json:"retry_policy"`
+	Filters     WebhookFilters         `json:"filters"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 // CreateWebhook creates a new webhook
 func (h *IntegrationsHandler) CreateWebhook(c *gin.Context) {
-	var webhook Webhook
-	if err := c.ShouldBindJSON(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req CreateWebhookRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	userID := c.GetString("user_id")
-	webhook.CreatedBy = userID
 
-	// INPUT VALIDATION: Validate all webhook input fields
-	if err := validateWebhookInput(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to webhook
+	webhook := Webhook{
+		Name:        req.Name,
+		Description: req.Description,
+		URL:         req.URL,
+		Secret:      req.Secret,
+		Events:      req.Events,
+		Headers:     req.Headers,
+		Enabled:     req.Enabled,
+		RetryPolicy: req.RetryPolicy,
+		Filters:     req.Filters,
+		Metadata:    req.Metadata,
+		CreatedBy:   userID,
 	}
 
 	// SECURITY: Validate webhook URL to prevent SSRF attacks
@@ -355,7 +334,6 @@ func (h *IntegrationsHandler) ListWebhooks(c *gin.Context) {
 	if enabled != "" {
 		query += fmt.Sprintf(" AND enabled = $%d", argCount)
 		args = append(args, enabled == "true")
-		argCount++
 	}
 
 	query += " ORDER BY created_at DESC"
@@ -419,6 +397,19 @@ func (h *IntegrationsHandler) ListWebhooks(c *gin.Context) {
 	c.JSON(http.StatusOK, gin.H{"webhooks": webhooks})
 }
 
+// UpdateWebhookRequest is the request body for updating a webhook
+type UpdateWebhookRequest struct {
+	Name        string                 `json:"name" validate:"omitempty,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	URL         string                 `json:"url" validate:"omitempty,url,max=2048"`
+	Events      []string               `json:"events" validate:"omitempty,min=1,max=50,dive,min=3,max=100"`
+	Headers     map[string]string      `json:"headers" validate:"omitempty,max=50,dive,keys,max=100,endkeys,max=1000"`
+	Enabled     *bool                  `json:"enabled"`
+	RetryPolicy *WebhookRetryPolicy    `json:"retry_policy"`
+	Filters     *WebhookFilters        `json:"filters"`
+	Metadata    map[string]interface{} `json:"metadata"`
+}
+
 // UpdateWebhook updates an existing webhook
 func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	webhookID, err := strconv.ParseInt(c.Param("webhookId"), 10, 64)
@@ -430,19 +421,30 @@ func (h *IntegrationsHandler) UpdateWebhook(c *gin.Context) {
 	userID := c.GetString("user_id")
 	role := c.GetString("role")
 
-	var webhook Webhook
-	if err := c.ShouldBindJSON(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req UpdateWebhookRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
-	// INPUT VALIDATION: Validate all webhook input fields
-	if err := validateWebhookInput(&webhook); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to webhook for update
+	webhook := Webhook{
+		Name:        req.Name,
+		Description: req.Description,
+		URL:         req.URL,
+		Events:      req.Events,
+		Headers:     req.Headers,
+		Metadata:    req.Metadata,
+	}
+	if req.Enabled != nil {
+		webhook.Enabled = *req.Enabled
+	}
+	if req.RetryPolicy != nil {
+		webhook.RetryPolicy = *req.RetryPolicy
+	}
+	if req.Filters != nil {
+		webhook.Filters = *req.Filters
 	}
 
 	// SECURITY: Validate webhook URL to prevent SSRF attacks
@@ -574,13 +576,13 @@ func (h *IntegrationsHandler) TestWebhook(c *gin.Context) {
 	}
 
 	if events.Valid && events.String != "" {
-		json.Unmarshal([]byte(events.String), &webhook.Events)
+		_ = json.Unmarshal([]byte(events.String), &webhook.Events)
 	}
 	if headers.Valid && headers.String != "" {
-		json.Unmarshal([]byte(headers.String), &webhook.Headers)
+		_ = json.Unmarshal([]byte(headers.String), &webhook.Headers)
 	}
 	if retryPolicy.Valid && retryPolicy.String != "" {
-		json.Unmarshal([]byte(retryPolicy.String), &webhook.RetryPolicy)
+		_ = json.Unmarshal([]byte(retryPolicy.String), &webhook.RetryPolicy)
 	}
 
 	// Create test event
@@ -629,7 +631,7 @@ func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 
 	// Count total
 	var total int
-	h.DB.DB().QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = $1", webhookID).Scan(&total)
+	_ = h.DB.DB().QueryRow("SELECT COUNT(*) FROM webhook_deliveries WHERE webhook_id = $1", webhookID).Scan(&total)
 
 	rows, err := h.DB.DB().Query(`
 		SELECT id, webhook_id, event, payload, status, status_code, response_body,
@@ -657,7 +659,7 @@ func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 
 		if err == nil {
 			if payload.Valid && payload.String != "" {
-				json.Unmarshal([]byte(payload.String), &d.Payload)
+				_ = json.Unmarshal([]byte(payload.String), &d.Payload)
 			}
 			deliveries = append(deliveries, d)
 		}
@@ -674,24 +676,38 @@ func (h *IntegrationsHandler) GetWebhookDeliveries(c *gin.Context) {
 
 // Integrations
 
+// CreateIntegrationRequest is the request body for creating an integration
+type CreateIntegrationRequest struct {
+	Type        string                 `json:"type" binding:"required" validate:"required,oneof=custom"`
+	Name        string                 `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string                 `json:"description" validate:"omitempty,max=1000"`
+	Config      map[string]interface{} `json:"config"`
+	Enabled     bool                   `json:"enabled"`
+	Events      []string               `json:"events" validate:"omitempty,max=50,dive,min=3,max=100"`
+	TestMode    bool                   `json:"test_mode"`
+}
+
 // CreateIntegration creates a new integration
 func (h *IntegrationsHandler) CreateIntegration(c *gin.Context) {
-	var integration Integration
-	if err := c.ShouldBindJSON(&integration); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	var req CreateIntegrationRequest
+
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	userID := c.GetString("user_id")
-	integration.CreatedBy = userID
 
-	// INPUT VALIDATION: Validate all integration input fields
-	if err := validateIntegrationInput(&integration); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{
-			"error":   "Validation failed",
-			"message": err.Error(),
-		})
-		return
+	// Map request to integration
+	integration := Integration{
+		Type:        req.Type,
+		Name:        req.Name,
+		Description: req.Description,
+		Config:      req.Config,
+		Enabled:     req.Enabled,
+		Events:      req.Events,
+		TestMode:    req.TestMode,
+		CreatedBy:   userID,
 	}
 
 	err := h.DB.DB().QueryRow(`
@@ -733,7 +749,6 @@ func (h *IntegrationsHandler) ListIntegrations(c *gin.Context) {
 	if enabled != "" {
 		query += fmt.Sprintf(" AND enabled = $%d", argCount)
 		args = append(args, enabled == "true")
-		argCount++
 	}
 
 	query += " ORDER BY created_at DESC"
@@ -756,10 +771,10 @@ func (h *IntegrationsHandler) ListIntegrations(c *gin.Context) {
 
 		if err == nil {
 			if config.Valid && config.String != "" {
-				json.Unmarshal([]byte(config.String), &i.Config)
+				_ = json.Unmarshal([]byte(config.String), &i.Config)
 			}
 			if events.Valid && events.String != "" {
-				json.Unmarshal([]byte(events.String), &i.Events)
+				_ = json.Unmarshal([]byte(events.String), &i.Events)
 			}
 			integrations = append(integrations, i)
 		}
@@ -807,20 +822,20 @@ func (h *IntegrationsHandler) TestIntegration(c *gin.Context) {
 	}
 
 	if config.Valid && config.String != "" {
-		json.Unmarshal([]byte(config.String), &integration.Config)
+		_ = json.Unmarshal([]byte(config.String), &integration.Config)
 	}
 	if events.Valid && events.String != "" {
-		json.Unmarshal([]byte(events.String), &integration.Events)
+		_ = json.Unmarshal([]byte(events.String), &integration.Events)
 	}
 
 	// Test based on type
 	success, message := h.testIntegration(integration)
 
 	// Update last test time
-	h.DB.DB().Exec("UPDATE integrations SET last_test_at = $1 WHERE id = $2", time.Now(), integrationID)
+	_, _ = h.DB.DB().Exec("UPDATE integrations SET last_test_at = $1 WHERE id = $2", time.Now(), integrationID)
 
 	if success {
-		h.DB.DB().Exec("UPDATE integrations SET last_success_at = $1 WHERE id = $2", time.Now(), integrationID)
+		_, _ = h.DB.DB().Exec("UPDATE integrations SET last_success_at = $1 WHERE id = $2", time.Now(), integrationID)
 		c.JSON(http.StatusOK, gin.H{"success": true, "message": message})
 	} else {
 		c.JSON(http.StatusBadRequest, gin.H{"success": false, "error": message})

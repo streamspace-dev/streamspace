@@ -7,7 +7,7 @@ import (
 	"strings"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // EmailPlugin implements SMTP email notification integration

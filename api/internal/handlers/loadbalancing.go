@@ -73,7 +73,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 	corev1 "k8s.io/api/core/v1"
 	metav1 "k8s.io/apimachinery/pkg/apis/meta/v1"
 	"k8s.io/client-go/kubernetes"
@@ -516,7 +516,7 @@ func (h *LoadBalancingHandler) getSessionCountsByNode() (map[string]int, error) 
 func (h *LoadBalancingHandler) cacheNodeStatusInDatabase(nodes []NodeStatus) {
 	for _, node := range nodes {
 		// Use UPSERT pattern to update or insert
-		h.DB.DB().Exec(`
+		_, _ = h.DB.DB().Exec(`
 			INSERT INTO node_status
 			(node_name, status, cpu_allocated, cpu_capacity, memory_allocated, memory_capacity,
 			 active_sessions, health_status, last_health_check, region, zone, labels, weight)
@@ -592,29 +592,12 @@ func (h *LoadBalancingHandler) scaleKubernetesDeployment(deploymentName string, 
 		namespace, deploymentName, originalReplicas, replicas)
 
 	// Also store in database queue as audit trail
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		INSERT INTO deployment_scaling_queue (deployment_name, namespace, target_replicas, status, created_at)
 		VALUES ($1, $2, $3, 'completed', NOW())
 	`, deploymentName, namespace, replicas)
 
 	return nil
-}
-
-// Calculate cluster totals helper function
-func calculateClusterTotals(nodes []NodeStatus) (totalCPU, usedCPU float64, totalMemory, usedMemory int64, totalSessions int) {
-	totalCPU, usedCPU = 0, 0
-	totalMemory, usedMemory = 0, 0
-	totalSessions = 0
-
-	for _, node := range nodes {
-		totalCPU += node.CPUCapacity
-		usedCPU += node.CPUAllocated
-		totalMemory += node.MemoryCapacity
-		usedMemory += node.MemoryAllocated
-		totalSessions += node.ActiveSessions
-	}
-
-	return totalCPU, usedCPU, totalMemory, usedMemory, totalSessions
 }
 
 // SelectNode selects best node for a new session based on policy
@@ -639,11 +622,11 @@ func (h *LoadBalancingHandler) SelectNode(c *gin.Context) {
 
 	// If no policy specified, get default policy
 	if policyID == 0 {
-		h.DB.DB().QueryRow(`SELECT id FROM load_balancing_policies WHERE enabled = true ORDER BY id LIMIT 1`).Scan(&policyID)
+		_ = h.DB.DB().QueryRow(`SELECT id FROM load_balancing_policies WHERE enabled = true ORDER BY id LIMIT 1`).Scan(&policyID)
 	}
 
 	if policyID > 0 {
-		h.DB.DB().QueryRow(`
+		_ = h.DB.DB().QueryRow(`
 			SELECT strategy, resource_thresholds, geo_preferences, node_weights
 			FROM load_balancing_policies WHERE id = $1
 		`, policyID).Scan(&policy.Strategy, &policy.ResourceThresholds,
@@ -673,7 +656,7 @@ func (h *LoadBalancingHandler) SelectNode(c *gin.Context) {
 	var candidates []NodeStatus
 	for rows.Next() {
 		var n NodeStatus
-		rows.Scan(&n.NodeName, &n.CPUAllocated, &n.CPUCapacity, &n.MemoryAllocated,
+		_ = rows.Scan(&n.NodeName, &n.CPUAllocated, &n.CPUCapacity, &n.MemoryAllocated,
 			&n.MemoryCapacity, &n.ActiveSessions, &n.HealthStatus, &n.Region, &n.Weight)
 
 		// Check if node has enough resources
@@ -710,8 +693,8 @@ func (h *LoadBalancingHandler) SelectNode(c *gin.Context) {
 
 	switch policy.Strategy {
 	case "round_robin":
-		// Simple round-robin (stateless, based on count)
-		selectedNode = candidates[len(candidates)%len(candidates)]
+		// Simple round-robin (stateless, just pick first candidate)
+		selectedNode = candidates[0]
 
 	case "least_loaded":
 		// Select node with lowest CPU usage
@@ -1038,14 +1021,14 @@ func (h *LoadBalancingHandler) TriggerScaling(c *gin.Context) {
 	err = h.scaleKubernetesDeployment(policy.TargetID, newReplicas)
 	if err != nil {
 		// Update event status to failed
-		h.DB.DB().Exec(`UPDATE scaling_events SET status = 'failed', error_message = $1 WHERE id = $2`,
+		_, _ = h.DB.DB().Exec(`UPDATE scaling_events SET status = 'failed', error_message = $1 WHERE id = $2`,
 			err.Error(), eventID)
 		c.JSON(http.StatusInternalServerError, gin.H{"error": fmt.Sprintf("scaling failed: %v", err)})
 		return
 	}
 
 	// Update event status to completed
-	h.DB.DB().Exec(`UPDATE scaling_events SET status = 'completed' WHERE id = $1`, eventID)
+	_, _ = h.DB.DB().Exec(`UPDATE scaling_events SET status = 'completed' WHERE id = $1`, eventID)
 
 	c.JSON(http.StatusOK, gin.H{
 		"event_id":          eventID,

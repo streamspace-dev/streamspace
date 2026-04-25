@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -6,11 +6,9 @@ import {
   TextField,
   InputAdornment,
   MenuItem,
-  Alert,
   Pagination,
   Button,
   Chip,
-  Link,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -133,7 +131,7 @@ export default function PluginCatalog() {
 
   const handleInstall = async (plugin: CatalogPlugin) => {
     try {
-      const result = await api.installPlugin(plugin.id);
+      await api.installPlugin(plugin.id);
       toast.success(`${plugin.displayName} installed successfully!`);
 
       // Invalidate queries to refresh plugin lists

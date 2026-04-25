@@ -119,6 +119,7 @@ export default function SessionShareDialog({
       loadShares();
       loadUsers();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId]);
 
   const loadShares = async () => {
@@ -225,7 +226,7 @@ export default function SessionShareDialog({
     }
   };
 
-  const handleUserSelect = (event: any) => {
+  const handleUserSelect = (event: React.ChangeEvent<HTMLInputElement | HTMLTextAreaElement>) => {
     const userId = event.target.value;
     setSelectedUserId(userId);
     const user = availableUsers.find(u => u.id === userId);

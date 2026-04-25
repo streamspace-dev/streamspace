@@ -3,11 +3,6 @@ import { Snackbar, Alert } from '@mui/material';
 import {
   useEnterpriseWebSocket,
   WebSocketMessage,
-  useSecurityAlertEvents,
-  useWebhookDeliveryEvents,
-  useScheduleEvents,
-  useScalingEvents,
-  useComplianceViolationEvents,
 } from '../hooks/useEnterpriseWebSocket';
 
 interface EnterpriseWebSocketProviderProps {
@@ -118,21 +113,22 @@ export default function EnterpriseWebSocketProvider({
           break;
       }
     },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
     [enableNotifications, addNotification]
   );
 
-  const handleWebhookDelivery = (data: any) => {
-    const status = data.status;
+  const handleWebhookDelivery = (data: Record<string, unknown>) => {
+    const status = data.status as string;
     const severity = status === 'success' ? 'success' : status === 'failed' ? 'error' : 'info';
     addNotification(`Webhook delivery ${status}`, severity);
   };
 
-  const handleSecurityAlert = (data: any) => {
+  const handleSecurityAlert = (data: Record<string, unknown>) => {
     const severity = data.severity === 'high' || data.severity === 'critical' ? 'error' : 'warning';
     addNotification(`Security Alert: ${data.message}`, severity);
   };
 
-  const handleScheduleEvent = (data: any) => {
+  const handleScheduleEvent = (data: Record<string, unknown>) => {
     const event = data.event;
     if (event === 'started') {
       addNotification(`Scheduled session started: ${data.session_id}`, 'success');
@@ -141,21 +137,21 @@ export default function EnterpriseWebSocketProvider({
     }
   };
 
-  const handleNodeHealth = (data: any) => {
+  const handleNodeHealth = (data: Record<string, unknown>) => {
     const status = data.health_status;
     if (status === 'unhealthy') {
       addNotification(`Node ${data.node_name} is unhealthy`, 'error');
     }
   };
 
-  const handleScalingEvent = (data: any) => {
+  const handleScalingEvent = (data: Record<string, unknown>) => {
     const action = data.action;
     const result = data.result;
     const severity = result === 'success' ? 'success' : 'error';
     addNotification(`Scaling ${action}: ${result}`, severity);
   };
 
-  const handleComplianceViolation = (data: any) => {
+  const handleComplianceViolation = (data: Record<string, unknown>) => {
     const severity = data.severity === 'high' || data.severity === 'critical' ? 'error' : 'warning';
     addNotification(`Compliance violation detected (${data.severity})`, severity);
   };

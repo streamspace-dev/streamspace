@@ -22,12 +22,9 @@ import {
   Pause as PauseIcon,
   Delete as DeleteIcon,
   OpenInNew as OpenIcon,
-  SignalWifiStatusbar4Bar as ConnectedIcon,
-  SignalWifiStatusbarConnectedNoInternet4 as DisconnectedIcon,
   LocalOffer as TagIcon,
   Share as ShareIcon,
   Link as LinkIcon,
-  People as PeopleIcon,
 } from '@mui/icons-material';
 import { useNavigate } from 'react-router-dom';
 import Layout from '../components/Layout';
@@ -222,7 +219,7 @@ export default function Sessions() {
           s.name === selectedSession.name ? { ...s, tags } : s
         ));
       }
-    } catch (error: any) {
+    } catch (error) {
       console.error('Failed to update session tags:', error);
       // Error notification is already handled by API interceptor
       // Re-throw to allow TagManager to handle UI state

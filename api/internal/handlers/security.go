@@ -39,8 +39,8 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/pquerna/otp/totp"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/middleware"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/middleware"
 )
 
 // ============================================================================
@@ -441,7 +441,7 @@ func (h *SecurityHandler) VerifyMFASetup(c *gin.Context) {
 		})
 		return
 	}
-	defer tx.Rollback() // Rollback if not committed
+	defer func() { _ = tx.Rollback() }() // Rollback if not committed
 
 	// Enable and verify MFA method
 	_, err = tx.Exec(`
@@ -607,7 +607,7 @@ func (h *SecurityHandler) VerifyMFA(c *gin.Context) {
 
 		// Update last used timestamp
 		if valid {
-			h.DB.Exec(`UPDATE mfa_methods SET last_used_at = NOW() WHERE user_id = $1 AND type = $2`,
+			_, _ = h.DB.Exec(`UPDATE mfa_methods SET last_used_at = NOW() WHERE user_id = $1 AND type = $2`,
 				userID, req.MethodType)
 		}
 	}
@@ -712,7 +712,7 @@ func (h *SecurityHandler) GenerateBackupCodes(c *gin.Context) {
 
 	// Clean up expired trusted devices
 	go func() {
-		h.DB.Exec(`DELETE FROM trusted_devices WHERE trusted_until < NOW()`)
+		_, _ = h.DB.Exec(`DELETE FROM trusted_devices WHERE trusted_until < NOW()`)
 	}()
 
 	// Generate new codes
@@ -736,7 +736,7 @@ func (h *SecurityHandler) generateBackupCodes(userID string, count int) []string
 		hash := sha256.Sum256([]byte(code))
 		hashStr := hex.EncodeToString(hash[:])
 
-		h.DB.Exec(`
+		_, _ = h.DB.Exec(`
 			INSERT INTO backup_codes (user_id, code)
 			VALUES ($1, $2)
 		`, userID, hashStr)
@@ -761,7 +761,7 @@ func (h *SecurityHandler) verifyBackupCode(userID, code string) bool {
 	}
 
 	// Mark as used
-	h.DB.Exec(`UPDATE backup_codes SET used = true, used_at = NOW() WHERE id = $1`, codeID)
+	_, _ = h.DB.Exec(`UPDATE backup_codes SET used = true, used_at = NOW() WHERE id = $1`, codeID)
 	return true
 }
 
@@ -893,7 +893,7 @@ func (h *SecurityHandler) isIPAllowed(userID, ipAddress string) bool {
 	for rows.Next() {
 		hasRules = true
 		var allowedIP string
-		rows.Scan(&allowedIP)
+		_ = rows.Scan(&allowedIP)
 
 		// Check if IP matches (support CIDR)
 		if strings.Contains(allowedIP, "/") {
@@ -1153,7 +1153,7 @@ func (h *SecurityHandler) CheckDevicePosture(c *gin.Context) {
 	req.LastChecked = time.Now()
 
 	// Store posture check result
-	h.DB.Exec(`
+	_, _ = h.DB.Exec(`
 		INSERT INTO device_posture_checks (device_id, compliant, issues, checked_at)
 		VALUES ($1, $2, $3, $4)
 	`, req.DeviceID, req.Compliant, strings.Join(issues, ","), time.Now())
@@ -1186,7 +1186,7 @@ func (h *SecurityHandler) GetSecurityAlerts(c *gin.Context) {
 	for rows.Next() {
 		var alertType, severity, message, details string
 		var createdAt time.Time
-		rows.Scan(&alertType, &severity, &message, &details, &createdAt)
+		_ = rows.Scan(&alertType, &severity, &message, &details, &createdAt)
 		alerts = append(alerts, map[string]interface{}{
 			"type":       alertType,
 			"severity":   severity,
@@ -1217,7 +1217,7 @@ func (h *SecurityHandler) trustDevice(userID, deviceID, userAgent, ipAddress str
 	trustedUntil := time.Now().Add(duration)
 	deviceName := fmt.Sprintf("%s from %s", userAgent, ipAddress)
 
-	h.DB.Exec(`
+	_, _ = h.DB.Exec(`
 		INSERT INTO trusted_devices (user_id, device_id, device_name, user_agent, ip_address, trusted_until)
 		VALUES ($1, $2, $3, $4, $5, $6)
 		ON CONFLICT (user_id, device_id) DO UPDATE SET
@@ -1252,7 +1252,7 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 
 	// Check for recent failed login attempts
 	var failedAttempts int
-	h.DB.QueryRow(`
+	_ = h.DB.QueryRow(`
 		SELECT COUNT(*) FROM audit_log
 		WHERE user_id = $1 AND action = 'login_failed'
 		AND created_at > NOW() - INTERVAL '1 hour'
@@ -1262,7 +1262,7 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 
 	// Check for location change
 	var lastIP string
-	h.DB.QueryRow(`
+	_ = h.DB.QueryRow(`
 		SELECT ip_address FROM session_verifications
 		WHERE user_id = $1 ORDER BY created_at DESC LIMIT 1
 	`, userID).Scan(&lastIP)
@@ -1282,19 +1282,10 @@ func (h *SecurityHandler) calculateRiskScore(userID, deviceID, ipAddress, userAg
 	return score
 }
 
-// Validate IP or CIDR
-func isValidIPOrCIDR(s string) bool {
-	if strings.Contains(s, "/") {
-		_, _, err := net.ParseCIDR(s)
-		return err == nil
-	}
-	return net.ParseIP(s) != nil
-}
-
 // Generate random code
 func generateRandomCode(length int) string {
 	bytes := make([]byte, length)
-	rand.Read(bytes)
+	_, _ = rand.Read(bytes)
 	return base32.StdEncoding.WithPadding(base32.NoPadding).EncodeToString(bytes)[:length]
 }
 

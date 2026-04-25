@@ -65,7 +65,7 @@ export default function InvitationAccept() {
   const [accepting, setAccepting] = useState(false);
   const [accepted, setAccepted] = useState(false);
   const [error, setError] = useState('');
-  const [sessionId, setSessionId] = useState('');
+  const [, setSessionId] = useState('');
 
   useEffect(() => {
     // If user is not logged in, redirect to login

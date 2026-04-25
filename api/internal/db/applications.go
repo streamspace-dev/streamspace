@@ -67,7 +67,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // downloadIcon downloads an icon from a URL and returns the binary data and media type.
@@ -282,7 +282,7 @@ func (a *ApplicationDB) GetApplication(ctx context.Context, appID string) (*mode
 
 	// Unmarshal configuration from JSONB string
 	if len(configJSON) > 0 {
-		json.Unmarshal([]byte(configJSON), &app.Configuration)
+		_ = json.Unmarshal([]byte(configJSON), &app.Configuration) // Best effort, ignore malformed JSON
 	}
 
 	return app, nil
@@ -341,7 +341,7 @@ func (a *ApplicationDB) ListApplications(ctx context.Context, enabledOnly bool) 
 
 		// Unmarshal configuration
 		if len(configJSON) > 0 {
-			json.Unmarshal(configJSON, &app.Configuration)
+			_ = json.Unmarshal(configJSON, &app.Configuration) // Best effort, ignore malformed JSON
 		}
 
 		// Note: We no longer auto-disable applications when folders are missing.
@@ -586,7 +586,7 @@ func (a *ApplicationDB) GetUserAccessibleApplications(ctx context.Context, userI
 
 		// Unmarshal configuration
 		if len(configJSON) > 0 {
-			json.Unmarshal(configJSON, &app.Configuration)
+			_ = json.Unmarshal(configJSON, &app.Configuration) // Best effort, ignore malformed JSON
 		}
 
 		apps = append(apps, app)
@@ -610,7 +610,7 @@ func (a *ApplicationDB) GetApplicationTemplateConfig(ctx context.Context, appID 
 
 	var config map[string]interface{}
 	if manifest != "" {
-		json.Unmarshal([]byte(manifest), &config)
+		_ = json.Unmarshal([]byte(manifest), &config)
 	}
 
 	return config, nil

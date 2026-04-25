@@ -97,6 +97,7 @@ export default function SessionCollaboratorsPanel({
     const interval = setInterval(loadCollaborators, 10000);
 
     return () => clearInterval(interval);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId]);
 
   const loadCollaborators = async () => {

@@ -12,8 +12,8 @@ import (
 	"github.com/crewjam/saml"
 	"github.com/crewjam/saml/samlsp"
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"github.com/stretchr/testify/assert"
 	"github.com/stretchr/testify/mock"
 )
@@ -163,7 +163,7 @@ func TestSAMLLogin_NotConfigured(t *testing.T) {
 	// Assert
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "not configured")
 }
 
@@ -207,7 +207,7 @@ func TestSAMLCallback_NotConfigured(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "not configured")
 }
 
@@ -229,7 +229,7 @@ func TestSAMLCallback_NoAssertion(t *testing.T) {
 
 	assert.Equal(t, http.StatusUnauthorized, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "No SAML assertion")
 }
 
@@ -259,7 +259,7 @@ func TestSAMLCallback_MissingEmail(t *testing.T) {
 
 	assert.Equal(t, http.StatusBadRequest, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "missing required email")
 }
 
@@ -315,7 +315,7 @@ func TestSAMLCallback_CreateNewUser(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, "jwt-token-123", response["token"])
 	assert.Equal(t, "/", response["returnUrl"]) // Default return URL
 
@@ -373,7 +373,7 @@ func TestSAMLCallback_UpdateExistingUser(t *testing.T) {
 
 	assert.Equal(t, http.StatusOK, w.Code)
 	var response map[string]interface{}
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Equal(t, "jwt-token-456", response["token"])
 
 	mockUserDB.AssertExpectations(t)
@@ -419,7 +419,7 @@ func TestSAMLCallback_InactiveUser(t *testing.T) {
 
 	assert.Equal(t, http.StatusForbidden, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "disabled")
 }
 
@@ -439,7 +439,7 @@ func TestSAMLMetadata_NotConfigured(t *testing.T) {
 
 	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "not configured")
 }
 
@@ -463,6 +463,6 @@ func TestSAMLMetadata_NilServiceProvider(t *testing.T) {
 
 	assert.Equal(t, http.StatusInternalServerError, w.Code)
 	var response map[string]string
-	json.Unmarshal(w.Body.Bytes(), &response)
+	_ = json.Unmarshal(w.Body.Bytes(), &response)
 	assert.Contains(t, response["error"], "not initialized")
 }

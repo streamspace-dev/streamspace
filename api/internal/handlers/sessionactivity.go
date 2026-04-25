@@ -72,7 +72,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // SessionActivityHandler handles session activity logging and queries
@@ -258,7 +258,7 @@ func (h *SessionActivityHandler) GetSessionActivity(c *gin.Context) {
 	// Count total
 	countQuery := fmt.Sprintf("SELECT COUNT(*) FROM (%s) AS filtered", query)
 	var total int
-	h.db.DB().QueryRowContext(ctx, countQuery, args...).Scan(&total)
+	_ = h.db.DB().QueryRowContext(ctx, countQuery, args...).Scan(&total)
 
 	// Add ordering and pagination
 	query += fmt.Sprintf(" ORDER BY timestamp DESC LIMIT $%d OFFSET $%d", argIdx, argIdx+1)
@@ -296,7 +296,7 @@ func (h *SessionActivityHandler) GetSessionActivity(c *gin.Context) {
 
 		// Parse metadata
 		if len(metadataJSON) > 0 {
-			json.Unmarshal(metadataJSON, &event.Metadata)
+			_ = json.Unmarshal(metadataJSON, &event.Metadata)
 		}
 
 		events = append(events, event)
@@ -374,13 +374,13 @@ func (h *SessionActivityHandler) GetActivityStats(c *gin.Context) {
 
 	// Get total event count
 	var totalEvents int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM session_activity_log
 	`).Scan(&totalEvents)
 
 	// Get recent events (last 24 hours)
 	var recentEvents int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM session_activity_log
 		WHERE timestamp >= NOW() - INTERVAL '24 hours'
 	`).Scan(&recentEvents)
@@ -448,7 +448,7 @@ func (h *SessionActivityHandler) GetSessionTimeline(c *gin.Context) {
 
 		// Parse metadata
 		if len(metadataJSON) > 0 {
-			json.Unmarshal(metadataJSON, &event.Metadata)
+			_ = json.Unmarshal(metadataJSON, &event.Metadata)
 		}
 
 		// Calculate duration since previous event
@@ -476,10 +476,10 @@ func (h *SessionActivityHandler) GetUserSessionActivity(c *gin.Context) {
 	limit := 50
 	offset := 0
 	if limitStr := c.Query("limit"); limitStr != "" {
-		fmt.Sscanf(limitStr, "%d", &limit)
+		_, _ = fmt.Sscanf(limitStr, "%d", &limit)
 	}
 	if offsetStr := c.Query("offset"); offsetStr != "" {
-		fmt.Sscanf(offsetStr, "%d", &offset)
+		_, _ = fmt.Sscanf(offsetStr, "%d", &offset)
 	}
 
 	query := `
@@ -520,7 +520,7 @@ func (h *SessionActivityHandler) GetUserSessionActivity(c *gin.Context) {
 
 		// Parse metadata
 		if len(metadataJSON) > 0 {
-			json.Unmarshal(metadataJSON, &event.Metadata)
+			_ = json.Unmarshal(metadataJSON, &event.Metadata)
 		}
 
 		events = append(events, event)
@@ -528,7 +528,7 @@ func (h *SessionActivityHandler) GetUserSessionActivity(c *gin.Context) {
 
 	// Get total count
 	var total int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM session_activity_log WHERE user_id = $1
 	`, userID).Scan(&total)
 

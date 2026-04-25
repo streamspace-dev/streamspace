@@ -46,24 +46,29 @@
 package handlers
 
 import (
+	"log"
 	"net/http"
+	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/activity"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/activity"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // ActivityHandler handles session activity-related endpoints
 type ActivityHandler struct {
 	k8sClient *k8s.Client
 	tracker   *activity.Tracker
+	database  *db.Database
 }
 
 // NewActivityHandler creates a new activity handler
-func NewActivityHandler(k8sClient *k8s.Client, tracker *activity.Tracker) *ActivityHandler {
+func NewActivityHandler(k8sClient *k8s.Client, tracker *activity.Tracker, database *db.Database) *ActivityHandler {
 	return &ActivityHandler{
 		k8sClient: k8sClient,
 		tracker:   tracker,
+		database:  database,
 	}
 }
 
@@ -117,19 +122,39 @@ func (h *ActivityHandler) RecordHeartbeat(c *gin.Context) {
 
 	namespace := getNamespace(c)
 
-	// Update session activity
-	err := h.tracker.UpdateSessionActivity(c.Request.Context(), namespace, sessionID)
-	if err != nil {
-		c.JSON(http.StatusInternalServerError, ErrorResponse{
-			Error:   "Failed to update activity",
-			Message: err.Error(),
-		})
-		return
+	// Update session activity in Kubernetes (if k8sClient is available)
+	if h.k8sClient != nil && h.tracker != nil {
+		err := h.tracker.UpdateSessionActivity(c.Request.Context(), namespace, sessionID)
+		if err != nil {
+			log.Printf("[ActivityHandler] Warning: Failed to update Kubernetes activity for %s: %v", sessionID, err)
+			// Don't fail the request - database update is more important for v2.0
+		}
+	}
+
+	// Update session activity in database (v2.0 architecture)
+	if h.database != nil {
+		now := time.Now()
+		_, err := h.database.DB().Exec(`
+			UPDATE sessions
+			SET last_activity = $1, updated_at = $1
+			WHERE id = $2
+		`, now, sessionID)
+
+		if err != nil {
+			log.Printf("[ActivityHandler] Error updating database activity for %s: %v", sessionID, err)
+			c.JSON(http.StatusInternalServerError, ErrorResponse{
+				Error:   "Failed to update activity",
+				Message: err.Error(),
+			})
+			return
+		}
+
+		log.Printf("Updated activity for session %s", sessionID)
 	}
 
 	c.JSON(http.StatusOK, gin.H{
-		"success": true,
-		"message": "Activity recorded",
+		"success":   true,
+		"message":   "Activity recorded",
 		"sessionId": sessionID,
 	})
 }

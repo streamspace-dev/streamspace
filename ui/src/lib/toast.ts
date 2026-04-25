@@ -1,5 +1,4 @@
 // Toast notification utility using native browser notifications styled as Material UI
-import { createRoot } from 'react-dom/client';
 
 export type ToastType = 'success' | 'error' | 'warning' | 'info';
 
@@ -10,7 +9,7 @@ interface ToastOptions {
 
 class ToastManager {
   private container: HTMLElement | null = null;
-  private toasts: Map<string, { element: HTMLElement; timeout: NodeJS.Timeout }> = new Map();
+  private toasts: Map<string, { element: HTMLElement; timeout: ReturnType<typeof setTimeout> }> = new Map();
 
   private ensureContainer() {
     if (!this.container) {

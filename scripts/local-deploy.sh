@@ -60,10 +60,6 @@ check_prerequisites() {
         exit 1
     fi
 
-    # Check Helm version
-    local helm_version=$(helm version --short 2>/dev/null || echo "unknown")
-    log_info "Helm version: ${helm_version}"
-
     if ! kubectl cluster-info &> /dev/null; then
         log_error "Cannot connect to Kubernetes cluster"
         log_info "Make sure your kubeconfig is properly configured"
@@ -76,11 +72,12 @@ check_prerequisites() {
 
 # Check if images exist locally
 check_images() {
-    log "Checking for locally built images..."
+    log "Checking for locally built images (v2.0-beta)..."
 
     local missing_images=0
 
-    for image in "streamspace/streamspace-kubernetes-controller" "streamspace/streamspace-api" "streamspace/streamspace-ui"; do
+    # v2.0: K8s Agent REPLACES kubernetes-controller
+    for image in "streamspace/streamspace-api" "streamspace/streamspace-ui" "streamspace/streamspace-k8s-agent"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"
         else
@@ -129,57 +126,9 @@ deploy_helm() {
     log_info "Chart directory contents:"
     ls -la "${CHART_PATH}/" 2>&1 | head -10
 
-    # Workaround for Helm v3.19.0: Package chart first, then install from .tgz
-    # This avoids the directory loading bug in v3.19.0
-    local helm_version=$(helm version --short 2>/dev/null | grep -oE 'v[0-9]+\.[0-9]+\.[0-9]+' || echo "unknown")
-    local use_package_workaround=false
-
-    if [[ "${helm_version}" == "v3.19."* ]] || [[ "${FORCE_PACKAGE:-false}" == "true" ]]; then
-        log_warning "Detected Helm ${helm_version} - using package workaround for chart loading bug"
-        use_package_workaround=true
-    fi
-
-    # Try validation only if not using package workaround
-    if [ "${use_package_workaround}" = false ] && [ "${SKIP_LINT:-false}" != "true" ]; then
-        log_info "Validating chart with helm lint..."
-        if helm lint "${CHART_PATH}" 2>&1 | tee /tmp/helm-lint.log; then
-            log_success "Chart validation passed"
-        else
-            log_warning "Helm lint reported errors (this may be a Helm v3.19.0 issue)"
-            log_info "Will use package workaround for installation"
-            use_package_workaround=true
-        fi
-    fi
-
     # Prepare chart for installation
     local chart_ref="${CHART_PATH}"
-    local temp_dir=""
 
-    if [ "${use_package_workaround}" = true ]; then
-        log_info "Packaging chart to work around Helm v3.19.0 directory loading bug..."
-        temp_dir=$(mktemp -d)
-
-        if helm package "${CHART_PATH}" -d "${temp_dir}" 2>&1 | tee /tmp/helm-package.log; then
-            # Find the packaged chart file
-            local chart_package=$(find "${temp_dir}" -name "streamspace-*.tgz" | head -1)
-            if [ -n "${chart_package}" ]; then
-                chart_ref="${chart_package}"
-                log_success "Chart packaged successfully: $(basename ${chart_package})"
-            else
-                log_error "Chart packaging failed - package file not found"
-                log_info "Package output:"
-                cat /tmp/helm-package.log
-                rm -rf "${temp_dir}"
-                exit 1
-            fi
-        else
-            log_error "Chart packaging failed"
-            log_info "This is a critical Helm v3.19.0 bug. Please downgrade Helm to v3.18.0 or earlier."
-            log_info "See docs/DEPLOYMENT_TROUBLESHOOTING.md for detailed instructions."
-            rm -rf "${temp_dir}"
-            exit 1
-        fi
-    fi
 
     # Check if release exists
     if helm status "${RELEASE_NAME}" -n "${NAMESPACE}" &> /dev/null; then
@@ -187,39 +136,37 @@ deploy_helm() {
         log_info "Running: helm upgrade ${RELEASE_NAME} ${chart_ref}"
         helm upgrade "${RELEASE_NAME}" "${chart_ref}" \
             --namespace "${NAMESPACE}" \
-            --set controller.image.tag="${VERSION}" \
-            --set controller.image.pullPolicy=Never \
+            --set controller.enabled=false \
             --set api.image.tag="${VERSION}" \
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
             --set ui.image.pullPolicy=Never \
+            --set k8sAgent.enabled=true \
+            --set k8sAgent.image.tag="${VERSION}" \
+            --set k8sAgent.image.pullPolicy=Never \
             --set postgresql.enabled=true \
             --set postgresql.auth.password=streamspace \
             --wait \
             --timeout 5m
     else
-        log_info "Installing fresh release..."
+        log_info "Installing fresh release (v2.0-beta: Agent replaces Controller)..."
         log_info "Running: helm install ${RELEASE_NAME} ${chart_ref}"
         helm install "${RELEASE_NAME}" "${chart_ref}" \
             --namespace "${NAMESPACE}" \
             --create-namespace \
-            --set controller.image.tag="${VERSION}" \
-            --set controller.image.pullPolicy=Never \
+            --set controller.enabled=false \
             --set api.image.tag="${VERSION}" \
             --set api.image.pullPolicy=Never \
             --set ui.image.tag="${VERSION}" \
             --set ui.image.pullPolicy=Never \
+            --set k8sAgent.enabled=true \
+            --set k8sAgent.image.tag="${VERSION}" \
+            --set k8sAgent.image.pullPolicy=Never \
             --set postgresql.enabled=true \
             --set postgresql.auth.password=streamspace \
-            --debug \
+
             --wait \
             --timeout 5m
-    fi
-
-    # Clean up temporary directory if we created one
-    if [ -n "${temp_dir}" ] && [ -d "${temp_dir}" ]; then
-        rm -rf "${temp_dir}"
-        log_info "Cleaned up temporary package directory"
     fi
 
     log_success "Helm deployment complete"
@@ -305,9 +252,9 @@ show_access_info() {
     echo ""
 
     log_info "View logs:"
-    echo "  Controller: kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=controller -f"
     echo "  API:        kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=api -f"
     echo "  UI:         kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=ui -f"
+    echo "  K8s Agent:  kubectl logs -n ${NAMESPACE} -l app.kubernetes.io/component=k8s-agent -f  # v2.0 (replaces controller)"
     echo ""
 
     log_info "When finished testing:"
@@ -319,12 +266,13 @@ show_access_info() {
 # Main execution
 main() {
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
-    echo -e "${COLOR_BOLD}  StreamSpace Local Deployment${COLOR_RESET}"
+    echo -e "${COLOR_BOLD}  StreamSpace v2.0 Local Deployment${COLOR_RESET}"
     echo -e "${COLOR_BOLD}═══════════════════════════════════════════════════${COLOR_RESET}"
     echo ""
+    echo -e "${COLOR_BLUE}Version:${COLOR_RESET}       v2.0-beta (K8s Agent enabled)"
     echo -e "${COLOR_BLUE}Namespace:${COLOR_RESET}     ${NAMESPACE}"
     echo -e "${COLOR_BLUE}Release:${COLOR_RESET}       ${RELEASE_NAME}"
-    echo -e "${COLOR_BLUE}Version:${COLOR_RESET}       ${VERSION}"
+    echo -e "${COLOR_BLUE}Build Tag:${COLOR_RESET}     ${VERSION}"
     echo ""
 
     check_prerequisites

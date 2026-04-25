@@ -99,6 +99,7 @@ export default function TemplateDetailModal({
         loadRatings();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, template, tabValue]);
 
   const loadRatings = async () => {

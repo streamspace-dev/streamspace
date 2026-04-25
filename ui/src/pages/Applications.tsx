@@ -34,10 +34,8 @@ import {
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
-  Settings as SettingsIcon,
   Group as GroupIcon,
   Refresh as RefreshIcon,
-  Search as SearchIcon,
 } from '@mui/icons-material';
 import AdminPortalLayout from '../components/AdminPortalLayout';
 import {
@@ -85,7 +83,7 @@ function ApplicationsContent() {
 
   // Edit dialog state
   const [editDisplayName, setEditDisplayName] = useState('');
-  const [editConfiguration, setEditConfiguration] = useState<Record<string, any>>({});
+  const [editConfiguration, setEditConfiguration] = useState<Record<string, unknown>>({});
   const [appGroups, setAppGroups] = useState<ApplicationGroupAccess[]>([]);
   const [newGroupId, setNewGroupId] = useState('');
   const [newGroupAccessLevel, setNewGroupAccessLevel] = useState<'view' | 'launch' | 'admin'>('launch');
@@ -96,6 +94,7 @@ function ApplicationsContent() {
     loadApplications();
     loadCatalogTemplates();
     loadGroups();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   const loadApplications = async () => {
@@ -614,7 +613,7 @@ function ApplicationsContent() {
                   <InputLabel>Access Level</InputLabel>
                   <Select
                     value={newGroupAccessLevel}
-                    onChange={(e) => setNewGroupAccessLevel(e.target.value as any)}
+                    onChange={(e) => setNewGroupAccessLevel(e.target.value as 'view' | 'launch' | 'admin')}
                     label="Access Level"
                     size="small"
                   >

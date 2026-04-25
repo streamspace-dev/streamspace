@@ -78,11 +78,11 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // Version information - can be set at build time with linker flags:
-// go build -ldflags "-X github.com/streamspace/streamspace/api/internal/handlers.Version=v1.2.3"
+// go build -ldflags "-X github.com/streamspace-dev/streamspace/api/internal/handlers.Version=v1.2.3"
 var (
 	Version   = "dev"
 	GitCommit = "unknown"
@@ -143,58 +143,58 @@ func (h *MonitoringHandler) PrometheusMetrics(c *gin.Context) {
 
 	// Session metrics
 	var totalSessions, runningSessions, hibernatedSessions int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
 
 	metrics = append(metrics,
-		fmt.Sprintf("# HELP streamspace_sessions_total Total number of sessions"),
-		fmt.Sprintf("# TYPE streamspace_sessions_total gauge"),
+		"# HELP streamspace_sessions_total Total number of sessions",
+		"# TYPE streamspace_sessions_total gauge",
 		fmt.Sprintf("streamspace_sessions_total %d", totalSessions),
 		"",
-		fmt.Sprintf("# HELP streamspace_sessions_running Number of running sessions"),
-		fmt.Sprintf("# TYPE streamspace_sessions_running gauge"),
+		"# HELP streamspace_sessions_running Number of running sessions",
+		"# TYPE streamspace_sessions_running gauge",
 		fmt.Sprintf("streamspace_sessions_running %d", runningSessions),
 		"",
-		fmt.Sprintf("# HELP streamspace_sessions_hibernated Number of hibernated sessions"),
-		fmt.Sprintf("# TYPE streamspace_sessions_hibernated gauge"),
+		"# HELP streamspace_sessions_hibernated Number of hibernated sessions",
+		"# TYPE streamspace_sessions_hibernated gauge",
 		fmt.Sprintf("streamspace_sessions_hibernated %d", hibernatedSessions),
 		"",
 	)
 
 	// User metrics
 	var totalUsers, activeUsers int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&totalUsers)
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&totalUsers)
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(DISTINCT user_id) FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '24 hours'
 	`).Scan(&activeUsers)
 
 	metrics = append(metrics,
-		fmt.Sprintf("# HELP streamspace_users_total Total number of users"),
-		fmt.Sprintf("# TYPE streamspace_users_total gauge"),
+		"# HELP streamspace_users_total Total number of users",
+		"# TYPE streamspace_users_total gauge",
 		fmt.Sprintf("streamspace_users_total %d", totalUsers),
 		"",
-		fmt.Sprintf("# HELP streamspace_users_active_24h Number of active users in last 24 hours"),
-		fmt.Sprintf("# TYPE streamspace_users_active_24h gauge"),
+		"# HELP streamspace_users_active_24h Number of active users in last 24 hours",
+		"# TYPE streamspace_users_active_24h gauge",
 		fmt.Sprintf("streamspace_users_active_24h %d", activeUsers),
 		"",
 	)
 
 	// Template metrics
 	var totalTemplates int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM templates`).Scan(&totalTemplates)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM templates`).Scan(&totalTemplates)
 
 	metrics = append(metrics,
-		fmt.Sprintf("# HELP streamspace_templates_total Total number of templates"),
-		fmt.Sprintf("# TYPE streamspace_templates_total gauge"),
+		"# HELP streamspace_templates_total Total number of templates",
+		"# TYPE streamspace_templates_total gauge",
 		fmt.Sprintf("streamspace_templates_total %d", totalTemplates),
 		"",
 	)
 
 	// Resource metrics (example - would need actual resource tracking)
 	var avgCPU, avgMemory float64
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(AVG((resources->>'cpu')::float), 0),
 			COALESCE(AVG((resources->>'memory')::float), 0)
@@ -203,12 +203,12 @@ func (h *MonitoringHandler) PrometheusMetrics(c *gin.Context) {
 	`).Scan(&avgCPU, &avgMemory)
 
 	metrics = append(metrics,
-		fmt.Sprintf("# HELP streamspace_resources_cpu_avg Average CPU allocation (cores)"),
-		fmt.Sprintf("# TYPE streamspace_resources_cpu_avg gauge"),
+		"# HELP streamspace_resources_cpu_avg Average CPU allocation (cores)",
+		"# TYPE streamspace_resources_cpu_avg gauge",
 		fmt.Sprintf("streamspace_resources_cpu_avg %.2f", avgCPU),
 		"",
-		fmt.Sprintf("# HELP streamspace_resources_memory_avg Average memory allocation (GB)"),
-		fmt.Sprintf("# TYPE streamspace_resources_memory_avg gauge"),
+		"# HELP streamspace_resources_memory_avg Average memory allocation (GB)",
+		"# TYPE streamspace_resources_memory_avg gauge",
 		fmt.Sprintf("streamspace_resources_memory_avg %.2f", avgMemory),
 		"",
 	)
@@ -218,12 +218,12 @@ func (h *MonitoringHandler) PrometheusMetrics(c *gin.Context) {
 	runtime.ReadMemStats(&memStats)
 
 	metrics = append(metrics,
-		fmt.Sprintf("# HELP streamspace_api_memory_bytes API server memory usage in bytes"),
-		fmt.Sprintf("# TYPE streamspace_api_memory_bytes gauge"),
+		"# HELP streamspace_api_memory_bytes API server memory usage in bytes",
+		"# TYPE streamspace_api_memory_bytes gauge",
 		fmt.Sprintf("streamspace_api_memory_bytes %d", memStats.Alloc),
 		"",
-		fmt.Sprintf("# HELP streamspace_api_goroutines Number of goroutines"),
-		fmt.Sprintf("# TYPE streamspace_api_goroutines gauge"),
+		"# HELP streamspace_api_goroutines Number of goroutines",
+		"# TYPE streamspace_api_goroutines gauge",
 		fmt.Sprintf("streamspace_api_goroutines %d", runtime.NumGoroutine()),
 		"",
 	)
@@ -252,7 +252,7 @@ func (h *MonitoringHandler) SessionMetrics(c *gin.Context) {
 	for rows.Next() {
 		var state string
 		var count int
-		rows.Scan(&state, &count)
+		_ = rows.Scan(&state, &count)
 		stateDistribution[state] = count
 	}
 
@@ -275,7 +275,7 @@ func (h *MonitoringHandler) SessionMetrics(c *gin.Context) {
 	for rows.Next() {
 		var templateName string
 		var count int
-		rows.Scan(&templateName, &count)
+		_ = rows.Scan(&templateName, &count)
 		topTemplates = append(topTemplates, map[string]interface{}{
 			"template": templateName,
 			"count":    count,
@@ -284,7 +284,7 @@ func (h *MonitoringHandler) SessionMetrics(c *gin.Context) {
 
 	// Session duration statistics
 	var avgDuration, maxDuration int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(AVG(EXTRACT(EPOCH FROM (terminated_at - created_at))), 0),
 			COALESCE(MAX(EXTRACT(EPOCH FROM (terminated_at - created_at))), 0)
@@ -312,7 +312,7 @@ func (h *MonitoringHandler) SessionMetrics(c *gin.Context) {
 	hourlyCreation := make(map[int]int)
 	for rows.Next() {
 		var hour, count int
-		rows.Scan(&hour, &count)
+		_ = rows.Scan(&hour, &count)
 		hourlyCreation[hour] = count
 	}
 
@@ -334,7 +334,7 @@ func (h *MonitoringHandler) ResourceMetrics(c *gin.Context) {
 
 	// Total allocated resources
 	var totalCPU, totalMemory float64
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(SUM((resources->>'cpu')::float), 0),
 			COALESCE(SUM((resources->>'memory')::float), 0)
@@ -366,7 +366,7 @@ func (h *MonitoringHandler) ResourceMetrics(c *gin.Context) {
 		var userID string
 		var sessionCount int
 		var cpu, memory float64
-		rows.Scan(&userID, &sessionCount, &cpu, &memory)
+		_ = rows.Scan(&userID, &sessionCount, &cpu, &memory)
 		topUsers = append(topUsers, map[string]interface{}{
 			"userId":       userID,
 			"sessionCount": sessionCount,
@@ -378,7 +378,7 @@ func (h *MonitoringHandler) ResourceMetrics(c *gin.Context) {
 	// Resource waste (hibernated sessions with resources allocated)
 	var wastedCPU, wastedMemory float64
 	var wastedSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COUNT(*),
 			COALESCE(SUM((resources->>'cpu')::float), 0),
@@ -408,9 +408,9 @@ func (h *MonitoringHandler) UserMetrics(c *gin.Context) {
 
 	// Active users by timeframe
 	var dau, wau, mau int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '1 day'`).Scan(&dau)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '7 days'`).Scan(&wau)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '30 days'`).Scan(&mau)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '1 day'`).Scan(&dau)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '7 days'`).Scan(&wau)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(DISTINCT user_id) FROM sessions WHERE created_at >= NOW() - INTERVAL '30 days'`).Scan(&mau)
 
 	// User growth
 	rows, err := h.db.DB().QueryContext(ctx, `
@@ -432,7 +432,7 @@ func (h *MonitoringHandler) UserMetrics(c *gin.Context) {
 	for rows.Next() {
 		var date time.Time
 		var count int
-		rows.Scan(&date, &count)
+		_ = rows.Scan(&date, &count)
 		userGrowth = append(userGrowth, map[string]interface{}{
 			"date":  date,
 			"count": count,
@@ -458,7 +458,7 @@ func (h *MonitoringHandler) UserMetrics(c *gin.Context) {
 	for rows.Next() {
 		var userID string
 		var count int
-		rows.Scan(&userID, &count)
+		_ = rows.Scan(&userID, &count)
 		topUsers = append(topUsers, map[string]interface{}{
 			"userId":       userID,
 			"sessionCount": count,
@@ -606,7 +606,7 @@ func (h *MonitoringHandler) DatabaseHealth(c *gin.Context) {
 
 	// Database size
 	var dbSize int64
-	h.db.DB().QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&dbSize)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT pg_database_size(current_database())`).Scan(&dbSize)
 
 	// Table sizes
 	rows, _ := h.db.DB().QueryContext(ctx, `
@@ -625,7 +625,7 @@ func (h *MonitoringHandler) DatabaseHealth(c *gin.Context) {
 	for rows.Next() {
 		var schema, table string
 		var size int64
-		rows.Scan(&schema, &table, &size)
+		_ = rows.Scan(&schema, &table, &size)
 		tables = append(tables, map[string]interface{}{
 			"schema": schema,
 			"table":  table,
@@ -657,7 +657,7 @@ func (h *MonitoringHandler) StorageHealth(c *gin.Context) {
 	// Snapshot storage usage
 	var snapshotCount int
 	var totalSnapshotSize int64
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*), COALESCE(SUM(size_bytes), 0)
 		FROM session_snapshots
 		WHERE status = 'completed'
@@ -665,7 +665,7 @@ func (h *MonitoringHandler) StorageHealth(c *gin.Context) {
 
 	// Sessions with persistent storage
 	var persistentSessionCount int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions WHERE persistent_home = true
 	`).Scan(&persistentSessionCount)
 
@@ -750,7 +750,7 @@ func (h *MonitoringHandler) GetAlerts(c *gin.Context) {
 		var threshold float64
 		var triggeredAt, acknowledgedAt, resolvedAt, createdAt sql.NullTime
 
-		rows.Scan(&id, &name, &description, &severity, &status, &condition, &threshold,
+		_ = rows.Scan(&id, &name, &description, &severity, &status, &condition, &threshold,
 			&triggeredAt, &acknowledgedAt, &resolvedAt, &createdAt)
 
 		alerts = append(alerts, map[string]interface{}{

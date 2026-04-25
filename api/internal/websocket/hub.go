@@ -41,6 +41,7 @@ package websocket
 
 import (
 	"log"
+	"net"
 	"sync"
 	"time"
 
@@ -98,6 +99,8 @@ type Hub struct {
 //
 // Each client has:
 //   - Unique ID for identification
+//   - Organization ID for multi-tenancy scoping
+//   - K8s namespace for resource filtering
 //   - WebSocket connection for bidirectional communication
 //   - Buffered send channel for outbound messages
 //   - Reference to hub for registration/unregistration
@@ -115,13 +118,18 @@ type Hub struct {
 //   - If buffer fills, client is slow and gets disconnected
 //   - Prevents slow clients from blocking the Hub
 //
+// MULTI-TENANCY: The OrgID and K8sNamespace fields are CRITICAL for tenant isolation.
+// Broadcasts MUST filter data by orgID to prevent cross-tenant data leakage.
+//
 // Example:
 //
 //	client := &Client{
-//	    hub:  hub,
-//	    conn: websocketConn,
-//	    send: make(chan []byte, 256),
-//	    id:   "user1-session123",
+//	    hub:         hub,
+//	    conn:        websocketConn,
+//	    send:        make(chan []byte, 256),
+//	    id:          "user1-session123",
+//	    orgID:       "org-acme",
+//	    k8sNamespace: "streamspace-acme",
 //	}
 type Client struct {
 	// hub is the Hub this client belongs to.
@@ -139,6 +147,18 @@ type Client struct {
 	// id uniquely identifies this client.
 	// Format: "{userID}-{sessionID}" or UUID
 	id string
+
+	// orgID is the organization this client belongs to.
+	// SECURITY CRITICAL: Used to filter broadcasts and prevent cross-tenant leakage.
+	orgID string
+
+	// k8sNamespace is the Kubernetes namespace for this client's org.
+	// Used to scope K8s API calls (sessions, logs) to the correct namespace.
+	k8sNamespace string
+
+	// userID is the authenticated user's ID.
+	// Used for user-specific filtering and audit logging.
+	userID string
 }
 
 // NewHub creates a new WebSocket hub
@@ -223,10 +243,10 @@ func (c *Client) writePump() {
 		select {
 		case message, ok := <-c.send:
 			// Set write deadline to prevent hanging on slow connections
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
 				// Hub closed the channel
-				c.conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -234,13 +254,13 @@ func (c *Client) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			_, _ = w.Write(message)
 
 			// Add queued messages to the current websocket message
 			n := len(c.send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-c.send)
+				_, _ = w.Write([]byte{'\n'})
+				_, _ = w.Write(<-c.send)
 			}
 
 			if err := w.Close(); err != nil {
@@ -249,7 +269,7 @@ func (c *Client) writePump() {
 
 		case <-ticker.C:
 			// Send ping to keep connection alive
-			c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = c.conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := c.conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -265,10 +285,23 @@ func (c *Client) readPump() {
 	}()
 
 	// Set read deadline and pong handler to keep connection alive
-	c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	c.conn.SetPongHandler(func(string) error {
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
+	})
+
+	// Set ping handler to automatically respond with pongs
+	c.conn.SetPingHandler(func(appData string) error {
+		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		err := c.conn.WriteControl(websocket.PongMessage, []byte(appData), time.Now().Add(10*time.Second))
+		if err == websocket.ErrCloseSent {
+			return nil
+		} else if _, ok := err.(net.Error); ok {
+			// Treat all net.Error as non-fatal for pong responses
+			return nil
+		}
+		return err
 	})
 
 	for {
@@ -281,7 +314,7 @@ func (c *Client) readPump() {
 		}
 
 		// Reset read deadline on any message
-		c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = c.conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 
 		// For now, we just log received messages
 		// In the future, we could handle client->server messages
@@ -289,13 +322,25 @@ func (c *Client) readPump() {
 	}
 }
 
-// ServeClient handles a new WebSocket connection
+// ServeClient handles a new WebSocket connection (deprecated - use ServeClientWithOrg)
+// DEPRECATED: This function does not support org scoping. Use ServeClientWithOrg instead.
 func (h *Hub) ServeClient(conn *websocket.Conn, clientID string) {
+	// Default to "default-org" for backward compatibility
+	h.ServeClientWithOrg(conn, clientID, "default-org", "streamspace", "")
+}
+
+// ServeClientWithOrg handles a new WebSocket connection with org context.
+// SECURITY: This function requires org context for multi-tenant isolation.
+// All broadcasts will be filtered by orgID to prevent cross-tenant data leakage.
+func (h *Hub) ServeClientWithOrg(conn *websocket.Conn, clientID, orgID, k8sNamespace, userID string) {
 	client := &Client{
-		hub:  h,
-		conn: conn,
-		send: make(chan []byte, 256),
-		id:   clientID,
+		hub:          h,
+		conn:         conn,
+		send:         make(chan []byte, 256),
+		id:           clientID,
+		orgID:        orgID,
+		k8sNamespace: k8sNamespace,
+		userID:       userID,
 	}
 
 	client.hub.register <- client
@@ -303,4 +348,82 @@ func (h *Hub) ServeClient(conn *websocket.Conn, clientID string) {
 	// Start pumps in separate goroutines
 	go client.writePump()
 	go client.readPump()
+}
+
+// GetClientsByOrg returns all clients belonging to a specific organization.
+// SECURITY: Used for org-scoped broadcasts to prevent cross-tenant data leakage.
+func (h *Hub) GetClientsByOrg(orgID string) []*Client {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	var orgClients []*Client
+	for client := range h.clients {
+		if client.orgID == orgID {
+			orgClients = append(orgClients, client)
+		}
+	}
+	return orgClients
+}
+
+// BroadcastToOrg sends a message only to clients in a specific organization.
+// SECURITY: This is the preferred broadcast method for org-scoped data.
+func (h *Hub) BroadcastToOrg(orgID string, message []byte) {
+	h.mu.RLock()
+	clientsToClose := make([]*Client, 0)
+	for client := range h.clients {
+		if client.orgID == orgID {
+			select {
+			case client.send <- message:
+				// Successfully sent
+			default:
+				// Client's send buffer is full, mark for closing
+				clientsToClose = append(clientsToClose, client)
+			}
+		}
+	}
+	h.mu.RUnlock()
+
+	// Close and remove blocked clients with write lock
+	if len(clientsToClose) > 0 {
+		h.mu.Lock()
+		for _, client := range clientsToClose {
+			close(client.send)
+			delete(h.clients, client)
+		}
+		h.mu.Unlock()
+	}
+}
+
+// GetUniqueOrgs returns a list of unique org IDs with connected clients.
+// Used by broadcast goroutines to iterate over active orgs.
+func (h *Hub) GetUniqueOrgs() []string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	orgs := make(map[string]bool)
+	for client := range h.clients {
+		if client.orgID != "" {
+			orgs[client.orgID] = true
+		}
+	}
+
+	result := make([]string, 0, len(orgs))
+	for org := range orgs {
+		result = append(result, org)
+	}
+	return result
+}
+
+// GetK8sNamespaceForOrg returns the K8s namespace for an org.
+// Returns first client's namespace found for the org.
+func (h *Hub) GetK8sNamespaceForOrg(orgID string) string {
+	h.mu.RLock()
+	defer h.mu.RUnlock()
+
+	for client := range h.clients {
+		if client.orgID == orgID && client.k8sNamespace != "" {
+			return client.k8sNamespace
+		}
+	}
+	return "streamspace" // Default namespace
 }

@@ -141,16 +141,20 @@ delete_crds() {
 clean_docker_images() {
     log "Cleaning Docker images..."
 
-    # Remove StreamSpace images
+    # Remove StreamSpace images (both streamspace/* and ghcr.io/streamspace-dev/*)
     local images=(
-        "streamspace/streamspace-kubernetes-controller:${VERSION}"
-        "streamspace/streamspace-kubernetes-controller:latest"
+        "streamspace/streamspace-k8s-agent:${VERSION}"
+        "streamspace/streamspace-k8s-agent:latest"
         "streamspace/streamspace-api:${VERSION}"
         "streamspace/streamspace-api:latest"
         "streamspace/streamspace-ui:${VERSION}"
         "streamspace/streamspace-ui:latest"
-        "streamspace/streamspace-docker-controller:${VERSION}"
-        "streamspace/streamspace-docker-controller:latest"
+        "ghcr.io/streamspace-dev/streamspace-k8s-agent:${VERSION}"
+        "ghcr.io/streamspace-dev/streamspace-k8s-agent:latest"
+        "ghcr.io/streamspace-dev/streamspace-api:${VERSION}"
+        "ghcr.io/streamspace-dev/streamspace-api:latest"
+        "ghcr.io/streamspace-dev/streamspace-ui:${VERSION}"
+        "ghcr.io/streamspace-dev/streamspace-ui:latest"
     )
 
     local removed=0
@@ -224,11 +228,11 @@ show_remaining() {
         log_success "No remaining pods"
     fi
 
-    # Check for any remaining images
-    local remaining_images=$(docker images | grep -c "streamspace/streamspace-" || echo "0")
+    # Check for any remaining images (both streamspace/* and ghcr.io/streamspace-dev/*)
+    local remaining_images=$(docker images | grep -c -E "streamspace/streamspace-|ghcr.io/streamspace-dev/" || echo "0")
     if [ "$remaining_images" -gt 0 ]; then
         log_warning "Found ${remaining_images} remaining image(s)"
-        docker images | grep "streamspace/streamspace-" || true
+        docker images | grep -E "streamspace/streamspace-|ghcr.io/streamspace-dev/" || true
     else
         log_success "No remaining Docker images"
     fi

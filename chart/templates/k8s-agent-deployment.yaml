@@ -1,0 +1,139 @@
+{{- if .Values.k8sAgent.enabled }}
+apiVersion: v1
+kind: ServiceAccount
+metadata:
+  name: {{ include "streamspace.k8sAgent.serviceAccountName" . }}
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.k8sAgent.labels" . | nindent 4 }}
+  {{- with .Values.k8sAgent.serviceAccount.annotations }}
+  annotations:
+    {{- toYaml . | nindent 4 }}
+  {{- end }}
+---
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: {{ include "streamspace.fullname" . }}-k8s-agent
+  namespace: {{ .Release.Namespace }}
+  labels:
+    {{- include "streamspace.k8sAgent.labels" . | nindent 4 }}
+spec:
+  replicas: {{ .Values.k8sAgent.replicaCount }}
+  selector:
+    matchLabels:
+      {{- include "streamspace.selectorLabels" . | nindent 6 }}
+      app.kubernetes.io/component: k8s-agent
+  template:
+    metadata:
+      labels:
+        {{- include "streamspace.selectorLabels" . | nindent 8 }}
+        app.kubernetes.io/component: k8s-agent
+    spec:
+      {{- with .Values.global.imagePullSecrets }}
+      imagePullSecrets:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      serviceAccountName: {{ include "streamspace.k8sAgent.serviceAccountName" . }}
+      containers:
+      - name: k8s-agent
+        image: {{ include "streamspace.k8sAgent.image" . }}
+        imagePullPolicy: {{ .Values.k8sAgent.image.pullPolicy }}
+        env:
+          # Agent Identity (unique per pod - includes pod name)
+          # Format: {agentId}-{podName} to ensure uniqueness across replicas
+          - name: AGENT_ID_PREFIX
+            value: {{ .Values.k8sAgent.config.agentId | quote }}
+          - name: POD_NAME
+            valueFrom:
+              fieldRef:
+                fieldPath: metadata.name
+          - name: AGENT_ID
+            value: "$(AGENT_ID_PREFIX)-$(POD_NAME)"
+          - name: PLATFORM
+            value: {{ .Values.k8sAgent.config.platform | quote }}
+          - name: REGION
+            value: {{ .Values.k8sAgent.config.region | quote }}
+
+          # Control Plane Connection
+          - name: CONTROL_PLANE_URL
+            value: {{ if .Values.k8sAgent.config.controlPlaneUrl }}{{ .Values.k8sAgent.config.controlPlaneUrl }}{{ else }}ws://{{ include "streamspace.fullname" . }}-api:{{ .Values.api.service.port }}{{ end }}
+
+          # Namespace Configuration
+          - name: NAMESPACE
+            value: {{ if .Values.k8sAgent.config.sessionNamespace }}{{ .Values.k8sAgent.config.sessionNamespace }}{{ else }}{{ .Release.Namespace }}{{ end }}
+
+          # Capacity Limits
+          - name: MAX_SESSIONS
+            value: {{ .Values.k8sAgent.config.capacity.maxSessions | quote }}
+          - name: MAX_CPU
+            value: {{ .Values.k8sAgent.config.capacity.maxCPU | quote }}
+          - name: MAX_MEMORY
+            value: {{ .Values.k8sAgent.config.capacity.maxMemory | quote }}
+
+          # Health Check Settings
+          - name: HEALTH_CHECK_INTERVAL
+            value: {{ .Values.k8sAgent.config.health.checkInterval | quote }}
+          - name: HEALTH_CHECK_TIMEOUT
+            value: {{ .Values.k8sAgent.config.health.timeout | quote }}
+
+          # Reconnection Settings
+          - name: RECONNECT_INITIAL_DELAY
+            value: {{ .Values.k8sAgent.config.reconnect.initialDelay | quote }}
+          - name: RECONNECT_MAX_DELAY
+            value: {{ .Values.k8sAgent.config.reconnect.maxDelay | quote }}
+          - name: RECONNECT_MULTIPLIER
+            value: {{ .Values.k8sAgent.config.reconnect.multiplier | quote }}
+
+          # High Availability Settings (Leader Election)
+          - name: ENABLE_HA
+            value: {{ .Values.k8sAgent.ha.enabled | quote }}
+          # POD_NAME already defined above for AGENT_ID
+
+          # Agent API Key for authentication (Issue #227)
+          # Uses the bootstrap key from secrets for initial registration
+          # After registration, agent receives a unique API key
+          - name: AGENT_API_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "streamspace.fullname" . }}-secrets
+                key: agent-bootstrap-key
+
+          {{- with .Values.k8sAgent.extraEnv }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        resources:
+          {{- toYaml .Values.k8sAgent.resources | nindent 10 }}
+        {{- with .Values.k8sAgent.livenessProbe }}
+        livenessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- with .Values.k8sAgent.readinessProbe }}
+        readinessProbe:
+          {{- toYaml . | nindent 10 }}
+        {{- end }}
+        {{- if or .Values.k8sAgent.extraVolumeMounts }}
+        volumeMounts:
+          {{- with .Values.k8sAgent.extraVolumeMounts }}
+          {{- toYaml . | nindent 10 }}
+          {{- end }}
+        {{- end }}
+      {{- if or .Values.k8sAgent.extraVolumes }}
+      volumes:
+        {{- with .Values.k8sAgent.extraVolumes }}
+        {{- toYaml . | nindent 8 }}
+        {{- end }}
+      {{- end }}
+      {{- with .Values.k8sAgent.nodeSelector }}
+      nodeSelector:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.k8sAgent.affinity }}
+      affinity:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+      {{- with .Values.k8sAgent.tolerations }}
+      tolerations:
+        {{- toYaml . | nindent 8 }}
+      {{- end }}
+{{- end }}

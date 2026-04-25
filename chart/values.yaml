@@ -12,14 +12,15 @@ global:
   storageClass: ""
 
 ## StreamSpace Kubernetes Controller
-## This is the Kubernetes-specific platform controller for the multi-platform architecture.
-## For Docker environments, use the Docker controller (docker-controller/).
+## DEPRECATED: Controller is not needed in v2.0-beta architecture.
+## In v2.0-beta, the API creates Session CRDs directly and dispatches commands to agents via WebSocket.
+## The controller-based architecture was replaced by the agent-based architecture.
 controller:
-  enabled: true
+  enabled: false  # Disabled for v2.0-beta (agent-based architecture)
 
   image:
     registry: ghcr.io
-    repository: streamspace/streamspace-kubernetes-controller
+    repository: streamspace-dev/streamspace-kubernetes-controller
     tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
@@ -28,7 +29,7 @@ controller:
 
   # Leader election for high availability
   leaderElection:
-    enabled: false  # Enable when replicaCount > 1
+    enabled: false # Enable when replicaCount > 1
 
   resources:
     requests:
@@ -93,13 +94,140 @@ controller:
     minAvailable: 1
     # maxUnavailable: 1
 
+## K8s Agent (v2.0-beta)
+# The K8s Agent connects to the Control Plane and manages sessions on Kubernetes
+k8sAgent:
+  # Enable K8s Agent deployment
+  enabled: true
+
+  # Number of agent replicas
+  # - For single-pod mode (ha.enabled=false): Set to 1
+  # - For HA mode (ha.enabled=true): Set to 2+ for high availability
+  replicaCount: 1
+
+  # High Availability configuration
+  ha:
+    # Enable leader election for agent HA
+    # When enabled, multiple replicas can run but only one will be active (leader)
+    # Standby replicas automatically take over if the leader fails
+    enabled: false
+
+  image:
+    registry: ghcr.io
+    repository: streamspace-dev/streamspace-k8s-agent
+    tag: "v2.0"
+    pullPolicy: IfNotPresent
+
+  # ServiceAccount for K8s Agent
+  # The agent needs permissions to create/manage deployments, services, pods, PVCs
+  serviceAccount:
+    create: true
+    name: streamspace-agent
+    annotations: {}
+
+  # Agent configuration
+  config:
+    # Unique identifier for this agent (must be unique across all agents)
+    # Format: <platform>-<environment>-<region>
+    # Example: k8s-prod-us-east-1, k8s-staging-eu-west-1
+    agentId: "k8s-prod-cluster"
+
+    # Control Plane URL (WebSocket endpoint)
+    # If empty, will auto-detect from API service: ws://<release-name>-api:8080
+    controlPlaneUrl: ""
+
+    # Platform identifier (should always be "kubernetes" for k8s-agent)
+    platform: "kubernetes"
+
+    # Region or datacenter identifier (optional, for multi-region deployments)
+    region: "default"
+
+    # Namespace where sessions will be created
+    # If empty, uses the same namespace as the agent
+    sessionNamespace: ""
+
+    # Capacity limits for this agent
+    capacity:
+      # Maximum number of concurrent sessions this agent can manage
+      maxSessions: 100
+      # Maximum CPU this agent can allocate (string format, e.g., "64 cores", "64000m")
+      maxCPU: "64 cores"
+      # Maximum memory this agent can allocate (string format, e.g., "256Gi", "128GB")
+      maxMemory: "256Gi"
+
+    # Health check settings
+    health:
+      # How often to send health checks to Control Plane
+      checkInterval: "30s"
+      # Timeout for health check responses
+      timeout: "10s"
+
+    # Reconnection settings
+    reconnect:
+      # Initial delay before first reconnection attempt
+      initialDelay: "1s"
+      # Maximum delay between reconnection attempts
+      maxDelay: "5m"
+      # Multiplier for exponential backoff
+      multiplier: 2
+
+  # Resource limits for the agent itself
+  resources:
+    requests:
+      memory: 256Mi
+      cpu: 100m
+    limits:
+      memory: 512Mi
+      cpu: 500m
+
+  # Health probes for the agent pod
+  livenessProbe:
+    exec:
+      command:
+        - pgrep
+        - -f
+        - k8s-agent
+    initialDelaySeconds: 10
+    periodSeconds: 30
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  readinessProbe:
+    exec:
+      command:
+        - pgrep
+        - -f
+        - k8s-agent
+    initialDelaySeconds: 5
+    periodSeconds: 10
+    timeoutSeconds: 5
+    failureThreshold: 3
+
+  # Node selection
+  nodeSelector: {}
+
+  # Tolerations
+  tolerations: []
+
+  # Affinity rules
+  affinity: {}
+
+  # Additional environment variables
+  extraEnv: []
+    # - name: LOG_LEVEL
+    #   value: debug
+
+  # Additional volumes
+  extraVolumes: []
+  extraVolumeMounts: []
+
 ## API Backend
 api:
   enabled: true
 
   image:
     registry: ghcr.io
-    repository: streamspace/streamspace-api
+    repository: streamspace-dev/streamspace-api
     tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
@@ -119,7 +247,7 @@ api:
     ginMode: release
 
     # CORS settings
-    corsOrigins: "*"  # Restrict in production
+    corsOrigins: "*" # Restrict in production
 
     # Repository sync (deprecated - use repositories section below)
     syncInterval: "1h"
@@ -127,10 +255,10 @@ api:
 
     # Default user quota settings (applied to new users)
     quota:
-      defaultMaxSessions: 5        # Maximum concurrent sessions per user
-      defaultMaxCPU: "4000m"        # Maximum CPU allocation (4 cores)
-      defaultMaxMemory: "16Gi"      # Maximum memory allocation
-      defaultMaxStorage: "100Gi"    # Maximum persistent storage
+      defaultMaxSessions: 5 # Maximum concurrent sessions per user
+      defaultMaxCPU: "4000m" # Maximum CPU allocation (4 cores)
+      defaultMaxMemory: "16Gi" # Maximum memory allocation
+      defaultMaxStorage: "100Gi" # Maximum persistent storage
 
   # Authentication configuration
   auth:
@@ -139,92 +267,16 @@ api:
 
     # JWT configuration
     jwt:
-      secret: ""  # Set via existingSecret or auto-generate
+      secret: "" # Set via existingSecret or auto-generate
       expiration: 24h
 
-## Admin User Configuration
-# Configure the initial admin user credentials
-auth:
-  admin:
-    # Admin password (leave empty for auto-generation)
-    # ⚠️ SECURITY: For production, provide a secure password or use existingSecret
-    password: ""  # Empty = auto-generate 32-character random password
-
-    # Admin email
-    email: "admin@streamspace.local"
-
-    # Use existing secret for admin credentials (optional)
-    # If set, password and email above will be ignored
-    existingSecret: ""
-    # Keys in the existing secret:
-    # - username: Admin username (default: admin)
-    # - password: Admin password
-    # - email: Admin email
-
-    # SAML SSO configuration
-    saml:
-      enabled: false
-
-      # SAML provider: okta, azuread, google, auth0, keycloak, authentik, generic
-      provider: generic
-
-      # Entity ID (SP identifier)
-      entityID: ""  # e.g., https://streamspace.example.com
-
-      # IdP Metadata (choose one)
-      metadataURL: ""  # URL to fetch IdP metadata
-      metadataXML: ""  # Or provide XML directly
-
-      # Assertion Consumer Service URL
-      acsURL: ""  # e.g., https://streamspace.example.com/saml/acs
-
-      # Single Logout URL
-      sloURL: ""  # e.g., https://streamspace.example.com/saml/slo
-
-      # Certificate and private key (for signing requests)
-      certificate: ""  # Path to certificate file or PEM content
-      privateKey: ""   # Path to private key file or PEM content
-
-      # Or use existing secret
-      existingSecret: ""
-      existingSecretCertKey: "saml-cert"
-      existingSecretKeyKey: "saml-key"
-
-      # SAML options
-      allowIDPInitiated: true
-      signRequest: true
-      forceAuthn: false
-
-      # Attribute mapping (maps SAML attributes to user fields)
-      attributeMapping:
-        email: ""      # Leave empty to use provider defaults
-        username: ""
-        firstName: ""
-        lastName: ""
-        groups: ""
-
-      # Provider-specific configuration (optional overrides)
-      okta:
-        domain: ""     # e.g., mycompany.okta.com
-        appID: ""
-
-      azuread:
-        tenantID: ""   # Azure AD tenant ID
-
-      google:
-        idpID: ""      # Google Workspace IdP ID
-
-      auth0:
-        domain: ""
-        clientID: ""
-
-      keycloak:
-        domain: ""
-        realm: ""
-
-      authentik:
-        domain: ""
-        slug: ""
+  # Agent authentication configuration
+  agentAuth:
+    # Bootstrap key for first-time agent registration (Issue #226)
+    # This key allows agents to self-register without manual database provisioning.
+    # Generate with: openssl rand -base64 32
+    # SECURITY: Use a strong key (32+ characters), store in Kubernetes secret, rotate every 90 days
+    bootstrapKey: "" # Set via --set or existingSecret
 
   # Service
   service:
@@ -254,7 +306,7 @@ auth:
     capabilities:
       drop:
         - ALL
-    readOnlyRootFilesystem: false  # Needs to write to /tmp for repo clones
+    readOnlyRootFilesystem: false # Needs to write to /tmp for repo clones
 
   # Autoscaling
   autoscaling:
@@ -280,7 +332,7 @@ ui:
 
   image:
     registry: ghcr.io
-    repository: streamspace/streamspace-ui
+    repository: streamspace-dev/streamspace-ui
     tag: "v0.2.0"
     pullPolicy: IfNotPresent
 
@@ -303,7 +355,7 @@ ui:
   podSecurityContext:
     fsGroup: 101
     runAsNonRoot: true
-    runAsUser: 101  # nginx user
+    runAsUser: 101 # nginx user
 
   securityContext:
     allowPrivilegeEscalation: false
@@ -388,70 +440,19 @@ postgresql:
     secretKeys:
       adminPasswordKey: "postgres-password"
 
-## NATS Message Broker (Required for multi-platform support)
-nats:
-  enabled: true  # Required for event communication between API and controllers
-
-  # Use external NATS
-  external:
-    enabled: false
-    url: ""  # e.g., "nats://nats.example.com:4222"
-    user: ""
-    password: ""
-    existingSecret: ""
-    existingSecretUserKey: "nats-user"
-    existingSecretPasswordKey: "nats-password"
-
-  # Internal NATS (for development/testing)
-  internal:
-    image:
-      registry: docker.io
-      repository: nats
-      tag: "2.10-alpine"
-      pullPolicy: IfNotPresent
-
-    # Enable JetStream for durable messaging
-    jetstream:
-      enabled: true
-      storeDir: /data
-
-    resources:
-      requests:
-        memory: 64Mi
-        cpu: 50m
-      limits:
-        memory: 256Mi
-        cpu: 200m
-
-    # Persistence for JetStream (optional)
-    persistence:
-      enabled: false
-      storageClass: ""
-      size: 1Gi
-      accessMode: ReadWriteOnce
-
-    # Security
-    podSecurityContext:
-      fsGroup: 1000
-      runAsNonRoot: true
-      runAsUser: 1000
-
-    securityContext:
-      allowPrivilegeEscalation: false
-      capabilities:
-        drop:
-          - ALL
-
-    # Service configuration
-    service:
-      type: ClusterIP
-      clientPort: 4222
-      monitorPort: 8222
-      clusterPort: 6222
+## NATS Message Broker - REMOVED
+## Agents now communicate via WebSocket instead of NATS pub/sub
+# nats:
+#   enabled: false  # NATS no longer used
 
 ## Redis Cache (Optional)
 redis:
-  enabled: false  # Set to true to enable caching
+  enabled: false # Set to true to enable caching and multi-pod AgentHub support
+
+  # Enable Redis for AgentHub multi-pod support
+  # When true and redis.enabled is true, multiple API replicas can share agent connection state
+  # Set to false to disable AgentHub Redis (single-pod mode only)
+  agentHubEnabled: true
 
   # Use external Redis
   external:
@@ -482,7 +483,7 @@ redis:
 
     # Persistent volume (optional for cache)
     persistence:
-      enabled: false  # Usually not needed for cache
+      enabled: false # Usually not needed for cache
       storageClass: ""
       size: 5Gi
       accessMode: ReadWriteOnce
@@ -502,16 +503,16 @@ redis:
     # Redis configuration
     config:
       maxMemory: "200mb"
-      maxMemoryPolicy: "allkeys-lru"  # Evict least recently used keys
-      appendOnly: "no"  # Don't persist to disk for cache
+      maxMemoryPolicy: "allkeys-lru" # Evict least recently used keys
+      appendOnly: "no" # Don't persist to disk for cache
 
   # Cache TTL configuration (used by API)
   ttl:
-    sessions: 30s        # Session lists
-    templates: 5m        # Template catalog
-    catalog: 10m         # External catalog data
-    config: 5m           # Configuration values
-    cluster: 1m          # Kubernetes cluster resources
+    sessions: 30s # Session lists
+    templates: 5m # Template catalog
+    catalog: 10m # External catalog data
+    config: 5m # Configuration values
+    cluster: 1m # Kubernetes cluster resources
 
 ## Ingress
 ingress:
@@ -555,7 +556,7 @@ secrets:
   # ⚠️ SECURITY WARNING: Change this password before deploying to production!
   # Generate a secure password with: openssl rand -base64 32
   # Or use existingSecret below with a properly managed secret
-  postgresPassword: "changeme"  # DEFAULT - CHANGE FOR PRODUCTION!
+  postgresPassword: "changeme" # DEFAULT - CHANGE FOR PRODUCTION!
 
   # Or use existing secret
   existingSecret: ""
@@ -570,13 +571,13 @@ templates:
 
   # Categories to deploy from bundled templates
   categories:
-    browsers: true      # Firefox only (minimal default)
-    development: false  # Use external repository
+    browsers: true # Firefox only (minimal default)
+    development: false # Use external repository
     productivity: false # Use external repository
-    design: false       # Use external repository
-    media: false        # Use external repository
-    gaming: false       # Use external repository
-    webtop: false       # Use external repository
+    design: false # Use external repository
+    media: false # Use external repository
+    gaming: false # Use external repository
+    webtop: false # Use external repository
 
 ## External Repositories
 # StreamSpace can sync templates and plugins from external Git repositories
@@ -586,17 +587,17 @@ repositories:
     enabled: true
     url: https://github.com/JoshuaAFerguson/streamspace-templates
     branch: main
-    syncInterval: 1h  # How often to sync (e.g., 15m, 1h, 24h)
+    syncInterval: 1h # How often to sync (e.g., 15m, 1h, 24h)
 
     # Categories to sync from external repository
     categories:
-      browsers: true      # Firefox, Chromium, Brave, LibreWolf
-      development: true   # VS Code, GitHub Desktop
-      productivity: true  # LibreOffice, Calligra
-      design: true        # GIMP, Krita, Inkscape, Blender
-      media: true         # Audacity, Kdenlive
-      gaming: true        # DuckStation, Dolphin
-      webtop: true        # Desktop environments
+      browsers: true # Firefox, Chromium, Brave, LibreWolf
+      development: true # VS Code, GitHub Desktop
+      productivity: true # LibreOffice, Calligra
+      design: true # GIMP, Krita, Inkscape, Blender
+      media: true # Audacity, Kdenlive
+      gaming: true # DuckStation, Dolphin
+      webtop: true # Desktop environments
 
   # Plugin repository
   plugins:
@@ -607,19 +608,18 @@ repositories:
 
     # Auto-install official plugins
     autoInstall:
-      official: false  # Set to true to auto-install all official plugins
+      official: false # Set to true to auto-install all official plugins
       community: false # Set to true to auto-install all community plugins (not recommended)
 
     # Specific plugins to auto-install
-    install:
-      []
+    install: []
       # - session-recorder
       # - audit-logger
       # - slack-integration
 
 ## Monitoring & Observability
 monitoring:
-  enabled: true
+  enabled: false
 
   # Prometheus ServiceMonitor
   serviceMonitor:
@@ -698,3 +698,86 @@ commonLabels: {}
 
 ## Common annotations
 commonAnnotations: {}
+## Admin User Configuration
+# Configure the initial admin user credentials
+auth:
+  admin:
+    # Admin password (leave empty for auto-generation)
+    # ⚠️ SECURITY: For production, provide a secure password or use existingSecret
+    password: "" # Empty = auto-generate 32-character random password
+
+    # Admin email
+    email: "admin@streamspace.local"
+
+    # Use existing secret for admin credentials (optional)
+    # If set, password and email above will be ignored
+    existingSecret: ""
+    # Keys in the existing secret:
+    # - username: Admin username (default: admin)
+    # - password: Admin password
+    # - email: Admin email
+
+  # SAML SSO configuration
+  saml:
+    enabled: false
+
+    # SAML provider: okta, azuread, google, auth0, keycloak, authentik, generic
+    provider: generic
+
+    # Entity ID (SP identifier)
+    entityID: "" # e.g., https://streamspace.example.com
+
+    # IdP Metadata (choose one)
+    metadataURL: "" # URL to fetch IdP metadata
+    metadataXML: "" # Or provide XML directly
+
+    # Assertion Consumer Service URL
+    acsURL: "" # e.g., https://streamspace.example.com/saml/acs
+
+    # Single Logout URL
+    sloURL: "" # e.g., https://streamspace.example.com/saml/slo
+
+    # Certificate and private key (for signing requests)
+    certificate: "" # Path to certificate file or PEM content
+    privateKey: "" # Path to private key file or PEM content
+
+    # Or use existing secret
+    existingSecret: ""
+    existingSecretCertKey: "saml-cert"
+    existingSecretKeyKey: "saml-key"
+
+    # SAML options
+    allowIDPInitiated: true
+    signRequest: true
+    forceAuthn: false
+
+    # Attribute mapping (maps SAML attributes to user fields)
+    attributeMapping:
+      email: "" # Leave empty to use provider defaults
+      username: ""
+      firstName: ""
+      lastName: ""
+      groups: ""
+
+    # Provider-specific configuration (optional overrides)
+    okta:
+      domain: "" # e.g., mycompany.okta.com
+      appID: ""
+
+    azuread:
+      tenantID: "" # Azure AD tenant ID
+
+    google:
+      idpID: "" # Google Workspace IdP ID
+
+    auth0:
+      domain: ""
+      clientID: ""
+
+    keycloak:
+      domain: ""
+      realm: ""
+
+    authentik:
+      domain: ""
+      slug: ""

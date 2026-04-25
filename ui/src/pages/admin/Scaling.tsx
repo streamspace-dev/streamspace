@@ -1,4 +1,4 @@
-import { useState, useEffect, useRef } from 'react';
+import { useState, useEffect } from 'react';
 import {
   Box,
   Typography,
@@ -26,18 +26,14 @@ import {
   InputLabel,
   Grid,
   LinearProgress,
-  Alert,
-  Paper,
 } from '@mui/material';
 import {
-  CloudQueue as CloudIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   TrendingUp as ScaleUpIcon,
   TrendingDown as ScaleDownIcon,
   Computer as NodeIcon,
-  Speed as PerformanceIcon,
 } from '@mui/icons-material';
 import AdminPortalLayout from '../../components/AdminPortalLayout';
 import api from '../../lib/api';
@@ -159,20 +155,27 @@ interface ScalingEvent {
   created_at: string;
 }
 
+interface ScalingEventData {
+  policy_id?: number;
+  policy_name?: string;
+  action?: string;
+  previous_replicas?: number;
+  new_replicas?: number;
+  status?: string;
+  error?: string;
+}
+
 export default function Scaling() {
   const [currentTab, setCurrentTab] = useState(0);
   const [lbPolicies, setLbPolicies] = useState<LoadBalancingPolicy[]>([]);
   const [nodes, setNodes] = useState<NodeStatus[]>([]);
   const [asPolicies, setAsPolicies] = useState<AutoScalingPolicy[]>([]);
   const [scalingHistory, setScalingHistory] = useState<ScalingEvent[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
 
   const [lbDialog, setLbDialog] = useState(false);
   const [asDialog, setAsDialog] = useState(false);
-
-  // Track previous scaling states for change notifications
-  const prevScalingEventsRef = useRef<Set<number>>(new Set());
 
   // Enhanced notification system
   const { addNotification } = useNotificationQueue();
@@ -186,14 +189,12 @@ export default function Scaling() {
   };
 
   // Real-time scaling events via WebSocket with notifications
-  useScalingEvents((data: any) => {
+  useScalingEvents((data: ScalingEventData) => {
     console.log('Scaling event:', data);
     setWsConnected(true);
 
     // Show notification for scaling events
     if (data.action && data.policy_name) {
-      const eventKey = `${data.policy_id}-${data.action}-${Date.now()}`;
-
       addNotification({
         message: `${data.policy_name}: ${data.previous_replicas} → ${data.new_replicas} replicas`,
         severity: data.action === 'scale_up' ? 'info' : data.action === 'scale_down' ? 'warning' : 'success',
@@ -308,8 +309,9 @@ export default function Scaling() {
       setLbDialog(false);
       setLbForm({ name: '', strategy: 'round_robin', session_affinity: false });
       loadLBPolicies();
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to create load balancing policy';
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      const errorMsg = axiosError.response?.data?.message || 'Failed to create load balancing policy';
       addNotification({
         message: errorMsg,
         severity: 'error',
@@ -348,7 +350,7 @@ export default function Scaling() {
         target_metric_value: 70,
       });
       loadASPolicies();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create auto-scaling policy');
     } finally {
       setLoading(false);
@@ -368,8 +370,9 @@ export default function Scaling() {
       });
       toast.success(`Scaling ${actionText} triggered`);
       loadScalingHistory();
-    } catch (error: any) {
-      const errorMsg = error.response?.data?.message || 'Failed to trigger scaling';
+    } catch (error) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      const errorMsg = axiosError.response?.data?.message || 'Failed to trigger scaling';
       addNotification({
         message: errorMsg,
         severity: 'error',

@@ -76,7 +76,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // TemplateVersion represents a version of a template
@@ -167,7 +167,7 @@ func (h *TemplateVersioningHandler) CreateTemplateVersion(c *gin.Context) {
 
 	// If this is set as default, unset other defaults
 	if req.IsDefault {
-		h.DB.DB().Exec("UPDATE template_versions SET is_default = false WHERE template_id = $1", templateID)
+		_, _ = h.DB.DB().Exec("UPDATE template_versions SET is_default = false WHERE template_id = $1", templateID)
 	}
 
 	var versionID int64
@@ -234,10 +234,10 @@ func (h *TemplateVersioningHandler) ListTemplateVersions(c *gin.Context) {
 
 		if err == nil {
 			if config.Valid && config.String != "" {
-				json.Unmarshal([]byte(config.String), &v.Configuration)
+				_ = json.Unmarshal([]byte(config.String), &v.Configuration)
 			}
 			if testResults.Valid && testResults.String != "" {
-				json.Unmarshal([]byte(testResults.String), &v.TestResults)
+				_ = json.Unmarshal([]byte(testResults.String), &v.TestResults)
 			}
 			versions = append(versions, v)
 		}
@@ -279,10 +279,10 @@ func (h *TemplateVersioningHandler) GetTemplateVersion(c *gin.Context) {
 	}
 
 	if config.Valid && config.String != "" {
-		json.Unmarshal([]byte(config.String), &v.Configuration)
+		_ = json.Unmarshal([]byte(config.String), &v.Configuration)
 	}
 	if testResults.Valid && testResults.String != "" {
-		json.Unmarshal([]byte(testResults.String), &v.TestResults)
+		_ = json.Unmarshal([]byte(testResults.String), &v.TestResults)
 	}
 
 	c.JSON(http.StatusOK, v)
@@ -298,7 +298,7 @@ func (h *TemplateVersioningHandler) PublishTemplateVersion(c *gin.Context) {
 
 	// Check if all tests passed
 	var failedTests int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM template_tests
 		WHERE version_id = $1 AND status = 'failed'
 	`, versionID).Scan(&failedTests)
@@ -363,7 +363,7 @@ func (h *TemplateVersioningHandler) SetDefaultTemplateVersion(c *gin.Context) {
 	}
 
 	// Unset all defaults for this template
-	h.DB.DB().Exec("UPDATE template_versions SET is_default = false WHERE template_id = $1", templateID)
+	_, _ = h.DB.DB().Exec("UPDATE template_versions SET is_default = false WHERE template_id = $1", templateID)
 
 	// Set this version as default
 	_, err = h.DB.DB().Exec("UPDATE template_versions SET is_default = true WHERE id = $1", versionID)
@@ -463,7 +463,7 @@ func (h *TemplateVersioningHandler) ListTemplateTests(c *gin.Context) {
 
 		if err == nil {
 			if results.Valid && results.String != "" {
-				json.Unmarshal([]byte(results.String), &t.Results)
+				_ = json.Unmarshal([]byte(results.String), &t.Results)
 			}
 			tests = append(tests, t)
 		}
@@ -506,10 +506,10 @@ func (h *TemplateVersioningHandler) UpdateTemplateTestStatus(c *gin.Context) {
 
 	// Update version's test results summary
 	var versionID int64
-	h.DB.DB().QueryRow("SELECT version_id FROM template_tests WHERE id = $1", testID).Scan(&versionID)
+	_ = h.DB.DB().QueryRow("SELECT version_id FROM template_tests WHERE id = $1", testID).Scan(&versionID)
 
 	testSummary := h.getTestSummary(versionID)
-	h.DB.DB().Exec("UPDATE template_versions SET test_results = $1 WHERE id = $2",
+	_, _ = h.DB.DB().Exec("UPDATE template_versions SET test_results = $1 WHERE id = $2",
 		toJSONB(testSummary), versionID)
 
 	c.JSON(http.StatusOK, gin.H{"message": "test status updated successfully"})
@@ -523,7 +523,7 @@ func (h *TemplateVersioningHandler) GetTemplateInheritance(c *gin.Context) {
 
 	// Get parent template if exists
 	var parentTemplateID sql.NullString
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT parent_template_id FROM template_versions
 		WHERE template_id = $1 AND is_default = true
 	`, templateID).Scan(&parentTemplateID)
@@ -536,12 +536,12 @@ func (h *TemplateVersioningHandler) GetTemplateInheritance(c *gin.Context) {
 
 		// Fetch parent and child configurations
 		var parentConfigJSON, childConfigJSON sql.NullString
-		h.DB.DB().QueryRow(`
+		_ = h.DB.DB().QueryRow(`
 			SELECT configuration FROM template_versions
 			WHERE template_id = $1 AND is_default = true
 		`, parentTemplateID.String).Scan(&parentConfigJSON)
 
-		h.DB.DB().QueryRow(`
+		_ = h.DB.DB().QueryRow(`
 			SELECT configuration FROM template_versions
 			WHERE template_id = $1 AND is_default = true
 		`, templateID).Scan(&childConfigJSON)
@@ -549,10 +549,10 @@ func (h *TemplateVersioningHandler) GetTemplateInheritance(c *gin.Context) {
 		// Parse configurations
 		var parentConfig, childConfig map[string]interface{}
 		if parentConfigJSON.Valid && parentConfigJSON.String != "" {
-			json.Unmarshal([]byte(parentConfigJSON.String), &parentConfig)
+			_ = json.Unmarshal([]byte(parentConfigJSON.String), &parentConfig)
 		}
 		if childConfigJSON.Valid && childConfigJSON.String != "" {
-			json.Unmarshal([]byte(childConfigJSON.String), &childConfig)
+			_ = json.Unmarshal([]byte(childConfigJSON.String), &childConfig)
 		}
 
 		// Compare and identify overridden and inherited fields
@@ -632,14 +632,14 @@ func (h *TemplateVersioningHandler) CloneTemplateVersion(c *gin.Context) {
 
 func parseSemanticVersion(version string) (int, int, int) {
 	var major, minor, patch int
-	fmt.Sscanf(version, "%d.%d.%d", &major, &minor, &patch)
+	_, _ = fmt.Sscanf(version, "%d.%d.%d", &major, &minor, &patch)
 	return major, minor, patch
 }
 
 func (h *TemplateVersioningHandler) getTestSummary(versionID int64) map[string]interface{} {
 	var total, passed, failed, pending int
 
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) as total,
 		       COUNT(*) FILTER (WHERE status = 'passed') as passed,
 		       COUNT(*) FILTER (WHERE status = 'failed') as failed,
@@ -665,7 +665,7 @@ func (h *TemplateVersioningHandler) getTestSummary(versionID int64) map[string]i
 func (h *TemplateVersioningHandler) executeTemplateTest(testID int64, templateID, versionID int64, version, testType string) {
 	// Update status to running
 	startTime := time.Now()
-	h.DB.DB().Exec("UPDATE template_tests SET status = 'running', started_at = $1 WHERE id = $2", startTime, testID)
+	_, _ = h.DB.DB().Exec("UPDATE template_tests SET status = 'running', started_at = $1 WHERE id = $2", startTime, testID)
 
 	// Fetch template configuration
 	var baseImage string
@@ -702,7 +702,7 @@ func (h *TemplateVersioningHandler) executeTemplateTest(testID int64, templateID
 	duration := int(time.Since(startTime).Seconds())
 
 	// Update test results
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		UPDATE template_tests
 		SET status = $1, results = $2, duration = $3, error_message = $4, completed_at = $5
 		WHERE id = $6
@@ -710,7 +710,7 @@ func (h *TemplateVersioningHandler) executeTemplateTest(testID int64, templateID
 
 	// Update version test summary
 	testSummary := h.getTestSummary(versionID)
-	h.DB.DB().Exec("UPDATE template_versions SET test_results = $1 WHERE id = $2",
+	_, _ = h.DB.DB().Exec("UPDATE template_versions SET test_results = $1 WHERE id = $2",
 		toJSONB(testSummary), versionID)
 }
 
@@ -764,7 +764,7 @@ func (h *TemplateVersioningHandler) runSmokeTest(baseImage, configJSON string, r
 	// Parse configuration
 	var config map[string]interface{}
 	if configJSON != "" {
-		json.Unmarshal([]byte(configJSON), &config)
+		_ = json.Unmarshal([]byte(configJSON), &config)
 	}
 
 	// Check 1: Image format is valid (basic validation)

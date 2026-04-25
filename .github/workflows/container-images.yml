@@ -1,4 +1,4 @@
-name: Container Images - Build, Sign & Publish
+name: Container Images - Build, Sign & Publish (v2.0)
 
 on:
   push:
@@ -9,7 +9,7 @@ on:
       - 'v*'
     paths:
       - 'api/**'
-      - 'k8s-controller/**'
+      - 'agents/k8s-agent/**'
       - 'ui/**'
       - '.github/workflows/container-images.yml'
   pull_request:
@@ -30,8 +30,8 @@ permissions:
   attestations: write
 
 jobs:
-  build-and-sign-controller:
-    name: Build & Sign Kubernetes Controller
+  build-and-sign-k8s-agent:
+    name: Build & Sign K8s Agent (v2.0)
     runs-on: ubuntu-latest
     steps:
       - name: Checkout code
@@ -58,7 +58,7 @@ jobs:
         id: meta
         uses: docker/metadata-action@v5
         with:
-          images: ${{ env.IMAGE_PREFIX }}-kubernetes-controller
+          images: ${{ env.IMAGE_PREFIX }}-k8s-agent
           tags: |
             type=ref,event=branch
             type=ref,event=pr
@@ -75,12 +75,12 @@ jobs:
           echo "COMMIT=${{ github.sha }}" >> $GITHUB_OUTPUT
           echo "BUILD_DATE=$(date -u +"%Y-%m-%dT%H:%M:%SZ")" >> $GITHUB_OUTPUT
 
-      - name: Build and push Kubernetes Controller image
+      - name: Build and push K8s Agent image
         id: build
         uses: docker/build-push-action@v5
         with:
-          context: ./k8s-controller
-          file: ./k8s-controller/Dockerfile
+          context: ./agents/k8s-agent
+          file: ./agents/k8s-agent/Dockerfile
           platforms: linux/amd64,linux/arm64
           push: ${{ github.event_name != 'pull_request' }}
           tags: ${{ steps.meta.outputs.tags }}
@@ -94,7 +94,7 @@ jobs:
           provenance: true
           sbom: true
 
-      - name: Sign Controller image
+      - name: Sign K8s Agent image
         if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
@@ -139,20 +139,20 @@ jobs:
             fi
           done
 
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-kubernetes-controller@${DIGEST}"
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-k8s-agent@${DIGEST}"
           echo "Image reference for signing: $IMAGE_REF"
           cosign sign --yes "$IMAGE_REF"
 
-      - name: Generate SBOM for Kubernetes Controller
+      - name: Generate SBOM for K8s Agent
         if: github.event_name != 'pull_request'
         uses: anchore/sbom-action@v0
         with:
-          path: ./k8s-controller
-          artifact-name: streamspace-kubernetes-controller-sbom.spdx.json
-          output-file: sbom-kubernetes-controller.spdx.json
+          path: ./agents/k8s-agent
+          artifact-name: streamspace-k8s-agent-sbom.spdx.json
+          output-file: sbom-k8s-agent.spdx.json
           format: spdx-json
 
-      - name: Attest Kubernetes Controller SBOM
+      - name: Attest K8s Agent SBOM
         if: github.event_name != 'pull_request'
         env:
           COSIGN_EXPERIMENTAL: "true"
@@ -185,18 +185,18 @@ jobs:
             fi
           done
 
-          IMAGE_REF="${{ env.IMAGE_PREFIX }}-kubernetes-controller@${DIGEST}"
+          IMAGE_REF="${{ env.IMAGE_PREFIX }}-k8s-agent@${DIGEST}"
           echo "Using digest for SBOM attestation: $DIGEST"
           cosign attest --yes --type spdxjson \
-            --predicate sbom-kubernetes-controller.spdx.json \
+            --predicate sbom-k8s-agent.spdx.json \
             "$IMAGE_REF"
 
-      - name: Upload Kubernetes Controller SBOM
+      - name: Upload K8s Agent SBOM
         if: github.event_name != 'pull_request'
         uses: actions/upload-artifact@v4
         with:
-          name: sbom-kubernetes-controller
-          path: sbom-kubernetes-controller.spdx.json
+          name: sbom-k8s-agent
+          path: sbom-k8s-agent.spdx.json
           retention-days: 90
 
   build-and-sign-api:
@@ -541,10 +541,10 @@ jobs:
     name: Security Scan
     runs-on: ubuntu-latest
     if: github.event_name != 'pull_request'
-    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    needs: [build-and-sign-k8s-agent, build-and-sign-api, build-and-sign-ui]
     strategy:
       matrix:
-        component: [kubernetes-controller, api, ui]
+        component: [k8s-agent, api, ui]
     steps:
       - name: Install Cosign
         uses: sigstore/cosign-installer@v3
@@ -581,7 +581,7 @@ jobs:
   update-helm-chart:
     name: Update Helm Chart
     runs-on: ubuntu-latest
-    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    needs: [build-and-sign-k8s-agent, build-and-sign-api, build-and-sign-ui]
     if: startsWith(github.ref, 'refs/tags/v')
     steps:
       - name: Checkout code
@@ -659,15 +659,23 @@ jobs:
       - name: Create Release Notes
         run: |
           cat > RELEASE_NOTES.md <<EOF
-          # StreamSpace ${{ steps.version.outputs.VERSION }}
+          # StreamSpace ${{ steps.version.outputs.VERSION }} (v2.0 Multi-Platform Architecture)
+
+          ## Architecture
+
+          StreamSpace v2.0 features a **multi-platform agent-based architecture**:
+          - Centralized Control Plane (API + UI)
+          - Platform-specific agents (K8s, Docker, VMs, Cloud)
+          - WebSocket-based agent communication
+          - VNC proxy tunneling
 
           ## Container Images
 
           All images are multi-platform (linux/amd64, linux/arm64) and signed with Cosign:
 
-          - Controller: \`${{ env.IMAGE_PREFIX }}-controller:${{ steps.version.outputs.VERSION }}\`
-          - API: \`${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.VERSION }}\`
-          - UI: \`${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.VERSION }}\`
+          - K8s Agent: \`${{ env.IMAGE_PREFIX }}-k8s-agent:${{ steps.version.outputs.VERSION }}\`
+          - Control Plane API: \`${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.VERSION }}\`
+          - Web UI: \`${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.VERSION }}\`
 
           ## Security
 
@@ -678,7 +686,9 @@ jobs:
           ### Verifying Image Signatures
 
           \`\`\`bash
-          cosign verify ${{ env.IMAGE_PREFIX }}-controller:${{ steps.version.outputs.VERSION }}
+          cosign verify ${{ env.IMAGE_PREFIX }}-k8s-agent:${{ steps.version.outputs.VERSION }}
+          cosign verify ${{ env.IMAGE_PREFIX }}-api:${{ steps.version.outputs.VERSION }}
+          cosign verify ${{ env.IMAGE_PREFIX }}-ui:${{ steps.version.outputs.VERSION }}
           \`\`\`
 
           ## Installation
@@ -715,19 +725,21 @@ jobs:
           GITHUB_TOKEN: ${{ secrets.GITHUB_TOKEN }}
 
   build-summary:
-    name: Build Summary
+    name: Build Summary (v2.0)
     runs-on: ubuntu-latest
-    needs: [build-and-sign-controller, build-and-sign-api, build-and-sign-ui]
+    needs: [build-and-sign-k8s-agent, build-and-sign-api, build-and-sign-ui]
     if: always()
     steps:
       - name: Generate summary
         run: |
-          echo "## 🐳 Container Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "## 🐳 StreamSpace v2.0 Container Images Built" >> $GITHUB_STEP_SUMMARY
+          echo "" >> $GITHUB_STEP_SUMMARY
+          echo "### Architecture: Multi-Platform Agent-Based" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Images" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-kubernetes-controller:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-api:latest\`" >> $GITHUB_STEP_SUMMARY
-          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-ui:latest\`" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-k8s-agent:latest\` (K8s Agent)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-api:latest\` (Control Plane API)" >> $GITHUB_STEP_SUMMARY
+          echo "- ✅ \`${{ env.IMAGE_PREFIX }}-ui:latest\` (Web UI)" >> $GITHUB_STEP_SUMMARY
           echo "" >> $GITHUB_STEP_SUMMARY
           echo "### Platforms" >> $GITHUB_STEP_SUMMARY
           echo "- linux/amd64" >> $GITHUB_STEP_SUMMARY

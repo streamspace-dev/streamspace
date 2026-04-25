@@ -185,6 +185,7 @@ package middleware
 import (
 	"crypto/rand"
 	"encoding/base64"
+	"strings"
 
 	"github.com/gin-gonic/gin"
 )
@@ -341,7 +342,17 @@ func SecurityHeaders() gin.HandlerFunc {
 
 		// X-Frame-Options
 		// Prevents clickjacking attacks
-		c.Header("X-Frame-Options", "DENY")
+		// Allow SAMEORIGIN for VNC proxy paths (they need to be embedded in iframes)
+		path := c.Request.URL.Path
+		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
+			strings.HasPrefix(path, "/api/v1/vnc/") ||
+			strings.HasPrefix(path, "/api/v1/vnc-viewer/") ||
+			strings.HasPrefix(path, "/api/v1/websockify/")
+		if isVNCProxy {
+			c.Header("X-Frame-Options", "SAMEORIGIN")
+		} else {
+			c.Header("X-Frame-Options", "DENY")
+		}
 
 		// X-XSS-Protection
 		// Legacy XSS protection (for older browsers)
@@ -350,8 +361,23 @@ func SecurityHeaders() gin.HandlerFunc {
 		// Content-Security-Policy
 		// IMPROVED: Uses nonce-based CSP to eliminate unsafe-inline and unsafe-eval
 		// This significantly improves XSS protection while maintaining functionality
+		// VNC/HTTP proxy paths need relaxed CSP because we're proxying third-party content
+		// (Selkies, Guacamole, etc.) which have their own inline scripts and styles
 		var csp string
-		if nonce != "" {
+		if isVNCProxy {
+			// Relaxed CSP for VNC/HTTP proxy paths
+			// These paths proxy content from trusted internal session pods (Selkies, etc.)
+			// The proxied content has its own scripts/styles that we can't add nonces to
+			csp = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +
+				"script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; " +
+				"style-src 'self' 'unsafe-inline'; " +
+				"img-src 'self' data: blob: https:; " +
+				"font-src 'self' data:; " +
+				"connect-src 'self' ws: wss:; " +
+				"media-src 'self' blob:; " +
+				"worker-src 'self' blob:; " +
+				"frame-ancestors 'self'"
+		} else if nonce != "" {
 			csp = "default-src 'self'; " +
 				"script-src 'self' 'nonce-" + nonce + "'; " +
 				"style-src 'self' 'nonce-" + nonce + "'; " +

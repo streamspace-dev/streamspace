@@ -189,7 +189,7 @@ import (
 	"database/sql"
 	"fmt"
 
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // PluginDatabase provides full SQL database access for plugins.
@@ -540,7 +540,7 @@ func (pd *PluginDatabase) Transaction(fn func(*sql.Tx) error) error {
 
 	defer func() {
 		if p := recover(); p != nil {
-			tx.Rollback()
+			_ = tx.Rollback()
 			panic(p)
 		}
 	}()
@@ -922,7 +922,7 @@ func (ps *PluginStorage) initStorage() error {
 //
 // Returns value (interface{}) or nil if not found, and error if query fails.
 func (ps *PluginStorage) Get(key string) (interface{}, error) {
-	ps.initStorage() // Ensure table exists
+	_ = ps.initStorage() // Ensure table exists
 
 	var value interface{}
 	err := ps.db.DB().QueryRow(`
@@ -1006,7 +1006,7 @@ func (ps *PluginStorage) Get(key string) (interface{}, error) {
 //
 // Returns error if serialization or database operation fails, nil on success.
 func (ps *PluginStorage) Set(key string, value interface{}) error {
-	ps.initStorage() // Ensure table exists
+	_ = ps.initStorage() // Ensure table exists
 
 	_, err := ps.db.DB().Exec(`
 		INSERT INTO plugin_storage (plugin_name, key, value, updated_at)
@@ -1077,7 +1077,7 @@ func (ps *PluginStorage) Set(key string, value interface{}) error {
 //
 // Returns error if database operation fails, nil on success (even if key didn't exist).
 func (ps *PluginStorage) Delete(key string) error {
-	ps.initStorage() // Ensure table exists
+	_ = ps.initStorage() // Ensure table exists
 
 	_, err := ps.db.DB().Exec(`
 		DELETE FROM plugin_storage
@@ -1158,7 +1158,7 @@ func (ps *PluginStorage) Delete(key string) error {
 //
 // Returns slice of key names matching prefix, or error if query fails.
 func (ps *PluginStorage) Keys(prefix string) ([]string, error) {
-	ps.initStorage() // Ensure table exists
+	_ = ps.initStorage() // Ensure table exists
 
 	var query string
 	var args []interface{}
@@ -1255,7 +1255,7 @@ func (ps *PluginStorage) Keys(prefix string) ([]string, error) {
 //
 // Returns error if database operation fails, nil on success.
 func (ps *PluginStorage) Clear() error {
-	ps.initStorage() // Ensure table exists
+	_ = ps.initStorage() // Ensure table exists
 
 	_, err := ps.db.DB().Exec(`
 		DELETE FROM plugin_storage WHERE plugin_name = $1

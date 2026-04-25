@@ -77,6 +77,61 @@ Ingress is disabled. To access StreamSpace:
 
 {{- end }}
 
+{{- if .Values.k8sAgent.enabled }}
+
+🤖 V2.0-BETA ARCHITECTURE
+────────────────────────────────────────────────────────────────────────────
+
+StreamSpace v2.0-beta is deployed with the K8s Agent architecture!
+
+Architecture Overview:
+  ┌─────────────────┐
+  │  Control Plane  │  ← API + VNC Proxy (unified)
+  │   (API Pod)     │
+  └─────────────────┘
+          ↕ WebSocket
+  ┌─────────────────┐
+  │   K8s Agent     │  ← Connects TO Control Plane
+  │  (Agent Pod)    │
+  └─────────────────┘
+          ↕ Manages
+  ┌─────────────────┐
+  │ Session Pods    │
+  └─────────────────┘
+
+K8s Agent Status:
+  kubectl get pods -n {{ .Release.Namespace }} -l app.kubernetes.io/component=k8s-agent
+
+K8s Agent Logs:
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=k8s-agent -f
+
+Connection Status:
+  # Check if agent is connected to Control Plane
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=k8s-agent \
+    | grep "Connected to Control Plane"
+
+  # View agent registration
+  kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=api \
+    | grep "Agent registered"
+
+The K8s Agent connects to the Control Plane via WebSocket for session management.
+This replaces the v1.x controller-based architecture.
+
+{{- else if .Values.controller.enabled }}
+
+⚙️  V1.X CONTROLLER ARCHITECTURE
+────────────────────────────────────────────────────────────────────────────
+
+StreamSpace is deployed with the v1.x Controller architecture.
+
+To upgrade to v2.0-beta agent architecture:
+  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
+    --reuse-values \
+    --set k8sAgent.enabled=true \
+    --set controller.enabled=false
+
+{{- end }}
+
 📊 MONITORING
 ────────────────────────────────────────────────────────────────────────────
 

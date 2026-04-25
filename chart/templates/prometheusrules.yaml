@@ -1,4 +1,11 @@
 {{- if and .Values.monitoring.enabled .Values.monitoring.prometheusRules.enabled }}
+# StreamSpace Prometheus Alert Rules
+# Aligned with SLOs from design documentation:
+# - API Availability: 99.5% monthly
+# - Session Start Success: 98%
+# - API Latency: p99 ≤ 300ms read, ≤ 800ms write
+# - Agent Heartbeat: 99% within 2x interval
+# - VNC Connect Success: 98%
 apiVersion: monitoring.coreos.com/v1
 kind: PrometheusRule
 metadata:
@@ -11,108 +18,314 @@ metadata:
     {{- end }}
 spec:
   groups:
-    - name: streamspace.controller
-      interval: {{ .Values.monitoring.prometheusRules.interval }}
+    # ===========================================
+    # Control Plane / API Alerts
+    # ===========================================
+    - name: streamspace.api.availability
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
       rules:
-        - alert: StreamSpaceControllerDown
-          expr: up{job="{{ include "streamspace.fullname" . }}-controller"} == 0
+        - alert: StreamSpaceAPIDown
+          expr: up{job=~".*streamspace.*api.*"} == 0
           for: 5m
           labels:
             severity: critical
-            component: controller
+            component: api
+            slo: availability
           annotations:
-            summary: "StreamSpace Controller is down"
-            description: "The StreamSpace controller has been down for more than 5 minutes."
+            summary: "StreamSpace API is down"
+            description: "The StreamSpace API has been down for more than 5 minutes."
+            runbook_url: "https://docs.streamspace.io/runbooks/api-down"
 
-        - alert: StreamSpaceHighSessionCount
-          expr: streamspace_sessions_total > {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold }}
-          for: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.duration }}
+        - alert: StreamSpaceAPIHighErrorRate
+          expr: |
+            sum(rate(http_requests_total{job=~".*streamspace.*api.*",status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{job=~".*streamspace.*api.*"}[5m])) > 0.02
+          for: 5m
           labels:
-            severity: warning
-            component: controller
+            severity: critical
+            component: api
+            slo: availability
           annotations:
-            summary: "High number of active sessions"
-            description: "There are {{ "{{ $value }}" }} active sessions (threshold: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold }})."
+            summary: "API 5xx error rate exceeds 2% (SLO violation)"
+            description: "API error rate is {{ "{{ $value | humanizePercentage }}" }} for 5 minutes. SLO target: <2%"
+            runbook_url: "https://docs.streamspace.io/runbooks/high-error-rate"
 
-        - alert: StreamSpaceSessionCreationFailures
-          expr: rate(streamspace_session_creation_failures_total[5m]) > 0.1
+        - alert: StreamSpaceAPIHighErrorRateWarning
+          expr: |
+            sum(rate(http_requests_total{job=~".*streamspace.*api.*",status=~"5.."}[5m]))
+            / sum(rate(http_requests_total{job=~".*streamspace.*api.*"}[5m])) > 0.01
           for: 10m
           labels:
             severity: warning
-            component: controller
+            component: api
+            slo: availability
           annotations:
-            summary: "High rate of session creation failures"
-            description: "Session creation is failing at {{ "{{ $value | humanizePercentage }}" }} per second."
+            summary: "API 5xx error rate exceeds 1%"
+            description: "API error rate is {{ "{{ $value | humanizePercentage }}" }}. Approaching SLO limit of 2%."
+
+    - name: streamspace.api.latency
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceAPIHighLatency
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~".*streamspace.*api.*"}[5m])) by (le)) > 0.8
+          for: 10m
+          labels:
+            severity: critical
+            component: api
+            slo: latency
+          annotations:
+            summary: "API p99 latency exceeds 800ms (SLO violation)"
+            description: "API p99 latency is {{ "{{ $value | humanizeDuration }}" }}. SLO target: <800ms for write operations."
+            runbook_url: "https://docs.streamspace.io/runbooks/high-latency"
+
+        - alert: StreamSpaceAPIHighLatencyWarning
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~".*streamspace.*api.*"}[5m])) by (le)) > 0.5
+          for: 15m
+          labels:
+            severity: warning
+            component: api
+            slo: latency
+          annotations:
+            summary: "API p99 latency exceeds 500ms"
+            description: "API p99 latency is {{ "{{ $value | humanizeDuration }}" }}. Approaching SLO limit."
+
+        - alert: StreamSpaceAPIReadLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum(rate(http_request_duration_seconds_bucket{job=~".*streamspace.*api.*",method="GET"}[5m])) by (le)) > 0.3
+          for: 10m
+          labels:
+            severity: warning
+            component: api
+            slo: latency
+          annotations:
+            summary: "API read p99 latency exceeds 300ms"
+            description: "Read operation p99 latency is {{ "{{ $value | humanizeDuration }}" }}. SLO target: <300ms."
+
+    # ===========================================
+    # Session Lifecycle Alerts
+    # ===========================================
+    - name: streamspace.sessions
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceSessionStartLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type="warm"}[5m])) by (le)) > 12
+          for: 15m
+          labels:
+            severity: critical
+            component: sessions
+            slo: session_start
+          annotations:
+            summary: "Session start p99 latency exceeds 12s (warm) - SLO violation"
+            description: "Warm session start p99 is {{ "{{ $value | humanizeDuration }}" }}. SLO target: <12s."
+            runbook_url: "https://docs.streamspace.io/runbooks/slow-session-start"
+
+        - alert: StreamSpaceSessionStartLatencyColdHigh
+          expr: |
+            histogram_quantile(0.99, sum(rate(streamspace_session_start_duration_seconds_bucket{type="cold"}[5m])) by (le)) > 25
+          for: 15m
+          labels:
+            severity: critical
+            component: sessions
+            slo: session_start
+          annotations:
+            summary: "Session start p99 latency exceeds 25s (cold) - SLO violation"
+            description: "Cold session start p99 is {{ "{{ $value | humanizeDuration }}" }}. SLO target: <25s."
+
+        - alert: StreamSpaceSessionCreationFailureRate
+          expr: |
+            sum(rate(streamspace_session_creation_failures_total[5m]))
+            / (sum(rate(streamspace_session_creations_total[5m])) + sum(rate(streamspace_session_creation_failures_total[5m]))) > 0.05
+          for: 10m
+          labels:
+            severity: critical
+            component: sessions
+            slo: session_success
+          annotations:
+            summary: "Session creation failure rate exceeds 5%"
+            description: "Session creation is failing at {{ "{{ $value | humanizePercentage }}" }}. SLO target: <2%."
+            runbook_url: "https://docs.streamspace.io/runbooks/session-failures"
+
+        - alert: StreamSpaceSessionCreationFailureRateWarning
+          expr: |
+            sum(rate(streamspace_session_creation_failures_total[5m]))
+            / (sum(rate(streamspace_session_creations_total[5m])) + sum(rate(streamspace_session_creation_failures_total[5m]))) > 0.02
+          for: 10m
+          labels:
+            severity: warning
+            component: sessions
+            slo: session_success
+          annotations:
+            summary: "Session creation failure rate exceeds 2% (SLO violation)"
+            description: "Session creation failure rate is {{ "{{ $value | humanizePercentage }}" }}."
 
         - alert: StreamSpaceHibernationFailures
           expr: rate(streamspace_hibernation_failures_total[5m]) > 0.1
           for: 10m
           labels:
             severity: warning
-            component: controller
+            component: sessions
           annotations:
             summary: "High rate of hibernation failures"
-            description: "Session hibernation is failing at {{ "{{ $value | humanizePercentage }}" }} per second."
+            description: "Session hibernation is failing at {{ "{{ $value }}" }} per second."
 
-        - alert: StreamSpaceHighReconciliationDuration
-          expr: histogram_quantile(0.99, rate(streamspace_reconciliation_duration_seconds_bucket[5m])) > 10
-          for: 15m
+        - alert: StreamSpaceHighSessionCount
+          expr: streamspace_sessions_total > {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold | default 100 }}
+          for: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.duration | default "10m" }}
           labels:
             severity: warning
-            component: controller
+            component: sessions
           annotations:
-            summary: "High reconciliation duration"
-            description: "99th percentile reconciliation duration is {{ "{{ $value }}" }} seconds."
+            summary: "High number of active sessions"
+            description: "There are {{ "{{ $value }}" }} active sessions (threshold: {{ .Values.monitoring.prometheusRules.alerts.highSessionCount.threshold | default 100 }})."
 
-    {{- if .Values.api.enabled }}
-    - name: streamspace.api
-      interval: {{ .Values.monitoring.prometheusRules.interval }}
+    # ===========================================
+    # VNC & WebSocket Alerts
+    # ===========================================
+    - name: streamspace.vnc
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
       rules:
-        - alert: StreamSpaceAPIDown
-          expr: up{job="{{ include "streamspace.fullname" . }}-api"} == 0
+        - alert: StreamSpaceVNCConnectSuccessLow
+          expr: |
+            100 * sum(rate(streamspace_vnc_connect_success_total[5m]))
+            / (sum(rate(streamspace_vnc_connect_success_total[5m])) + sum(rate(streamspace_vnc_connect_failure_total[5m]))) < 98
+          for: 10m
+          labels:
+            severity: critical
+            component: vnc
+            slo: vnc_connect
+          annotations:
+            summary: "VNC connect success rate below 98% (SLO violation)"
+            description: 'VNC connect success rate is {{ "{{ $value | printf \"%.1f\" }}" }}%. SLO target: >98%.'
+            runbook_url: "https://docs.streamspace.io/runbooks/vnc-failures"
+
+        - alert: StreamSpaceVNCConnectSuccessWarning
+          expr: |
+            100 * sum(rate(streamspace_vnc_connect_success_total[5m]))
+            / (sum(rate(streamspace_vnc_connect_success_total[5m])) + sum(rate(streamspace_vnc_connect_failure_total[5m]))) < 99
+          for: 5m
+          labels:
+            severity: warning
+            component: vnc
+            slo: vnc_connect
+          annotations:
+            summary: "VNC connect success rate below 99%"
+            description: 'VNC connect success rate is {{ "{{ $value | printf \"%.1f\" }}" }}%. Approaching SLO limit.'
+
+        - alert: StreamSpaceWebSocketDisconnectsHigh
+          expr: sum(rate(streamspace_websocket_disconnects_total[5m])) * 60 > 100
+          for: 5m
+          labels:
+            severity: warning
+            component: websocket
+          annotations:
+            summary: "High WebSocket disconnect rate"
+            description: 'WebSocket disconnects at {{ "{{ $value | printf \"%.0f\" }}" }}/min.'
+
+    # ===========================================
+    # Agent Alerts
+    # ===========================================
+    - name: streamspace.agents
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceAgentHeartbeatStale
+          expr: |
+            (count(streamspace_agent_heartbeat_age_seconds >= 120) / count(streamspace_agent_heartbeat_age_seconds)) > 0.05
           for: 5m
           labels:
             severity: critical
-            component: api
+            component: agents
+            slo: agent_health
           annotations:
-            summary: "StreamSpace API is down"
-            description: "The StreamSpace API has been down for more than 5 minutes."
+            summary: "More than 5% of agents have stale heartbeats (SLO violation)"
+            description: "{{ "{{ $value | humanizePercentage }}" }} of agents have heartbeats older than 2 minutes. SLO: 99% healthy."
+            runbook_url: "https://docs.streamspace.io/runbooks/agent-heartbeat"
 
-        - alert: StreamSpaceAPIHighErrorRate
-          expr: rate(http_requests_total{job="{{ include "streamspace.fullname" . }}-api",status=~"5.."}[5m]) / rate(http_requests_total{job="{{ include "streamspace.fullname" . }}-api"}[5m]) > 0.05
+        - alert: StreamSpaceAgentHeartbeatStaleWarning
+          expr: |
+            (count(streamspace_agent_heartbeat_age_seconds >= 120) / count(streamspace_agent_heartbeat_age_seconds)) > 0.01
+          for: 5m
+          labels:
+            severity: warning
+            component: agents
+            slo: agent_health
+          annotations:
+            summary: "More than 1% of agents have stale heartbeats"
+            description: "{{ "{{ $value | humanizePercentage }}" }} of agents have heartbeats older than 2 minutes."
+
+        - alert: StreamSpaceAgentOffline
+          expr: count(streamspace_agent_heartbeat_age_seconds >= 300) > 0
+          for: 5m
+          labels:
+            severity: critical
+            component: agents
+          annotations:
+            summary: "One or more agents are offline"
+            description: "{{ "{{ $value }}" }} agent(s) have not sent heartbeat in 5+ minutes."
+
+        - alert: StreamSpaceAgentCapacityHigh
+          expr: |
+            sum(streamspace_agent_sessions_active) by (agent_id)
+            / sum(streamspace_agent_capacity_max) by (agent_id) > 0.9
           for: 10m
           labels:
             severity: warning
-            component: api
+            component: agents
           annotations:
-            summary: "High API error rate"
-            description: "API error rate is {{ "{{ $value | humanizePercentage }}" }}."
+            summary: "Agent capacity usage exceeds 90%"
+            description: "Agent {{ "{{ $labels.agent_id }}" }} is at {{ "{{ $value | humanizePercentage }}" }} capacity."
 
-        - alert: StreamSpaceAPIHighLatency
-          expr: histogram_quantile(0.99, rate(http_request_duration_seconds_bucket{job="{{ include "streamspace.fullname" . }}-api"}[5m])) > 2
+        - alert: StreamSpaceAgentScheduleFailures
+          expr: sum(rate(streamspace_agent_schedule_failures_total[5m])) by (agent_id) > 0.1
           for: 10m
           labels:
             severity: warning
-            component: api
+            component: agents
           annotations:
-            summary: "High API latency"
-            description: "99th percentile API latency is {{ "{{ $value }}" }} seconds."
+            summary: "High agent schedule failure rate"
+            description: "Agent {{ "{{ $labels.agent_id }}" }} is failing to schedule sessions."
 
+        - alert: StreamSpaceAgentImagePullFailures
+          expr: sum(rate(streamspace_agent_image_pull_failures_total[5m])) by (image) > 0.1
+          for: 10m
+          labels:
+            severity: warning
+            component: agents
+          annotations:
+            summary: "High image pull failure rate"
+            description: "Image {{ "{{ $labels.image }}" }} is failing to pull."
+
+    # ===========================================
+    # Database Alerts
+    # ===========================================
+    - name: streamspace.database
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
         - alert: StreamSpaceDatabaseConnectionFailed
           expr: streamspace_database_connected == 0
           for: 5m
           labels:
             severity: critical
-            component: api
+            component: database
           annotations:
             summary: "Database connection failed"
             description: "The API cannot connect to the PostgreSQL database."
-    {{- end }}
+            runbook_url: "https://docs.streamspace.io/runbooks/database-connection"
 
-    {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
-    - name: streamspace.postgresql
-      interval: {{ .Values.monitoring.prometheusRules.interval }}
-      rules:
+        - alert: StreamSpaceDatabaseQueryLatencyHigh
+          expr: |
+            histogram_quantile(0.99, sum(rate(streamspace_db_query_duration_seconds_bucket[5m])) by (le)) > 0.5
+          for: 10m
+          labels:
+            severity: warning
+            component: database
+          annotations:
+            summary: "Database query p99 latency exceeds 500ms"
+            description: "Database query p99 latency is {{ "{{ $value | humanizeDuration }}" }}."
+
+        {{- if and .Values.postgresql.enabled (not .Values.postgresql.external.enabled) }}
         - alert: StreamSpacePostgreSQLDown
           expr: up{job="{{ include "streamspace.fullname" . }}-postgres"} == 0
           for: 5m
@@ -124,7 +337,7 @@ spec:
             description: "The StreamSpace PostgreSQL database has been down for more than 5 minutes."
 
         - alert: StreamSpacePostgreSQLHighConnections
-          expr: pg_stat_database_numbackends{datname="{{ .Values.postgresql.auth.database }}"} > 80
+          expr: pg_stat_database_numbackends{datname="{{ .Values.postgresql.auth.database | default "streamspace" }}"} > 80
           for: 10m
           labels:
             severity: warning
@@ -132,7 +345,93 @@ spec:
           annotations:
             summary: "High number of database connections"
             description: "PostgreSQL has {{ "{{ $value }}" }} connections (threshold: 80)."
-    {{- end }}
+        {{- end }}
+
+    # ===========================================
+    # Security Alerts
+    # ===========================================
+    - name: streamspace.security
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceAuthFailuresHigh
+          expr: sum(rate(streamspace_auth_failures_total[5m])) * 60 > 50
+          for: 5m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "High authentication failure rate"
+            description: 'Authentication failures at {{ "{{ $value | printf \"%.0f\" }}" }}/min.'
+
+        - alert: StreamSpaceAuthFailuresByIP
+          expr: sum(rate(streamspace_auth_failures_total[5m])) by (ip) * 60 > 20
+          for: 5m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "Repeated auth failures from single IP"
+            description: 'IP {{ "{{ $labels.ip }}" }} has {{ "{{ $value | printf \"%.0f\" }}" }} auth failures/min. Possible brute force.'
+
+        - alert: StreamSpaceRateLimitHitsHigh
+          expr: sum(rate(streamspace_rate_limit_hits_total[5m])) * 60 > 100
+          for: 5m
+          labels:
+            severity: warning
+            component: security
+          annotations:
+            summary: "High rate limit hit rate"
+            description: 'Rate limits being hit at {{ "{{ $value | printf \"%.0f\" }}" }}/min.'
+
+    # ===========================================
+    # Webhook Alerts
+    # ===========================================
+    - name: streamspace.webhooks
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceWebhookFailureRateHigh
+          expr: |
+            sum(rate(streamspace_webhook_failures_total[5m]))
+            / (sum(rate(streamspace_webhook_success_total[5m])) + sum(rate(streamspace_webhook_failures_total[5m]))) > 0.1
+          for: 15m
+          labels:
+            severity: warning
+            component: webhooks
+          annotations:
+            summary: "Webhook failure rate exceeds 10%"
+            description: "Webhook delivery failure rate is {{ "{{ $value | humanizePercentage }}" }}."
+
+        - alert: StreamSpaceWebhookRetryQueueHigh
+          expr: streamspace_webhook_retry_queue_size > 100
+          for: 10m
+          labels:
+            severity: warning
+            component: webhooks
+          annotations:
+            summary: "Webhook retry queue is large"
+            description: "{{ "{{ $value }}" }} webhooks waiting for retry."
+
+    # ===========================================
+    # Error Budget Alerts
+    # ===========================================
+    - name: streamspace.error_budget
+      interval: {{ .Values.monitoring.prometheusRules.interval | default "30s" }}
+      rules:
+        - alert: StreamSpaceErrorBudgetBurnRateHigh
+          expr: |
+            (
+              sum(rate(http_requests_total{job=~".*streamspace.*api.*",status=~"5.."}[1h]))
+              / sum(rate(http_requests_total{job=~".*streamspace.*api.*"}[1h]))
+            ) * 24 * 30 > 0.25
+          for: 1h
+          labels:
+            severity: critical
+            component: api
+            slo: error_budget
+          annotations:
+            summary: "Error budget burn rate critical - 25% of monthly budget in 1 day"
+            description: "At current rate, monthly error budget will be exhausted in {{ "{{ $value | humanize }}" }} days."
+            runbook_url: "https://docs.streamspace.io/runbooks/error-budget"
 
     {{- with .Values.monitoring.prometheusRules.additionalRules }}
     {{- toYaml . | nindent 4 }}

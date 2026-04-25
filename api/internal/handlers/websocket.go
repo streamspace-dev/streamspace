@@ -215,7 +215,7 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/gorilla/websocket"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // WebSocketHandler handles WebSocket connections for real-time platform updates.
@@ -607,18 +607,17 @@ func (s *WebSocketSession) readPump() {
 		s.Conn.Close()
 	}()
 
-	s.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+	_ = s.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 	s.Conn.SetPongHandler(func(string) error {
-		s.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
+		_ = s.Conn.SetReadDeadline(time.Now().Add(60 * time.Second))
 		return nil
 	})
 
 	for {
 		_, message, err := s.Conn.ReadMessage()
 		if err != nil {
-			if websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure) {
-				// Log unexpected close
-			}
+			// Ignore expected close errors, just break
+			_ = websocket.IsUnexpectedCloseError(err, websocket.CloseGoingAway, websocket.CloseAbnormalClosure)
 			break
 		}
 
@@ -645,9 +644,9 @@ func (s *WebSocketSession) writePump() {
 	for {
 		select {
 		case message, ok := <-s.Send:
-			s.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = s.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if !ok {
-				s.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = s.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -655,13 +654,13 @@ func (s *WebSocketSession) writePump() {
 			if err != nil {
 				return
 			}
-			w.Write(message)
+			_, _ = w.Write(message)
 
 			// Add queued messages
 			n := len(s.Send)
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})
-				w.Write(<-s.Send)
+				_, _ = w.Write([]byte{'\n'})
+				_, _ = w.Write(<-s.Send)
 			}
 
 			if err := w.Close(); err != nil {
@@ -669,7 +668,7 @@ func (s *WebSocketSession) writePump() {
 			}
 
 		case <-ticker.C:
-			s.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
+			_ = s.Conn.SetWriteDeadline(time.Now().Add(10 * time.Second))
 			if err := s.Conn.WriteMessage(websocket.PingMessage, nil); err != nil {
 				return
 			}
@@ -714,32 +713,29 @@ func (h *WebSocketHandler) sendPeriodicMetrics(session *WebSocketSession) {
 
 	ctx := context.Background()
 
-	for {
+	for range ticker.C {
+		// Get current metrics
+		var totalSessions, runningSessions, hibernatedSessions int
+		_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
+		_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
+		_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
+
+		message := &BroadcastMessage{
+			Type:  "metrics",
+			Event: "metrics.sessions",
+			Data: map[string]interface{}{
+				"total":      totalSessions,
+				"running":    runningSessions,
+				"hibernated": hibernatedSessions,
+			},
+			Timestamp: time.Now().UTC(),
+		}
+
+		data, _ := json.Marshal(message)
 		select {
-		case <-ticker.C:
-			// Get current metrics
-			var totalSessions, runningSessions, hibernatedSessions int
-			h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
-			h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
-			h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
-
-			message := &BroadcastMessage{
-				Type:  "metrics",
-				Event: "metrics.sessions",
-				Data: map[string]interface{}{
-					"total":      totalSessions,
-					"running":    runningSessions,
-					"hibernated": hibernatedSessions,
-				},
-				Timestamp: time.Now().UTC(),
-			}
-
-			data, _ := json.Marshal(message)
-			select {
-			case session.Send <- data:
-			default:
-				return
-			}
+		case session.Send <- data:
+		default:
+			return
 		}
 	}
 }

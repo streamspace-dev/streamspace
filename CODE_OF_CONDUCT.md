@@ -60,7 +60,7 @@ representative at an online or offline event.
 
 Instances of abusive, harassing, or otherwise unacceptable behavior may be
 reported to the community leaders responsible for enforcement at
-[conduct@streamspace.io](mailto:conduct@streamspace.io).
+[conduct@streamspace.dev](mailto:conduct@streamspace.dev).
 
 All complaints will be reviewed and investigated promptly and fairly.
 

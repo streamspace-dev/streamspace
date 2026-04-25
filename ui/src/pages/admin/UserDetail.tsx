@@ -227,7 +227,7 @@ export default function UserDetail() {
                     <Select
                       value={formData.role || user.role}
                       label="Role"
-                      onChange={(e) => setFormData({ ...formData, role: e.target.value as any })}
+                      onChange={(e) => setFormData({ ...formData, role: e.target.value as 'user' | 'operator' | 'admin' })}
                     >
                       <MenuItem value="user">User</MenuItem>
                       <MenuItem value="operator">Operator</MenuItem>

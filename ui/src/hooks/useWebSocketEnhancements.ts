@@ -14,12 +14,13 @@ import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
 /**
  * Throttle function - limits function execution to once per interval
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function throttle<T extends (...args: any[]) => any>(
   func: T,
   delay: number
 ): (...args: Parameters<T>) => void {
   let lastCall = 0;
-  let timeout: NodeJS.Timeout | null = null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
 
   return (...args: Parameters<T>) => {
     const now = Date.now();
@@ -41,11 +42,12 @@ export function throttle<T extends (...args: any[]) => any>(
 /**
  * Debounce function - delays function execution until after delay has passed since last call
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function debounce<T extends (...args: any[]) => any>(
   func: T,
   delay: number
 ): (...args: Parameters<T>) => void {
-  let timeout: NodeJS.Timeout | null = null;
+  let timeout: ReturnType<typeof setTimeout> | null = null;
 
   return (...args: Parameters<T>) => {
     if (timeout) clearTimeout(timeout);
@@ -56,6 +58,7 @@ export function debounce<T extends (...args: any[]) => any>(
 /**
  * Hook for throttling callbacks
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useThrottle<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
@@ -72,6 +75,7 @@ export function useThrottle<T extends (...args: any[]) => any>(
 /**
  * Hook for debouncing callbacks
  */
+// eslint-disable-next-line @typescript-eslint/no-explicit-any
 export function useDebounce<T extends (...args: any[]) => any>(
   callback: T,
   delay: number
@@ -90,11 +94,11 @@ export function useDebounce<T extends (...args: any[]) => any>(
  */
 export function useConnectionQuality(
   isConnected: boolean,
-  sendPing?: () => void
+  _sendPing?: () => void
 ) {
   const [latency, setLatency] = useState<number | undefined>(undefined);
   const [quality, setQuality] = useState<'excellent' | 'good' | 'fair' | 'poor' | 'unknown'>('unknown');
-  const pingIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const pingIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const lastPingRef = useRef<number | null>(null);
 
   // Measure latency
@@ -161,7 +165,7 @@ export function useMessageBatching<T>(
   batchDelay: number = 1000
 ) {
   const batchRef = useRef<T[]>([]);
-  const timeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const timeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
 
   const flushBatch = useCallback(() => {
     if (batchRef.current.length > 0) {

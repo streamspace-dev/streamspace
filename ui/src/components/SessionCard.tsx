@@ -17,6 +17,11 @@ import {
   LocalOffer as TagIcon,
   Share as ShareIcon,
   Link as LinkIcon,
+  Cloud as K8sIcon,
+  Storage as DockerIcon,
+  CloudQueue as VMIcon,
+  CloudCircle as CloudIcon,
+  Computer as AgentIcon,
 } from '@mui/icons-material';
 import TagChip from './TagChip';
 import ActivityIndicator from './ActivityIndicator';
@@ -121,8 +126,23 @@ function SessionCard({
     }
   };
 
+  const getPlatformIcon = (platform?: string) => {
+    switch (platform?.toLowerCase()) {
+      case 'kubernetes':
+        return <K8sIcon fontSize="small" />;
+      case 'docker':
+        return <DockerIcon fontSize="small" />;
+      case 'vm':
+        return <VMIcon fontSize="small" />;
+      case 'cloud':
+        return <CloudIcon fontSize="small" />;
+      default:
+        return <AgentIcon fontSize="small" />;
+    }
+  };
+
   return (
-    <Card>
+    <Card component="article">
       <CardContent>
         <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
           <Box>
@@ -134,8 +154,18 @@ function SessionCard({
             </Typography>
           </Box>
           <Box sx={{ display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-            <Chip label={session.state} size="small" color={getStateColor(session.state)} />
-            <Chip label={session.status.phase} size="small" color={getPhaseColor(session.status.phase)} />
+            <Chip
+              label={session.state}
+              size="small"
+              color={getStateColor(session.state)}
+              aria-label={`Session state: ${session.state}`}
+            />
+            <Chip
+              label={session.status.phase}
+              size="small"
+              color={getPhaseColor(session.status.phase)}
+              aria-label={`Session phase: ${session.status.phase}`}
+            />
             <ActivityIndicator
               isActive={session.isActive}
               isIdle={session.isIdle}
@@ -173,6 +203,38 @@ function SessionCard({
               <Typography variant="body2">{session.activeConnections}</Typography>
             </Box>
           )}
+          {/* v2.0 Platform/Agent information */}
+          {session.platform && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                Platform
+              </Typography>
+              <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
+                {getPlatformIcon(session.platform)}
+                <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                  {session.platform}
+                </Typography>
+              </Box>
+            </Box>
+          )}
+          {session.agent_id && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                Agent
+              </Typography>
+              <Typography variant="body2" sx={{ fontSize: '0.75rem', fontFamily: 'monospace' }} noWrap>
+                {session.agent_id}
+              </Typography>
+            </Box>
+          )}
+          {session.region && (
+            <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
+              <Typography variant="body2" color="text.secondary">
+                Region
+              </Typography>
+              <Typography variant="body2">{session.region}</Typography>
+            </Box>
+          )}
           {session.status.url && (
             <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
               <Typography variant="body2" color="text.secondary">
@@ -205,7 +267,7 @@ function SessionCard({
                 size="small"
                 startIcon={<OpenIcon />}
                 onClick={() => onConnect(session)}
-                disabled={session.status.phase !== 'Running'}
+                disabled={session.status.phase !== 'Running' || !session.status.url}
               >
                 Connect
               </Button>
@@ -214,6 +276,8 @@ function SessionCard({
                 color="warning"
                 onClick={() => onStateChange(session.name, 'hibernated')}
                 disabled={isUpdating}
+                aria-label="Hibernate Session"
+                title="Hibernate Session"
               >
                 <PauseIcon />
               </IconButton>
@@ -224,6 +288,8 @@ function SessionCard({
               color="success"
               onClick={() => onStateChange(session.name, 'running')}
               disabled={isUpdating}
+              aria-label="Resume Session"
+              title="Resume Session"
             >
               <PlayIcon />
             </IconButton>
@@ -235,6 +301,7 @@ function SessionCard({
             color="primary"
             onClick={() => onShare(session)}
             title="Share with User"
+            aria-label="Share with User"
           >
             <ShareIcon />
           </IconButton>
@@ -243,6 +310,7 @@ function SessionCard({
             color="primary"
             onClick={() => onInvitation(session)}
             title="Create Invitation Link"
+            aria-label="Create Invitation Link"
           >
             <LinkIcon />
           </IconButton>
@@ -251,6 +319,7 @@ function SessionCard({
             color="primary"
             onClick={() => onManageTags(session)}
             title="Manage Tags"
+            aria-label="Manage Tags"
           >
             <TagIcon />
           </IconButton>
@@ -259,6 +328,7 @@ function SessionCard({
             color="error"
             onClick={() => onDelete(session.name)}
             title="Delete Session"
+            aria-label="Delete Session"
           >
             <DeleteIcon />
           </IconButton>

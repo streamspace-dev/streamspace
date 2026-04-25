@@ -82,7 +82,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // SearchHandler handles advanced search and filtering
@@ -300,7 +300,7 @@ func (h *SearchHandler) SearchTemplates(c *gin.Context) {
 				r.Icon = icon.String
 			}
 			if len(tagsJSON) > 0 {
-				json.Unmarshal(tagsJSON, &r.Tags)
+				_ = json.Unmarshal(tagsJSON, &r.Tags)
 			}
 
 			// Calculate relevance score
@@ -368,7 +368,6 @@ func (h *SearchHandler) SearchSessions(c *gin.Context) {
 	if state != "" {
 		sqlQuery += fmt.Sprintf(` AND state = $%d`, argIndex)
 		args = append(args, state)
-		argIndex++
 	}
 
 	sqlQuery += ` ORDER BY created_at DESC LIMIT 50`
@@ -641,7 +640,7 @@ func (h *SearchHandler) ListSavedSearches(c *gin.Context) {
 				s.Description = description.String
 			}
 			if len(filtersJSON) > 0 {
-				json.Unmarshal(filtersJSON, &s.Filters)
+				_ = json.Unmarshal(filtersJSON, &s.Filters)
 			}
 			searches = append(searches, s)
 		}
@@ -723,7 +722,7 @@ func (h *SearchHandler) GetSavedSearch(c *gin.Context) {
 		s.Description = description.String
 	}
 	if len(filtersJSON) > 0 {
-		json.Unmarshal(filtersJSON, &s.Filters)
+		_ = json.Unmarshal(filtersJSON, &s.Filters)
 	}
 
 	c.JSON(http.StatusOK, s)
@@ -856,7 +855,7 @@ func (h *SearchHandler) GetSearchHistory(c *gin.Context) {
 			}
 			if len(filtersJSON) > 0 {
 				var filters map[string]interface{}
-				json.Unmarshal(filtersJSON, &filters)
+				_ = json.Unmarshal(filtersJSON, &filters)
 				item["filters"] = filters
 			}
 			history = append(history, item)
@@ -923,7 +922,7 @@ func (h *SearchHandler) searchTemplatesInternal(ctx context.Context, query strin
 				r.Icon = icon.String
 			}
 			if len(tagsJSON) > 0 {
-				json.Unmarshal(tagsJSON, &r.Tags)
+				_ = json.Unmarshal(tagsJSON, &r.Tags)
 			}
 
 			score := 0.0
@@ -945,7 +944,7 @@ func (h *SearchHandler) searchTemplatesInternal(ctx context.Context, query strin
 func (h *SearchHandler) recordSearchHistory(ctx context.Context, userID, query, searchType string, filters map[string]interface{}) {
 	filtersJSON, _ := json.Marshal(filters)
 
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		INSERT INTO search_history (user_id, query, search_type, filters)
 		VALUES ($1, $2, $3, $4)
 	`, userID, query, searchType, filtersJSON)

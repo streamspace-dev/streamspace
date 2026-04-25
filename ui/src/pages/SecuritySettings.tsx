@@ -35,7 +35,7 @@
  * <SecuritySettings />
  * ```
  */
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -67,11 +67,8 @@ import {
   Step,
   StepLabel,
   Paper,
-  Divider,
-  Snackbar,
 } from '@mui/material';
 import {
-  Security as SecurityIcon,
   PhoneAndroid as PhoneIcon,
   Email as EmailIcon,
   VpnKey as KeyIcon,
@@ -80,8 +77,6 @@ import {
   Check as CheckIcon,
   Warning as WarningIcon,
   Shield as ShieldIcon,
-  Wifi as ConnectedIcon,
-  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import AdminPortalLayout from '../components/AdminPortalLayout';
 import { QRCodeSVG } from 'qrcode.react';
@@ -94,40 +89,10 @@ import { useNotificationQueue } from '../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../components/WebSocketErrorBoundary';
 
-/**
- * Interface for MFA method data structure.
- * Represents a configured multi-factor authentication method.
- */
-interface MFAMethod {
-  id: number;
-  type: string;
-  enabled: boolean;
-  is_primary: boolean;
-  phone_number?: string;
-  email?: string;
-  created_at: string;
-  last_used_at?: string;
-}
-
-interface IPWhitelistEntry {
-  id: number;
-  ip_address: string;
-  description: string;
-  enabled: boolean;
-  created_at: string;
-  expires_at?: string;
-}
-
-interface SecurityAlert {
-  type: string;
-  severity: string;
-  message: string;
-  created_at: string;
-}
 
 function SecuritySettingsContent() {
   const [currentTab, setCurrentTab] = useState(0);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
 
@@ -141,7 +106,7 @@ function SecuritySettingsContent() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time security alerts via WebSocket
-  useSecurityAlertEvents((data: any) => {
+  useSecurityAlertEvents((data: Record<string, unknown>) => {
     console.log('Security alert event:', data);
     setWsConnected(true);
     setWsReconnectAttempts(0);
@@ -198,7 +163,7 @@ function SecuritySettingsContent() {
       }
 
       toast.success(response.message || 'MFA setup initiated');
-    } catch (error) {
+    } catch {
       toast.error('Failed to start MFA setup');
       setMfaDialog(false);
     } finally {
@@ -215,7 +180,7 @@ function SecuritySettingsContent() {
       setBackupCodes(response.backup_codes || []);
       setMfaStep(2);
       toast.success('MFA verified successfully');
-    } catch (error) {
+    } catch {
       toast.error('Invalid verification code');
     } finally {
       setLoading(false);
@@ -238,7 +203,7 @@ function SecuritySettingsContent() {
       await api.disableMFA(id);
       toast.success('MFA method disabled');
       queryClient.invalidateQueries({ queryKey: ['mfa-methods'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to disable MFA method');
     } finally {
       setLoading(false);
@@ -253,7 +218,7 @@ function SecuritySettingsContent() {
       setIpDialog(false);
       setIpForm({ ip_address: '', description: '' });
       queryClient.invalidateQueries({ queryKey: ['ip-whitelist'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to add IP address');
     } finally {
       setLoading(false);
@@ -268,7 +233,7 @@ function SecuritySettingsContent() {
       await api.deleteIPWhitelist(id);
       toast.success('IP address removed');
       queryClient.invalidateQueries({ queryKey: ['ip-whitelist'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to remove IP address');
     } finally {
       setLoading(false);

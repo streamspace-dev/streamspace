@@ -1,9 +1,12 @@
 import { useEffect, useRef, useState, useCallback, useMemo } from 'react';
 import { useUserStore } from '../store/userStore';
 
+/** Generic data type for WebSocket messages */
+export type WebSocketData = Record<string, unknown>;
+
 interface UseWebSocketOptions {
   url: string;
-  onMessage: (data: any) => void;
+  onMessage: (data: WebSocketData) => void;
   onError?: (error: Event) => void;
   onOpen?: () => void;
   onClose?: () => void;
@@ -14,7 +17,7 @@ interface UseWebSocketOptions {
 interface UseWebSocketReturn {
   isConnected: boolean;
   reconnectAttempts: number;
-  sendMessage: (message: any) => void;
+  sendMessage: (message: WebSocketData) => void;
   close: () => void;
 }
 
@@ -64,14 +67,15 @@ export function useWebSocket({
   onError,
   onOpen,
   onClose,
-  reconnectInterval = 3000, // Not used with custom backoff
+  reconnectInterval: _reconnectInterval = 3000, // Not used with custom backoff
   maxReconnectAttempts = 10,
 }: UseWebSocketOptions): UseWebSocketReturn {
   const [isConnected, setIsConnected] = useState(false);
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
+  void _reconnectInterval; // Mark as intentionally unused (kept for API compatibility)
   const shouldReconnectRef = useRef(true);
   const reconnectAttemptsRef = useRef(0);
 
@@ -164,7 +168,7 @@ export function useWebSocket({
     }
   }, [url, maxReconnectAttempts]); // Removed reconnectInterval since we use getReconnectDelay
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: WebSocketData) => {
     if (wsRef.current?.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
@@ -233,7 +237,7 @@ export function useWebSocket({
  * });
  * ```
  */
-export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
+export function useSessionsWebSocket(onUpdate: (sessions: WebSocketData[]) => void) {
   // Get token directly from Zustand store - automatically reactive
   const token = useUserStore((state) => state?.token);
 
@@ -295,7 +299,7 @@ export function useSessionsWebSocket(onUpdate: (sessions: any[]) => void) {
  * });
  * ```
  */
-export function useMetricsWebSocket(onUpdate: (metrics: any) => void) {
+export function useMetricsWebSocket(onUpdate: (metrics: Record<string, unknown>) => void) {
   // Get token directly from Zustand store - automatically reactive
   const token = useUserStore((state) => state?.token);
 

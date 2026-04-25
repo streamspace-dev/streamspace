@@ -1,4 +1,4 @@
-import { useState, useEffect, useMemo } from 'react';
+import { useState, useMemo } from 'react';
 import {
   Box,
   Typography,
@@ -9,7 +9,6 @@ import {
   Button,
   IconButton,
   Chip,
-  Alert,
   Switch,
   FormControlLabel,
   Dialog,
@@ -132,11 +131,14 @@ function InstalledPluginsContent() {
   const [configDialogOpen, setConfigDialogOpen] = useState(false);
   const [selectedPlugin, setSelectedPlugin] = useState<InstalledPlugin | null>(null);
   const [configJson, setConfigJson] = useState('');
-  const [configFormData, setConfigFormData] = useState<Record<string, any>>({});
+  const [configFormData, setConfigFormData] = useState<Record<string, unknown>>({});
   const [configMode, setConfigMode] = useState<'form' | 'json'>('form');
 
   // Fetch plugins via React Query
-  const { data: plugins = [], isLoading: loading } = useInstalledPlugins();
+  // BUG FIX P0-123: Ensure plugins is always an array, never null/undefined
+  // Handle undefined, null, and non-array responses gracefully
+  const { data: pluginsData, isLoading: loading } = useInstalledPlugins();
+  const plugins = useMemo(() => Array.isArray(pluginsData) ? pluginsData : [], [pluginsData]);
   const queryClient = useQueryClient();
 
   // WebSocket connection state
@@ -147,7 +149,7 @@ function InstalledPluginsContent() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time plugin events via WebSocket
-  usePluginEvents((data: any) => {
+  usePluginEvents((data: Record<string, unknown>) => {
     setWsConnected(true);
     setWsReconnectAttempts(0);
 
@@ -233,7 +235,7 @@ function InstalledPluginsContent() {
     if (!selectedPlugin) return;
 
     try {
-      let config: Record<string, any>;
+      let config: Record<string, unknown>;
 
       if (configMode === 'form') {
         config = configFormData;
@@ -251,7 +253,7 @@ function InstalledPluginsContent() {
     }
   };
 
-  const handleConfigFormChange = (data: Record<string, any>) => {
+  const handleConfigFormChange = (data: Record<string, unknown>) => {
     setConfigFormData(data);
     setConfigJson(JSON.stringify(data, null, 2));
   };
@@ -282,6 +284,9 @@ function InstalledPluginsContent() {
   };
 
   const filteredPlugins = useMemo(() => {
+    // BUG FIX P0-1: Extra safety check to prevent crashes
+    if (!Array.isArray(plugins)) return [];
+
     return plugins.filter(plugin => {
       // Filter by enabled/disabled status
       if (filter === 'enabled' && !plugin.enabled) return false;
@@ -347,19 +352,19 @@ function InstalledPluginsContent() {
           />
           <Box display="flex" gap={1} flexWrap="wrap">
             <Chip
-              label={`All (${plugins.length})`}
+              label={`All (${plugins?.length ?? 0})`}
               onClick={() => setFilter('all')}
               color={filter === 'all' ? 'primary' : 'default'}
               variant={filter === 'all' ? 'filled' : 'outlined'}
             />
             <Chip
-              label={`Enabled (${plugins.filter(p => p.enabled).length})`}
+              label={`Enabled (${plugins?.filter(p => p.enabled).length ?? 0})`}
               onClick={() => setFilter('enabled')}
               color={filter === 'enabled' ? 'primary' : 'default'}
               variant={filter === 'enabled' ? 'filled' : 'outlined'}
             />
             <Chip
-              label={`Disabled (${plugins.filter(p => !p.enabled).length})`}
+              label={`Disabled (${plugins?.filter(p => !p.enabled).length ?? 0})`}
               onClick={() => setFilter('disabled')}
               color={filter === 'disabled' ? 'primary' : 'default'}
               variant={filter === 'disabled' ? 'filled' : 'outlined'}

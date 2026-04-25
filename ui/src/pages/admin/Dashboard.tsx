@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Admin page uses `any` for WebSocket metrics data
 import { useState, useEffect, useRef } from 'react';
 import {
   Box,
@@ -135,7 +137,7 @@ interface ClusterMetrics {
   };
 }
 
-interface RecentSession {
+interface _RecentSession {
   name: string;
   user: string;
   template: string;

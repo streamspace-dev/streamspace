@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -9,7 +9,6 @@ import {
   Button,
   Switch,
   FormControlLabel,
-  Divider,
   Alert,
   Dialog,
   DialogTitle,
@@ -19,15 +18,8 @@ import {
   Step,
   StepLabel,
   Paper,
-  Chip,
-  List,
-  ListItem,
-  ListItemText,
-  ListItemSecondaryAction,
-  IconButton,
 } from '@mui/material';
 import {
-  Settings as SettingsIcon,
   Security as SecurityIcon,
   Palette as PaletteIcon,
   Lock as LockIcon,
@@ -60,9 +52,9 @@ import { useThemeMode } from '../App';
  * @access user - All authenticated users
  */
 export default function UserSettings() {
-  const { user } = useUserStore();
+  useUserStore();
   const queryClient = useQueryClient();
-  const { data: mfaMethods = [], isLoading: mfaLoading } = useMFAMethods();
+  const { data: mfaMethods = [] } = useMFAMethods();
   const { mode, toggleTheme } = useThemeMode();
 
   // Password change state
@@ -85,7 +77,7 @@ export default function UserSettings() {
   const [settingUpMfa, setSettingUpMfa] = useState(false);
 
   // Check if TOTP is already enabled
-  const totpMethod = mfaMethods.find((m: any) => m.type === 'totp');
+  const totpMethod = mfaMethods.find((m: { type: string; enabled?: boolean }) => m.type === 'totp');
   const isTotpEnabled = totpMethod?.enabled || false;
 
   // Handle password change
@@ -113,8 +105,9 @@ export default function UserSettings() {
       setPasswordSuccess(true);
       setPasswordForm({ currentPassword: '', newPassword: '', confirmPassword: '' });
       toast.success('Password changed successfully');
-    } catch (error: any) {
-      setPasswordError(error.response?.data?.message || 'Failed to change password');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      setPasswordError(axiosError.response?.data?.message || 'Failed to change password');
     } finally {
       setChangingPassword(false);
     }
@@ -134,8 +127,9 @@ export default function UserSettings() {
       setTotpUri(response.uri);
       setMfaDialogOpen(true);
       setMfaStep(0);
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to start MFA setup');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      toast.error(axiosError.response?.data?.message || 'Failed to start MFA setup');
     } finally {
       setSettingUpMfa(false);
     }
@@ -154,8 +148,9 @@ export default function UserSettings() {
       setMfaStep(2);
       queryClient.invalidateQueries({ queryKey: ['mfa-methods'] });
       toast.success('MFA enabled successfully');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Invalid verification code');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      toast.error(axiosError.response?.data?.message || 'Invalid verification code');
     }
   };
 
@@ -169,8 +164,9 @@ export default function UserSettings() {
       await api.disableMFA('totp');
       queryClient.invalidateQueries({ queryKey: ['mfa-methods'] });
       toast.success('MFA disabled');
-    } catch (error: any) {
-      toast.error(error.response?.data?.message || 'Failed to disable MFA');
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string } } };
+      toast.error(axiosError.response?.data?.message || 'Failed to disable MFA');
     }
   };
 

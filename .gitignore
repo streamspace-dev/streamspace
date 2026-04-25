@@ -46,6 +46,11 @@ __pycache__/
 vendor/
 *.test
 *.cover
+# Go compiled binaries (specific to this project)
+api/main
+agents/*/agent
+agents/docker-agent/docker-agent
+agents/k8s-agent/k8s-agent
 
 # Helm
 *.tgz
@@ -63,3 +68,6 @@ logs/
 tmp/
 temp/
 *.tmp
+
+# Claude settings
+.claude/settings.local.json

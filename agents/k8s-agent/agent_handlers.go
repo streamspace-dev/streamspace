@@ -1,0 +1,366 @@
+package main
+
+import (
+	"fmt"
+	"log"
+
+	"github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/config"
+	"k8s.io/client-go/dynamic"
+	"k8s.io/client-go/kubernetes"
+)
+
+// CommandHandler defines the interface for command execution.
+type CommandHandler interface {
+	Handle(cmd *CommandMessage) (*CommandResult, error)
+}
+
+// CommandResult represents the result of a command execution.
+type CommandResult struct {
+	Success bool                   `json:"success"`
+	Data    map[string]interface{} `json:"data,omitempty"`
+	Error   string                 `json:"error,omitempty"`
+}
+
+// SessionSpec represents a session specification from the command payload.
+type SessionSpec struct {
+	SessionID       string `json:"sessionId"`
+	User            string `json:"user"`
+	Template        string `json:"template"`
+	PersistentHome  bool   `json:"persistentHome"`
+	Memory          string `json:"memory"`
+	CPU             string `json:"cpu"`
+}
+
+// StartSessionHandler handles start_session commands.
+type StartSessionHandler struct {
+	kubeClient    *kubernetes.Clientset
+	dynamicClient dynamic.Interface
+	config        *config.AgentConfig
+	agent         *K8sAgent
+}
+
+// NewStartSessionHandler creates a new start session handler.
+func NewStartSessionHandler(kubeClient *kubernetes.Clientset, dynamicClient dynamic.Interface, config *config.AgentConfig, agent *K8sAgent) *StartSessionHandler {
+	return &StartSessionHandler{
+		kubeClient:    kubeClient,
+		dynamicClient: dynamicClient,
+		config:        config,
+		agent:         agent,
+	}
+}
+
+// Handle executes the start_session command.
+//
+// Steps:
+//  1. Parse session spec from command payload
+//  2. Parse template manifest from payload (v2.0-beta: API sends full manifest, no K8s fetch)
+//  3. Create Deployment (using template)
+//  4. Create Service (ClusterIP)
+//  5. Create PVC (if persistentHome enabled)
+//  6. Wait for pod to be Running
+//  7. Get pod IP and VNC port
+//  8. Return result with session metadata
+func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error) {
+	log.Printf("[StartSessionHandler] Starting session from command %s", cmd.CommandID)
+
+	// Parse session spec
+	sessionID, ok := cmd.Payload["sessionId"].(string)
+	if !ok || sessionID == "" {
+		return nil, fmt.Errorf("missing or invalid sessionId")
+	}
+
+	user, ok := cmd.Payload["user"].(string)
+	if !ok || user == "" {
+		return nil, fmt.Errorf("missing or invalid user")
+	}
+
+	templateName, ok := cmd.Payload["template"].(string)
+	if !ok || templateName == "" {
+		return nil, fmt.Errorf("missing or invalid template")
+	}
+
+	spec := &SessionSpec{
+		SessionID:      sessionID,
+		User:           user,
+		Template:       templateName,
+		PersistentHome: getBoolOrDefault(cmd.Payload, "persistentHome", false),
+		Memory:         getStringOrDefault(cmd.Payload, "memory", ""),
+		CPU:            getStringOrDefault(cmd.Payload, "cpu", ""),
+	}
+
+	log.Printf("[StartSessionHandler] Session spec: user=%s, template=%s, persistent=%v",
+		spec.User, spec.Template, spec.PersistentHome)
+
+	// v2.0-beta: Parse template manifest from payload (API sends full manifest from database)
+	// This eliminates the need for agent to have read access to Template CRDs
+	template, err := parseTemplateFromPayload(cmd.Payload, h.config.Namespace)
+	if err != nil {
+		// Fallback: Try fetching from Kubernetes for backwards compatibility
+		log.Printf("[StartSessionHandler] Warning: No templateManifest in payload, falling back to K8s fetch: %v", err)
+		template, err = fetchTemplateCRD(h.dynamicClient, h.config.Namespace, templateName)
+		if err != nil {
+			return nil, fmt.Errorf("failed to get template %s: %w", templateName, err)
+		}
+	}
+
+	log.Printf("[StartSessionHandler] Using template: %s (image: %s)", template.DisplayName, template.BaseImage)
+
+	// Create Kubernetes resources
+	deployment, err := createSessionDeployment(h.kubeClient, h.config.Namespace, spec, template)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create deployment: %w", err)
+	}
+
+	service, err := createSessionService(h.kubeClient, h.config.Namespace, spec)
+	if err != nil {
+		return nil, fmt.Errorf("failed to create service: %w", err)
+	}
+
+	var pvcName string
+	if spec.PersistentHome {
+		pvc, err := createSessionPVC(h.kubeClient, h.config.Namespace, spec)
+		if err != nil {
+			return nil, fmt.Errorf("failed to create PVC: %w", err)
+		}
+		pvcName = pvc.Name
+	}
+
+	// Wait for pod to be ready
+	podName, podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
+	if err != nil {
+		return nil, fmt.Errorf("pod not ready: %w", err)
+	}
+
+	log.Printf("[StartSessionHandler] Session %s started successfully (pod: %s, IP: %s)", sessionID, podName, podIP)
+
+	// Create Session CRD in Kubernetes (v2.0: Agent creates Session CRD)
+	if err := createSessionCRD(h.dynamicClient, h.config.Namespace, spec, podName, podIP); err != nil {
+		log.Printf("[StartSessionHandler] Warning: Failed to create Session CRD: %v", err)
+		// Don't fail the command - Session CRD is informational
+	}
+
+	// Initialize VNC tunnel for this session
+	if h.agent != nil {
+		if err := h.agent.initVNCTunnelForSession(sessionID); err != nil {
+			log.Printf("[StartSessionHandler] Warning: Failed to init VNC tunnel: %v", err)
+			// Don't fail the command - VNC can be established later
+		}
+	}
+
+	// v2.0 ARCHITECTURE: Update database via API (source of truth)
+	// Send session update message to Control Plane to update database
+	if h.agent != nil {
+		if err := h.agent.sendSessionUpdate(sessionID, "running", podName, podIP); err != nil {
+			log.Printf("[StartSessionHandler] Warning: Failed to send session update: %v", err)
+			// Don't fail the command - database can be updated manually if needed
+		}
+	}
+
+	// Return success result
+	return &CommandResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"sessionId":  sessionID,
+			"deployment": deployment.Name,
+			"service":    service.Name,
+			"pvc":        pvcName,
+			"podName":    podName,
+			"podIP":      podIP,
+			"vncPort":    3000, // Default VNC port
+			"state":      "running",
+		},
+	}, nil
+}
+
+// StopSessionHandler handles stop_session commands.
+type StopSessionHandler struct {
+	kubeClient *kubernetes.Clientset
+	config     *config.AgentConfig
+	agent      *K8sAgent
+}
+
+// NewStopSessionHandler creates a new stop session handler.
+func NewStopSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig, agent *K8sAgent) *StopSessionHandler {
+	return &StopSessionHandler{
+		kubeClient: kubeClient,
+		config:     config,
+		agent:      agent,
+	}
+}
+
+// Handle executes the stop_session command.
+//
+// Steps:
+//  1. Parse session ID from command payload
+//  2. Delete Deployment
+//  3. Delete Service
+//  4. Optionally delete PVC (if not persistent)
+//  5. Return success result
+func (h *StopSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error) {
+	log.Printf("[StopSessionHandler] Stopping session from command %s", cmd.CommandID)
+
+	// Parse session ID
+	sessionID, ok := cmd.Payload["sessionId"].(string)
+	if !ok || sessionID == "" {
+		return nil, fmt.Errorf("missing or invalid sessionId")
+	}
+
+	shouldDeletePVC := getBoolOrDefault(cmd.Payload, "deletePVC", false)
+
+	log.Printf("[StopSessionHandler] Deleting resources for session %s (deletePVC: %v)", sessionID, shouldDeletePVC)
+
+	// Close VNC tunnel for this session
+	if h.agent != nil && h.agent.vncManager != nil {
+		if err := h.agent.vncManager.CloseTunnel(sessionID); err != nil {
+			log.Printf("[StopSessionHandler] Warning: Failed to close VNC tunnel: %v", err)
+		}
+	}
+
+	// Delete Deployment
+	if err := deleteDeployment(h.kubeClient, h.config.Namespace, sessionID); err != nil {
+		log.Printf("[StopSessionHandler] Warning: Failed to delete deployment: %v", err)
+	}
+
+	// Delete Service
+	if err := deleteService(h.kubeClient, h.config.Namespace, sessionID); err != nil {
+		log.Printf("[StopSessionHandler] Warning: Failed to delete service: %v", err)
+	}
+
+	// Delete PVC if requested
+	if shouldDeletePVC {
+		if err := deletePVC(h.kubeClient, h.config.Namespace, sessionID); err != nil {
+			log.Printf("[StopSessionHandler] Warning: Failed to delete PVC: %v", err)
+		}
+	}
+
+	log.Printf("[StopSessionHandler] Session %s stopped successfully", sessionID)
+
+	return &CommandResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"sessionId": sessionID,
+			"state":     "terminated",
+		},
+	}, nil
+}
+
+// HibernateSessionHandler handles hibernate_session commands.
+type HibernateSessionHandler struct {
+	kubeClient *kubernetes.Clientset
+	config     *config.AgentConfig
+}
+
+// NewHibernateSessionHandler creates a new hibernate session handler.
+func NewHibernateSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig) *HibernateSessionHandler {
+	return &HibernateSessionHandler{
+		kubeClient: kubeClient,
+		config:     config,
+	}
+}
+
+// Handle executes the hibernate_session command.
+//
+// Steps:
+//  1. Parse session ID
+//  2. Scale deployment to 0 replicas
+//  3. Return success result
+func (h *HibernateSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error) {
+	log.Printf("[HibernateSessionHandler] Hibernating session from command %s", cmd.CommandID)
+
+	// Parse session ID
+	sessionID, ok := cmd.Payload["sessionId"].(string)
+	if !ok || sessionID == "" {
+		return nil, fmt.Errorf("missing or invalid sessionId")
+	}
+
+	log.Printf("[HibernateSessionHandler] Scaling deployment to 0 replicas for session %s", sessionID)
+
+	// Scale deployment to 0
+	if err := scaleDeployment(h.kubeClient, h.config.Namespace, sessionID, 0); err != nil {
+		return nil, fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	log.Printf("[HibernateSessionHandler] Session %s hibernated successfully", sessionID)
+
+	return &CommandResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"sessionId": sessionID,
+			"state":     "hibernated",
+		},
+	}, nil
+}
+
+// WakeSessionHandler handles wake_session commands.
+type WakeSessionHandler struct {
+	kubeClient *kubernetes.Clientset
+	config     *config.AgentConfig
+}
+
+// NewWakeSessionHandler creates a new wake session handler.
+func NewWakeSessionHandler(kubeClient *kubernetes.Clientset, config *config.AgentConfig) *WakeSessionHandler {
+	return &WakeSessionHandler{
+		kubeClient: kubeClient,
+		config:     config,
+	}
+}
+
+// Handle executes the wake_session command.
+//
+// Steps:
+//  1. Parse session ID
+//  2. Scale deployment to 1 replica
+//  3. Wait for pod to be Running
+//  4. Get new pod IP
+//  5. Return result with updated metadata
+func (h *WakeSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error) {
+	log.Printf("[WakeSessionHandler] Waking session from command %s", cmd.CommandID)
+
+	// Parse session ID
+	sessionID, ok := cmd.Payload["sessionId"].(string)
+	if !ok || sessionID == "" {
+		return nil, fmt.Errorf("missing or invalid sessionId")
+	}
+
+	log.Printf("[WakeSessionHandler] Scaling deployment to 1 replica for session %s", sessionID)
+
+	// Scale deployment to 1
+	if err := scaleDeployment(h.kubeClient, h.config.Namespace, sessionID, 1); err != nil {
+		return nil, fmt.Errorf("failed to scale deployment: %w", err)
+	}
+
+	// Wait for pod to be ready
+	podName, podIP, err := waitForPodReady(h.kubeClient, h.config.Namespace, sessionID, 120)
+	if err != nil {
+		return nil, fmt.Errorf("pod not ready after wake: %w", err)
+	}
+
+	log.Printf("[WakeSessionHandler] Session %s woke successfully (pod: %s, IP: %s)", sessionID, podName, podIP)
+
+	return &CommandResult{
+		Success: true,
+		Data: map[string]interface{}{
+			"sessionId": sessionID,
+			"podName":   podName,
+			"podIP":     podIP,
+			"vncPort":   3000,
+			"state":     "running",
+		},
+	}, nil
+}
+
+// Helper functions
+
+func getBoolOrDefault(payload map[string]interface{}, key string, defaultValue bool) bool {
+	if val, ok := payload[key].(bool); ok {
+		return val
+	}
+	return defaultValue
+}
+
+func getStringOrDefault(payload map[string]interface{}, key string, defaultValue string) string {
+	if val, ok := payload[key].(string); ok && val != "" {
+		return val
+	}
+	return defaultValue
+}

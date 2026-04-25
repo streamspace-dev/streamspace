@@ -79,10 +79,10 @@ export const notify = {
 
   // Repository notifications
   repository: {
-    added: (repoUrl: string) =>
+    added: (_repoUrl: string) =>
       toast.success('Repository added successfully'),
 
-    removed: (repoUrl: string) =>
+    removed: (_repoUrl: string) =>
       toast.success('Repository removed'),
 
     synced: () =>

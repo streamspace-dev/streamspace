@@ -421,7 +421,7 @@ func (m PluginManifest) Value() (driver.Value, error) {
 
 // InstallPluginRequest represents a request to install a plugin
 type InstallPluginRequest struct {
-	PluginID int             `json:"pluginId"` // From catalog
+	PluginID int             `json:"pluginId" validate:"required,gt=0"` // From catalog
 	Config   json.RawMessage `json:"config,omitempty"`
 }
 
@@ -433,6 +433,6 @@ type UpdatePluginRequest struct {
 
 // RatePluginRequest represents a request to rate a plugin
 type RatePluginRequest struct {
-	Rating int    `json:"rating"` // 1-5
-	Review string `json:"review,omitempty"`
+	Rating int    `json:"rating" validate:"required,min=1,max=5"` // 1-5
+	Review string `json:"review,omitempty" validate:"omitempty,max=2000"`
 }

@@ -97,7 +97,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // NotificationsHandler handles notification delivery and management
@@ -198,7 +198,7 @@ func (h *NotificationsHandler) ListNotifications(c *gin.Context) {
 
 		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message, &dataJSON, &n.Priority, &n.Read, &actionURL, &actionText, &n.CreatedAt, &readAt); err == nil {
 			if len(dataJSON) > 0 {
-				json.Unmarshal(dataJSON, &n.Data)
+				_ = json.Unmarshal(dataJSON, &n.Data)
 			}
 			if actionURL.Valid {
 				n.ActionURL = actionURL.String
@@ -215,7 +215,7 @@ func (h *NotificationsHandler) ListNotifications(c *gin.Context) {
 
 	// Get total count
 	var total int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM notifications WHERE user_id = $1`, userIDStr).Scan(&total)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM notifications WHERE user_id = $1`, userIDStr).Scan(&total)
 
 	c.JSON(http.StatusOK, gin.H{
 		"notifications": notifications,
@@ -255,7 +255,7 @@ func (h *NotificationsHandler) GetUnreadNotifications(c *gin.Context) {
 		if err := rows.Scan(&n.ID, &n.UserID, &n.Type, &n.Title, &n.Message, &dataJSON, &n.Priority, &actionURL, &actionText, &n.CreatedAt); err == nil {
 			n.Read = false
 			if len(dataJSON) > 0 {
-				json.Unmarshal(dataJSON, &n.Data)
+				_ = json.Unmarshal(dataJSON, &n.Data)
 			}
 			if actionURL.Valid {
 				n.ActionURL = actionURL.String
@@ -434,12 +434,12 @@ func (h *NotificationsHandler) SendNotification(c *gin.Context) {
 
 	// Send email notification if enabled for this event type
 	if h.shouldSendEmail(prefs, req.Type) {
-		go h.sendEmailNotification(req.UserID, req.Type, req.Title, req.Message, req.ActionURL)
+		go func() { _ = h.sendEmailNotification(req.UserID, req.Type, req.Title, req.Message, req.ActionURL) }()
 	}
 
 	// Send webhook notification if enabled
 	if h.shouldSendWebhook(prefs, req.Type) {
-		go h.sendWebhookNotification(prefs, req.UserID, req.Type, req.Title, req.Message, req.Data)
+		go func() { _ = h.sendWebhookNotification(prefs, req.UserID, req.Type, req.Title, req.Message, req.Data) }()
 	}
 
 	c.JSON(http.StatusOK, gin.H{
@@ -479,7 +479,7 @@ func (h *NotificationsHandler) getUserNotificationPreferences(ctx context.Contex
 	}
 
 	var prefs map[string]interface{}
-	json.Unmarshal(prefsJSON, &prefs)
+	_ = json.Unmarshal(prefsJSON, &prefs)
 	return prefs, nil
 }
 
@@ -594,7 +594,7 @@ func (h *NotificationsHandler) sendEmailNotification(userID, eventType, title, m
 	}
 
 	var body bytes.Buffer
-	tmpl.Execute(&body, map[string]string{
+	_ = tmpl.Execute(&body, map[string]string{
 		"Title":     title,
 		"Message":   message,
 		"ActionURL": actionURL,

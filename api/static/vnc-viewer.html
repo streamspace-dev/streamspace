@@ -1,0 +1,238 @@
+<!DOCTYPE html>
+<html lang="en">
+<head>
+    <meta charset="UTF-8">
+    <meta name="viewport" content="width=device-width, initial-scale=1.0">
+    <title>StreamSpace VNC Viewer</title>
+
+    <!-- noVNC Core Library -->
+    <link rel="stylesheet" href="https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/base.css">
+    <script src="https://cdn.jsdelivr.net/npm/@novnc/novnc@1.4.0/core/rfb.js"></script>
+
+    <style>
+        * {
+            margin: 0;
+            padding: 0;
+            box-sizing: border-box;
+        }
+
+        body {
+            background-color: #000;
+            overflow: hidden;
+            font-family: -apple-system, BlinkMacSystemFont, 'Segoe UI', Roboto, Oxygen, Ubuntu, Cantarell, sans-serif;
+        }
+
+        #vnc-container {
+            width: 100vw;
+            height: 100vh;
+            position: relative;
+        }
+
+        #vnc-status {
+            position: absolute;
+            top: 50%;
+            left: 50%;
+            transform: translate(-50%, -50%);
+            color: #fff;
+            text-align: center;
+            z-index: 1000;
+            background-color: rgba(0, 0, 0, 0.8);
+            padding: 20px 40px;
+            border-radius: 8px;
+            font-size: 16px;
+        }
+
+        #vnc-status.hidden {
+            display: none;
+        }
+
+        .status-icon {
+            font-size: 48px;
+            margin-bottom: 10px;
+        }
+
+        .spinner {
+            border: 4px solid rgba(255, 255, 255, 0.3);
+            border-top: 4px solid #fff;
+            border-radius: 50%;
+            width: 48px;
+            height: 48px;
+            animation: spin 1s linear infinite;
+            margin: 0 auto 10px;
+        }
+
+        @keyframes spin {
+            0% { transform: rotate(0deg); }
+            100% { transform: rotate(360deg); }
+        }
+
+        .error {
+            color: #ff4444;
+        }
+
+        .success {
+            color: #44ff44;
+        }
+    </style>
+</head>
+<body>
+    <div id="vnc-container">
+        <div id="vnc-status">
+            <div class="spinner"></div>
+            <div id="status-text">Connecting to session...</div>
+        </div>
+    </div>
+
+    <script>
+        // Extract sessionId from URL path (e.g., /vnc-viewer/sess-123)
+        const pathParts = window.location.pathname.split('/');
+        const sessionId = pathParts[pathParts.length - 1];
+
+        // Get JWT token from sessionStorage (set by SessionViewer component)
+        const token = sessionStorage.getItem('streamspace_token');
+
+        // Status elements
+        const statusDiv = document.getElementById('vnc-status');
+        const statusText = document.getElementById('status-text');
+
+        // Update status message
+        function updateStatus(message, type = 'info') {
+            statusText.textContent = message;
+            statusDiv.className = type;
+
+            if (type === 'success') {
+                // Hide status after successful connection
+                setTimeout(() => {
+                    statusDiv.classList.add('hidden');
+                }, 2000);
+            }
+        }
+
+        // Show error status
+        function showError(message) {
+            const spinner = statusDiv.querySelector('.spinner');
+            if (spinner) spinner.remove();
+
+            updateStatus(`❌ ${message}`, 'error');
+        }
+
+        // Validate inputs
+        if (!sessionId || sessionId === 'vnc-viewer') {
+            showError('Invalid session ID');
+            throw new Error('Session ID not found in URL');
+        }
+
+        if (!token) {
+            showError('Authentication token not found. Please log in.');
+            throw new Error('JWT token not found in sessionStorage');
+        }
+
+        // Construct WebSocket URL
+        const protocol = window.location.protocol === 'https:' ? 'wss:' : 'ws:';
+        const host = window.location.host;
+        const wsUrl = `${protocol}//${host}/api/v1/vnc/${sessionId}?token=${token}`;
+
+        console.log('[VNC Viewer] Connecting to:', wsUrl.replace(token, 'TOKEN_HIDDEN'));
+        updateStatus('Establishing VNC connection...');
+
+        // Create noVNC RFB client
+        let rfb;
+
+        try {
+            rfb = new RFB(document.getElementById('vnc-container'), wsUrl, {
+                credentials: { password: '' },
+                shared: true,
+                repeaterID: '',
+                wsProtocols: ['binary'],
+            });
+
+            // Configure RFB options
+            rfb.scaleViewport = true;
+            rfb.resizeSession = true;
+            rfb.showDotCursor = true;
+            rfb.background = '#000000';
+            rfb.qualityLevel = 6;
+            rfb.compressionLevel = 2;
+
+            // RFB Event Handlers
+            rfb.addEventListener('connect', () => {
+                console.log('[VNC Viewer] Connected to session:', sessionId);
+                updateStatus('✓ Connected!', 'success');
+            });
+
+            rfb.addEventListener('disconnect', (e) => {
+                console.log('[VNC Viewer] Disconnected:', e.detail);
+
+                if (e.detail.clean) {
+                    showError('Connection closed');
+                } else {
+                    showError('Connection lost. Please refresh to reconnect.');
+                }
+            });
+
+            rfb.addEventListener('credentialsrequired', () => {
+                console.log('[VNC Viewer] Credentials required');
+                showError('VNC password required (not supported yet)');
+            });
+
+            rfb.addEventListener('securityfailure', (e) => {
+                console.error('[VNC Viewer] Security failure:', e.detail);
+                showError(`Security failure: ${e.detail.reason}`);
+            });
+
+            rfb.addEventListener('clipboard', (e) => {
+                console.log('[VNC Viewer] Clipboard data received');
+                // Handle clipboard if needed
+            });
+
+            rfb.addEventListener('bell', () => {
+                console.log('[VNC Viewer] Bell');
+            });
+
+            rfb.addEventListener('desktopname', (e) => {
+                console.log('[VNC Viewer] Desktop name:', e.detail.name);
+                document.title = `${e.detail.name} - StreamSpace`;
+            });
+
+        } catch (err) {
+            console.error('[VNC Viewer] Failed to create RFB client:', err);
+            showError(`Failed to initialize VNC viewer: ${err.message}`);
+        }
+
+        // Handle page unload
+        window.addEventListener('beforeunload', () => {
+            if (rfb) {
+                rfb.disconnect();
+            }
+        });
+
+        // Handle visibility change (pause/resume when tab is hidden/visible)
+        document.addEventListener('visibilitychange', () => {
+            if (document.hidden) {
+                console.log('[VNC Viewer] Tab hidden, pausing updates');
+                // RFB handles this automatically
+            } else {
+                console.log('[VNC Viewer] Tab visible, resuming updates');
+            }
+        });
+
+        // Keyboard shortcuts
+        document.addEventListener('keydown', (e) => {
+            // Ctrl+Alt+Shift+R: Reconnect
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'R') {
+                console.log('[VNC Viewer] Reconnecting...');
+                location.reload();
+            }
+
+            // Ctrl+Alt+Shift+F: Toggle fullscreen
+            if (e.ctrlKey && e.altKey && e.shiftKey && e.key === 'F') {
+                if (document.fullscreenElement) {
+                    document.exitFullscreen();
+                } else {
+                    document.documentElement.requestFullscreen();
+                }
+            }
+        });
+    </script>
+</body>
+</html>

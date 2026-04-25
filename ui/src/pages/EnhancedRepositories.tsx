@@ -117,7 +117,7 @@ function EnhancedRepositoriesContent() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time repository events via WebSocket
-  useRepositoryEvents((data: any) => {
+  useRepositoryEvents((data: Record<string, unknown>) => {
     setWsConnected(true);
     setWsReconnectAttempts(0);
 
@@ -190,7 +190,7 @@ function EnhancedRepositoriesContent() {
     setDialogOpen(true);
   };
 
-  const handleSave = (data: any) => {
+  const handleSave = (data: { name: string; url: string; branch?: string; authType?: string; authSecret?: string }) => {
     if (editingRepository) {
       updateRepository.mutate(
         { id: editingRepository.id, data },
@@ -199,7 +199,7 @@ function EnhancedRepositoriesContent() {
             setDialogOpen(false);
             setSnackbar({ open: true, message: 'Repository updated successfully', severity: 'success' });
           },
-          onError: (error: any) => {
+          onError: (error: Error) => {
             setSnackbar({ open: true, message: error.message || 'Failed to update repository', severity: 'error' });
           },
         }
@@ -210,7 +210,7 @@ function EnhancedRepositoriesContent() {
           setDialogOpen(false);
           setSnackbar({ open: true, message: 'Repository added successfully', severity: 'success' });
         },
-        onError: (error: any) => {
+        onError: (error: Error) => {
           setSnackbar({ open: true, message: error.message || 'Failed to add repository', severity: 'error' });
         },
       });
@@ -224,7 +224,7 @@ function EnhancedRepositoriesContent() {
         // Refresh after a short delay to show the syncing status
         setTimeout(() => refetch(), 1000);
       },
-      onError: (error: any) => {
+      onError: (error: Error) => {
         setSnackbar({ open: true, message: error.message || 'Failed to sync repository', severity: 'error' });
       },
     });
@@ -236,7 +236,7 @@ function EnhancedRepositoriesContent() {
         setSnackbar({ open: true, message: 'Syncing all repositories', severity: 'success' });
         setTimeout(() => refetch(), 1000);
       },
-      onError: (error: any) => {
+      onError: (error: Error) => {
         setSnackbar({ open: true, message: error.message || 'Failed to sync repositories', severity: 'error' });
       },
     });
@@ -251,7 +251,7 @@ function EnhancedRepositoriesContent() {
       onSuccess: () => {
         setSnackbar({ open: true, message: 'Repository deleted successfully', severity: 'success' });
       },
-      onError: (error: any) => {
+      onError: (error: Error) => {
         setSnackbar({ open: true, message: error.message || 'Failed to delete repository', severity: 'error' });
       },
     });

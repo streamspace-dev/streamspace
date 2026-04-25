@@ -437,6 +437,54 @@ func CSRFProtection() gin.HandlerFunc {
 	})
 
 	return func(c *gin.Context) {
+		// EXEMPTION: JWT-Authenticated API Clients
+		//
+		// Skip CSRF validation for requests authenticated with JWT tokens.
+		// JWT tokens provide sufficient authentication for programmatic API clients
+		// (curl, scripts, CI/CD, integrations) and don't require CSRF protection.
+		//
+		// WHY THIS IS SAFE:
+		//
+		// CSRF attacks exploit the browser's automatic cookie-sending behavior.
+		// JWT authentication requires clients to explicitly include the token in
+		// the Authorization header, which attackers cannot do cross-origin.
+		//
+		// CSRF Attack Scenario (Session Cookies):
+		//   1. User logs in → gets session cookie
+		//   2. User visits evil.com
+		//   3. evil.com: fetch('https://streamspace.io/api/delete', {method: 'POST'})
+		//   4. Browser automatically sends session cookie
+		//   5. Attack succeeds (without CSRF protection)
+		//
+		// JWT Attack Scenario (Bearer Tokens):
+		//   1. User logs in → gets JWT token in response body
+		//   2. User visits evil.com
+		//   3. evil.com: fetch('https://streamspace.io/api/delete', {method: 'POST'})
+		//   4. Browser does NOT send JWT (not in cookie, must be in header)
+		//   5. Attack fails (no Authorization header)
+		//
+		// IMPORTANT: This exemption only applies to Bearer token authentication.
+		// Session-based authentication (cookies) still requires CSRF protection.
+		//
+		// USE CASES:
+		// - CLI tools (curl, httpie)
+		// - CI/CD scripts (GitHub Actions, Jenkins)
+		// - API integrations (Zapier, custom scripts)
+		// - Mobile apps
+		// - Server-to-server communication
+		//
+		// SECURITY CONSIDERATIONS:
+		// - JWT tokens must be kept secure (not exposed in URLs or logs)
+		// - Use HTTPS to prevent token interception
+		// - Implement token expiration and refresh
+		// - Validate JWT signature on every request
+		authHeader := c.GetHeader("Authorization")
+		if len(authHeader) > 7 && authHeader[:7] == "Bearer " {
+			// Request has JWT token, skip CSRF validation
+			c.Next()
+			return
+		}
+
 		// BRANCH 1: SAFE METHODS (GET, HEAD, OPTIONS)
 		//
 		// These methods should not modify state, so we generate and send

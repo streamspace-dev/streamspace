@@ -54,7 +54,7 @@
 //
 //	package main
 //
-//	import "github.com/streamspace/streamspace/api/internal/plugins"
+//	import "github.com/streamspace-dev/streamspace/api/internal/plugins"
 //
 //	type MyPlugin struct{}
 //

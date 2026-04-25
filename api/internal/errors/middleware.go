@@ -123,17 +123,17 @@ func Recovery() gin.HandlerFunc {
 // HandleError is a helper function to handle errors in handlers
 func HandleError(c *gin.Context, err error) {
 	if appErr, ok := err.(*AppError); ok {
-		c.Error(appErr)
+		_ = c.Error(appErr)
 		c.JSON(appErr.StatusCode, appErr.ToResponse())
 	} else {
 		internalErr := InternalServer(err.Error())
-		c.Error(internalErr)
+		_ = c.Error(internalErr)
 		c.JSON(internalErr.StatusCode, internalErr.ToResponse())
 	}
 }
 
 // AbortWithError is a helper to abort request with error
 func AbortWithError(c *gin.Context, err *AppError) {
-	c.Error(err)
+	_ = c.Error(err)
 	c.AbortWithStatusJSON(err.StatusCode, err.ToResponse())
 }

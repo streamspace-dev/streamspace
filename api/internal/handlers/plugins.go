@@ -81,8 +81,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // PluginHandler handles plugin-related HTTP requests.
@@ -381,7 +382,6 @@ func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 			` OR cp.description ILIKE $` + strconv.Itoa(argIndex) +
 			` OR $` + strconv.Itoa(argIndex) + ` = ANY(cp.tags))`
 		args = append(args, "%"+search+"%")
-		argIndex++
 	}
 
 	// Sorting
@@ -424,7 +424,7 @@ func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 
 		// Parse manifest
 		if len(manifestJSON) > 0 {
-			json.Unmarshal(manifestJSON, &plugin.Manifest)
+			_ = json.Unmarshal(manifestJSON, &plugin.Manifest)
 		}
 
 		// Parse tags
@@ -433,7 +433,7 @@ func (h *PluginHandler) BrowsePluginCatalog(c *gin.Context) {
 			tagsStr := tags.String
 			if len(tagsStr) > 2 {
 				tagsStr = tagsStr[1 : len(tagsStr)-1] // Remove { }
-				json.Unmarshal([]byte(`["`+tagsStr+`"]`), &plugin.Tags)
+				_ = json.Unmarshal([]byte(`["`+tagsStr+`"]`), &plugin.Tags)
 			}
 		}
 
@@ -529,7 +529,7 @@ func (h *PluginHandler) GetCatalogPlugin(c *gin.Context) {
 
 	// Parse manifest
 	if len(manifestJSON) > 0 {
-		json.Unmarshal(manifestJSON, &plugin.Manifest)
+		_ = json.Unmarshal(manifestJSON, &plugin.Manifest)
 	}
 
 	// Parse tags
@@ -537,13 +537,13 @@ func (h *PluginHandler) GetCatalogPlugin(c *gin.Context) {
 		tagsStr := tags.String
 		if len(tagsStr) > 2 {
 			tagsStr = tagsStr[1 : len(tagsStr)-1]
-			json.Unmarshal([]byte(`["`+tagsStr+`"]`), &plugin.Tags)
+			_ = json.Unmarshal([]byte(`["`+tagsStr+`"]`), &plugin.Tags)
 		}
 	}
 
 	// Get view count and update stats
 	go func() {
-		h.db.DB().Exec(`
+		_, _ = h.db.DB().Exec(`
 			INSERT INTO plugin_stats (plugin_id, view_count, last_viewed_at)
 			VALUES ($1, 1, $2)
 			ON CONFLICT (plugin_id) DO UPDATE
@@ -592,13 +592,7 @@ func (h *PluginHandler) RatePlugin(c *gin.Context) {
 	userID := c.GetString("user_id") // From auth middleware
 
 	var req models.RatePluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
-		return
-	}
-
-	if req.Rating < 1 || req.Rating > 5 {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Rating must be between 1 and 5"})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -616,7 +610,7 @@ func (h *PluginHandler) RatePlugin(c *gin.Context) {
 	}
 
 	// Update plugin average rating
-	h.db.DB().Exec(`
+	_, _ = h.db.DB().Exec(`
 		UPDATE catalog_plugins
 		SET avg_rating = (SELECT AVG(rating) FROM plugin_ratings WHERE plugin_id = $1),
 		    rating_count = (SELECT COUNT(*) FROM plugin_ratings WHERE plugin_id = $1),
@@ -679,7 +673,12 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	userID := c.GetString("user_id")
 
 	var req models.InstallPluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
+	if !validator.BindAndValidate(c, &req) {
+		return
+	}
+
+	// Set default config if not provided
+	if len(req.Config) == 0 {
 		req.Config = json.RawMessage("{}")
 	}
 
@@ -709,7 +708,7 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 
 	// Parse manifest
 	if len(manifestJSON) > 0 {
-		json.Unmarshal(manifestJSON, &catalogPlugin.Manifest)
+		_ = json.Unmarshal(manifestJSON, &catalogPlugin.Manifest)
 	}
 
 	// Check if already installed
@@ -749,13 +748,13 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 
 	// Update install count
 	go func() {
-		h.db.DB().Exec(`
+		_, _ = h.db.DB().Exec(`
 			UPDATE catalog_plugins
 			SET install_count = install_count + 1
 			WHERE id = $1
 		`, catalogPlugin.ID)
 
-		h.db.DB().Exec(`
+		_, _ = h.db.DB().Exec(`
 			INSERT INTO plugin_stats (plugin_id, install_count, last_installed_at)
 			VALUES ($1, 1, $2)
 			ON CONFLICT (plugin_id) DO UPDATE
@@ -997,8 +996,7 @@ func (h *PluginHandler) UpdateInstalledPlugin(c *gin.Context) {
 	id := c.Param("id")
 
 	var req models.UpdatePluginRequest
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": "Invalid request", "details": err.Error()})
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 

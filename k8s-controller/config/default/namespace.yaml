@@ -1,7 +1,0 @@
-apiVersion: v1
-kind: Namespace
-metadata:
-  name: streamspace
-  labels:
-    app.kubernetes.io/name: streamspace
-    app.kubernetes.io/part-of: streamspace-controller

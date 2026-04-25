@@ -1,4 +1,4 @@
-import { useState, useRef, useCallback } from 'react';
+import { useRef, useCallback } from 'react';
 import {
   Box,
   Typography,
@@ -114,12 +114,12 @@ export default function SharedSessions() {
 
   // Real-time session updates via WebSocket with notifications
   // Wrap callback in useCallback to prevent reconnection loop
-  const handleSessionsUpdate = useCallback((updatedSessions: any[]) => {
+  const handleSessionsUpdate = useCallback((updatedSessions: Array<{ id: string; state: string }>) => {
     if (!currentUser?.id || sessions.length === 0) return;
 
     // Update shared sessions with real-time data and show notifications for changes
     sessions.forEach((sharedSession) => {
-      const updated = updatedSessions.find((s: any) => s.id === sharedSession.id);
+      const updated = updatedSessions.find((s) => s.id === sharedSession.id);
       if (updated) {
         // Check if state changed
         const prevState = prevStatesRef.current.get(sharedSession.id);

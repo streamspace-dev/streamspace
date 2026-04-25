@@ -31,18 +31,24 @@ import (
 //
 // Each user has:
 //   - A unique ID (UUID)
+//   - An organization membership (org_id for multi-tenancy)
 //   - Authentication credentials (provider-specific)
 //   - Resource quotas (sessions, CPU, memory, storage)
 //   - Group memberships (for team-based access control)
+//
+// SECURITY: All API handlers MUST filter queries by org_id from the
+// authenticated user's JWT claims to prevent cross-tenant data access.
 //
 // Example:
 //
 //	{
 //	  "id": "550e8400-e29b-41d4-a716-446655440000",
+//	  "orgId": "org-acme",
 //	  "username": "alice",
 //	  "email": "alice@example.com",
 //	  "fullName": "Alice Smith",
 //	  "role": "user",
+//	  "orgRole": "user",
 //	  "provider": "local",
 //	  "active": true,
 //	  "quota": {
@@ -56,6 +62,11 @@ type User struct {
 	// ID is a unique identifier for this user (UUID v4).
 	// Generated automatically when the user is created.
 	ID string `json:"id" db:"id"`
+
+	// OrgID is the organization this user belongs to.
+	// SECURITY: This field is critical for multi-tenancy isolation.
+	// All queries MUST filter by org_id to prevent cross-tenant access.
+	OrgID string `json:"orgId" db:"org_id"`
 
 	// Username is a unique identifier used for authentication and display.
 	// Requirements:
@@ -79,7 +90,7 @@ type User struct {
 	// Example: "Alice Smith", "Bob Jones"
 	FullName string `json:"fullName" db:"full_name"`
 
-	// Role defines the user's permission level.
+	// Role defines the user's system-wide permission level.
 	//
 	// Valid roles:
 	//   - "user": Standard user (can manage own sessions)
@@ -88,6 +99,17 @@ type User struct {
 	//
 	// Default: "user"
 	Role string `json:"role" db:"role"`
+
+	// OrgRole defines the user's role within their organization.
+	//
+	// Valid org roles:
+	//   - "org_admin": Manage users/roles, templates, org settings
+	//   - "maintainer": Manage templates, sessions (no user admin)
+	//   - "user": Manage own sessions, list org templates
+	//   - "viewer": Read-only access to lists/metrics
+	//
+	// Default: "user"
+	OrgRole string `json:"orgRole,omitempty" db:"org_role"`
 
 	// Provider indicates how this user authenticates.
 	//
@@ -411,12 +433,12 @@ type GroupMembership struct {
 //	  "provider": "local"
 //	}
 type CreateUserRequest struct {
-	Username string `json:"username" binding:"required"`
-	Email    string `json:"email" binding:"required,email"`
-	FullName string `json:"fullName" binding:"required"`
-	Password string `json:"password"` // Required for local auth, validated in handler
-	Role     string `json:"role"`     // user, admin, operator
-	Provider string `json:"provider"` // local, saml, oidc
+	Username string `json:"username" binding:"required" validate:"required,username"`
+	Email    string `json:"email" binding:"required,email" validate:"required,email"`
+	FullName string `json:"fullName" binding:"required" validate:"required,min=1,max=200"`
+	Password string `json:"password" validate:"omitempty,password"` // Required for local auth, validated in handler
+	Role     string `json:"role" validate:"omitempty,oneof=user admin operator"` // user, admin, operator
+	Provider string `json:"provider" validate:"omitempty,oneof=local saml oidc"` // local, saml, oidc
 }
 
 // UpdateUserRequest represents a request to update an existing user.
@@ -430,9 +452,9 @@ type CreateUserRequest struct {
 //	  "role": "admin"
 //	}
 type UpdateUserRequest struct {
-	Email    *string `json:"email,omitempty"`
-	FullName *string `json:"fullName,omitempty"`
-	Role     *string `json:"role,omitempty"`
+	Email    *string `json:"email,omitempty" validate:"omitempty,email"`
+	FullName *string `json:"fullName,omitempty" validate:"omitempty,min=1,max=200"`
+	Role     *string `json:"role,omitempty" validate:"omitempty,oneof=user admin operator"`
 	Active   *bool   `json:"active,omitempty"`
 }
 
@@ -454,20 +476,20 @@ type UpdateUserRequest struct {
 //	  "parentID": null
 //	}
 type CreateGroupRequest struct {
-	Name        string  `json:"name" binding:"required"`
-	DisplayName string  `json:"displayName" binding:"required"`
-	Description string  `json:"description"`
-	Type        string  `json:"type" binding:"required"`
-	ParentID    *string `json:"parentId,omitempty"`
+	Name        string  `json:"name" binding:"required" validate:"required,min=3,max=50,lowercase,alphanum|contains=-"`
+	DisplayName string  `json:"displayName" binding:"required" validate:"required,min=3,max=100"`
+	Description string  `json:"description" validate:"omitempty,max=500"`
+	Type        string  `json:"type" binding:"required" validate:"required,oneof=team department project"`
+	ParentID    *string `json:"parentId,omitempty" validate:"omitempty,uuid"`
 }
 
 // UpdateGroupRequest represents a request to update an existing group.
 //
 // All fields are optional (pointer types) - only provided fields are updated.
 type UpdateGroupRequest struct {
-	DisplayName *string `json:"displayName,omitempty"`
-	Description *string `json:"description,omitempty"`
-	Type        *string `json:"type,omitempty"`
+	DisplayName *string `json:"displayName,omitempty" validate:"omitempty,min=3,max=100"`
+	Description *string `json:"description,omitempty" validate:"omitempty,max=500"`
+	Type        *string `json:"type,omitempty" validate:"omitempty,oneof=team department project"`
 }
 
 // AddGroupMemberRequest represents a request to add a user to a group.
@@ -479,8 +501,8 @@ type UpdateGroupRequest struct {
 //	  "role": "member"
 //	}
 type AddGroupMemberRequest struct {
-	UserID string `json:"userId" binding:"required"`
-	Role   string `json:"role"` // member, admin, owner
+	UserID string `json:"userId" binding:"required" validate:"required,min=1,max=100"`
+	Role   string `json:"role" validate:"omitempty,oneof=member admin owner"`
 }
 
 // SetQuotaRequest represents a request to set or update user/group quotas.

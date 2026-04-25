@@ -12,7 +12,6 @@ import {
   Avatar,
   CircularProgress,
   IconButton,
-  Tooltip,
 } from '@mui/material';
 import {
   Search as SearchIcon,
@@ -73,7 +72,7 @@ export default function Dashboard() {
   const [searchQuery, setSearchQuery] = useState('');
   const [favorites, setFavorites] = useState<Set<string>>(new Set());
   const [launching, setLaunching] = useState<Set<string>>(new Set());
-  const [favoritesLoading, setFavoritesLoading] = useState(false);
+  const [, setFavoritesLoading] = useState(false);
 
   // Load user favorites from backend API
   useEffect(() => {
@@ -85,7 +84,7 @@ export default function Dashboard() {
         const response = await api.getFavorites();
         const favoriteNames = response.favorites.map((f: { templateName: string }) => f.templateName);
         setFavorites(new Set(favoriteNames));
-      } catch (error) {
+      } catch {
         // Fallback to localStorage for backward compatibility
         const stored = localStorage.getItem(`favorites_${username}`);
         if (stored) {
@@ -117,7 +116,7 @@ export default function Dashboard() {
       } else {
         await api.addFavorite(templateName);
       }
-    } catch (error) {
+    } catch {
       // Revert on error
       if (isCurrentlyFavorite) {
         newFavorites.add(templateName);
@@ -150,7 +149,7 @@ export default function Dashboard() {
         try {
           await api.updateSession(existingSession.name, { state: 'running' });
           await refetchSessions();
-        } catch (error) {
+        } catch {
           toast.error('Failed to wake session');
         }
       }
@@ -178,8 +177,9 @@ export default function Dashboard() {
       setTimeout(() => {
         navigate('/sessions');
       }, 1000);
-    } catch (error: any) {
-      const errorData = error.response?.data;
+    } catch (error: unknown) {
+      const axiosError = error as { response?: { data?: { message?: string; error?: string } } };
+      const errorData = axiosError.response?.data;
       const errorMessage = errorData?.message || errorData?.error || 'Failed to launch application';
       toast.error(errorMessage);
     } finally {

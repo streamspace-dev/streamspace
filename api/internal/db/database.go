@@ -197,6 +197,22 @@ func NewDatabase(config Config) (*Database, error) {
 	return &Database{db: db}, nil
 }
 
+// NewDatabaseForTesting creates a Database from an existing sql.DB connection.
+// This constructor is intended ONLY FOR TESTING to enable dependency injection
+// with mock databases (e.g., sqlmock).
+//
+// DO NOT use this in production code. Use NewDatabase() instead.
+//
+// Example usage in tests:
+//
+//	db, mock, err := sqlmock.New()
+//	database := db.NewDatabaseForTesting(db)
+//	handler := &AuditHandler{database: database}
+//	// ... setup mock expectations and run tests
+func NewDatabaseForTesting(db *sql.DB) *Database {
+	return &Database{db: db}
+}
+
 // Close closes the database connection
 func (d *Database) Close() error {
 	return d.db.Close()
@@ -2100,6 +2116,294 @@ func (d *Database) Migrate() error {
 
 		// Create index for idle session queries
 		`CREATE INDEX IF NOT EXISTS idx_sessions_last_activity ON sessions(last_activity)`,
+
+		// License Management
+		// Licenses table - manages platform licensing and feature enforcement
+		`CREATE TABLE IF NOT EXISTS licenses (
+			id SERIAL PRIMARY KEY,
+			license_key VARCHAR(255) UNIQUE NOT NULL,
+			tier VARCHAR(50) NOT NULL,
+			features JSONB,
+			max_users INT,
+			max_sessions INT,
+			max_nodes INT,
+			issued_at TIMESTAMP NOT NULL,
+			expires_at TIMESTAMP NOT NULL,
+			activated_at TIMESTAMP,
+			status VARCHAR(50) DEFAULT 'active',
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// License usage tracking - daily snapshots of resource usage
+		`CREATE TABLE IF NOT EXISTS license_usage (
+			id SERIAL PRIMARY KEY,
+			license_id INT REFERENCES licenses(id) ON DELETE CASCADE,
+			snapshot_date DATE NOT NULL,
+			active_users INT DEFAULT 0,
+			active_sessions INT DEFAULT 0,
+			active_nodes INT DEFAULT 0,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			UNIQUE(license_id, snapshot_date)
+		)`,
+
+		// License indexes for efficient querying
+		`CREATE INDEX IF NOT EXISTS idx_licenses_tier ON licenses(tier)`,
+		`CREATE INDEX IF NOT EXISTS idx_licenses_status ON licenses(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_licenses_expires_at ON licenses(expires_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_license_usage_license_id ON license_usage(license_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_license_usage_snapshot_date ON license_usage(snapshot_date)`,
+
+		// Insert default Community license for initial setup
+		`INSERT INTO licenses (license_key, tier, features, max_users, max_sessions, max_nodes, issued_at, expires_at, activated_at, status, metadata)
+		VALUES (
+			'COMMUNITY-DEFAULT',
+			'community',
+			'{"basic_auth": true, "saml": false, "oidc": false, "mfa": false, "recordings": false, "advanced_compliance": false, "priority_support": false}',
+			10,
+			20,
+			3,
+			CURRENT_TIMESTAMP,
+			CURRENT_TIMESTAMP + INTERVAL '100 years',
+			CURRENT_TIMESTAMP,
+			'active',
+			'{"description": "Default Community license - free forever", "auto_generated": true}'
+		)
+		ON CONFLICT (license_key) DO NOTHING`,
+
+		// ========================================================================
+		// v2.0 Architecture: Multi-Platform Control Plane + Agents
+		// ========================================================================
+
+		// Agents table (platform-specific execution agents)
+		// Supports multi-platform deployment (Kubernetes, Docker, VMs, Cloud)
+		`CREATE TABLE IF NOT EXISTS agents (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			agent_id VARCHAR(255) UNIQUE NOT NULL,
+			platform VARCHAR(50) NOT NULL,
+			region VARCHAR(100),
+			status VARCHAR(50) DEFAULT 'offline',
+			capacity JSONB,
+			last_heartbeat TIMESTAMP,
+			websocket_id VARCHAR(255),
+			metadata JSONB,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Agent commands table (command queue for agent communication)
+		// Tracks commands sent from Control Plane to Agents
+		`CREATE TABLE IF NOT EXISTS agent_commands (
+			id UUID PRIMARY KEY DEFAULT gen_random_uuid(),
+			command_id VARCHAR(255) UNIQUE NOT NULL,
+			agent_id VARCHAR(255) REFERENCES agents(agent_id) ON DELETE CASCADE,
+			session_id VARCHAR(255),
+			action VARCHAR(50) NOT NULL,
+			payload JSONB,
+			status VARCHAR(50) DEFAULT 'pending',
+			error_message TEXT,
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			sent_at TIMESTAMP,
+			acknowledged_at TIMESTAMP,
+			completed_at TIMESTAMP
+		)`,
+
+		// Alter sessions table to add v2.0 platform-agnostic fields
+		// NOTE: These columns may already exist from previous runs (IF NOT EXISTS doesn't work on ALTER TABLE)
+		// Using DO $$ block to check if columns exist before adding them
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='agent_id') THEN
+				ALTER TABLE sessions ADD COLUMN agent_id VARCHAR(255) REFERENCES agents(agent_id);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='platform') THEN
+				ALTER TABLE sessions ADD COLUMN platform VARCHAR(50);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='platform_metadata') THEN
+				ALTER TABLE sessions ADD COLUMN platform_metadata JSONB;
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='cluster_id') THEN
+				ALTER TABLE sessions ADD COLUMN cluster_id VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='sessions' AND column_name='tags') THEN
+				ALTER TABLE sessions ADD COLUMN tags TEXT[];
+			END IF;
+		END $$`,
+
+		// Alter agents table to add v2.0-beta cluster fields
+		// NOTE: These columns may already exist from previous runs (IF NOT EXISTS doesn't work on ALTER TABLE)
+		// Using DO $$ block to check if columns exist before adding them
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='cluster_id') THEN
+				ALTER TABLE agents ADD COLUMN cluster_id VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='cluster_name') THEN
+				ALTER TABLE agents ADD COLUMN cluster_name VARCHAR(255);
+			END IF;
+		END $$`,
+
+		// Migration 005: Add API key authentication columns to agents table (Issue #229)
+		// These columns support secure agent-to-API authentication
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_hash') THEN
+				ALTER TABLE agents ADD COLUMN api_key_hash VARCHAR(255);
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_created_at') THEN
+				ALTER TABLE agents ADD COLUMN api_key_created_at TIMESTAMP;
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='api_key_last_used_at') THEN
+				ALTER TABLE agents ADD COLUMN api_key_last_used_at TIMESTAMP;
+			END IF;
+		END $$`,
+
+		// Migration 006: Add organizations table and org_id to tables (Issue #233)
+		// This migration implements multi-tenancy by adding organization support
+		// SECURITY: P0 critical security fix to prevent cross-tenant data access
+		`CREATE TABLE IF NOT EXISTS organizations (
+			id VARCHAR(255) PRIMARY KEY,
+			name VARCHAR(255) UNIQUE NOT NULL,
+			display_name VARCHAR(255) NOT NULL,
+			description TEXT,
+			k8s_namespace VARCHAR(255) NOT NULL DEFAULT 'streamspace',
+			status VARCHAR(50) DEFAULT 'active',
+			created_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP,
+			updated_at TIMESTAMP DEFAULT CURRENT_TIMESTAMP
+		)`,
+
+		// Create indexes for organizations
+		`CREATE INDEX IF NOT EXISTS idx_organizations_name ON organizations(name)`,
+		`CREATE INDEX IF NOT EXISTS idx_organizations_status ON organizations(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_organizations_k8s_namespace ON organizations(k8s_namespace)`,
+
+		// Add org_id to users table (nullable initially for backward compatibility)
+		`ALTER TABLE users ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE SET NULL`,
+		`CREATE INDEX IF NOT EXISTS idx_users_org_id ON users(org_id)`,
+
+		// Add org_id to sessions table
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE CASCADE`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_org_id ON sessions(org_id)`,
+
+		// Add org_id to audit_log table (if exists)
+		`DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'audit_log') THEN
+				ALTER TABLE audit_log ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE CASCADE;
+				CREATE INDEX IF NOT EXISTS idx_audit_log_org_id ON audit_log(org_id);
+			END IF;
+		END $$`,
+
+		// Add org_id to api_keys table (if exists)
+		`DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'api_keys') THEN
+				ALTER TABLE api_keys ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE CASCADE;
+				CREATE INDEX IF NOT EXISTS idx_api_keys_org_id ON api_keys(org_id);
+			END IF;
+		END $$`,
+
+		// Add org_id to webhooks table (if exists)
+		`DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'webhooks') THEN
+				ALTER TABLE webhooks ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE CASCADE;
+				CREATE INDEX IF NOT EXISTS idx_webhooks_org_id ON webhooks(org_id);
+			END IF;
+		END $$`,
+
+		// Add org_id to agents table (for org-scoped agent access)
+		`DO $$
+		BEGIN
+			IF EXISTS (SELECT 1 FROM information_schema.tables WHERE table_name = 'agents') THEN
+				ALTER TABLE agents ADD COLUMN IF NOT EXISTS org_id VARCHAR(255) REFERENCES organizations(id) ON DELETE CASCADE;
+				CREATE INDEX IF NOT EXISTS idx_agents_org_id ON agents(org_id);
+			END IF;
+		END $$`,
+
+		// Create a default organization for existing data
+		`INSERT INTO organizations (id, name, display_name, description, k8s_namespace, status)
+		VALUES ('default-org', 'default', 'Default Organization', 'Default organization for existing data', 'streamspace', 'active')
+		ON CONFLICT (id) DO NOTHING`,
+
+		// Update existing users to belong to default org (if org_id is null)
+		`UPDATE users SET org_id = 'default-org' WHERE org_id IS NULL`,
+
+		// Update existing sessions to belong to default org (if org_id is null)
+		`UPDATE sessions SET org_id = 'default-org' WHERE org_id IS NULL`,
+
+		// Migration 007: Add approval_status to agents table (Issue #234)
+		// This migration adds agent approval workflow support
+		`DO $$
+		BEGIN
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approval_status') THEN
+				ALTER TABLE agents ADD COLUMN approval_status VARCHAR(20) DEFAULT 'approved';
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approved_at') THEN
+				ALTER TABLE agents ADD COLUMN approved_at TIMESTAMP;
+			END IF;
+			IF NOT EXISTS (SELECT 1 FROM information_schema.columns
+				WHERE table_name='agents' AND column_name='approved_by') THEN
+				ALTER TABLE agents ADD COLUMN approved_by VARCHAR(255);
+			END IF;
+		END $$`,
+
+		// Create index for approval_status for fast filtering
+		`CREATE INDEX IF NOT EXISTS idx_agents_approval_status ON agents(approval_status)`,
+
+		// Migration 008: Add streaming protocol support to sessions table
+		// Purpose: Support multiple streaming protocols (VNC, Selkies, Guacamole, etc.)
+		// This enables StreamSpace to support various streaming technologies beyond VNC.
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_protocol VARCHAR(50) DEFAULT 'vnc'`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_port INTEGER DEFAULT 5900`,
+		`ALTER TABLE sessions ADD COLUMN IF NOT EXISTS streaming_path VARCHAR(255)`,
+
+		// Create index for streaming protocol queries
+		`CREATE INDEX IF NOT EXISTS idx_sessions_streaming_protocol ON sessions(streaming_protocol)`,
+
+		// Update existing sessions to have explicit VNC protocol
+		`UPDATE sessions SET streaming_protocol = 'vnc', streaming_port = 5900 WHERE streaming_protocol IS NULL`,
+
+		// Indexes for agents table
+		`CREATE INDEX IF NOT EXISTS idx_agents_agent_id ON agents(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_platform ON agents(platform)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_status ON agents(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_region ON agents(region)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_last_heartbeat ON agents(last_heartbeat)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_id ON agents(cluster_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_cluster_status ON agents(cluster_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_api_key_hash ON agents(api_key_hash)`,
+
+		// Indexes for agent_commands table
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_command_id ON agent_commands(command_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_id ON agent_commands(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_session_id ON agent_commands(session_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_status ON agent_commands(status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_created_at ON agent_commands(created_at)`,
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_action ON agent_commands(action)`,
+
+		// Composite indexes for common queries
+		`CREATE INDEX IF NOT EXISTS idx_agent_commands_agent_status ON agent_commands(agent_id, status)`,
+		`CREATE INDEX IF NOT EXISTS idx_agents_platform_status ON agents(platform, status)`,
+
+		// Index for sessions table agent_id lookup
+		`CREATE INDEX IF NOT EXISTS idx_sessions_agent_id ON sessions(agent_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_platform ON sessions(platform)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_cluster_id ON sessions(cluster_id)`,
+		`CREATE INDEX IF NOT EXISTS idx_sessions_tags ON sessions USING GIN(tags)`,
 	}
 
 	// Execute migrations

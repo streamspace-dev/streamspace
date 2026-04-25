@@ -1,0 +1,104 @@
+package config
+
+import "github.com/streamspace-dev/streamspace/agents/k8s-agent/internal/errors"
+
+// AgentConfig holds the configuration for the K8s Agent.
+//
+// Configuration can be provided via:
+//   - Command-line flags
+//   - Environment variables
+//   - ConfigMap (when running in Kubernetes)
+type AgentConfig struct{
+	// AgentID is the unique identifier for this agent
+	// Format: k8s-{environment}-{region} (e.g., k8s-prod-us-east-1)
+	AgentID string
+
+	// ControlPlaneURL is the WebSocket URL for the Control Plane
+	// Format: wss://control.example.com or ws://localhost:8000 (for dev)
+	ControlPlaneURL string
+
+	// Platform identifies the agent type
+	// Value: "kubernetes" (fixed for K8s Agent)
+	Platform string
+
+	// Region is the deployment region (optional)
+	// Examples: us-east-1, eu-west-1, ap-southeast-1
+	Region string
+
+	// Namespace is the Kubernetes namespace where sessions will be created
+	// Default: "streamspace"
+	Namespace string
+
+	// KubeConfig is the path to kubeconfig file (optional)
+	// If empty, uses in-cluster config
+	KubeConfig string
+
+	// Capacity defines the maximum resources available on this agent
+	Capacity AgentCapacity
+
+	// HeartbeatInterval is the interval for sending heartbeats
+	// Default: 10 seconds
+	HeartbeatInterval int // in seconds
+
+	// ReconnectBackoff defines the reconnection strategy
+	// Default: [2s, 4s, 8s, 16s, 32s]
+	ReconnectBackoff []int // in seconds
+
+	// APIKey is the agent's API key for authentication with Control Plane
+	// SECURITY: Must be stored securely (e.g., Kubernetes Secret)
+	// Format: 64 hexadecimal characters (32 bytes)
+	APIKey string
+}
+
+// AgentCapacity defines the maximum resources available on the agent.
+// This struct matches the API's expected format (api/internal/models/agent.go).
+type AgentCapacity struct {
+	// MaxSessions is the maximum number of concurrent sessions
+	// Example: 100 sessions
+	MaxSessions int `json:"maxSessions"`
+
+	// CPU is the maximum CPU available (formatted string)
+	// Example: "64 cores", "100000m"
+	CPU string `json:"cpu"`
+
+	// Memory is the maximum memory available (formatted string)
+	// Example: "256Gi", "128GB"
+	Memory string `json:"memory"`
+
+	// Storage is the maximum storage available (optional, formatted string)
+	// Example: "1Ti", "500Gi"
+	Storage string `json:"storage,omitempty"`
+}
+
+// Validate validates the agent configuration.
+func (c *AgentConfig) Validate() error {
+	if c.AgentID == "" {
+		return errors.ErrMissingAgentID
+	}
+
+	if c.ControlPlaneURL == "" {
+		return errors.ErrMissingControlPlaneURL
+	}
+
+	if c.APIKey == "" {
+		return errors.ErrMissingAPIKey
+	}
+
+	if c.Platform == "" {
+		c.Platform = "kubernetes"
+	}
+
+	if c.Namespace == "" {
+		c.Namespace = "streamspace"
+	}
+
+	if c.HeartbeatInterval <= 0 {
+		c.HeartbeatInterval = 10 // default 10 seconds
+	}
+
+	if len(c.ReconnectBackoff) == 0 {
+		c.ReconnectBackoff = []int{2, 4, 8, 16, 32} // default exponential backoff
+	}
+
+	return nil
+}

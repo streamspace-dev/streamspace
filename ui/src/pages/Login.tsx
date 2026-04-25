@@ -124,9 +124,10 @@ export default function Login() {
 
         navigate('/');
       }
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Login failed:', err);
-      setError(err.response?.data?.message || 'Login failed. Please check your credentials.');
+      const axiosError = err as { response?: { data?: { message?: string } } };
+      setError(axiosError.response?.data?.message || 'Login failed. Please check your credentials.');
     } finally {
       setLoading(false);
     }

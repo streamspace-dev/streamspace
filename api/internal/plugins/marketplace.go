@@ -151,8 +151,8 @@ import (
 	"strings"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // PluginMarketplace manages plugin discovery, download, and installation.
@@ -783,7 +783,7 @@ func (m *PluginMarketplace) downloadPluginFiles(pluginName, pluginPath string) e
 
 	// Download README.md
 	readmeURL := fmt.Sprintf("%s/%s/README.md", m.repositoryURL, pluginName)
-	m.downloadFile(readmeURL, filepath.Join(pluginPath, "README.md")) // Optional, ignore errors
+	_ = m.downloadFile(readmeURL, filepath.Join(pluginPath, "README.md")) // Optional, ignore errors
 
 	// Download plugin code (could be .go, .js, etc.)
 	// Try multiple extensions

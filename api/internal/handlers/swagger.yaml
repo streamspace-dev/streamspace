@@ -1,0 +1,1931 @@
+openapi: 3.0.3
+info:
+  title: StreamSpace API
+  description: |
+    StreamSpace is a platform-agnostic container streaming platform that delivers GUI applications to web browsers.
+
+    ## Architecture
+    - **Control Plane**: Centralized API with WebSocket Hub for agent coordination
+    - **Agents**: Lightweight executors on target platforms (Kubernetes, Docker)
+    - **VNC Proxy**: Secure, firewall-friendly VNC streaming through WebSocket
+
+    ## Authentication
+    - **Users**: JWT tokens (24-hour expiration) via `/api/v1/auth/login`
+    - **Agents**: API keys via `/api/v1/agents/register`
+    - **Webhooks**: HMAC signatures
+
+    ## Rate Limiting
+    Default: 60 requests/minute per IP (configurable via `RATE_LIMIT_REQUESTS_PER_MINUTE`)
+
+    ## Common Response Formats
+    All error responses follow:
+    ```json
+    {
+      "error": "ErrorCode",
+      "message": "Detailed error message"
+    }
+    ```
+  version: 2.0.0-beta
+  contact:
+    name: StreamSpace Team
+    url: https://github.com/streamspace-dev/streamspace
+  license:
+    name: MIT
+    url: https://opensource.org/licenses/MIT
+
+servers:
+  - url: http://localhost:8000
+    description: Local development
+  - url: https://api.streamspace.example.com
+    description: Production
+
+tags:
+  - name: auth
+    description: Authentication and authorization
+  - name: sessions
+    description: Session lifecycle management
+  - name: templates
+    description: Application templates
+  - name: catalog
+    description: Template catalog and discovery
+  - name: agents
+    description: Agent management (v2.0 architecture)
+  - name: users
+    description: User management
+  - name: groups
+    description: Group management
+  - name: vnc
+    description: VNC proxy and viewer
+  - name: admin
+    description: Administrative operations
+  - name: monitoring
+    description: Metrics and monitoring
+  - name: webhooks
+    description: Webhook integrations
+  - name: plugins
+    description: Plugin management
+  - name: quotas
+    description: Resource quota management
+
+components:
+  securitySchemes:
+    bearerAuth:
+      type: http
+      scheme: bearer
+      bearerFormat: JWT
+      description: JWT token obtained from /api/v1/auth/login
+    apiKeyAuth:
+      type: apiKey
+      in: header
+      name: X-API-Key
+      description: API key for agent authentication
+
+  schemas:
+    Error:
+      type: object
+      properties:
+        error:
+          type: string
+          description: Error code
+        message:
+          type: string
+          description: Human-readable error message
+      required:
+        - error
+        - message
+
+    Session:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        user:
+          type: string
+          description: Username owning the session
+        template:
+          type: string
+          description: Template name
+        status:
+          type: string
+          enum: [pending, creating, running, hibernating, hibernated, stopping, stopped, failed, terminated]
+        agent_id:
+          type: string
+          description: ID of the agent running this session
+        vnc_port:
+          type: integer
+          description: VNC port (internal to agent)
+        resources:
+          $ref: '#/components/schemas/Resources'
+        tags:
+          type: array
+          items:
+            type: string
+        created_at:
+          type: string
+          format: date-time
+        updated_at:
+          type: string
+          format: date-time
+
+    CreateSessionRequest:
+      type: object
+      required:
+        - user
+      properties:
+        user:
+          type: string
+          description: Username for the session
+        template:
+          type: string
+          description: Template name to use
+        application_id:
+          type: string
+          description: Installed application ID (alternative to template)
+        resources:
+          $ref: '#/components/schemas/Resources'
+        persistent_home:
+          type: boolean
+          default: true
+          description: Mount persistent home directory
+        idle_timeout:
+          type: string
+          example: "30m"
+          description: Auto-hibernate after idle period
+        max_session_duration:
+          type: string
+          example: "8h"
+          description: Maximum session lifetime
+        tags:
+          type: array
+          items:
+            type: string
+
+    Resources:
+      type: object
+      properties:
+        memory:
+          type: string
+          example: "2Gi"
+        cpu:
+          type: string
+          example: "1000m"
+
+    Template:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+          description: Unique template identifier
+        display_name:
+          type: string
+        description:
+          type: string
+        category:
+          type: string
+        app_type:
+          type: string
+        icon_url:
+          type: string
+        tags:
+          type: array
+          items:
+            type: string
+        default_resources:
+          $ref: '#/components/schemas/Resources'
+        manifest:
+          type: object
+          description: Platform-specific deployment manifest
+        created_at:
+          type: string
+          format: date-time
+
+    Agent:
+      type: object
+      properties:
+        id:
+          type: string
+        name:
+          type: string
+        platform:
+          type: string
+          enum: [kubernetes, docker, vm, aws, azure, gcp]
+        status:
+          type: string
+          enum: [online, offline, draining]
+        region:
+          type: string
+        capabilities:
+          type: object
+        active_sessions:
+          type: integer
+        available_memory:
+          type: string
+        available_cpu:
+          type: string
+        last_heartbeat:
+          type: string
+          format: date-time
+        registered_at:
+          type: string
+          format: date-time
+
+    AgentRegistration:
+      type: object
+      required:
+        - agent_id
+        - platform
+      properties:
+        agent_id:
+          type: string
+          description: Unique agent identifier
+        platform:
+          type: string
+          enum: [kubernetes, docker, vm, aws, azure, gcp]
+        name:
+          type: string
+          description: Friendly display name
+        region:
+          type: string
+        capabilities:
+          type: object
+        metadata:
+          type: object
+          additionalProperties:
+            type: string
+
+    User:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        username:
+          type: string
+        email:
+          type: string
+          format: email
+        role:
+          type: string
+          enum: [admin, operator, user]
+        active:
+          type: boolean
+        mfa_enabled:
+          type: boolean
+        created_at:
+          type: string
+          format: date-time
+
+    Group:
+      type: object
+      properties:
+        id:
+          type: string
+          format: uuid
+        name:
+          type: string
+        description:
+          type: string
+        member_count:
+          type: integer
+        created_at:
+          type: string
+          format: date-time
+
+    LoginRequest:
+      type: object
+      required:
+        - username
+        - password
+      properties:
+        username:
+          type: string
+        password:
+          type: string
+          format: password
+        mfa_code:
+          type: string
+          description: MFA TOTP code (if MFA enabled)
+
+    LoginResponse:
+      type: object
+      properties:
+        token:
+          type: string
+          description: JWT access token
+        refresh_token:
+          type: string
+        expires_at:
+          type: string
+          format: date-time
+        user:
+          $ref: '#/components/schemas/User'
+
+    Quota:
+      type: object
+      properties:
+        user_id:
+          type: string
+        max_sessions:
+          type: integer
+        max_memory:
+          type: string
+        max_cpu:
+          type: string
+        max_storage:
+          type: string
+        used_sessions:
+          type: integer
+        used_memory:
+          type: string
+        used_cpu:
+          type: string
+
+    PaginatedResponse:
+      type: object
+      properties:
+        data:
+          type: array
+          items: {}
+        total:
+          type: integer
+        page:
+          type: integer
+        limit:
+          type: integer
+        total_pages:
+          type: integer
+
+paths:
+  /health:
+    get:
+      summary: Health check
+      description: Returns API health status
+      operationId: healthCheck
+      tags:
+        - monitoring
+      responses:
+        '200':
+          description: API is healthy
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  status:
+                    type: string
+                    example: healthy
+                  version:
+                    type: string
+                  timestamp:
+                    type: string
+                    format: date-time
+
+  /version:
+    get:
+      summary: Get API version
+      operationId: getVersion
+      tags:
+        - monitoring
+      responses:
+        '200':
+          description: Version information
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  version:
+                    type: string
+                  build:
+                    type: string
+                  commit:
+                    type: string
+
+  # Authentication
+  /api/v1/auth/login:
+    post:
+      summary: User login
+      description: Authenticate with username and password, receive JWT token
+      operationId: login
+      tags:
+        - auth
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/LoginRequest'
+      responses:
+        '200':
+          description: Login successful
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+        '401':
+          description: Invalid credentials
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/auth/refresh:
+    post:
+      summary: Refresh JWT token
+      operationId: refreshToken
+      tags:
+        - auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Token refreshed
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/LoginResponse'
+
+  /api/v1/auth/logout:
+    post:
+      summary: Logout
+      operationId: logout
+      tags:
+        - auth
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Logged out successfully
+
+  /api/v1/auth/saml/login:
+    get:
+      summary: Initiate SAML SSO
+      operationId: samlLogin
+      tags:
+        - auth
+      responses:
+        '302':
+          description: Redirect to IdP
+
+  /api/v1/auth/saml/acs:
+    post:
+      summary: SAML assertion consumer service
+      operationId: samlACS
+      tags:
+        - auth
+      responses:
+        '302':
+          description: Redirect to app with token
+
+  /api/v1/auth/saml/metadata:
+    get:
+      summary: Get SAML SP metadata
+      operationId: samlMetadata
+      tags:
+        - auth
+      responses:
+        '200':
+          description: SAML metadata XML
+          content:
+            application/xml:
+              schema:
+                type: string
+
+  # Sessions
+  /api/v1/sessions:
+    get:
+      summary: List sessions
+      description: Get all sessions with optional filtering
+      operationId: listSessions
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user
+          in: query
+          schema:
+            type: string
+          description: Filter by username
+        - name: status
+          in: query
+          schema:
+            type: string
+            enum: [pending, creating, running, hibernating, hibernated, stopping, stopped, failed, terminated]
+        - name: template
+          in: query
+          schema:
+            type: string
+        - name: agent_id
+          in: query
+          schema:
+            type: string
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: List of sessions
+          content:
+            application/json:
+              schema:
+                allOf:
+                  - $ref: '#/components/schemas/PaginatedResponse'
+                  - type: object
+                    properties:
+                      data:
+                        type: array
+                        items:
+                          $ref: '#/components/schemas/Session'
+
+    post:
+      summary: Create session
+      description: Create a new container session
+      operationId: createSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/CreateSessionRequest'
+      responses:
+        '201':
+          description: Session created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '400':
+          description: Invalid request
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+        '403':
+          description: Quota exceeded
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Error'
+
+  /api/v1/sessions/{id}:
+    get:
+      summary: Get session
+      operationId: getSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+        '404':
+          description: Session not found
+
+    patch:
+      summary: Update session
+      operationId: updateSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                resources:
+                  $ref: '#/components/schemas/Resources'
+                idle_timeout:
+                  type: string
+      responses:
+        '200':
+          description: Session updated
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+    delete:
+      summary: Delete session
+      description: Terminate and delete a session
+      operationId: deleteSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Session deleted
+        '404':
+          description: Session not found
+
+  /api/v1/sessions/{id}/hibernate:
+    put:
+      summary: Hibernate session
+      description: Put session into hibernation (scale to zero)
+      operationId: hibernateSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session hibernating
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /api/v1/sessions/{id}/wake:
+    put:
+      summary: Wake session
+      description: Wake a hibernated session
+      operationId: wakeSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Session waking
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Session'
+
+  /api/v1/sessions/{id}/connect:
+    get:
+      summary: Get session connection info
+      description: Get VNC connection details for a session
+      operationId: connectSession
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Connection info
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  vnc_url:
+                    type: string
+                    description: WebSocket URL for VNC connection
+                  token:
+                    type: string
+                    description: One-time connection token
+
+  # VNC
+  /api/v1/vnc/ws/{sessionId}:
+    get:
+      summary: VNC WebSocket connection
+      description: WebSocket endpoint for VNC tunneling (v2.0 architecture)
+      operationId: vncWebSocket
+      tags:
+        - vnc
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+        - name: token
+          in: query
+          schema:
+            type: string
+          description: One-time connection token
+      responses:
+        '101':
+          description: Switching protocols to WebSocket
+
+  /api/v1/vnc-viewer/{sessionId}:
+    get:
+      summary: VNC viewer page
+      description: Serve noVNC viewer HTML
+      operationId: vncViewer
+      tags:
+        - vnc
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: sessionId
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: noVNC HTML page
+          content:
+            text/html:
+              schema:
+                type: string
+
+  # Templates
+  /api/v1/templates:
+    get:
+      summary: List templates
+      operationId: listTemplates
+      tags:
+        - templates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of templates
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Template'
+
+    post:
+      summary: Create template
+      description: Create a new template (operator/admin only)
+      operationId: createTemplate
+      tags:
+        - templates
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Template'
+      responses:
+        '201':
+          description: Template created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+
+  /api/v1/templates/{id}:
+    get:
+      summary: Get template
+      operationId: getTemplate
+      tags:
+        - templates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Template'
+
+    patch:
+      summary: Update template
+      operationId: updateTemplate
+      tags:
+        - templates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Template updated
+
+    delete:
+      summary: Delete template
+      operationId: deleteTemplate
+      tags:
+        - templates
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Template deleted
+
+  # Catalog
+  /api/v1/catalog/templates:
+    get:
+      summary: List catalog templates
+      description: Browse templates with search, filtering, and sorting
+      operationId: listCatalogTemplates
+      tags:
+        - catalog
+      parameters:
+        - name: search
+          in: query
+          schema:
+            type: string
+        - name: category
+          in: query
+          schema:
+            type: string
+        - name: tag
+          in: query
+          schema:
+            type: string
+        - name: appType
+          in: query
+          schema:
+            type: string
+        - name: featured
+          in: query
+          schema:
+            type: boolean
+        - name: sort
+          in: query
+          schema:
+            type: string
+            enum: [popular, rating, recent, installs]
+        - name: page
+          in: query
+          schema:
+            type: integer
+            default: 1
+        - name: limit
+          in: query
+          schema:
+            type: integer
+            default: 20
+      responses:
+        '200':
+          description: Catalog templates
+
+  /api/v1/catalog/templates/featured:
+    get:
+      summary: Get featured templates
+      operationId: getFeaturedTemplates
+      tags:
+        - catalog
+      responses:
+        '200':
+          description: Featured templates
+
+  /api/v1/catalog/templates/trending:
+    get:
+      summary: Get trending templates
+      operationId: getTrendingTemplates
+      tags:
+        - catalog
+      responses:
+        '200':
+          description: Trending templates
+
+  /api/v1/catalog/templates/popular:
+    get:
+      summary: Get popular templates
+      operationId: getPopularTemplates
+      tags:
+        - catalog
+      responses:
+        '200':
+          description: Popular templates
+
+  # Agents
+  /api/v1/agents/register:
+    post:
+      summary: Register agent
+      description: Register or re-register an agent with the control plane
+      operationId: registerAgent
+      tags:
+        - agents
+      security:
+        - apiKeyAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/AgentRegistration'
+      responses:
+        '200':
+          description: Agent registered
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  agent_id:
+                    type: string
+                  api_key:
+                    type: string
+                    description: API key (only returned on first registration)
+                  websocket_url:
+                    type: string
+                    description: WebSocket URL for agent connection
+
+  /api/v1/agents/{agent_id}/heartbeat:
+    post:
+      summary: Agent heartbeat
+      description: Update agent status and capacity
+      operationId: agentHeartbeat
+      tags:
+        - agents
+      security:
+        - apiKeyAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                active_sessions:
+                  type: integer
+                available_memory:
+                  type: string
+                available_cpu:
+                  type: string
+                status:
+                  type: string
+                  enum: [online, draining]
+      responses:
+        '200':
+          description: Heartbeat received
+
+  /api/v1/agents/ws:
+    get:
+      summary: Agent WebSocket connection
+      description: WebSocket endpoint for agent command & control
+      operationId: agentWebSocket
+      tags:
+        - agents
+      security:
+        - apiKeyAuth: []
+      responses:
+        '101':
+          description: Switching protocols to WebSocket
+
+  /api/v1/admin/agents:
+    get:
+      summary: List all agents (admin)
+      operationId: listAgents
+      tags:
+        - agents
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: platform
+          in: query
+          schema:
+            type: string
+        - name: status
+          in: query
+          schema:
+            type: string
+        - name: region
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of agents
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Agent'
+
+  /api/v1/admin/agents/{agent_id}:
+    get:
+      summary: Get agent details (admin)
+      operationId: getAgent
+      tags:
+        - agents
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Agent details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Agent'
+
+    delete:
+      summary: Deregister agent (admin)
+      operationId: deregisterAgent
+      tags:
+        - agents
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: agent_id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Agent deregistered
+
+  # Users
+  /api/v1/users:
+    get:
+      summary: List users
+      operationId: listUsers
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: role
+          in: query
+          schema:
+            type: string
+            enum: [admin, operator, user]
+        - name: active
+          in: query
+          schema:
+            type: boolean
+        - name: search
+          in: query
+          schema:
+            type: string
+      responses:
+        '200':
+          description: List of users
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/User'
+
+    post:
+      summary: Create user
+      operationId: createUser
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - username
+                - password
+                - email
+              properties:
+                username:
+                  type: string
+                password:
+                  type: string
+                  format: password
+                email:
+                  type: string
+                  format: email
+                role:
+                  type: string
+                  enum: [admin, operator, user]
+                  default: user
+      responses:
+        '201':
+          description: User created
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/v1/users/me:
+    get:
+      summary: Get current user
+      operationId: getCurrentUser
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Current user details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+  /api/v1/users/{id}:
+    get:
+      summary: Get user
+      operationId: getUser
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/User'
+
+    patch:
+      summary: Update user
+      operationId: updateUser
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User updated
+
+    delete:
+      summary: Delete user
+      operationId: deleteUser
+      tags:
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: User deleted
+
+  /api/v1/users/{id}/sessions:
+    get:
+      summary: Get user's sessions
+      operationId: getUserSessions
+      tags:
+        - users
+        - sessions
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User's sessions
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Session'
+
+  # Groups
+  /api/v1/groups:
+    get:
+      summary: List groups
+      operationId: listGroups
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of groups
+          content:
+            application/json:
+              schema:
+                type: array
+                items:
+                  $ref: '#/components/schemas/Group'
+
+    post:
+      summary: Create group
+      operationId: createGroup
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      requestBody:
+        required: true
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - name
+              properties:
+                name:
+                  type: string
+                description:
+                  type: string
+      responses:
+        '201':
+          description: Group created
+
+  /api/v1/groups/{id}:
+    get:
+      summary: Get group
+      operationId: getGroup
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Group details
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Group'
+
+    patch:
+      summary: Update group
+      operationId: updateGroup
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Group updated
+
+    delete:
+      summary: Delete group
+      operationId: deleteGroup
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '204':
+          description: Group deleted
+
+  /api/v1/groups/{id}/members:
+    get:
+      summary: List group members
+      operationId: listGroupMembers
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: Group members
+
+    post:
+      summary: Add group member
+      operationId: addGroupMember
+      tags:
+        - groups
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - user_id
+              properties:
+                user_id:
+                  type: string
+                  format: uuid
+                role:
+                  type: string
+      responses:
+        '201':
+          description: Member added
+
+  # Quotas
+  /api/v1/users/{id}/quota:
+    get:
+      summary: Get user quota
+      operationId: getUserQuota
+      tags:
+        - quotas
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      responses:
+        '200':
+          description: User quota
+          content:
+            application/json:
+              schema:
+                $ref: '#/components/schemas/Quota'
+
+    put:
+      summary: Set user quota
+      operationId: setUserQuota
+      tags:
+        - quotas
+        - users
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+            format: uuid
+      requestBody:
+        content:
+          application/json:
+            schema:
+              $ref: '#/components/schemas/Quota'
+      responses:
+        '200':
+          description: Quota updated
+
+  # Monitoring
+  /api/v1/metrics:
+    get:
+      summary: Get Prometheus metrics
+      operationId: getMetrics
+      tags:
+        - monitoring
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Prometheus metrics
+          content:
+            text/plain:
+              schema:
+                type: string
+
+  /api/v1/monitoring/alerts:
+    get:
+      summary: List alerts
+      operationId: listAlerts
+      tags:
+        - monitoring
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Active alerts
+
+  # Admin - Audit
+  /api/v1/admin/audit/logs:
+    get:
+      summary: List audit logs (admin)
+      operationId: listAuditLogs
+      tags:
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: user
+          in: query
+          schema:
+            type: string
+        - name: action
+          in: query
+          schema:
+            type: string
+        - name: from
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: to
+          in: query
+          schema:
+            type: string
+            format: date-time
+        - name: page
+          in: query
+          schema:
+            type: integer
+        - name: limit
+          in: query
+          schema:
+            type: integer
+      responses:
+        '200':
+          description: Audit logs
+
+  /api/v1/admin/audit/export:
+    get:
+      summary: Export audit logs (admin)
+      operationId: exportAuditLogs
+      tags:
+        - admin
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: format
+          in: query
+          schema:
+            type: string
+            enum: [json, csv]
+            default: json
+      responses:
+        '200':
+          description: Exported audit logs
+
+  # Webhooks
+  /api/v1/integrations/webhooks:
+    get:
+      summary: List webhooks
+      operationId: listWebhooks
+      tags:
+        - webhooks
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: List of webhooks
+
+    post:
+      summary: Create webhook
+      operationId: createWebhook
+      tags:
+        - webhooks
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - url
+                - events
+              properties:
+                url:
+                  type: string
+                  format: uri
+                events:
+                  type: array
+                  items:
+                    type: string
+                secret:
+                  type: string
+                enabled:
+                  type: boolean
+                  default: true
+      responses:
+        '201':
+          description: Webhook created
+
+  /api/v1/integrations/webhooks/{webhookId}:
+    patch:
+      summary: Update webhook
+      operationId: updateWebhook
+      tags:
+        - webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Webhook updated
+
+    delete:
+      summary: Delete webhook
+      operationId: deleteWebhook
+      tags:
+        - webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Webhook deleted
+
+  /api/v1/integrations/webhooks/{webhookId}/test:
+    post:
+      summary: Test webhook
+      operationId: testWebhook
+      tags:
+        - webhooks
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: webhookId
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Test sent
+
+  # Plugins
+  /api/v1/plugins:
+    get:
+      summary: List installed plugins
+      operationId: listPlugins
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      responses:
+        '200':
+          description: Installed plugins
+
+    post:
+      summary: Install plugin
+      operationId: installPlugin
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                source:
+                  type: string
+                  description: Plugin source URL or marketplace ID
+      responses:
+        '201':
+          description: Plugin installed
+
+  /api/v1/plugins/{id}:
+    get:
+      summary: Get plugin details
+      operationId: getPlugin
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plugin details
+
+    delete:
+      summary: Uninstall plugin
+      operationId: uninstallPlugin
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '204':
+          description: Plugin uninstalled
+
+  /api/v1/plugins/{id}/enable:
+    post:
+      summary: Enable plugin
+      operationId: enablePlugin
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plugin enabled
+
+  /api/v1/plugins/{id}/disable:
+    post:
+      summary: Disable plugin
+      operationId: disablePlugin
+      tags:
+        - plugins
+      security:
+        - bearerAuth: []
+      parameters:
+        - name: id
+          in: path
+          required: true
+          schema:
+            type: string
+      responses:
+        '200':
+          description: Plugin disabled
+
+  /api/v1/plugins/marketplace:
+    get:
+      summary: List marketplace plugins
+      operationId: listMarketplacePlugins
+      tags:
+        - plugins
+      responses:
+        '200':
+          description: Marketplace plugins
+
+  # Batch Operations
+  /api/v1/batch/sessions/terminate:
+    post:
+      summary: Batch terminate sessions
+      operationId: batchTerminateSessions
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_ids
+              properties:
+                session_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Batch job started
+
+  /api/v1/batch/sessions/hibernate:
+    post:
+      summary: Batch hibernate sessions
+      operationId: batchHibernateSessions
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_ids
+              properties:
+                session_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Batch job started
+
+  /api/v1/batch/sessions/wake:
+    post:
+      summary: Batch wake sessions
+      operationId: batchWakeSessions
+      tags:
+        - sessions
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - session_ids
+              properties:
+                session_ids:
+                  type: array
+                  items:
+                    type: string
+                    format: uuid
+      responses:
+        '200':
+          description: Batch job started
+
+  # Security - MFA
+  /api/v1/security/mfa/setup:
+    post:
+      summary: Setup MFA
+      operationId: setupMFA
+      tags:
+        - auth
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              properties:
+                method:
+                  type: string
+                  enum: [totp, webauthn]
+      responses:
+        '200':
+          description: MFA setup initiated
+          content:
+            application/json:
+              schema:
+                type: object
+                properties:
+                  secret:
+                    type: string
+                  qr_code:
+                    type: string
+                    description: Base64 encoded QR code image
+
+  /api/v1/security/mfa/verify:
+    post:
+      summary: Verify MFA code
+      operationId: verifyMFA
+      tags:
+        - auth
+      security:
+        - bearerAuth: []
+      requestBody:
+        content:
+          application/json:
+            schema:
+              type: object
+              required:
+                - code
+              properties:
+                code:
+                  type: string
+      responses:
+        '200':
+          description: MFA verified

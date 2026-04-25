@@ -101,7 +101,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"golang.org/x/crypto/bcrypt"
 )
 
@@ -301,7 +301,6 @@ func (u *UserDB) ListUsers(ctx context.Context, role, provider string, activeOnl
 	if provider != "" {
 		query += fmt.Sprintf(" AND provider = $%d", argIdx)
 		args = append(args, provider)
-		argIdx++
 	}
 
 	if activeOnly {
@@ -393,7 +392,7 @@ func (u *UserDB) DeleteUser(ctx context.Context, userID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to begin transaction: %w", err)
 	}
-	defer tx.Rollback() // Rollback if we don't commit
+	defer func() { _ = tx.Rollback() }() // No-op after successful commit
 
 	// Delete quota first
 	_, err = tx.ExecContext(ctx, "DELETE FROM user_quotas WHERE user_id = $1", userID)

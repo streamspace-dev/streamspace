@@ -165,7 +165,7 @@ export function useUpdateRepository() {
   const queryClient = useQueryClient();
 
   return useMutation({
-    mutationFn: ({ id, data }: { id: number; data: any }) => api.updateRepository(id, data),
+    mutationFn: ({ id, data }: { id: number; data: Partial<{ name: string; url: string; branch: string; authType: string; authSecret: string }> }) => api.updateRepository(id, data),
     onSuccess: () => {
       queryClient.invalidateQueries({ queryKey: ['repositories'] });
     },

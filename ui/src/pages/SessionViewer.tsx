@@ -15,7 +15,6 @@ import {
   DialogContent,
   DialogActions,
   Tooltip,
-  Snackbar,
 } from '@mui/material';
 import {
   Close as CloseIcon,
@@ -26,10 +25,8 @@ import {
   Share as ShareIcon,
   People as PeopleIcon,
   Link as LinkIcon,
-  Wifi as ConnectedIcon,
-  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
-import { api } from '../lib/api';
+import { api, Session } from '../lib/api';
 import { useUserStore } from '../store/userStore';
 import { useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useEnhancedWebSocket } from '../hooks/useWebSocketEnhancements';
@@ -110,7 +107,7 @@ export default function SessionViewer() {
   const navigate = useNavigate();
   const username = useUserStore((state) => state.user?.username);
 
-  const [session, setSession] = useState<any>(null);
+  const [session, setSession] = useState<Session | null>(null);
   const [connectionId, setConnectionId] = useState<string | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState('');
@@ -125,7 +122,7 @@ export default function SessionViewer() {
 
   const iframeRef = useRef<HTMLIFrameElement>(null);
   const containerRef = useRef<HTMLDivElement>(null);
-  const heartbeatIntervalRef = useRef<NodeJS.Timeout | null>(null);
+  const heartbeatIntervalRef = useRef<ReturnType<typeof setInterval> | null>(null);
   const prevStateRef = useRef<string | null>(null);
 
   // Enhanced notification system
@@ -133,12 +130,12 @@ export default function SessionViewer() {
 
   // Real-time session updates via WebSocket with notifications
   // Wrap callback in useCallback to prevent reconnection loop
-  const handleSessionUpdate = useCallback((updatedSessions: any[]) => {
+  const handleSessionUpdate = useCallback((updatedSessions: Session[]) => {
     if (!sessionId) return;
 
     // Find this session in the update
     // BUG FIX: Session objects use 'name' property, not 'id'
-    const updatedSession = updatedSessions.find((s: any) => s.name === sessionId);
+    const updatedSession = updatedSessions.find((s) => s.name === sessionId);
     if (updatedSession && session) {
       // Check if state changed
       if (updatedSession.state !== prevStateRef.current && prevStateRef.current !== null) {
@@ -184,6 +181,7 @@ export default function SessionViewer() {
         handleDisconnect();
       }
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [sessionId, username]);
 
   const loadSession = async () => {
@@ -196,6 +194,22 @@ export default function SessionViewer() {
       // Get session details
       const sessionData = await api.getSession(sessionId);
       setSession(sessionData);
+
+      // v2.0: Store JWT token in sessionStorage for noVNC viewer
+      // The token is needed by the noVNC viewer page to authenticate WebSocket connections
+      // Token is stored in Zustand persisted store ('streamspace-auth' key)
+      try {
+        const authState = localStorage.getItem('streamspace-auth');
+        if (authState) {
+          const parsed = JSON.parse(authState);
+          const token = parsed?.state?.token;
+          if (token) {
+            sessionStorage.setItem('streamspace_token', token);
+          }
+        }
+      } catch (e) {
+        console.error('Failed to parse auth state for sessionStorage token:', e);
+      }
 
       // Check if current user is the session owner
       setIsOwner(sessionData.user === username);
@@ -221,9 +235,10 @@ export default function SessionViewer() {
       startHeartbeat(sessionId, connectionResult.connectionId);
 
       setLoading(false);
-    } catch (err: any) {
+    } catch (err: unknown) {
       console.error('Failed to load session:', err);
-      setError(err.response?.data?.message || 'Failed to connect to session');
+      const axiosError = err as { response?: { data?: { message?: string } } };
+      setError(axiosError.response?.data?.message || 'Failed to connect to session');
       setLoading(false);
     }
   };
@@ -283,7 +298,8 @@ export default function SessionViewer() {
 
   const handleRefresh = () => {
     if (iframeRef.current) {
-      iframeRef.current.src = iframeRef.current.src;
+      const currentSrc = iframeRef.current.src;
+      iframeRef.current.src = currentSrc;
     }
   };
 
@@ -417,10 +433,35 @@ export default function SessionViewer() {
       </AppBar>
 
       <Box sx={{ flex: 1, position: 'relative', bgcolor: '#000' }}>
-        {/* BUG FIX: Add sandbox attribute to prevent malicious session content from accessing parent page */}
+        {/* Multi-protocol streaming support */}
+        {/* VNC: Load noVNC viewer through control plane proxy */}
+        {/* Selkies/HTTP-based: Load through control plane HTTP proxy */}
+        {/* Token is passed as query param for iframe auth (iframes can't send Authorization headers) */}
         <iframe
           ref={iframeRef}
-          src={session.status.url}
+          src={(() => {
+            // Get token from Zustand persisted store ('streamspace-auth' key in localStorage)
+            // The store structure is: {state: {token: "...", ...}}
+            let token: string | null = null;
+            try {
+              const authState = localStorage.getItem('streamspace-auth');
+              if (authState) {
+                const parsed = JSON.parse(authState);
+                token = parsed?.state?.token || null;
+              }
+            } catch (e) {
+              console.error('Failed to parse auth state for iframe token:', e);
+            }
+            const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
+            if (
+              session.streamingProtocol === 'selkies' ||
+              session.streamingProtocol === 'guacamole' ||
+              session.streamingProtocol === 'kasm'
+            ) {
+              return `/api/v1/http/${sessionId}/${tokenParam}`;
+            }
+            return `/api/v1/vnc-viewer/${sessionId}${tokenParam}`;
+          })()}
           style={{
             width: '100%',
             height: '100%',
@@ -552,6 +593,38 @@ export default function SessionViewer() {
                   {' • '}
                   Memory: {session.status.resourceUsage.memory || 'N/A'}
                 </Typography>
+              </Box>
+            )}
+
+            {/* v2.0 Platform/Agent information */}
+            {session.platform && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Platform
+                </Typography>
+                <Typography variant="body2" sx={{ textTransform: 'capitalize' }}>
+                  {session.platform}
+                </Typography>
+              </Box>
+            )}
+
+            {session.agent_id && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Agent ID
+                </Typography>
+                <Typography variant="body2" sx={{ fontFamily: 'monospace', fontSize: '0.875rem' }}>
+                  {session.agent_id}
+                </Typography>
+              </Box>
+            )}
+
+            {session.region && (
+              <Box>
+                <Typography variant="caption" color="text.secondary">
+                  Region
+                </Typography>
+                <Typography variant="body2">{session.region}</Typography>
               </Box>
             )}
 

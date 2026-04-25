@@ -116,7 +116,7 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/quota"
+	"github.com/streamspace-dev/streamspace/api/internal/quota"
 )
 
 // QuotaMiddleware enforces resource quotas at the API level.

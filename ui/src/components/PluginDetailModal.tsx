@@ -148,6 +148,7 @@ export default function PluginDetailModal({
         loadRatings();
       }
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, plugin, tabValue]);
 
   const loadRatings = async () => {

@@ -15,7 +15,6 @@ import {
   TableContainer,
   TableHead,
   TableRow,
-  Paper,
   Dialog,
   DialogTitle,
   DialogContent,
@@ -27,13 +26,10 @@ import {
   InputLabel,
   Switch,
   FormControlLabel,
-  Alert,
   Grid,
 } from '@mui/material';
 import {
-  Webhook as WebhookIcon,
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   PlayArrow as TestIcon,
   History as HistoryIcon,
@@ -138,13 +134,26 @@ interface WebhookDelivery {
   response_code?: number;
 }
 
+interface IntegrationConfig {
+  webhook_url?: string;
+  api_key?: string;
+  channel?: string;
+  [key: string]: string | undefined;
+}
+
 interface Integration {
   id: number;
   name: string;
   type: string;
   enabled: boolean;
-  config: any;
+  config: IntegrationConfig;
   created_at: string;
+}
+
+interface WebhookDeliveryEventData {
+  webhook_name?: string;
+  status?: string;
+  event?: string;
 }
 
 const AVAILABLE_EVENTS = [
@@ -170,13 +179,13 @@ const AVAILABLE_EVENTS = [
 function IntegrationsContent() {
   const [currentTab, setCurrentTab] = useState(0);
   const [webhooks, setWebhooks] = useState<Webhook[]>([]);
-  const [integrations, setIntegrations] = useState<Integration[]>([]);
+  const [_integrations, setIntegrations] = useState<Integration[]>([]);
   const [webhookDialog, setWebhookDialog] = useState(false);
-  const [integrationDialog, setIntegrationDialog] = useState(false);
+  const [_integrationDialog, _setIntegrationDialog] = useState(false);
   const [deliveryDialog, setDeliveryDialog] = useState(false);
   const [selectedWebhook, setSelectedWebhook] = useState<Webhook | null>(null);
   const [deliveries, setDeliveries] = useState<WebhookDelivery[]>([]);
-  const [loading, setLoading] = useState(false);
+  const [_loading, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
 
@@ -184,7 +193,7 @@ function IntegrationsContent() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time webhook delivery updates via WebSocket
-  useWebhookDeliveryEvents((data: any) => {
+  useWebhookDeliveryEvents((data: WebhookDeliveryEventData) => {
     setWsConnected(true);
     setWsReconnectAttempts(0);
 
@@ -219,7 +228,8 @@ function IntegrationsContent() {
     enabled: true,
   });
 
-  const [integrationForm, setIntegrationForm] = useState({
+  // eslint-disable-next-line @typescript-eslint/no-unused-vars
+  const [_integrationForm, setIntegrationForm] = useState({
     name: '',
     type: 'slack',
     config: {},
@@ -269,7 +279,7 @@ function IntegrationsContent() {
       setWebhookDialog(false);
       setWebhookForm({ name: '', url: '', secret: '', events: [], enabled: true });
       loadWebhooks();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create webhook');
     } finally {
       setLoading(false);
@@ -281,7 +291,7 @@ function IntegrationsContent() {
     try {
       const response = await api.testWebhook(webhook.id);
       toast.success(response.message || 'Test webhook sent successfully');
-    } catch (error) {
+    } catch {
       toast.error('Failed to test webhook');
     } finally {
       setLoading(false);
@@ -295,7 +305,7 @@ function IntegrationsContent() {
       const response = await api.getWebhookDeliveries(webhook.id);
       setDeliveries(response.deliveries);
       setDeliveryDialog(true);
-    } catch (error) {
+    } catch {
       toast.error('Failed to fetch webhook deliveries');
     } finally {
       setLoading(false);
@@ -310,7 +320,7 @@ function IntegrationsContent() {
       await api.deleteWebhook(id);
       toast.success('Webhook deleted');
       loadWebhooks();
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete webhook');
     } finally {
       setLoading(false);

@@ -12,25 +12,29 @@ import {
   Divider,
 } from '@mui/material';
 
+type ConfigValue = string | number | boolean | null | undefined;
+
+interface ConfigFieldSchema {
+  type: 'string' | 'number' | 'boolean' | 'enum';
+  title?: string;
+  description?: string;
+  default?: ConfigValue;
+  enum?: string[];
+  minimum?: number;
+  maximum?: number;
+  pattern?: string;
+}
+
 interface ConfigSchema {
   type: 'object';
-  properties: Record<string, {
-    type: 'string' | 'number' | 'boolean' | 'enum';
-    title?: string;
-    description?: string;
-    default?: any;
-    enum?: string[];
-    minimum?: number;
-    maximum?: number;
-    pattern?: string;
-  }>;
+  properties: Record<string, ConfigFieldSchema>;
   required?: string[];
 }
 
 interface PluginConfigFormProps {
   schema?: ConfigSchema;
-  value: Record<string, any>;
-  onChange: (value: Record<string, any>) => void;
+  value: Record<string, ConfigValue>;
+  onChange: (value: Record<string, ConfigValue>) => void;
   disabled?: boolean;
 }
 
@@ -86,13 +90,13 @@ export default function PluginConfigForm({
   onChange,
   disabled = false,
 }: PluginConfigFormProps) {
-  const [formData, setFormData] = useState<Record<string, any>>(value || {});
+  const [formData, setFormData] = useState<Record<string, ConfigValue>>(value || {});
 
   useEffect(() => {
     setFormData(value || {});
   }, [value]);
 
-  const handleFieldChange = (fieldName: string, fieldValue: any) => {
+  const handleFieldChange = (fieldName: string, fieldValue: ConfigValue) => {
     const newData = { ...formData, [fieldName]: fieldValue };
     setFormData(newData);
     onChange(newData);
@@ -108,7 +112,7 @@ export default function PluginConfigForm({
     );
   }
 
-  const renderField = (fieldName: string, fieldSchema: any) => {
+  const renderField = (fieldName: string, fieldSchema: ConfigFieldSchema) => {
     const fieldTitle = fieldSchema.title || fieldName;
     const fieldDescription = fieldSchema.description;
     const isRequired = schema.required?.includes(fieldName);

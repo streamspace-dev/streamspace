@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Admin page uses `any` for API responses
 import { useState } from 'react';
 import {
   Box,

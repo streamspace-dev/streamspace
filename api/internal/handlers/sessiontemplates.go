@@ -90,9 +90,10 @@ import (
 
 	"github.com/gin-gonic/gin"
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/events"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/events"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // SessionTemplatesHandler handles custom session templates and presets
@@ -176,7 +177,11 @@ func (h *SessionTemplatesHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // ListSessionTemplates returns user's session templates
 func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	visibility := c.Query("visibility") // private, team, public, all
@@ -203,7 +208,6 @@ func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
 	if category != "" {
 		sqlQuery += fmt.Sprintf(` AND category = $%d`, argIndex)
 		args = append(args, category)
-		argIndex++
 	}
 
 	sqlQuery += ` ORDER BY is_default DESC, usage_count DESC, created_at DESC`
@@ -235,16 +239,16 @@ func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
 				t.TeamID = teamID.String
 			}
 			if len(tagsJSON) > 0 {
-				json.Unmarshal(tagsJSON, &t.Tags)
+				_ = json.Unmarshal(tagsJSON, &t.Tags)
 			}
 			if len(configJSON) > 0 {
-				json.Unmarshal(configJSON, &t.Configuration)
+				_ = json.Unmarshal(configJSON, &t.Configuration)
 			}
 			if len(resourcesJSON) > 0 {
-				json.Unmarshal(resourcesJSON, &t.Resources)
+				_ = json.Unmarshal(resourcesJSON, &t.Resources)
 			}
 			if len(envJSON) > 0 {
-				json.Unmarshal(envJSON, &t.Environment)
+				_ = json.Unmarshal(envJSON, &t.Environment)
 			}
 
 			templates = append(templates, t)
@@ -257,29 +261,36 @@ func (h *SessionTemplatesHandler) ListSessionTemplates(c *gin.Context) {
 	})
 }
 
+// CreateSessionTemplateRequest is the request body for creating a session template
+type CreateSessionTemplateRequest struct {
+	Name          string                 `json:"name" binding:"required" validate:"required,min=3,max=100"`
+	Description   string                 `json:"description" validate:"omitempty,max=1000"`
+	Icon          string                 `json:"icon" validate:"omitempty,max=100"`
+	Category      string                 `json:"category" validate:"omitempty,min=2,max=50"`
+	Tags          []string               `json:"tags" validate:"omitempty,dive,min=2,max=50"`
+	Visibility    string                 `json:"visibility" validate:"omitempty,oneof=private team public"`
+	TeamID        string                 `json:"teamId" validate:"omitempty,uuid"`
+	BaseTemplate  string                 `json:"baseTemplate" binding:"required" validate:"required,min=3,max=100"`
+	Configuration map[string]interface{} `json:"configuration"`
+	Resources     map[string]interface{} `json:"resources"`
+	Environment   map[string]string      `json:"environment" validate:"omitempty,dive,keys,min=1,max=100,endkeys,min=0,max=10000"`
+	IsDefault     bool                   `json:"isDefault"`
+}
+
 // CreateSessionTemplate creates a new session template
 func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
-	var req struct {
-		Name          string                 `json:"name" binding:"required"`
-		Description   string                 `json:"description"`
-		Icon          string                 `json:"icon"`
-		Category      string                 `json:"category"`
-		Tags          []string               `json:"tags"`
-		Visibility    string                 `json:"visibility"` // private, team, public
-		TeamID        string                 `json:"teamId"`
-		BaseTemplate  string                 `json:"baseTemplate" binding:"required"`
-		Configuration map[string]interface{} `json:"configuration"`
-		Resources     map[string]interface{} `json:"resources"`
-		Environment   map[string]string      `json:"environment"`
-		IsDefault     bool                   `json:"isDefault"`
-	}
+	var req CreateSessionTemplateRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Default visibility to private
@@ -298,7 +309,7 @@ func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
 
 	// If setting as default, unset other defaults
 	if req.IsDefault {
-		h.db.DB().ExecContext(ctx, `UPDATE user_session_templates SET is_default = false WHERE user_id = $1`, userIDStr)
+		_, _ = h.db.DB().ExecContext(ctx, `UPDATE user_session_templates SET is_default = false WHERE user_id = $1`, userIDStr)
 	}
 
 	_, err := h.db.DB().ExecContext(ctx, `
@@ -320,7 +331,11 @@ func (h *SessionTemplatesHandler) CreateSessionTemplate(c *gin.Context) {
 // GetSessionTemplate retrieves a specific template
 func (h *SessionTemplatesHandler) GetSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -360,41 +375,48 @@ func (h *SessionTemplatesHandler) GetSessionTemplate(c *gin.Context) {
 		t.TeamID = teamID.String
 	}
 	if len(tagsJSON) > 0 {
-		json.Unmarshal(tagsJSON, &t.Tags)
+		_ = json.Unmarshal(tagsJSON, &t.Tags)
 	}
 	if len(configJSON) > 0 {
-		json.Unmarshal(configJSON, &t.Configuration)
+		_ = json.Unmarshal(configJSON, &t.Configuration)
 	}
 	if len(resourcesJSON) > 0 {
-		json.Unmarshal(resourcesJSON, &t.Resources)
+		_ = json.Unmarshal(resourcesJSON, &t.Resources)
 	}
 	if len(envJSON) > 0 {
-		json.Unmarshal(envJSON, &t.Environment)
+		_ = json.Unmarshal(envJSON, &t.Environment)
 	}
 
 	c.JSON(http.StatusOK, t)
 }
 
+// UpdateSessionTemplateRequest is the request body for updating a session template
+type UpdateSessionTemplateRequest struct {
+	Name          string                 `json:"name" validate:"omitempty,min=3,max=100"`
+	Description   string                 `json:"description" validate:"omitempty,max=1000"`
+	Icon          string                 `json:"icon" validate:"omitempty,max=100"`
+	Category      string                 `json:"category" validate:"omitempty,min=2,max=50"`
+	Tags          []string               `json:"tags" validate:"omitempty,dive,min=2,max=50"`
+	Configuration map[string]interface{} `json:"configuration"`
+	Resources     map[string]interface{} `json:"resources"`
+	Environment   map[string]string      `json:"environment" validate:"omitempty,dive,keys,min=1,max=100,endkeys,min=0,max=10000"`
+}
+
 // UpdateSessionTemplate updates a template
 func (h *SessionTemplatesHandler) UpdateSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
-	var req struct {
-		Name          string                 `json:"name"`
-		Description   string                 `json:"description"`
-		Icon          string                 `json:"icon"`
-		Category      string                 `json:"category"`
-		Tags          []string               `json:"tags"`
-		Configuration map[string]interface{} `json:"configuration"`
-		Resources     map[string]interface{} `json:"resources"`
-		Environment   map[string]string      `json:"environment"`
-	}
+	var req UpdateSessionTemplateRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	ctx := context.Background()
@@ -425,7 +447,11 @@ func (h *SessionTemplatesHandler) UpdateSessionTemplate(c *gin.Context) {
 // DeleteSessionTemplate deletes a template
 func (h *SessionTemplatesHandler) DeleteSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -448,13 +474,17 @@ func (h *SessionTemplatesHandler) DeleteSessionTemplate(c *gin.Context) {
 // CloneSessionTemplate creates a copy of a template
 func (h *SessionTemplatesHandler) CloneSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
 		Name string `json:"name"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req)
 
 	ctx := context.Background()
 
@@ -499,7 +529,11 @@ func (h *SessionTemplatesHandler) CloneSessionTemplate(c *gin.Context) {
 // UseSessionTemplate creates a session from a template
 func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := c.Request.Context()
@@ -632,7 +666,11 @@ func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 // CreateTemplateFromSession creates a template from an existing session
 func (h *SessionTemplatesHandler) CreateTemplateFromSession(c *gin.Context) {
 	sessionID := c.Param("sessionId")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -686,13 +724,17 @@ func (h *SessionTemplatesHandler) CreateTemplateFromSession(c *gin.Context) {
 // SetAsDefaultTemplate sets a template as the user's default
 func (h *SessionTemplatesHandler) SetAsDefaultTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
 
 	// Unset other defaults
-	h.db.DB().ExecContext(ctx, `UPDATE user_session_templates SET is_default = false WHERE user_id = $1`, userIDStr)
+	_, _ = h.db.DB().ExecContext(ctx, `UPDATE user_session_templates SET is_default = false WHERE user_id = $1`, userIDStr)
 
 	// Set this as default
 	_, err := h.db.DB().ExecContext(ctx, `
@@ -712,7 +754,11 @@ func (h *SessionTemplatesHandler) SetAsDefaultTemplate(c *gin.Context) {
 
 // GetDefaultTemplates returns user's default templates
 func (h *SessionTemplatesHandler) GetDefaultTemplates(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -758,7 +804,11 @@ func (h *SessionTemplatesHandler) GetDefaultTemplates(c *gin.Context) {
 // PublishSessionTemplate makes a template public
 func (h *SessionTemplatesHandler) PublishSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -781,7 +831,11 @@ func (h *SessionTemplatesHandler) PublishSessionTemplate(c *gin.Context) {
 // UnpublishSessionTemplate makes a template private
 func (h *SessionTemplatesHandler) UnpublishSessionTemplate(c *gin.Context) {
 	templateID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "Unauthorized"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -847,7 +901,7 @@ func (h *SessionTemplatesHandler) ListPublicTemplates(c *gin.Context) {
 			}
 			if len(tagsJSON) > 0 {
 				var tags []string
-				json.Unmarshal(tagsJSON, &tags)
+				_ = json.Unmarshal(tagsJSON, &tags)
 				item["tags"] = tags
 			}
 			templates = append(templates, item)
@@ -1196,13 +1250,15 @@ func (h *SessionTemplatesHandler) ListTemplateVersions(c *gin.Context) {
 	page := 1
 	limit := 50
 	if pageStr := c.Query("page"); pageStr != "" {
-		if p, err := fmt.Sscanf(pageStr, "%d", &page); err == nil && p == 1 && page > 0 {
-			// page is valid
+		var parsedPage int
+		if p, err := fmt.Sscanf(pageStr, "%d", &parsedPage); err == nil && p == 1 && parsedPage > 0 {
+			page = parsedPage
 		}
 	}
 	if limitStr := c.Query("limit"); limitStr != "" {
-		if l, err := fmt.Sscanf(limitStr, "%d", &limit); err == nil && l == 1 && limit > 0 && limit <= 100 {
-			// limit is valid
+		var parsedLimit int
+		if l, err := fmt.Sscanf(limitStr, "%d", &parsedLimit); err == nil && l == 1 && parsedLimit > 0 && parsedLimit <= 100 {
+			limit = parsedLimit
 		}
 	}
 	offset := (page - 1) * limit

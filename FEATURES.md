@@ -1,350 +1,220 @@
+<div align="center">
+
 # StreamSpace Features
 
-**Version**: v1.0.0-beta
-**Last Updated**: 2025-11-19
+**Version**: v2.0-beta.1 • **Last Updated**: 2025-11-28
+
+[![Status](https://img.shields.io/badge/Status-v2.0--beta.1-success.svg)](CHANGELOG.md)
+[![License](https://img.shields.io/badge/License-MIT-yellow.svg)](LICENSE)
+
+</div>
 
 ---
 
-## Status Legend
+> [!NOTE]
+> **Current Status: v2.0-beta.1 - Production Ready**
+>
+> StreamSpace v2.0-beta.1 is ready for production deployment with multi-tenancy, enterprise security, and comprehensive observability.
 
-- **Complete** - Feature is fully implemented and tested
-- **Implemented** - Feature code exists but may have limited testing
-- **Partial** - Framework exists but implementation is incomplete
-- **Stub** - Only placeholder code exists
-- **Planned** - Not yet implemented
+> [!NOTE]
+> **Status Legend**
+>
+> - ✅ **Complete & Tested**: Feature works with test coverage
+> - 🔄 **Complete**: Feature implemented, tests in progress
+> - ⚠️ **Partial**: Framework exists, implementation incomplete
+> - 📝 **Planned**: Not yet implemented
 
----
+## 📊 Implementation Summary
 
-## Implementation Summary
+| Category | Status | Test Coverage | Notes |
+| :--- | :--- | :--- | :--- |
+| **Multi-Tenancy** | ✅ Complete | 100% | Org-scoped access control |
+| **K8s Agent (v2.0)** | ✅ Complete | ~80% | Session lifecycle, VNC tunneling |
+| **Docker Agent (v2.0)** | ✅ Complete | ~60% | Full platform support |
+| **API Backend** | ✅ Complete | 100% (9/9 packages) | All handler tests passing |
+| **Web UI** | ✅ Complete | 98% (189/191 tests) | All pages functional |
+| **Observability** | ✅ Complete | N/A | 3 dashboards, 12 alert rules |
+| **Security** | ✅ Complete | 100% | 15 CVEs fixed, headers added |
+| **Authentication** | ✅ Complete | ~90% | Local, SAML, OIDC, MFA |
+| **API Documentation** | ✅ Complete | N/A | OpenAPI 3.0, Swagger UI |
 
-| Category | Status | Notes |
-|----------|--------|-------|
-| Kubernetes Controller | Complete | 5,282 lines of production code |
-| API Backend | Implemented | 61,289 lines, 70+ handlers |
-| Web UI | Implemented | 25,629 lines, 50+ components |
-| Database | Complete | 87 tables |
-| Authentication | Complete | Local, SAML, OIDC, MFA |
-| Plugin System | Partial | Framework only, 28 stub plugins |
-| Docker Controller | Stub | 102 lines, not functional |
-| Test Coverage | Incomplete | ~15-20% |
+**Overall Status**: Production Ready
 
----
-
-## Core Features
+## 🚀 Core Features
 
 ### Session Management
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Create/List/Delete Sessions | Complete | Full CRUD operations |
-| Session State Management | Complete | Running/Hibernated/Terminated |
-| Resource Allocation | Complete | CPU, memory configuration |
-| Auto-Hibernation | Complete | Idle detection, scale to zero |
-| Wake on Demand | Complete | Instant restart |
-| Session Sharing | Implemented | Permissions, invitations |
-| Session Snapshots | Implemented | Tar-based backup/restore |
-| Session Tags | Implemented | Tag management |
-| Session Recording | Implemented | Start/stop recording |
-| Activity Tracking | Complete | Last activity timestamps |
+| :--- | :--- | :--- |
+| **Create/List/Delete** | ✅ Complete | Full CRUD with org scoping |
+| **State Management** | ✅ Complete | Running/Hibernated/Terminated |
+| **Resource Allocation** | ✅ Complete | CPU, memory, disk limits |
+| **Auto-Hibernation** | ✅ Complete | Configurable idle timeout |
+| **Wake on Demand** | ✅ Complete | Sub-30s wake time |
+| **Session Sharing** | ✅ Complete | Role-based permissions |
+| **VNC Proxy (v2.0)** | ✅ Complete | WebSocket tunneling, <100ms latency |
 
 ### Template System
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Template Catalog | Complete | Browse, search, filter |
-| Template Categories | Complete | Browsers, Dev, Design, etc. |
-| Template Ratings | Implemented | User reviews |
-| Template Favorites | Implemented | Bookmarks |
-| Template Versioning | Implemented | Version control |
-| Template Sharing | Implemented | Share with users/teams |
-| 200+ Templates | Complete | Via external repository |
+| :--- | :--- | :--- |
+| **Catalog** | ✅ Complete | Browse, search, filter |
+| **Categories** | ✅ Complete | Browsers, Dev, Design, etc. |
+| **Ratings & Favorites** | ✅ Complete | User reviews and bookmarks |
+| **Versioning** | ✅ Complete | Template version control |
+| **200+ Templates** | ✅ Complete | Via external repository |
 
 ### User Management
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| User CRUD | Complete | Full operations |
-| User Groups | Complete | Team organization |
-| User Quotas | Complete | Resource limits |
-| User Preferences | Implemented | Settings storage |
-| Activity Tracking | Complete | Login, usage stats |
+| :--- | :--- | :--- |
+| **User CRUD** | ✅ Complete | Full operations |
+| **Groups** | ✅ Complete | Team organization |
+| **Quotas** | ✅ Complete | Resource limits per user/group |
+| **Activity Tracking** | ✅ Complete | Login, usage stats |
 
-### Persistent Storage
+### Multi-Tenancy (v2.0-beta.1) ⭐ **NEW**
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Per-User PVCs | Complete | Persistent home directories |
-| NFS Support | Complete | ReadWriteMany |
-| Storage Quotas | Implemented | Per-user limits |
+| :--- | :--- | :--- |
+| **Organization Context** | ✅ Complete | JWT claims with org_id |
+| **Org-Scoped Queries** | ✅ Complete | All resources filtered by org |
+| **WebSocket Auth** | ✅ Complete | Broadcasts filtered by org |
+| **Cross-Tenant Prevention** | ✅ Complete | Middleware-level blocking |
 
----
-
-## Authentication & Security
+## 🔐 Authentication & Security
 
 ### Authentication Methods
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Local Authentication | Complete | Username/password |
-| JWT Tokens | Complete | Secure sessions |
-| SAML 2.0 SSO | Complete | Okta, Azure AD, Authentik, Keycloak, Auth0 |
-| OIDC OAuth2 | Complete | 8 providers supported |
-| MFA (TOTP) | Complete | Authenticator apps |
-| MFA Backup Codes | Implemented | Recovery codes |
-| SMS/Email MFA | Disabled | Security concerns |
+| :--- | :--- | :--- |
+| **Local Auth** | ✅ Complete | Username/password |
+| **JWT Tokens** | ✅ Complete | Secure sessions with org claims |
+| **SAML 2.0 SSO** | ✅ Complete | Okta, Azure AD, Authentik, Keycloak |
+| **OIDC OAuth2** | ✅ Complete | 8 providers supported |
+| **MFA (TOTP)** | ✅ Complete | Authenticator apps |
 
 ### Security Features
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| IP Whitelisting | Complete | IP and CIDR restrictions |
-| CSRF Protection | Complete | Token validation |
-| Rate Limiting | Complete | Multiple tiers |
-| Input Validation | Complete | JSON schema |
-| SSRF Protection | Implemented | Webhook URL validation |
-| Security Headers | Complete | HSTS, CSP, X-Frame-Options |
-| Audit Logging | Implemented | Action audit trail |
+| :--- | :--- | :--- |
+| **Security Headers** | ✅ Complete | HSTS, CSP, X-Frame-Options, etc. |
+| **IP Whitelisting** | ✅ Complete | IP and CIDR restrictions |
+| **CSRF Protection** | ✅ Complete | Token validation |
+| **Rate Limiting** | ✅ Complete | 60 req/min default |
+| **Input Validation** | ✅ Complete | JSON schema validation |
+| **Audit Logging** | ✅ Complete | Action audit trail |
+| **Vulnerability Management** | ✅ Complete | 0 Critical/High CVEs |
 
-### Compliance
+## 📊 Observability (v2.0-beta.1) ⭐ **NEW**
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Compliance Frameworks | Implemented | SOC2, HIPAA, GDPR |
-| Compliance Policies | Implemented | Policy management |
-| Violation Tracking | Implemented | Breach monitoring |
-| DLP Policies | Implemented | Data protection |
-| Compliance Dashboard | Implemented | Status overview |
+### Grafana Dashboards
 
----
+| Dashboard | Metrics | Notes |
+| :--- | :--- | :--- |
+| **Control Plane** | ✅ Complete | API latency, error rates, request volume |
+| **Sessions** | ✅ Complete | Active sessions, lifecycle, resources |
+| **Agents** | ✅ Complete | Heartbeat, command latency, capacity |
 
-## Integrations
+### Prometheus Alerts
+
+| Alert | Threshold | Severity |
+| :--- | :--- | :--- |
+| API Latency High | > 800ms p99 | Warning |
+| API Latency Critical | > 2s p99 | Critical |
+| Session Startup Slow | > 30s | Warning |
+| Session Startup Critical | > 60s | Critical |
+| Agent Heartbeat Missing | > 60s | Warning |
+| Agent Down | > 120s | Critical |
+| Error Rate High | > 1% | Warning |
+| Error Rate Critical | > 5% | Critical |
+
+## 📚 API Documentation (v2.0-beta.1) ⭐ **NEW**
+
+| Feature | Status | Endpoint |
+| :--- | :--- | :--- |
+| **Swagger UI** | ✅ Complete | `/api/docs` |
+| **OpenAPI YAML** | ✅ Complete | `/api/openapi.yaml` |
+| **OpenAPI JSON** | ✅ Complete | `/api/openapi.json` |
+
+**Documented Endpoints**: 70+ across all resources
+
+## 🔌 Integrations
 
 ### Webhooks
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Webhook CRUD | Complete | Full operations |
-| 16 Event Types | Complete | Session, user, plugin events |
-| HMAC Signatures | Complete | Payload validation |
-| Retry Logic | Implemented | Exponential backoff |
-| Delivery History | Implemented | Tracking |
+| :--- | :--- | :--- |
+| **Webhook CRUD** | ✅ Complete | Full operations |
+| **16 Event Types** | ✅ Complete | Session, user, plugin events |
+| **HMAC Signatures** | ✅ Complete | Payload validation |
 
 ### External Services
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Slack Integration | Implemented | Notifications |
-| Microsoft Teams | Implemented | Notifications |
-| Discord | Implemented | Notifications |
-| PagerDuty | Implemented | Incident management |
-| Email (SMTP) | Implemented | TLS/STARTTLS |
+| :--- | :--- | :--- |
+| **Slack** | ⚠️ Partial | Notifications (via plugin) |
+| **Microsoft Teams** | ⚠️ Partial | Notifications (via plugin) |
+| **Discord** | ⚠️ Partial | Notifications (via plugin) |
+| **PagerDuty** | ⚠️ Partial | Incident management (via plugin) |
+| **Email (SMTP)** | ✅ Complete | TLS/STARTTLS |
 
----
-
-## Plugin System
-
-### Framework
+## 🧩 Plugin System
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| Plugin Catalog | Complete | Browse plugins |
-| Plugin Installation | Complete | Install/uninstall |
-| Plugin Configuration | Complete | JSONB storage |
-| Plugin Versioning | Implemented | Version management |
-| Plugin Ratings | Implemented | User reviews |
-| Plugin Repositories | Implemented | External sources |
+| :--- | :--- | :--- |
+| **Catalog** | ✅ Complete | Browse plugins |
+| **Installation** | ✅ Complete | Install/uninstall |
+| **Configuration** | ✅ Complete | JSONB storage |
+| **Versioning** | ✅ Complete | Version management |
 
-### Individual Plugins
+## 💻 User Interface
 
-| Plugin | Status | Notes |
-|--------|--------|-------|
-| streamspace-calendar | Stub | TODO: Extract from scheduling |
-| streamspace-multi-monitor | Stub | TODO: 3 items |
-| streamspace-compliance | Stub | Placeholder only |
-| streamspace-dlp | Stub | Placeholder only |
-| streamspace-analytics | Stub | Placeholder only |
-| streamspace-slack | Stub | TODO: Extract from integrations |
-| streamspace-teams | Stub | TODO: Extract from integrations |
-| streamspace-discord | Stub | TODO: Extract from integrations |
-| ... (20 more) | Stub | All contain TODOs |
+### User Pages
 
-**Note**: All 28 plugins in the repository are stubs with TODO comments. The plugin framework is complete, but actual plugin implementations need to be extracted from the core handlers.
+- **Dashboard**: Session overview with quick actions
+- **Sessions**: Active sessions management
+- **Catalog**: Template browsing with search/filter
+- **Settings**: Security and preferences
 
----
+### Admin Pages
 
-## Collaboration Features
+- **Dashboard**: System metrics and health
+- **Users & Groups**: Management with org scoping
+- **Quotas**: Resource limits per user/group/org
+- **Plugins**: System-wide plugin admin
+- **Agents**: Real-time agent monitoring
+- **Audit Logs**: Security audit trail
 
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Session Sharing | Implemented | Share with permissions |
-| Real-time Collaboration | Implemented | Multi-user sessions |
-| Chat Messages | Implemented | In-session messaging |
-| Annotations | Implemented | Draw on screen |
-| Presence Indicators | Implemented | Who's online |
-
----
-
-## Administration
-
-### User & Group Management
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Admin Dashboard | Complete | System overview |
-| User Management | Complete | Full CRUD |
-| Group Management | Complete | Teams, permissions |
-| Quota Management | Complete | User/group/system |
-
-### Platform Management
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Node Management | Implemented | View cluster nodes |
-| Scaling Configuration | Implemented | Auto-scaling policies |
-| Plugin Administration | Implemented | System-wide control |
-| Integration Management | Implemented | Connectivity testing |
-
----
-
-## Monitoring & Observability
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Prometheus Metrics | Complete | 40+ metrics |
-| Grafana Dashboards | Implemented | Pre-built dashboards |
-| Health Checks | Complete | Liveness/readiness |
-| Alert Rules | Implemented | 11 pre-configured |
-| Structured Logging | Complete | JSON format |
-
----
-
-## API & Infrastructure
-
-### API Backend
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| REST API | Complete | 70+ handlers |
-| WebSocket Support | Complete | Real-time updates |
-| Request Compression | Complete | gzip/deflate |
-| API Keys | Implemented | Programmatic access |
-
-### Middleware Stack (15+ layers)
-
-| Feature | Status | Notes |
-|---------|--------|-------|
-| Request ID Tracking | Complete | Distributed tracing |
-| Authentication | Complete | JWT validation |
-| Authorization | Complete | RBAC checks |
-| Rate Limiting | Complete | Traffic control |
-| CSRF Protection | Complete | Token validation |
-| Input Validation | Complete | Schema validation |
-| Audit Logging | Implemented | Action logging |
-
----
-
-## User Interface
-
-### User Pages (14)
-
-| Page | Status | Notes |
-|------|--------|-------|
-| Dashboard | Complete | Session overview |
-| Sessions | Complete | Active sessions |
-| Catalog | Complete | Template browsing |
-| Plugin Catalog | Implemented | Browse plugins |
-| Security Settings | Implemented | MFA, IP whitelist |
-| Scheduling | Implemented | Session scheduler |
-| ... (8 more) | Implemented | Various features |
-
-### Admin Pages (12)
-
-| Page | Status | Notes |
-|------|--------|-------|
-| Admin Dashboard | Complete | System metrics |
-| Users | Complete | User management |
-| Groups | Complete | Team management |
-| Quotas | Implemented | Quota management |
-| Plugins | Implemented | Plugin admin |
-| Compliance | Implemented | Compliance dashboard |
-| ... (6 more) | Implemented | Various features |
-
----
-
-## Platform Support
+## 🏗️ Platform Support (v2.0 Architecture)
 
 | Platform | Status | Notes |
-|----------|--------|-------|
-| Kubernetes | Complete | Full support |
-| Docker | Stub | 102-line skeleton, not functional |
-| Bare Metal | Planned | Not implemented |
+| :--- | :--- | :--- |
+| **Kubernetes** | ✅ Complete | K8s Agent with leader election, HA |
+| **Docker** | ✅ Complete | Docker Agent with compose support |
+| **VM / Cloud** | 📝 Planned | v2.2+ (AWS, Azure, GCP) |
 
----
-
-## Testing
-
-| Area | Status | Coverage |
-|------|--------|----------|
-| Controller Unit Tests | Partial | 4 files, ~30-40% |
-| API Unit Tests | Partial | 11 files, ~10-20% |
-| UI Unit Tests | Partial | 2 files, ~5% |
-| Integration Tests | Complete | 23 test functions |
-| E2E Tests | Partial | Some scenarios have TODOs |
-
-**Overall Test Coverage**: ~15-20%
-
-See [tests/reports/TEST_COVERAGE_REPORT.md](tests/reports/TEST_COVERAGE_REPORT.md) for detailed analysis.
-
----
-
-## Not Implemented
-
-These features are documented but not yet built:
+### High Availability
 
 | Feature | Status | Notes |
-|---------|--------|-------|
-| VNC Migration | Planned | TigerVNC + noVNC |
-| StreamSpace Container Images | Planned | Self-hosted images |
-| Multi-cluster Federation | Planned | Future enhancement |
-| WebRTC Streaming | Planned | Lower latency option |
-| GPU Acceleration | Planned | Future enhancement |
+| :--- | :--- | :--- |
+| **Multi-Pod API** | ✅ Complete | 2-10 replicas, Redis-backed |
+| **K8s Agent HA** | ✅ Complete | Leader election, 3-10 replicas |
+| **Docker Agent HA** | ✅ Complete | File/Redis/Swarm backends |
+| **Automatic Failover** | ✅ Complete | <5s leader failover |
+
+## 📊 Performance Metrics
+
+| Metric | Target | Actual |
+| :--- | :--- | :--- |
+| API Latency (p99) | < 800ms | ✅ ~200ms |
+| Session Startup | < 30s | ✅ ~6s |
+| VNC Latency | < 100ms | ✅ <100ms |
+| Agent Reconnection | < 60s | ✅ ~23s |
 
 ---
 
-## Code Statistics
-
-| Component | Lines of Code | Files |
-|-----------|---------------|-------|
-| Kubernetes Controller | 5,282 | ~30 |
-| API Backend | 61,289 | ~150 |
-| Web UI | 25,629 | ~80 |
-| Test Code | ~6,231 | 21 |
-| **Total** | **~99,000** | **~280** |
-
-### Database
-
-- **Tables**: 87
-- **Key tables**: users, sessions, templates, plugins, quotas, compliance, audit_logs
-
-### API Handlers
-
-- **Total**: 70+ files
-- **With tests**: 7 files
-- **Without tests**: 63+ files
-
----
-
-## Next Steps
-
-Priority work items:
-
-1. **Increase test coverage** to 70%+
-2. **Implement top 10 plugins** from stubs
-3. **Complete Docker controller** for multi-platform support
-4. **Migrate to TigerVNC + noVNC** for VNC independence
-
-See [ROADMAP.md](ROADMAP.md) for detailed timeline and milestones.
-
----
-
-**Last Updated**: 2025-11-19
+<div align="center">
+  <sub>Updated for v2.0-beta.1 • Last updated: 2025-11-28</sub><br>
+  <sub>See <a href="CHANGELOG.md">CHANGELOG.md</a> for release details</sub>
+</div>

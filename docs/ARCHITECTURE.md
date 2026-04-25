@@ -1,676 +1,518 @@
-# StreamSpace Architecture
+<div align="center">
 
-Complete architecture documentation for the StreamSpace container streaming platform.
+# 🏗️ StreamSpace Architecture
 
-## Overview
+**Version**: v2.0-beta.1 • **Last Updated**: 2025-11-23
 
-StreamSpace is a Kubernetes-native multi-user platform that streams containerized applications to web browsers using KasmVNC. Built for k3s and optimized for ARM64, it provides on-demand provisioning with auto-hibernation for resource efficiency.
+[![Status](https://img.shields.io/badge/Status-v2.0--beta-success.svg)](../CHANGELOG.md)
 
-**Based on**: Original implementation plan in `ai-infra-k3s/docs/KASM_ALTERNATIVE_PLAN.md`
-
-## System Architecture
-
-### High-Level Architecture
-
-```
-┌──────────────────────────────────────────────────────────────┐
-│                        Users                                  │
-│              (Web Browsers - Any Device)                      │
-└────────────────────────┬─────────────────────────────────────┘
-                         │ HTTPS
-                         ↓
-┌──────────────────────────────────────────────────────────────┐
-│                   Ingress / Load Balancer                     │
-└────────────────────────┬─────────────────────────────────────┘
-                         │
-          ┌──────────────┴─────────────┐
-          ↓                            ↓
-┌─────────────────────┐      ┌──────────────────────┐
-│   Web UI (React)    │      │   Control Plane (API)│
-│  - Dashboard        │      │   - REST API         │
-│  - Catalog          │      │   - WebSocket        │
-│  - Session viewer   │      │   - Auth middleware  │
-│  - Admin panel      │      │   - Controller Mgmt  │
-└─────────────────────┘      └──────────┬───────────┘
-                                        │ Secure Protocol (gRPC/WS)
-                         ┌──────────────┴──────────────┐
-                         ↓                             ↓
-┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
-│    Kubernetes Controller (Agent)      │   │      Docker Controller (Agent)       │
-│  - Runs on K8s Cluster               │   │  - Runs on Docker Host               │
-│  - Manages Pods/PVCs                 │   │  - Manages Containers/Volumes        │
-│  - Reports Status                    │   │  - Reports Status                    │
-└────────────────┬─────────────────────┘   └────────────────┬─────────────────────┘
-                 │                                          │
-                 ↓                                          ↓
-┌──────────────────────────────────────┐   ┌──────────────────────────────────────┐
-│         Kubernetes Cluster           │   │            Docker Host               │
-│  [Session Pods]                      │   │  [Session Containers]                │
-└──────────────────────────────────────┘   └──────────────────────────────────────┘
-```
-
-## Core Components
-
-### 1. StreamSpace Controllers (Agents)
-
-**Architecture**: Agent-based model similar to Portainer Agents.
-**Purpose**: Platform-specific implementation of session management.
-
-**Responsibilities**:
-
-- **Control**: Execute commands from Control Plane (Start, Stop, Hibernate).
-- **Monitor**: Collect metrics (CPU, Memory, Network) and report to Control Plane.
-- **Log**: Stream logs back to Control Plane.
-- **Report**: Periodic status updates (Heartbeat, Session State).
-
-**Controller Types**:
-
-- **Kubernetes Controller**: Manages Pods, PVCs, Services.
-- **Docker Controller**: Manages Containers, Volumes, Networks.
-- **Hyper-V/vCenter**: Manages VMs (Future).
-
-**Communication**:
-
-- Secure WebSocket or gRPC connection to Control Plane.
-- Pull-based or Push-based command execution.
-
-### 2. API Backend
-
-**Language**: Go (Gin framework) or Python (FastAPI)
-**Purpose**: REST/WebSocket API for UI and integrations
-
-**Endpoints**:
-
-- `GET /api/v1/sessions` - List user sessions
-- `POST /api/v1/sessions` - Create session
-- `GET /api/v1/sessions/{id}` - Get session details
-- `DELETE /api/v1/sessions/{id}` - Terminate session
-- `POST /api/v1/sessions/{id}/wake` - Wake hibernated session
-- `GET /api/v1/templates` - List templates
-- `GET /api/v1/users/me` - Get current user info
-- `WS /api/v1/sessions/{id}/connect` - WebSocket for KasmVNC proxy
-
-**Authentication**:
-
-- OIDC via Authentik
-- JWT tokens (1-hour expiration)
-- Refresh token flow
-
-**Authorization**:
-
-- Users: Own sessions only
-- Admins: All sessions + config
-
-### 3. Web UI
-
-**Framework**: React + TypeScript + Material-UI
-**Purpose**: User-facing dashboard and admin panel
-
-**Pages**:
-
-- `/login` - Authentik SSO login
-- `/dashboard` - My sessions (running, hibernated)
-- `/catalog` - Browse templates by category
-- `/session/{id}` - View/connect to session (iframe or new tab)
-- `/admin/users` - User management
-- `/admin/templates` - Template management
-- `/admin/analytics` - Usage analytics
-
-**State Management**: React Context API or Redux
-**Routing**: React Router
-**API Client**: Axios with JWT interceptors
-
-### 4. Session Pods
-
-**Structure**: Single-container pod with user-specific labels
-
-**Pod Specification**:
-
-```yaml
-apiVersion: v1
-kind: Pod
-metadata:
-  name: ss-user1-firefox-abc123
-  labels:
-    app: streamspace-session
-    user: user1
-    template: firefox-browser
-    session: user1-firefox
-spec:
-  containers:
-  - name: workspace
-    image: lscr.io/linuxserver/firefox:latest
-    ports:
-    - containerPort: 3000
-      name: vnc
-    env:
-    - name: PUID
-      value: "1000"
-    - name: PGID
-      value: "1000"
-    volumeMounts:
-    - name: user-home
-      mountPath: /config
-    resources:
-      requests:
-        memory: 2Gi
-        cpu: 1000m
-      limits:
-        memory: 2Gi
-        cpu: 1000m
-  volumes:
-  - name: user-home
-    persistentVolumeClaim:
-      claimName: home-user1
-```
-
-**Networking**:
-
-- Service per session: `ss-user1-firefox-svc`
-- Ingress rule: `user1-firefox.streamspace.local` → Service
-- KasmVNC port: 3000 (default)
-
-### 5. User Storage
-
-**Backend**: NFS with ReadWriteMany support
-
-**PVC per User**:
-
-```yaml
-apiVersion: v1
-kind: PersistentVolumeClaim
-metadata:
-  name: home-user1
-  namespace: streamspace
-spec:
-  accessModes: [ReadWriteMany]
-  storageClassName: nfs-client
-  resources:
-    requests:
-      storage: 50Gi
-```
-
-**Mount Path**: `/config` (LinuxServer.io convention) or `/home/kasm-user`
-
-**Benefits**:
-
-- Files persist across sessions
-- Shared across all user's workspaces
-- Backed up independently
-
-### 6. Plugin System
-
-**Purpose**: Extensible architecture for adding custom functionality without modifying core code
-
-**Plugin Types**:
-
-- **Extension**: Add new features and UI components
-- **Webhook**: React to system events (session created, user login, etc.)
-- **API Integration**: Connect to external services (Slack, GitHub, Jira)
-- **UI Theme**: Customize web interface appearance
-- **CLI**: Add custom command-line tools
-
-**Database Schema**:
-
-```sql
--- Plugin repositories (GitHub, GitLab, custom)
-CREATE TABLE repositories (
-  id SERIAL PRIMARY KEY,
-  name VARCHAR(255) NOT NULL,
-  url TEXT NOT NULL,
-  branch VARCHAR(255) DEFAULT 'main',
-  auth_type VARCHAR(50),
-  enabled BOOLEAN DEFAULT true
-);
-
--- Catalog of available plugins
-CREATE TABLE catalog_plugins (
-  id SERIAL PRIMARY KEY,
-  repository_id INTEGER REFERENCES repositories(id),
-  name VARCHAR(255) NOT NULL UNIQUE,
-  version VARCHAR(50),
-  display_name VARCHAR(255),
-  description TEXT,
-  category VARCHAR(100),
-  plugin_type VARCHAR(50),
-  icon_url TEXT,
-  manifest JSONB,
-  tags TEXT[]
-);
-
--- User-installed plugins
-CREATE TABLE installed_plugins (
-  id SERIAL PRIMARY KEY,
-  catalog_plugin_id INTEGER REFERENCES catalog_plugins(id),
-  name VARCHAR(255) NOT NULL UNIQUE,
-  version VARCHAR(50),
-  enabled BOOLEAN DEFAULT false,
-  config JSONB,
-  installed_by VARCHAR(255),
-  installed_at TIMESTAMP DEFAULT NOW()
-);
-```
-
-**API Endpoints**:
-
-- `GET /api/v1/plugins/catalog` - Browse available plugins
-- `POST /api/v1/plugins/install` - Install plugin
-- `GET /api/v1/plugins/installed` - List installed plugins
-- `POST /api/v1/plugins/{id}/enable` - Enable plugin
-- `POST /api/v1/plugins/{id}/disable` - Disable plugin
-- `PUT /api/v1/plugins/{id}/config` - Update plugin configuration
-- `DELETE /api/v1/plugins/{id}` - Uninstall plugin
-
-**UI Components**:
-
-- **PluginCatalog** (`/plugins/catalog`) - Browse and install plugins with search, filters, ratings
-- **InstalledPlugins** (`/plugins/installed`) - Manage installed plugins with config editor
-- **Admin PluginManagement** (`/admin/plugins`) - System-wide plugin administration
-- **PluginCard** - Display plugin with type-based color coding
-- **PluginDetailModal** - Full details, reviews, permissions with risk indicators
-- **PluginConfigForm** - Schema-based form generator for plugin configuration
-
-**Security Features**:
-
-- Permission system with risk levels (low/medium/high)
-- Sandbox execution environment
-- Configuration validation
-- Manifest schema enforcement
-- User/admin approval workflows
-
-**Event System**:
-
-```javascript
-// Plugins can register handlers for these events:
-- session.created
-- session.started
-- session.stopped
-- session.hibernated
-- session.woken
-- session.deleted
-- user.created
-- user.updated
-- user.deleted
-- user.login
-- user.logout
-```
-
-**Documentation**:
-
-- `PLUGIN_DEVELOPMENT.md` - Complete developer guide with examples
-- `docs/PLUGIN_API.md` - Comprehensive API reference
-
-## Data Flow
-
-### Session Creation Flow
-
-1. **User clicks "Launch" in UI**
-
-   ```
-   POST /api/v1/sessions
-   {
-     "template": "firefox-browser",
-     "resources": {"memory": "2Gi"}
-   }
-   ```
-
-2. **API validates request**
-   - Check user quota (max sessions, memory limit)
-   - Verify template exists
-   - Generate unique session name
-
-3. **API creates Session CR**
-
-   ```yaml
-   apiVersion: stream.space/v1alpha1
-   kind: Session
-   metadata:
-     name: user1-firefox
-   spec:
-     user: user1
-     template: firefox-browser
-     state: running
-     resources:
-       memory: 2Gi
-   ```
-
-4. **Controller watches Session CR**
-   - Reconcile loop triggered
-
-5. **Controller provisions resources**
-   - Create/ensure user PVC exists
-   - Create Deployment (with pod template)
-   - Create Service
-   - Create Ingress rule
-   - Update Session status with URL
-
-6. **Pod starts**
-   - Container pulls image
-   - KasmVNC starts on port 3000
-   - User home directory mounted
-
-7. **Status update**
-
-   ```yaml
-   status:
-     phase: Running
-     url: https://user1-firefox.streamspace.local
-     podName: ss-user1-firefox-abc123
-     lastActivity: "2025-01-15T10:00:00Z"
-   ```
-
-8. **UI polls for ready status**
-   - Opens session URL in iframe or new tab
-
-### Hibernation Flow
-
-1. **Hibernation controller checks sessions every 60s**
-
-2. **Detects idle session**
-   - `time.Now() - lastActivity > idleTimeout` (default 30m)
-
-3. **Updates Session state**
-
-   ```yaml
-   spec:
-     state: hibernated
-   ```
-
-4. **Session reconciler scales down**
-   - Set Deployment replicas to 0
-   - Pod terminates (PVC persists)
-   - Update Session phase to "Hibernated"
-
-5. **User returns and clicks session**
-
-6. **API wake endpoint**
-
-   ```
-   POST /api/v1/sessions/{id}/wake
-   ```
-
-7. **Updates Session state**
-
-   ```yaml
-   spec:
-     state: running
-   ```
-
-8. **Session reconciler scales up**
-   - Set Deployment replicas to 1
-   - Pod starts (mounts same PVC)
-   - Wait for readiness
-
-9. **UI redirects to session URL**
-
-## Custom Resource Definitions
-
-### Session CRD
-
-```yaml
-apiVersion: stream.space/v1alpha1
-kind: Session
-metadata:
-  name: user1-firefox
-  namespace: streamspace
-spec:
-  user: user1
-  template: firefox-browser
-  state: running  # running, hibernated, terminated
-  resources:
-    memory: 2Gi
-    cpu: 1000m
-  persistentHome: true
-  idleTimeout: 30m
-  maxSessionDuration: 8h
-status:
-  phase: Running  # Pending, Running, Hibernated, Failed, Terminated
-  podName: ss-user1-firefox-abc123
-  url: https://user1-firefox.streamspace.local
-  lastActivity: "2025-01-15T10:30:00Z"
-  resourceUsage:
-    memory: 1.2Gi
-    cpu: 450m
-```
-
-### Template CRD
-
-```yaml
-apiVersion: stream.space/v1alpha1
-kind: Template
-metadata:
-  name: firefox-browser
-  namespace: streamspace
-spec:
-  displayName: Firefox Web Browser
-  description: Modern web browser with privacy features
-  category: Web Browsers
-  icon: https://example.com/firefox-icon.png
-  baseImage: lscr.io/linuxserver/firefox:latest
-  defaultResources:
-    memory: 2Gi
-    cpu: 1000m
-  ports:
-    - name: vnc
-      containerPort: 3000
-  env:
-    - name: PUID
-      value: "1000"
-  volumeMounts:
-    - name: user-home
-      mountPath: /config
-  kasmvnc:
-    enabled: true
-    port: 3000
-  capabilities: [Network, Audio, Clipboard]
-  tags: [browser, web, firefox]
-```
-
-## Security Architecture
-
-### Authentication
-
-**SSO via Authentik**:
-
-- OIDC provider
-- JWT tokens (access + refresh)
-- MFA support
-- Social logins
-
-### Authorization
-
-**RBAC**:
-
-- Users can only access their own sessions
-- Admins can access all sessions
-- Service accounts for automation
-
-**Network Policies**:
-
-```yaml
-apiVersion: networking.k8s.io/v1
-kind: NetworkPolicy
-metadata:
-  name: session-isolation
-spec:
-  podSelector:
-    matchLabels:
-      app: streamspace-session
-  policyTypes:
-  - Ingress
-  - Egress
-  ingress:
-  - from:
-    - podSelector:
-        matchLabels:
-          app: streamspace-ingress
-  egress:
-  - to:
-    - podSelector: {}  # Allow DNS
-    ports:
-    - port: 53
-  - to:
-    - namespaceSelector: {}  # Internet access
-```
-
-### Data Protection
-
-- User PVCs isolated by RBAC
-- Audit logs for all actions
-- Optional session recording (Phase 5)
-- Secrets in Kubernetes Secrets (not ConfigMaps)
-
-## Resource Management
-
-### Memory Allocation
-
-**Cluster**: 64GB total (4 × 16GB nodes)
-
-- System overhead: 8GB
-- StreamSpace platform: 4GB
-- **Available for sessions**: 52GB
-
-**Per-Session Estimates**:
-
-- Browsers: 2GB
-- IDEs: 4GB
-- 3D/Video: 6-8GB
-
-**Capacity**: ~26 lightweight or ~13 medium or ~6 heavy concurrent sessions
-
-**With Hibernation**: Support 50+ users (20% active concurrency)
-
-### Quota Enforcement
-
-```go
-func (r *SessionReconciler) enforceQuota(user string) error {
-    // Count active sessions
-    activeSessions := r.countActiveSessions(user)
-    if activeSessions >= user.Quota.MaxSessions {
-        return errors.New("max sessions exceeded")
-    }
-
-    // Check memory usage
-    totalMemory := r.calculateTotalMemory(user)
-    if totalMemory >= user.Quota.Memory {
-        return errors.New("memory quota exceeded")
-    }
-
-    return nil
-}
-```
-
-## Monitoring & Observability
-
-### Metrics
-
-**Controller Metrics**:
-
-- Active sessions count
-- Hibernated sessions count
-- Session start/end events
-- Hibernation events
-- Resource usage (memory, CPU)
-- Cluster capacity %
-
-**API Metrics**:
-
-- Request rate
-- Error rate
-- Response time (p50, p95, p99)
-- Concurrent connections
-
-### Dashboards
-
-**Grafana "Session Overview"**:
-
-- Active vs hibernated sessions
-- Memory usage (per session, total)
-- Session lifecycle events
-- User activity
-- API performance
-
-### Alerts
-
-- High memory usage (>85%)
-- Provisioning failures
-- Controller/API downtime
-- Hibernation not working
-- Long-running sessions (>12h)
-
-## Deployment Architecture
-
-### Helm Chart Structure
-
-```
-chart/
-├── Chart.yaml
-├── values.yaml
-├── templates/
-│   ├── controller-deployment.yaml
-│   ├── api-deployment.yaml
-│   ├── ui-deployment.yaml
-│   ├── ingress.yaml
-│   ├── servicemonitor.yaml
-│   └── prometheusrule.yaml
-└── crds/
-    ├── session-crd.yaml
-    └── template-crd.yaml
-```
-
-### High Availability (Phase 5)
-
-**Controller HA**:
-
-- 2+ replicas with leader election
-- Kubernetes lease for coordination
-
-**API HA**:
-
-- 3+ replicas behind Service
-- Horizontal Pod Autoscaler
-
-**Database HA**:
-
-- PostgreSQL with replication
-- Or cloud-managed (RDS, Cloud SQL)
-
-## Performance Considerations
-
-### Session Provisioning
-
-**Target**: < 30 seconds from request to accessible
-
-- Pod scheduling: 5-10s
-- Image pull (cached): 2-5s
-- Container start: 10-15s
-- KasmVNC ready: 5s
-
-### Hibernation/Wake
-
-**Hibernation**: < 5 seconds (scale to 0)
-**Wake**: < 20 seconds (scale to 1, wait for ready)
-
-### Optimization
-
-- Pre-pull images on all nodes
-- Use smaller base images (Alpine vs Ubuntu)
-- Optimize readiness probes
-- CRIU for instant wake (Phase 5, advanced)
-
-## Future Enhancements
-
-- **GPU Support**: PassThrough for 3D/gaming workspaces
-- **CRIU Hibernation**: Checkpoint/restore for instant resume
-- **Multi-Cluster**: Federate sessions across clusters
-- **Marketplace**: Public template registry
-- **Analytics**: Advanced usage insights
-- **WebRTC**: Alternative to KasmVNC for lower latency
+</div>
 
 ---
 
-For implementation details, see:
+> [!IMPORTANT]
+> **v2.0 Architecture Update**
+>
+> StreamSpace has evolved to a **Control Plane + Agent** architecture. The Control Plane acts as the central management hub, while Agents (Kubernetes, Docker, etc.) execute commands and manage resources on their respective platforms.
 
-- Controller: `docs/CONTROLLER_GUIDE.md`
-- API: `docs/API_REFERENCE.md`
-- Deployment: `docs/GETTING_STARTED.md`
+## 🧩 System Overview
+
+StreamSpace is a platform-agnostic container streaming platform. It separates the management logic (Control Plane) from the execution logic (Agents), allowing for scalability and multi-platform support.
+
+### High-Level Architecture
+
+```mermaid
+graph TD
+    User[User / Browser] -->|HTTPS| Ingress[Ingress / Load Balancer]
+    Ingress -->|HTTPS| UI[Web UI]
+    Ingress -->|HTTPS/WSS| API[Control Plane API<br/>2-10 Pod Replicas]
+
+    subgraph "Control Plane (HA-Ready)"
+        UI
+        API
+        Redis[(Redis<br/>Agent Hub)]
+        DB[(PostgreSQL)]
+        API --> DB
+        API <--> Redis
+    end
+
+    subgraph "Execution Plane (Kubernetes)"
+        K8sLeader[K8s Agent - Leader]
+        K8sFollower1[K8s Agent - Follower]
+        K8sFollower2[K8s Agent - Follower]
+        K8sLeader <-->|WebSocket| API
+        K8sFollower1 <-->|WebSocket| API
+        K8sFollower2 <-->|WebSocket| API
+        K8sLeader -->|Manage| Pods[Session Pods]
+        API -.->|VNC Proxy| K8sLeader
+        K8sLeader -.->|Tunnel| Pods
+    end
+
+    subgraph "Execution Plane (Docker)"
+        DockerLeader[Docker Agent - Leader]
+        DockerFollower[Docker Agent - Follower]
+        DockerLeader <-->|WebSocket| API
+        DockerFollower <-->|WebSocket| API
+        DockerLeader -->|Manage| Containers[Session Containers]
+        API -.->|VNC Proxy| DockerLeader
+        DockerLeader -.->|Tunnel| Containers
+    end
+```
+
+## 🔴 High Availability Architecture (v2.0-beta.1)
+
+StreamSpace v2.0-beta.1 introduces comprehensive High Availability (HA) features for production deployments, ensuring zero downtime during component failures and seamless horizontal scaling.
+
+### HA Components Overview
+
+| Component | HA Feature | Replicas | Backend |
+|-----------|-----------|----------|---------|
+| **Control Plane API** | Multi-pod deployment with Redis-backed AgentHub | 2-10 pods | Redis |
+| **K8s Agent** | Leader election via Kubernetes leases | 3-10 replicas | Kubernetes leases API |
+| **Docker Agent** | Leader election with pluggable backends | 2-10 instances | File / Redis / Swarm |
+| **PostgreSQL** | External HA database recommended | N/A | PostgreSQL HA (Patroni, etc.) |
+| **Redis** | Sentinel or Cluster mode for production | 3+ nodes | Redis Sentinel/Cluster |
+
+### Redis-Backed AgentHub Architecture
+
+The **AgentHub** is the WebSocket connection manager for all agents. In HA deployments, it uses Redis to coordinate agent connections across multiple API pods.
+
+```mermaid
+graph TD
+    subgraph "Multi-Pod Control Plane"
+        API1[API Pod 1<br/>AgentHub Instance]
+        API2[API Pod 2<br/>AgentHub Instance]
+        API3[API Pod 3<br/>AgentHub Instance]
+    end
+
+    Redis[(Redis<br/>Shared State)]
+
+    API1 <--> Redis
+    API2 <--> Redis
+    API3 <--> Redis
+
+    subgraph "Agents"
+        K8sAgent1[K8s Agent 1] -->|WebSocket| API1
+        K8sAgent2[K8s Agent 2] -->|WebSocket| API2
+        DockerAgent[Docker Agent] -->|WebSocket| API3
+    end
+
+    Redis -.->|Agent Registry| API1
+    Redis -.->|Agent Registry| API2
+    Redis -.->|Agent Registry| API3
+```
+
+**Key Features:**
+- **Shared Agent Registry**: All API pods see all connected agents via Redis.
+- **Connection Routing**: Agents connect to any API pod; requests route correctly.
+- **Failover**: If an API pod dies, agents reconnect to another pod (23s avg reconnection).
+- **Session Survival**: 100% session survival during API pod failover (tested in Wave 14).
+
+**Redis Data Structures:**
+```
+streamspace:agents:{platform}:{name} -> Agent metadata (JSON)
+streamspace:agents:connections:{agent_id} -> Connected API pod ID
+streamspace:agents:heartbeats:{agent_id} -> Last heartbeat timestamp
+```
+
+### Multi-Pod Control Plane Deployment
+
+```mermaid
+graph TD
+    LB[Load Balancer<br/>Session Affinity]
+
+    subgraph "Kubernetes Cluster"
+        subgraph "Control Plane Pods"
+            API1[API Pod 1<br/>Port 8000]
+            API2[API Pod 2<br/>Port 8000]
+            API3[API Pod 3<br/>Port 8000]
+        end
+
+        HPA[Horizontal Pod<br/>Autoscaler]
+        HPA -.->|Scale| API1
+        HPA -.->|Scale| API2
+        HPA -.->|Scale| API3
+
+        Redis[(Redis<br/>AgentHub Backend)]
+        DB[(PostgreSQL<br/>Primary Database)]
+
+        API1 <--> Redis
+        API2 <--> Redis
+        API3 <--> Redis
+
+        API1 --> DB
+        API2 --> DB
+        API3 --> DB
+    end
+
+    LB -->|HTTPS/WSS| API1
+    LB -->|HTTPS/WSS| API2
+    LB -->|HTTPS/WSS| API3
+
+    Users[Users/Agents] -->|HTTPS/WSS| LB
+```
+
+**Scaling Configuration:**
+- **Min Replicas**: 2 (for HA)
+- **Max Replicas**: 10 (recommended)
+- **Target CPU**: 70% utilization
+- **Session Affinity**: Sticky sessions for WebSocket connections (required for VNC)
+
+**Deployment Command:**
+```bash
+helm install streamspace ./chart \
+  --set api.replicas=3 \
+  --set api.redis.enabled=true \
+  --set api.autoscaling.enabled=true \
+  --set api.autoscaling.maxReplicas=10
+```
+
+### K8s Agent Leader Election
+
+The Kubernetes Agent uses **Kubernetes lease-based leader election** to ensure only one agent actively manages resources at a time, while followers remain ready for failover.
+
+```mermaid
+sequenceDiagram
+    participant Agent1 as K8s Agent 1
+    participant Agent2 as K8s Agent 2
+    participant Agent3 as K8s Agent 3
+    participant K8sAPI as Kubernetes API
+    participant ControlPlane as Control Plane
+
+    Agent1->>K8sAPI: Try Acquire Lease "k8s-agent-leader"
+    K8sAPI-->>Agent1: ✅ Lease Acquired (Leader)
+    Agent1->>ControlPlane: Register (is_leader: true)
+
+    Agent2->>K8sAPI: Try Acquire Lease "k8s-agent-leader"
+    K8sAPI-->>Agent2: ❌ Lease Held by Agent1 (Follower)
+    Agent2->>ControlPlane: Register (is_leader: false)
+
+    Agent3->>K8sAPI: Try Acquire Lease "k8s-agent-leader"
+    K8sAPI-->>Agent3: ❌ Lease Held by Agent1 (Follower)
+    Agent3->>ControlPlane: Register (is_leader: false)
+
+    loop Every 10s (Renew Deadline)
+        Agent1->>K8sAPI: Renew Lease
+        K8sAPI-->>Agent1: ✅ Lease Renewed
+    end
+
+    Note over Agent1: Agent1 Crashes!
+    Agent1-xControlPlane: WebSocket Disconnect
+
+    Agent2->>K8sAPI: Try Acquire Lease (after 15s lease expiry)
+    K8sAPI-->>Agent2: ✅ Lease Acquired (New Leader)
+    Agent2->>ControlPlane: Update (is_leader: true)
+    Note over Agent2: Agent2 is now Leader!
+
+    ControlPlane->>Agent2: Route Commands to New Leader
+```
+
+**Leader Election Parameters:**
+- **Lease Duration**: 15s (time before lease expires)
+- **Renew Deadline**: 10s (leader renews lease every 10s)
+- **Retry Period**: 2s (followers check every 2s)
+- **Lease Name**: `k8s-agent-leader` (namespace: `streamspace`)
+
+**Failover Timing:**
+- **Detection**: 15s (lease expiry timeout)
+- **Election**: 2-4s (follower acquires lease)
+- **Reconnection**: 23s average (tested in Wave 14)
+- **Session Impact**: 0% session loss (100% survival)
+
+### Docker Agent HA Backends
+
+The Docker Agent supports **three HA backends** for leader election, allowing flexible deployment models.
+
+```mermaid
+graph TD
+    subgraph "File Backend (Single Host)"
+        DockerAgent1[Docker Agent 1]
+        DockerAgent2[Docker Agent 2]
+        FileBackend[/shared/leader.lock]
+        DockerAgent1 <-.->|Flock| FileBackend
+        DockerAgent2 <-.->|Flock| FileBackend
+    end
+
+    subgraph "Redis Backend (Multi-Host) - RECOMMENDED"
+        DockerAgent3[Docker Agent 3<br/>Host A]
+        DockerAgent4[Docker Agent 4<br/>Host B]
+        RedisBackend[(Redis<br/>Distributed Lock)]
+        DockerAgent3 <-.->|SETNX| RedisBackend
+        DockerAgent4 <-.->|SETNX| RedisBackend
+    end
+
+    subgraph "Swarm Backend (Docker Swarm)"
+        DockerAgent5[Docker Agent 5<br/>Swarm Node]
+        DockerAgent6[Docker Agent 6<br/>Swarm Node]
+        SwarmBackend[Docker Swarm<br/>Service Constraint]
+        DockerAgent5 <-.->|Service Replica 1| SwarmBackend
+        DockerAgent6 <-.->|Service Replica 2| SwarmBackend
+    end
+```
+
+**Backend Comparison:**
+
+| Backend | Use Case | Replicas | Failover Time | Pros | Cons |
+|---------|----------|----------|---------------|------|------|
+| **File** | Single host, shared filesystem | 2-4 | 15s | Simple, no dependencies | Single point of failure (filesystem) |
+| **Redis** | Multi-host, distributed | 2-10 | 15s | Distributed, production-ready | Requires Redis |
+| **Swarm** | Docker Swarm environments | 2-10 | 30s | Native Swarm integration | Requires Swarm mode |
+
+**Configuration Examples:**
+
+**File Backend:**
+```bash
+# /etc/systemd/system/streamspace-docker-agent.service
+Environment="ENABLE_HA=true"
+Environment="HA_BACKEND=file"
+Environment="FILE_LOCK_PATH=/var/lib/streamspace/leader.lock"
+Environment="LEASE_DURATION=15s"
+```
+
+**Redis Backend (Recommended):**
+```bash
+Environment="ENABLE_HA=true"
+Environment="HA_BACKEND=redis"
+Environment="REDIS_URL=redis://redis.example.com:6379"
+Environment="LEASE_KEY=docker-agent-leader"
+Environment="LEASE_DURATION=15s"
+```
+
+**Swarm Backend:**
+```yaml
+# docker-compose.yml (Swarm mode)
+services:
+  streamspace-docker-agent:
+    image: streamspace/docker-agent:v2.0-beta.1
+    deploy:
+      mode: replicated
+      replicas: 3
+    environment:
+      ENABLE_HA: "true"
+      HA_BACKEND: "swarm"
+```
+
+### HA Deployment Topology
+
+Complete HA deployment topology showing all components with recommended replica counts:
+
+```mermaid
+graph TB
+    subgraph "External Load Balancer"
+        LB[Ingress / ALB<br/>TLS Termination]
+    end
+
+    subgraph "Kubernetes Cluster - Control Plane Namespace"
+        subgraph "API Pods (2-10 replicas)"
+            API1[API Pod 1]
+            API2[API Pod 2]
+            API3[API Pod 3]
+        end
+
+        UI[Web UI Pod]
+        Redis[(Redis<br/>3-node Sentinel)]
+        DB[(PostgreSQL<br/>HA w/ Patroni)]
+
+        API1 <--> Redis
+        API2 <--> Redis
+        API3 <--> Redis
+
+        API1 --> DB
+        API2 --> DB
+        API3 --> DB
+    end
+
+    subgraph "Kubernetes Cluster - Agent Namespace"
+        subgraph "K8s Agent Pods (3-10 replicas)"
+            K8sLeader[K8s Agent 1<br/>👑 Leader]
+            K8sFollower1[K8s Agent 2<br/>Follower]
+            K8sFollower2[K8s Agent 3<br/>Follower]
+        end
+
+        Lease[Kubernetes Lease<br/>"k8s-agent-leader"]
+
+        K8sLeader -.->|Holds| Lease
+        K8sFollower1 -.->|Watches| Lease
+        K8sFollower2 -.->|Watches| Lease
+    end
+
+    subgraph "Kubernetes Cluster - Sessions Namespace"
+        Pod1[Session Pod 1]
+        Pod2[Session Pod 2]
+        PodN[Session Pod N]
+    end
+
+    subgraph "Docker Hosts (2-10 instances)"
+        subgraph "Host A"
+            DockerLeader[Docker Agent 1<br/>👑 Leader]
+            Container1[Session Container 1]
+            Container2[Session Container 2]
+        end
+
+        subgraph "Host B"
+            DockerFollower[Docker Agent 2<br/>Follower]
+        end
+
+        RedisHA[(Redis HA<br/>Leader Election)]
+        DockerLeader <-.->|Holds Lock| RedisHA
+        DockerFollower <-.->|Watches Lock| RedisHA
+    end
+
+    LB --> UI
+    LB --> API1
+    LB --> API2
+    LB --> API3
+
+    K8sLeader <-->|WebSocket| API1
+    K8sFollower1 <-->|WebSocket| API2
+    K8sFollower2 <-->|WebSocket| API3
+
+    DockerLeader <-->|WebSocket| API1
+    DockerFollower <-->|WebSocket| API2
+
+    K8sLeader -->|Manage| Pod1
+    K8sLeader -->|Manage| Pod2
+    K8sLeader -->|Manage| PodN
+
+    DockerLeader -->|Manage| Container1
+    DockerLeader -->|Manage| Container2
+```
+
+**Production HA Checklist:**
+
+- ✅ **Control Plane**: 3+ API pods, Redis Sentinel (3+ nodes), PostgreSQL HA
+- ✅ **K8s Agent**: 3+ replicas with leader election enabled
+- ✅ **Docker Agent**: 2+ instances with Redis backend
+- ✅ **Load Balancer**: Session affinity enabled for WebSocket
+- ✅ **Monitoring**: Prometheus alerts for leader election failures
+- ✅ **Backup**: Regular PostgreSQL backups and Redis snapshots
+
+## 📦 Core Components
+
+### 1. Control Plane (API)
+
+- **Role**: Central brain of the system.
+- **Tech**: Go (Gin framework).
+- **Responsibilities**:
+  - User Authentication & Authorization (SAML, OIDC).
+  - Session Management (CRUD).
+  - Agent Coordination (WebSocket Hub).
+  - VNC Proxying (Secure tunneling).
+  - Database Management.
+
+### 2. Execution Agents
+
+- **Role**: Platform-specific executors.
+- **Tech**: Go.
+- **Types**:
+  - **Kubernetes Agent**: Manages Pods, PVCs, Services with leader election (v2.0-beta.1).
+  - **Docker Agent**: Manages Containers, Volumes with HA backends (v2.0-beta.1).
+- **Responsibilities**:
+  - Connect to Control Plane via secure WebSocket.
+  - Execute commands (Start, Stop, Hibernate).
+  - Report status and metrics (Heartbeats).
+  - Tunnel VNC traffic.
+  - Participate in leader election for High Availability.
+
+### 3. Web UI
+
+- **Role**: User interface.
+- **Tech**: React + TypeScript + Material-UI.
+- **Features**:
+  - Dashboard & Catalog.
+  - Session Viewer (noVNC integration).
+  - Admin Panel (User, Agent, Plugin management).
+
+### 4. Session Workspaces
+
+- **Role**: The actual user environment.
+- **Tech**: Containerized applications (LinuxServer.io images).
+- **Features**:
+  - KasmVNC for streaming.
+  - Persistent home directory.
+  - Isolated environment.
+
+## 🔄 Data Flow
+
+### Session Creation
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as Control Plane
+    participant DB as Database
+    participant Agent as K8s Agent
+    participant K8s as Kubernetes
+
+    User->>API: POST /api/v1/sessions
+    API->>DB: Check Quota & Create Record
+    API->>Agent: Send Command (StartSession)
+    Agent->>K8s: Create Deployment/Service/PVC
+    K8s-->>Agent: Pod Ready (IP: 10.42.x.x)
+    Agent->>API: Update Status (Running)
+    API-->>User: Session Ready
+```
+
+### VNC Streaming (v2.0 Proxy)
+
+```mermaid
+sequenceDiagram
+    participant User
+    participant API as Control Plane Proxy
+    participant Agent as K8s Agent
+    participant Pod as Session Pod
+
+    User->>API: WebSocket Connect (/api/v1/vnc/:id)
+    API->>Agent: Route VNC Traffic
+    Agent->>Pod: Port Forward (5900)
+    Pod-->>Agent: VNC Data
+    Agent-->>API: VNC Data
+    API-->>User: VNC Data
+```
+
+## 🛡️ Security Architecture
+
+### Authentication
+
+- **SSO**: Authentik, Okta, Azure AD via OIDC/SAML.
+- **Tokens**: JWT (Access + Refresh).
+- **MFA**: TOTP support.
+
+### Network Security
+
+- **Ingress**: TLS/SSL enforced.
+- **Isolation**: Network Policies deny inter-pod traffic by default.
+- **Proxy**: All VNC traffic flows through Control Plane (no direct pod access).
+
+### Data Protection
+
+- **Storage**: Per-user PVCs with RBAC.
+- **Encryption**: Secrets management for sensitive data.
+- **Audit**: Comprehensive logging of all actions.
+
+## 💾 Resource Management
+
+### Quotas
+
+- **Per User**: Max sessions, CPU, Memory.
+- **Enforcement**: Checked at API level before command dispatch.
+
+### Hibernation
+
+- **Auto-Scale**: Idle sessions scale to 0 replicas.
+- **Wake**: Instant resume on user interaction.
+- **Persistence**: PVCs remain mounted/available.
+
+## 🔌 Plugin System
+
+The plugin system allows extending functionality without modifying the core.
+
+- **Types**: Extension, Webhook, Integration, Theme.
+- **Storage**: JSONB configuration in database.
+- **Events**: Plugins can subscribe to system events (SessionStart, UserLogin, etc.).
+
+---
+
+<div align="center">
+  <sub>StreamSpace Architecture Documentation</sub>
+</div>

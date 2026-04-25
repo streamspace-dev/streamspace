@@ -86,7 +86,7 @@ export default function SetupWizard() {
             navigate('/login');
           }, 3000);
         }
-      } catch (err: any) {
+      } catch (err) {
         console.error('Failed to check setup status (attempt ' + (retryCount + 1) + '):', err);
 
         // Retry if API is not ready yet (502/503/connection refused)
@@ -163,9 +163,10 @@ export default function SetupWizard() {
       setTimeout(() => {
         navigate('/login');
       }, 2000);
-    } catch (err: any) {
-      const errorMessage = err.response?.data?.error || err.message || 'Failed to configure admin account';
-      const hint = err.response?.data?.hint;
+    } catch (err: unknown) {
+      const axiosError = err as { response?: { data?: { error?: string; hint?: string } }; message?: string };
+      const errorMessage = axiosError.response?.data?.error || axiosError.message || 'Failed to configure admin account';
+      const hint = axiosError.response?.data?.hint;
       setError(hint ? `${errorMessage}\n${hint}` : errorMessage);
     } finally {
       setLoading(false);

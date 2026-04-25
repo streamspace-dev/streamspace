@@ -1,0 +1,27 @@
+# ConfigMap for K8s Agent configuration (optional)
+apiVersion: v1
+kind: ConfigMap
+metadata:
+  name: streamspace-agent-config
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: k8s-agent
+data:
+  # Agent configuration
+  agent-id: "k8s-prod-us-east-1"
+  control-plane-url: "wss://control.example.com"
+  platform: "kubernetes"
+  region: "us-east-1"
+  namespace: "streamspace"
+
+  # Capacity configuration
+  max-cpu: "100"
+  max-memory: "256"
+  max-sessions: "100"
+
+  # Heartbeat configuration
+  heartbeat-interval: "10"  # seconds
+
+  # Reconnect backoff (comma-separated seconds)
+  reconnect-backoff: "2,4,8,16,32"

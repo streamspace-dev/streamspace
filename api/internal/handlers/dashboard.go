@@ -52,8 +52,8 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/k8s"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 )
 
 // DashboardHandler handles dashboard and resource usage queries
@@ -76,14 +76,14 @@ func (h *DashboardHandler) GetPlatformStats(c *gin.Context) {
 
 	// Get user stats
 	var totalUsers, activeUsers int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&totalUsers)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE active = true`).Scan(&activeUsers)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users`).Scan(&totalUsers)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE active = true`).Scan(&activeUsers)
 
 	// Get session stats
 	var totalSessions, runningSessions, hibernatedSessions int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions`).Scan(&totalSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'running'`).Scan(&runningSessions)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM sessions WHERE state = 'hibernated'`).Scan(&hibernatedSessions)
 
 	// Get template count from Kubernetes
 	namespace := c.Query("namespace")
@@ -95,16 +95,16 @@ func (h *DashboardHandler) GetPlatformStats(c *gin.Context) {
 
 	// Get connection stats
 	var activeConnections int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM connections`).Scan(&activeConnections)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM connections`).Scan(&activeConnections)
 
 	// Get recent activity (last 24 hours)
 	var sessionsCreated24h, connectionsLast24h int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions
 		WHERE created_at >= NOW() - INTERVAL '24 hours'
 	`).Scan(&sessionsCreated24h)
 
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM connections
 		WHERE connected_at >= NOW() - INTERVAL '24 hours'
 	`).Scan(&connectionsLast24h)
@@ -207,10 +207,10 @@ func (h *DashboardHandler) GetUserUsageStats(c *gin.Context) {
 	limit := 50
 	offset := 0
 	if limitStr := c.Query("limit"); limitStr != "" {
-		fmt.Sscanf(limitStr, "%d", &limit)
+		_, _ = fmt.Sscanf(limitStr, "%d", &limit)
 	}
 	if offsetStr := c.Query("offset"); offsetStr != "" {
-		fmt.Sscanf(offsetStr, "%d", &offset)
+		_, _ = fmt.Sscanf(offsetStr, "%d", &offset)
 	}
 
 	// Get user usage data
@@ -271,7 +271,7 @@ func (h *DashboardHandler) GetUserUsageStats(c *gin.Context) {
 
 	// Get total count
 	var total int
-	h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE active = true`).Scan(&total)
+	_ = h.db.DB().QueryRowContext(ctx, `SELECT COUNT(*) FROM users WHERE active = true`).Scan(&total)
 
 	c.JSON(http.StatusOK, gin.H{
 		"users":  users,
@@ -327,7 +327,7 @@ func (h *DashboardHandler) GetActivityTimeline(c *gin.Context) {
 	// Get time range from query (default: last 7 days)
 	days := 7
 	if daysStr := c.Query("days"); daysStr != "" {
-		fmt.Sscanf(daysStr, "%d", &days)
+		_, _ = fmt.Sscanf(daysStr, "%d", &days)
 		if days > 90 {
 			days = 90 // Max 90 days
 		}
@@ -421,15 +421,15 @@ func (h *DashboardHandler) GetUserDashboard(c *gin.Context) {
 
 	// Get user's sessions
 	var totalSessions, runningSessions, hibernatedSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions WHERE user_id = $1
 	`, userIDStr).Scan(&totalSessions)
 
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND state = 'running'
 	`, userIDStr).Scan(&runningSessions)
 
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions WHERE user_id = $1 AND state = 'hibernated'
 	`, userIDStr).Scan(&hibernatedSessions)
 
@@ -474,7 +474,7 @@ func (h *DashboardHandler) GetUserDashboard(c *gin.Context) {
 
 	// Get user's recent activity
 	var recentConnections int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM connections
 		WHERE user_id = $1 AND connected_at >= NOW() - INTERVAL '24 hours'
 	`, userIDStr).Scan(&recentConnections)

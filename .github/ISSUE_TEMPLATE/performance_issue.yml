@@ -1,0 +1,129 @@
+name: Performance Issue
+description: Report a performance regression or optimization opportunity
+title: "[PERF] "
+labels: ["performance", "P1"]
+body:
+  - type: markdown
+    attributes:
+      value: |
+        Report performance issues, regressions, or optimization opportunities.
+
+  - type: dropdown
+    id: component
+    attributes:
+      label: Component
+      description: Which component has the performance issue?
+      options:
+        - UI - Frontend/React
+        - Backend - API/Go
+        - K8s Agent
+        - Docker Agent
+        - Database
+        - WebSocket
+        - VNC Proxy
+        - Plugin System
+        - Other
+    validations:
+      required: true
+
+  - type: textarea
+    id: description
+    attributes:
+      label: Performance Issue Description
+      description: What is slow or resource-intensive?
+      placeholder: The session list page takes 5+ seconds to load with 100+ sessions
+    validations:
+      required: true
+
+  - type: textarea
+    id: benchmark_before
+    attributes:
+      label: Current Performance (Before)
+      description: Baseline performance metrics
+      placeholder: |
+        - Response time: 5.2 seconds
+        - Memory usage: 512 MB
+        - CPU usage: 80%
+        - Database queries: 50 queries
+      render: markdown
+
+  - type: textarea
+    id: benchmark_target
+    attributes:
+      label: Target Performance (After)
+      description: What performance do we need?
+      placeholder: |
+        - Response time: < 1 second
+        - Memory usage: < 200 MB
+        - CPU usage: < 30%
+        - Database queries: < 10 queries
+      render: markdown
+
+  - type: textarea
+    id: profiling
+    attributes:
+      label: Profiling Data
+      description: Attach profiling data, flame graphs, or performance traces
+      placeholder: |
+        ```
+        Paste profiling output here
+        ```
+
+  - type: textarea
+    id: proposed_solution
+    attributes:
+      label: Proposed Solution
+      description: Ideas for improving performance
+      placeholder: |
+        - Add database indexes on session.user_id
+        - Implement pagination (limit 50 per page)
+        - Cache session counts in Redis
+        - Use lazy loading for session details
+
+  - type: dropdown
+    id: milestone
+    attributes:
+      label: Target Milestone
+      options:
+        - v2.0-beta.1
+        - v2.0-beta.2
+        - v2.1.0
+        - v2.2.0
+        - Future
+    validations:
+      required: true
+
+  - type: dropdown
+    id: size
+    attributes:
+      label: Estimated Effort
+      options:
+        - size:xs (< 2 hours)
+        - size:s (2-4 hours)
+        - size:m (4-8 hours)
+        - size:l (1-2 days)
+        - size:xl (2-5 days)
+        - Unknown
+
+  - type: textarea
+    id: acceptance
+    attributes:
+      label: Acceptance Criteria
+      description: How will we verify the improvement?
+      placeholder: |
+        - [ ] Response time < 1 second for 100 sessions
+        - [ ] Memory usage reduced by 50%
+        - [ ] Load testing shows improvement
+        - [ ] No regression in other areas
+    validations:
+      required: true
+
+  - type: textarea
+    id: context
+    attributes:
+      label: Additional Context
+      description: Environment, load conditions, related issues
+      placeholder: |
+        - Production environment with 500 users
+        - Issue appears with > 50 active sessions
+        - Related to #123

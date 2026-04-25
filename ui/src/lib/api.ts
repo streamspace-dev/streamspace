@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// API layer uses `any` for flexible response handling from backend
 import axios, { AxiosInstance, AxiosError } from 'axios';
 import { toast } from './toast';
 
@@ -39,6 +41,14 @@ export interface Session {
   idleThreshold?: number; // seconds
   isIdle?: boolean;
   isActive?: boolean;
+  // v2.0 multi-platform architecture fields
+  agent_id?: string;  // ID of the agent running this session
+  platform?: string;  // Platform type (kubernetes, docker, vm, cloud)
+  region?: string;    // Region where session is running
+  // Multi-protocol streaming support
+  streamingProtocol?: string;  // Streaming protocol: vnc, selkies, guacamole, x2go, rdp
+  streamingPort?: number;      // Port for streaming service
+  streamingPath?: string;      // URL path for HTTP-based protocols
 }
 
 export interface SessionStatus {
@@ -1305,7 +1315,8 @@ class APIClient {
   async listInstalledPlugins(enabledOnly?: boolean): Promise<InstalledPlugin[]> {
     const params = enabledOnly ? { enabled: 'true' } : {};
     const response = await this.client.get<{ plugins: InstalledPlugin[] }>('/plugins', { params });
-    return response.data.plugins;
+    // BUG FIX P0-123: Guard against null/undefined plugins response
+    return Array.isArray(response.data.plugins) ? response.data.plugins : [];
   }
 
   async getInstalledPlugin(id: number): Promise<InstalledPlugin> {
@@ -2033,6 +2044,40 @@ class APIClient {
   async removeFavorite(templateName: string): Promise<{ message: string; templateName: string }> {
     const response = await this.client.delete(`/preferences/favorites/${encodeURIComponent(templateName)}`);
     return response.data;
+  }
+
+  // ============================================================================
+  // Agent Management (Admin)
+  // ============================================================================
+
+  async listAgents(params?: {
+    platform?: string;
+    status?: string;
+    approval_status?: string;
+    page?: number;
+    limit?: number;
+  }): Promise<{ agents: any[]; total: number; page: number; limit: number }> {
+    const queryParams = new URLSearchParams();
+    if (params?.platform) queryParams.append('platform', params.platform);
+    if (params?.status) queryParams.append('status', params.status);
+    if (params?.approval_status) queryParams.append('approval_status', params.approval_status);
+    if (params?.page) queryParams.append('page', String(params.page));
+    if (params?.limit) queryParams.append('limit', String(params.limit));
+
+    const response = await this.client.get(`/admin/agents?${queryParams.toString()}`);
+    return response.data;
+  }
+
+  async deleteAgent(agentId: string): Promise<void> {
+    await this.client.delete(`/admin/agents/${agentId}`);
+  }
+
+  async approveAgent(agentId: string): Promise<void> {
+    await this.client.post(`/admin/agents/${agentId}/approve`);
+  }
+
+  async rejectAgent(agentId: string): Promise<void> {
+    await this.client.post(`/admin/agents/${agentId}/reject`);
   }
 }
 

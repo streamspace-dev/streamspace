@@ -23,7 +23,6 @@ import {
   Drawer,
   List,
   ListItem,
-  ListItemText,
   ListItemIcon,
   Typography,
   Button,
@@ -170,10 +169,12 @@ export default function NotificationQueue({
   // Expose addNotification method globally
   useEffect(() => {
     // Store in window for global access
-    (window as any).addNotification = addNotification;
+    const windowWithNotification = window as Window & { addNotification?: typeof addNotification };
+    windowWithNotification.addNotification = addNotification;
     return () => {
-      delete (window as any).addNotification;
+      delete windowWithNotification.addNotification;
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -192,7 +193,7 @@ export default function NotificationQueue({
           maxWidth: 400,
         }}
       >
-        {visibleNotifications.map((notification, index) => (
+        {visibleNotifications.map((notification) => (
           <Snackbar
             key={notification.id}
             open={true}
@@ -358,12 +359,14 @@ export default function NotificationQueue({
 }
 
 // Export hook for easy use
+// eslint-disable-next-line react-refresh/only-export-components
 export function useNotificationQueue() {
   // Use useCallback to return a stable function reference
   // This prevents unnecessary re-renders in components that use this hook
   const addNotification = useCallback((notification: Omit<Notification, 'id' | 'timestamp'>) => {
-    if ((window as any).addNotification) {
-      (window as any).addNotification(notification);
+    const windowWithNotification = window as Window & { addNotification?: (n: Omit<Notification, 'id' | 'timestamp'>) => void };
+    if (windowWithNotification.addNotification) {
+      windowWithNotification.addNotification(notification);
     }
   }, []);
 

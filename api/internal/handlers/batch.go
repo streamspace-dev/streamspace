@@ -79,7 +79,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // BatchHandler handles batch operations on multiple resources
@@ -139,7 +139,11 @@ func (h *BatchHandler) RegisterRoutes(router *gin.RouterGroup) {
 
 // TerminateSessions terminates multiple sessions
 func (h *BatchHandler) TerminateSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -148,6 +152,11 @@ func (h *BatchHandler) TerminateSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -181,7 +190,11 @@ func (h *BatchHandler) TerminateSessions(c *gin.Context) {
 
 // HibernateSessions hibernates multiple sessions
 func (h *BatchHandler) HibernateSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -190,6 +203,11 @@ func (h *BatchHandler) HibernateSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -221,7 +239,11 @@ func (h *BatchHandler) HibernateSessions(c *gin.Context) {
 
 // WakeSessions wakes multiple hibernated sessions
 func (h *BatchHandler) WakeSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -230,6 +252,11 @@ func (h *BatchHandler) WakeSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -261,7 +288,11 @@ func (h *BatchHandler) WakeSessions(c *gin.Context) {
 
 // DeleteSessions deletes multiple sessions
 func (h *BatchHandler) DeleteSessions(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -270,6 +301,11 @@ func (h *BatchHandler) DeleteSessions(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -301,7 +337,11 @@ func (h *BatchHandler) DeleteSessions(c *gin.Context) {
 
 // UpdateSessionTags updates tags for multiple sessions
 func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -315,8 +355,24 @@ func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
 		return
 	}
 
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
+		return
+	}
+
+	if len(req.Tags) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "tags cannot be empty"})
+		return
+	}
+
 	if req.Operation == "" {
 		req.Operation = "replace"
+	}
+
+	validOperations := map[string]bool{"add": true, "remove": true, "replace": true}
+	if !validOperations[req.Operation] {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "operation must be one of: add, remove, replace"})
+		return
 	}
 
 	ctx := context.Background()
@@ -347,7 +403,11 @@ func (h *BatchHandler) UpdateSessionTags(c *gin.Context) {
 
 // UpdateSessionResources updates resources for multiple sessions
 func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -357,6 +417,16 @@ func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
+		return
+	}
+
+	if len(req.Resources) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "resources cannot be empty"})
 		return
 	}
 
@@ -386,7 +456,11 @@ func (h *BatchHandler) UpdateSessionResources(c *gin.Context) {
 
 // DeleteSnapshots deletes multiple snapshots
 func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -395,6 +469,11 @@ func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SnapshotIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "snapshotIds cannot be empty"})
 		return
 	}
 
@@ -426,7 +505,11 @@ func (h *BatchHandler) DeleteSnapshots(c *gin.Context) {
 
 // CreateSnapshots creates snapshots for multiple sessions
 func (h *BatchHandler) CreateSnapshots(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	var req struct {
@@ -436,6 +519,11 @@ func (h *BatchHandler) CreateSnapshots(c *gin.Context) {
 
 	if err := c.ShouldBindJSON(&req); err != nil {
 		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+		return
+	}
+
+	if len(req.SessionIDs) == 0 {
+		c.JSON(http.StatusBadRequest, gin.H{"error": "sessionIds cannot be empty"})
 		return
 	}
 
@@ -499,7 +587,11 @@ func (h *BatchHandler) DeleteTemplates(c *gin.Context) {
 
 // ListBatchJobs lists user's batch jobs
 func (h *BatchHandler) ListBatchJobs(c *gin.Context) {
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -557,7 +649,11 @@ func (h *BatchHandler) ListBatchJobs(c *gin.Context) {
 // GetBatchJob retrieves a specific batch job
 func (h *BatchHandler) GetBatchJob(c *gin.Context) {
 	jobID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -604,7 +700,11 @@ func (h *BatchHandler) GetBatchJob(c *gin.Context) {
 // CancelBatchJob cancels a running batch job
 func (h *BatchHandler) CancelBatchJob(c *gin.Context) {
 	jobID := c.Param("id")
-	userID, _ := c.Get("userID")
+	userID, exists := c.Get("userID")
+	if !exists {
+		c.JSON(http.StatusUnauthorized, gin.H{"error": "User not authenticated"})
+		return
+	}
 	userIDStr := userID.(string)
 
 	ctx := context.Background()
@@ -637,23 +737,55 @@ func (h *BatchHandler) executeBatchTerminate(jobID, userID string, sessionIDs []
 	var errors []string
 
 	for _, sessionID := range sessionIDs {
-		// Update session state to terminated
+		// Get agent_id for the session before deleting
+		var agentID string
+		err := h.db.DB().QueryRowContext(ctx, `
+			SELECT agent_id FROM sessions WHERE id = $1 AND user_id = $2
+		`, sessionID, userID).Scan(&agentID)
+
+		if err != nil {
+			failureCount++
+			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+			// Update progress
+			_, _ = h.db.DB().ExecContext(ctx, `
+				UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
+			`, successCount, failureCount, jobID)
+			continue
+		}
+
+		// Send stop_session command to agent to clean up Kubernetes resources
+		if agentID != "" {
+			cmdID := fmt.Sprintf("cmd-%x", time.Now().UnixNano())
+			cmdPayload := fmt.Sprintf(`{"sessionId":"%s"}`, sessionID)
+
+			_, err = h.db.DB().ExecContext(ctx, `
+				INSERT INTO agent_commands (command_id, agent_id, action, payload, status, created_at)
+				VALUES ($1, $2, 'stop_session', $3, 'pending', CURRENT_TIMESTAMP)
+			`, cmdID, agentID, cmdPayload)
+
+			if err != nil {
+				log.Printf("[BatchHandler] Warning: Failed to create stop command for session %s: %v", sessionID, err)
+			}
+		}
+
+		// Delete session from database
 		result, err := h.db.DB().ExecContext(ctx, `
-			UPDATE sessions SET state = 'terminated' WHERE id = $1 AND user_id = $2
+			DELETE FROM sessions WHERE id = $1 AND user_id = $2
 		`, sessionID, userID)
 
 		if err != nil {
 			failureCount++
-			errors = append(errors, fmt.Sprintf("session %s: %v", sessionID, err))
+			errors = append(errors, fmt.Sprintf("session %s: delete failed: %v", sessionID, err))
 		} else if rowsAffected, _ := result.RowsAffected(); rowsAffected == 0 {
 			failureCount++
-			errors = append(errors, fmt.Sprintf("session %s: not found or not owned by user", sessionID))
+			errors = append(errors, fmt.Sprintf("session %s: not found", sessionID))
 		} else {
 			successCount++
+			log.Printf("[BatchHandler] Terminated session %s (agent: %s)", sessionID, agentID)
 		}
 
 		// Update progress
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
@@ -662,7 +794,7 @@ func (h *BatchHandler) executeBatchTerminate(jobID, userID string, sessionIDs []
 	errorsJSON, _ := json.Marshal(errors)
 
 	// Mark as completed with final error count
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }
@@ -689,13 +821,13 @@ func (h *BatchHandler) executeBatchHibernate(jobID, userID string, sessionIDs []
 			successCount++
 		}
 
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
 
 	errorsJSON, _ := json.Marshal(errors)
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }
@@ -722,13 +854,13 @@ func (h *BatchHandler) executeBatchWake(jobID, userID string, sessionIDs []strin
 			successCount++
 		}
 
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
 
 	errorsJSON, _ := json.Marshal(errors)
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }
@@ -755,13 +887,13 @@ func (h *BatchHandler) executeBatchDelete(jobID, userID string, sessionIDs []str
 			successCount++
 		}
 
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
 
 	errorsJSON, _ := json.Marshal(errors)
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }
@@ -802,13 +934,13 @@ func (h *BatchHandler) executeBatchUpdateTags(jobID, userID string, sessionIDs [
 			log.Printf("[ERROR] Failed to update tags for session %s: %v", sessionID, err)
 		}
 
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
 
 	errorsJSON, _ := json.Marshal(errors)
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }
@@ -921,13 +1053,13 @@ func (h *BatchHandler) executeBatchDeleteSnapshots(jobID, userID string, snapsho
 			successCount++
 		}
 
-		h.db.DB().ExecContext(ctx, `
+		_, _ = h.db.DB().ExecContext(ctx, `
 			UPDATE batch_operations SET processed_items = processed_items + 1, success_count = $1, failure_count = $2 WHERE id = $3
 		`, successCount, failureCount, jobID)
 	}
 
 	errorsJSON, _ := json.Marshal(errors)
-	h.db.DB().ExecContext(ctx, `
+	_, _ = h.db.DB().ExecContext(ctx, `
 		UPDATE batch_operations SET status = 'completed', completed_at = CURRENT_TIMESTAMP, errors = $1 WHERE id = $2
 	`, string(errorsJSON), jobID)
 }

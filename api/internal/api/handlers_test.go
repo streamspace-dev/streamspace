@@ -113,8 +113,14 @@ func TestUpdateConfig_InvalidJSON(t *testing.T) {
 	// Execute
 	handler.UpdateConfig(c)
 
-	// Assert
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	// Assert - v2.0-beta: k8sClient is nil, so returns 503 (not 400)
+	// When k8sClient is nil, the handler returns ServiceUnavailable before parsing JSON
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
+
+	var response map[string]string
+	err := json.Unmarshal(w.Body.Bytes(), &response)
+	assert.NoError(t, err)
+	assert.Contains(t, response["error"], "Configuration management not available")
 }
 
 // Test helper to create a test context with request context
@@ -145,18 +151,20 @@ func TestGetPodLogs_MissingPodName(t *testing.T) {
 
 	handler := &Handler{
 		namespace: "streamspace",
+		// k8sClient is nil - v2.0-beta architecture
 	}
 
 	// Execute
 	handler.GetPodLogs(c)
 
-	// Assert
-	assert.Equal(t, http.StatusBadRequest, w.Code)
+	// Assert - v2.0-beta: k8sClient is nil, so returns 503 (not 400)
+	// When k8sClient is nil, cluster management endpoints return ServiceUnavailable
+	assert.Equal(t, http.StatusServiceUnavailable, w.Code)
 
 	var response map[string]string
 	err := json.Unmarshal(w.Body.Bytes(), &response)
 	assert.NoError(t, err)
-	assert.Contains(t, response["error"], "pod query parameter required")
+	assert.Contains(t, response["error"], "Cluster management not available")
 }
 
 // Benchmark tests

@@ -504,13 +504,13 @@ func (c *WebSocketClient) writePump() {
 		case message, ok := <-c.Send:
 			// Set write deadline to prevent hanging on slow clients
 			// If write takes longer than 10 seconds, it fails
-			c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
 
 			// Check if channel was closed (ok == false)
 			if !ok {
 				// Hub closed our Send channel (client being removed)
 				// Send close message to client and exit gracefully
-				c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
+				_ = c.Conn.WriteMessage(websocket.CloseMessage, []byte{})
 				return
 			}
 
@@ -531,17 +531,17 @@ func (c *WebSocketClient) writePump() {
 			}
 
 			// Write the message to the frame
-			w.Write(data)
+			_, _ = w.Write(data)
 
 			// OPTIMIZATION: Batch queued messages into this WebSocket frame
 			// If there are more messages waiting, send them together
 			// This reduces WebSocket frame overhead during high traffic
 			n := len(c.Send) // Check how many messages are waiting
 			for i := 0; i < n; i++ {
-				w.Write([]byte{'\n'})     // Newline separator between messages
+				_, _ = w.Write([]byte{'\n'})     // Newline separator between messages
 				msg := <-c.Send           // Get next message from channel
 				data, _ := json.Marshal(msg) // Marshal to JSON (ignore error for batching)
-				w.Write(data)              // Add to current frame
+				_, _ = w.Write(data)              // Add to current frame
 			}
 
 			// Close the writer to finish and send the WebSocket frame
@@ -553,7 +553,7 @@ func (c *WebSocketClient) writePump() {
 		// Ticker fired - time to send ping message
 		case <-ticker.C:
 			// Set write deadline for ping message
-			c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
+			_ = c.Conn.SetWriteDeadline(time.Now().Add(WebSocketWriteDeadline))
 
 			// Send ping message
 			// Client should respond with pong (handled in readPump)
@@ -604,13 +604,13 @@ func (c *WebSocketClient) readPump() {
 	// Set initial read deadline (60 seconds)
 	// If no message received in 60 seconds, read will timeout
 	// This is reset every time we receive a pong message
-	c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
+	_ = c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
 
 	// Set pong handler - called when client responds to our ping
 	// This proves the client is still alive and resets the read deadline
 	c.Conn.SetPongHandler(func(string) error {
 		// Reset read deadline (client is alive)
-		c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
+		_ = c.Conn.SetReadDeadline(time.Now().Add(WebSocketReadDeadline))
 		return nil // No error
 	})
 

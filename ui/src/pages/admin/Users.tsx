@@ -1,4 +1,4 @@
-import { useState, useRef } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Button,
@@ -109,6 +109,12 @@ import AdminPortalLayout from '../../components/AdminPortalLayout';
  * @see UserDetail for viewing and editing user details
  * @see Quotas for managing user resource quotas
  */
+
+interface UserEventData {
+  event_type?: string;
+  username?: string;
+}
+
 export default function Users() {
   const navigate = useNavigate();
   const queryClient = useQueryClient();
@@ -130,7 +136,7 @@ export default function Users() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time user events via WebSocket with notifications
-  useUserEvents((data: any) => {
+  useUserEvents((data: UserEventData) => {
     console.log('User event:', data);
     setWsConnected(true);
 

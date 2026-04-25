@@ -44,7 +44,7 @@ import (
 	"fmt"
 	"time"
 
-	"github.com/streamspace/streamspace/api/internal/cache"
+	"github.com/streamspace-dev/streamspace/api/internal/cache"
 )
 
 // SessionStore manages server-side session tracking in Redis
@@ -58,6 +58,7 @@ type SessionData struct {
 	UserID    string    `json:"user_id"`
 	Username  string    `json:"username"`
 	Role      string    `json:"role"`
+	OrgID     string    `json:"org_id"` // Organization ID for multi-tenancy
 	CreatedAt time.Time `json:"created_at"`
 	ExpiresAt time.Time `json:"expires_at"`
 	IPAddress string    `json:"ip_address,omitempty"`

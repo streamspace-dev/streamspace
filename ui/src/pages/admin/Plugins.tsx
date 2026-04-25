@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Admin page uses `any` for plugin configuration data
 import { useState, useEffect } from 'react';
 import {
   Box,

@@ -69,7 +69,9 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/lib/pq"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // APIKeyHandler handles API key management
@@ -120,21 +122,24 @@ func hashAPIKey(key string) string {
 	return hex.EncodeToString(hash[:])
 }
 
+// CreateAPIKeyRequest is the request body for creating an API key
+type CreateAPIKeyRequest struct {
+	Name        string   `json:"name" binding:"required" validate:"required,min=3,max=100"`
+	Description string   `json:"description" validate:"omitempty,max=500"`
+	Scopes      []string `json:"scopes" validate:"omitempty,dive,min=3,max=50"`
+	RateLimit   int      `json:"rateLimit" validate:"omitempty,gte=0,lte=100000"`
+	ExpiresIn   string   `json:"expiresIn" validate:"omitempty,min=2,max=10"` // Duration string like "30d", "1y"
+}
+
 // CreateAPIKey creates a new API key
 func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 	ctx := context.Background()
 
-	var req struct {
-		Name        string    `json:"name" binding:"required"`
-		Description string    `json:"description"`
-		Scopes      []string  `json:"scopes"`
-		RateLimit   int       `json:"rateLimit"`
-		ExpiresIn   string    `json:"expiresIn"` // Duration string like "30d", "1y"
-	}
+	var req CreateAPIKeyRequest
 
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
-		return
+	// Bind and validate request
+	if !validator.BindAndValidate(c, &req) {
+		return // Validator already set error response
 	}
 
 	// Get user ID from context
@@ -195,7 +200,7 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		req.Name,
 		req.Description,
 		userIDStr,
-		req.Scopes,
+		pq.Array(req.Scopes),
 		rateLimit,
 		expiresAt,
 		userIDStr,
@@ -216,6 +221,56 @@ func (h *APIKeyHandler) CreateAPIKey(c *gin.Context) {
 		"expiresAt": expiresAt,
 		"message":   "API key created successfully. Store it securely - it won't be shown again.",
 	})
+}
+
+// ListAllAPIKeys returns all API keys in the system (admin only)
+func (h *APIKeyHandler) ListAllAPIKeys(c *gin.Context) {
+	ctx := context.Background()
+
+	query := `
+		SELECT id, key_prefix, name, description, user_id, scopes, rate_limit,
+		       expires_at, last_used_at, use_count, is_active, created_at, created_by
+		FROM api_keys
+		ORDER BY created_at DESC
+	`
+
+	rows, err := h.db.DB().QueryContext(ctx, query)
+	if err != nil {
+		c.JSON(http.StatusInternalServerError, gin.H{"error": err.Error()})
+		return
+	}
+	defer rows.Close()
+
+	keys := []APIKey{}
+	for rows.Next() {
+		var key APIKey
+		var scopes []string
+
+		err := rows.Scan(
+			&key.ID,
+			&key.KeyPrefix,
+			&key.Name,
+			&key.Description,
+			&key.UserID,
+			pq.Array(&scopes),
+			&key.RateLimit,
+			&key.ExpiresAt,
+			&key.LastUsedAt,
+			&key.UseCount,
+			&key.IsActive,
+			&key.CreatedAt,
+			&key.CreatedBy,
+		)
+		if err != nil {
+			continue
+		}
+
+		key.Scopes = scopes
+		keys = append(keys, key)
+	}
+
+	// Return as array for consistency with admin UI expectations
+	c.JSON(http.StatusOK, keys)
 }
 
 // ListAPIKeys returns all API keys for the current user
@@ -261,7 +316,7 @@ func (h *APIKeyHandler) ListAPIKeys(c *gin.Context) {
 			&key.Name,
 			&key.Description,
 			&key.UserID,
-			&scopes,
+			pq.Array(&scopes),
 			&key.RateLimit,
 			&key.ExpiresAt,
 			&key.LastUsedAt,
@@ -426,13 +481,13 @@ func (h *APIKeyHandler) GetAPIKeyUsage(c *gin.Context) {
 
 	// Get total usage count
 	var totalUsage int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM api_key_usage_log WHERE api_key_id = $1
 	`, keyID).Scan(&totalUsage)
 
 	// Get recent usage (last 24 hours)
 	var recentUsage int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM api_key_usage_log
 		WHERE api_key_id = $1 AND timestamp >= NOW() - INTERVAL '24 hours'
 	`, keyID).Scan(&recentUsage)

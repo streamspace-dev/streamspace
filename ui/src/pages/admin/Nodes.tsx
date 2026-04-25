@@ -73,6 +73,21 @@ import { useNotificationQueue } from '../../components/NotificationQueue';
 import EnhancedWebSocketStatus from '../../components/EnhancedWebSocketStatus';
 import WebSocketErrorBoundary from '../../components/WebSocketErrorBoundary';
 
+interface NodeHealthEventData {
+  node_name?: string;
+  status?: string;
+  message?: string;
+  event_type?: string;
+}
+
+interface ApiError {
+  response?: {
+    data?: {
+      message?: string;
+    };
+  };
+}
+
 interface NodeInfo {
   name: string;
   labels: Record<string, string>;
@@ -160,7 +175,7 @@ export default function AdminNodes() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time node health updates via WebSocket with notifications
-  const baseWebSocket = useNodeHealthEvents((data: any) => {
+  useNodeHealthEvents((data: NodeHealthEventData) => {
     console.log('Node health event:', data);
     setWsConnected(true);
 
@@ -214,9 +229,10 @@ export default function AdminNodes() {
       // Ensure nodesData is always an array to prevent undefined errors
       setNodes(Array.isArray(nodesData) ? nodesData : []);
       setStats(statsData || null);
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to load nodes:', err);
-      setError(err.response?.data?.message || 'Failed to load node information');
+      const apiError = err as ApiError;
+      setError(apiError.response?.data?.message || 'Failed to load node information');
       // Set empty array on error to prevent undefined
       setNodes([]);
       setStats(null);
@@ -240,9 +256,10 @@ export default function AdminNodes() {
       setLabelKey('');
       setLabelValue('');
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to add label:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to add label';
+      const apiError = err as ApiError;
+      const errorMsg = apiError.response?.data?.message || 'Failed to add label';
       setError(errorMsg);
       addNotification({
         message: errorMsg,
@@ -257,9 +274,10 @@ export default function AdminNodes() {
     try {
       await api.removeNodeLabel(nodeName, key);
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to remove label:', err);
-      setError(err.response?.data?.message || 'Failed to remove label');
+      const apiError = err as ApiError;
+      setError(apiError.response?.data?.message || 'Failed to remove label');
     }
   };
 
@@ -277,9 +295,10 @@ export default function AdminNodes() {
       setTaintValue('');
       setTaintEffect('NoSchedule');
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to add taint:', err);
-      setError(err.response?.data?.message || 'Failed to add taint');
+      const apiError = err as ApiError;
+      setError(apiError.response?.data?.message || 'Failed to add taint');
     }
   };
 
@@ -287,9 +306,10 @@ export default function AdminNodes() {
     try {
       await api.removeNodeTaint(nodeName, key);
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to remove taint:', err);
-      setError(err.response?.data?.message || 'Failed to remove taint');
+      const apiError = err as ApiError;
+      setError(apiError.response?.data?.message || 'Failed to remove taint');
     }
   };
 
@@ -303,9 +323,10 @@ export default function AdminNodes() {
         title: 'Node Cordoned',
       });
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to cordon node:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to cordon node';
+      const apiError = err as ApiError;
+      const errorMsg = apiError.response?.data?.message || 'Failed to cordon node';
       setError(errorMsg);
       addNotification({
         message: errorMsg,
@@ -326,9 +347,10 @@ export default function AdminNodes() {
         title: 'Node Uncordoned',
       });
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to uncordon node:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to uncordon node';
+      const apiError = err as ApiError;
+      const errorMsg = apiError.response?.data?.message || 'Failed to uncordon node';
       setError(errorMsg);
       addNotification({
         message: errorMsg,
@@ -361,9 +383,10 @@ export default function AdminNodes() {
         title: 'Node Drained',
       });
       loadNodesAndStats();
-    } catch (err: any) {
+    } catch (err) {
       console.error('Failed to drain node:', err);
-      const errorMsg = err.response?.data?.message || 'Failed to drain node';
+      const apiError = err as ApiError;
+      const errorMsg = apiError.response?.data?.message || 'Failed to drain node';
       setError(errorMsg);
       addNotification({
         message: errorMsg,

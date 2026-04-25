@@ -50,8 +50,8 @@ import (
 	"net/http"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/middleware"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/middleware"
 )
 
 // TeamHandler handles team-related API requests with RBAC

@@ -107,7 +107,7 @@ stop_applications() {
     echo ""
 
     local deployments=(
-        "streamspace-controller"
+        "streamspace-k8s-agent"
         "streamspace-api"
         "streamspace-ui"
     )
@@ -142,7 +142,7 @@ wait_for_termination() {
 
     while [ $elapsed -lt $timeout ]; do
         local app_pods=$(kubectl get pods -n "${NAMESPACE}" \
-            -l 'app.kubernetes.io/component in (controller,api,ui)' \
+            -l 'app.kubernetes.io/component in (k8s-agent,api,ui)' \
             --field-selector=status.phase!=Succeeded,status.phase!=Failed \
             --no-headers 2>/dev/null | wc -l || echo "0")
 
@@ -168,7 +168,7 @@ show_status_after() {
 
     log_info "Application Deployments (should show 0/0 ready):"
     kubectl get deployments -n "${NAMESPACE}" \
-        -l 'app.kubernetes.io/name=streamspace,app.kubernetes.io/component in (controller,api,ui)' \
+        -l 'app.kubernetes.io/name=streamspace,app.kubernetes.io/component in (k8s-agent,api,ui)' \
         2>/dev/null || log_warning "No application deployments found"
     echo ""
 
@@ -210,7 +210,7 @@ show_next_steps() {
     echo ""
 
     log_info "To manually restart without rebuilding:"
-    echo "     ${COLOR_BLUE}kubectl scale deployment streamspace-controller -n ${NAMESPACE} --replicas=1${COLOR_RESET}"
+    echo "     ${COLOR_BLUE}kubectl scale deployment streamspace-k8s-agent -n ${NAMESPACE} --replicas=1${COLOR_RESET}"
     echo "     ${COLOR_BLUE}kubectl scale deployment streamspace-api -n ${NAMESPACE} --replicas=1${COLOR_RESET}"
     echo "     ${COLOR_BLUE}kubectl scale deployment streamspace-ui -n ${NAMESPACE} --replicas=1${COLOR_RESET}"
     echo ""

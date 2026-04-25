@@ -13,7 +13,7 @@
 //	// In plugin file: plugins/my-plugin/main.go
 //	package main
 //
-//	import "github.com/streamspace/streamspace/api/internal/plugins"
+//	import "github.com/streamspace-dev/streamspace/api/internal/plugins"
 //
 //	func init() {
 //	    plugins.Register("my-plugin", func() plugins.PluginHandler {
@@ -135,8 +135,7 @@ import (
 //   - Runtime calls GetGlobalRegistry() to discover all plugins
 //   - Discovery applies global registry to runtime
 var (
-	globalRegistry     = &GlobalPluginRegistry{plugins: make(map[string]PluginFactory)}
-	globalRegistryOnce sync.Once
+	globalRegistry = &GlobalPluginRegistry{plugins: make(map[string]PluginFactory)}
 )
 
 // GlobalPluginRegistry manages global plugin registration and discovery.

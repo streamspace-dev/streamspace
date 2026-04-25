@@ -16,22 +16,25 @@ This guide covers common issues you might encounter when deploying StreamSpace a
 ### Issue: "Chart.yaml file is missing" error during helm lint
 
 **Symptoms:**
+
 ```bash
 ==> Linting /path/to/streamspace/chart
 [ERROR] templates/: Chart.yaml file is missing
 [ERROR] : unable to load chart
-	Chart.yaml file is missing
+ Chart.yaml file is missing
 
 Error: 1 chart(s) linted, 1 chart(s) failed
 ```
 
 **Affected Versions:**
+
 - Helm v3.19.0 (confirmed critical bug)
 - Possibly affects v3.19.1+ as well
 - Observed on macOS and Linux
 
 **Root Cause:**
 Helm v3.19.0 has a **critical regression** in the chart loader (`helm.sh/helm/v3/pkg/chart/loader`) that **completely breaks chart loading**. The bug affects:
+
 - ✗ `helm lint` - reports "Chart.yaml is missing"
 - ✗ `helm template` - fails to load chart
 - ✗ `helm install` from directory - fails with "Chart.yaml file is missing"
@@ -42,6 +45,7 @@ Helm v3.19.0 has a **critical regression** in the chart loader (`helm.sh/helm/v3
 **Solutions:**
 
 #### Option 1: Use kubectl-based Deployment ✅ RECOMMENDED for Helm v3.19.0
+
 We've created a Helm-free deployment script that uses raw Kubernetes manifests:
 
 ```bash
@@ -49,6 +53,7 @@ We've created a Helm-free deployment script that uses raw Kubernetes manifests:
 ```
 
 This script:
+
 - ✅ Works with any Helm version (doesn't use Helm)
 - ✅ Deploys all components (controller, API, UI, database)
 - ✅ Creates RBAC, secrets, and services
@@ -58,9 +63,11 @@ This script:
 **This is the recommended approach if you can't downgrade Helm.**
 
 #### Option 2: Downgrade Helm (Best Long-term Solution)
+
 Downgrade to Helm v3.18.0 or earlier:
 
 **On macOS (using Homebrew):**
+
 ```bash
 # Uninstall current version
 brew uninstall helm
@@ -74,6 +81,7 @@ asdf global helm 3.18.0
 ```
 
 **On Linux:**
+
 ```bash
 # Download specific version
 wget https://get.helm.sh/helm-v3.18.0-linux-amd64.tar.gz
@@ -91,6 +99,7 @@ Helm v3.19.0's bug is so severe that it affects **all chart loading operations**
 
 **Verification:**
 After installation, verify the deployment is working:
+
 ```bash
 # Check pod status
 kubectl get pods -n streamspace
@@ -109,6 +118,7 @@ kubectl logs -n streamspace -l app.kubernetes.io/component=controller -f
 ### Issue: ImagePullBackOff for local images
 
 **Symptoms:**
+
 ```
 NAME                                      READY   STATUS             RESTARTS   AGE
 streamspace-controller-xxxxx              0/1     ImagePullBackOff   0          2m
@@ -120,11 +130,13 @@ Kubernetes is trying to pull the image from a registry instead of using the loca
 **Solution:**
 
 1. **Verify images exist locally:**
+
 ```bash
 docker images | grep streamspace
 ```
 
 You should see:
+
 ```
 streamspace/streamspace-controller   local   ...
 streamspace/streamspace-api          local   ...
@@ -134,6 +146,7 @@ streamspace/streamspace-ui           local   ...
 2. **Ensure `imagePullPolicy` is set to `Never`:**
 
 The deployment script should set this automatically, but you can verify:
+
 ```bash
 kubectl get deployment streamspace-controller -n streamspace -o jsonpath='{.spec.template.spec.containers[0].imagePullPolicy}'
 ```
@@ -143,6 +156,7 @@ Should output: `Never`
 3. **For Docker Desktop Kubernetes:**
 
 Make sure you're using the same Docker context:
+
 ```bash
 # Check current context
 docker context list
@@ -152,6 +166,7 @@ docker context use default
 ```
 
 4. **Manual fix if needed:**
+
 ```bash
 helm upgrade streamspace ./chart \
   --namespace streamspace \
@@ -168,6 +183,7 @@ helm upgrade streamspace ./chart \
 ### Issue: API or Controller can't connect to PostgreSQL
 
 **Symptoms:**
+
 ```
 Error: failed to connect to postgres: dial tcp: lookup streamspace-postgres: no such host
 ```
@@ -175,27 +191,32 @@ Error: failed to connect to postgres: dial tcp: lookup streamspace-postgres: no 
 **Solutions:**
 
 1. **Verify PostgreSQL is running:**
+
 ```bash
 kubectl get pods -n streamspace -l app.kubernetes.io/component=database
 ```
 
 2. **Check PostgreSQL service:**
+
 ```bash
 kubectl get svc -n streamspace -l app.kubernetes.io/component=database
 ```
 
 3. **Verify connection from a test pod:**
+
 ```bash
 kubectl run -it --rm debug --image=postgres:15 --restart=Never -n streamspace -- \
   psql -h streamspace-postgres -U streamspace -d streamspace
 ```
 
 4. **Check PostgreSQL logs:**
+
 ```bash
 kubectl logs -n streamspace -l app.kubernetes.io/component=database
 ```
 
 5. **Verify password secret:**
+
 ```bash
 kubectl get secret streamspace-secrets -n streamspace -o jsonpath='{.data.postgres-password}' | base64 -d
 ```
@@ -207,6 +228,7 @@ kubectl get secret streamspace-secrets -n streamspace -o jsonpath='{.data.postgr
 ### Issue: CRDs not found
 
 **Symptoms:**
+
 ```
 Error from server (NotFound): the server could not find the requested resource (get sessions.stream.streamspace.io)
 ```
@@ -214,16 +236,19 @@ Error from server (NotFound): the server could not find the requested resource (
 **Solutions:**
 
 1. **Manually install CRDs:**
+
 ```bash
 kubectl apply -f ./chart/crds/
 ```
 
 2. **Verify CRDs are installed:**
+
 ```bash
 kubectl get crds | grep streamspace
 ```
 
 Expected output:
+
 ```
 sessions.stream.streamspace.io
 templates.stream.streamspace.io
@@ -232,11 +257,13 @@ connections.stream.streamspace.io
 ```
 
 3. **Check CRD details:**
+
 ```bash
 kubectl get crd sessions.stream.streamspace.io -o yaml
 ```
 
 4. **Reinstall if needed:**
+
 ```bash
 kubectl delete crd sessions.stream.streamspace.io templates.stream.streamspace.io
 kubectl apply -f ./chart/crds/
@@ -249,6 +276,7 @@ kubectl apply -f ./chart/crds/
 ### Issue: Controller not starting or crash looping
 
 **Symptoms:**
+
 ```
 NAME                                      READY   STATUS             RESTARTS   AGE
 streamspace-controller-xxxxx              0/1     CrashLoopBackOff   5          5m
@@ -257,26 +285,31 @@ streamspace-controller-xxxxx              0/1     CrashLoopBackOff   5          
 **Debugging Steps:**
 
 1. **Check controller logs:**
+
 ```bash
 kubectl logs -n streamspace -l app.kubernetes.io/component=controller --tail=100
 ```
 
 2. **Check for RBAC issues:**
+
 ```bash
 kubectl auth can-i get deployments --as=system:serviceaccount:streamspace:streamspace-controller -n streamspace
 ```
 
 3. **Verify service account exists:**
+
 ```bash
 kubectl get serviceaccount streamspace-controller -n streamspace
 ```
 
 4. **Check resource limits:**
+
 ```bash
 kubectl describe pod -n streamspace -l app.kubernetes.io/component=controller
 ```
 
 5. **Increase verbosity:**
+
 ```bash
 helm upgrade streamspace ./chart \
   --namespace streamspace \
@@ -288,12 +321,13 @@ helm upgrade streamspace ./chart \
 
 ## Additional Resources
 
-- **Helm Documentation:** https://helm.sh/docs/
-- **Kubernetes Debugging:** https://kubernetes.io/docs/tasks/debug/
+- **Helm Documentation:** <https://helm.sh/docs/>
+- **Kubernetes Debugging:** <https://kubernetes.io/docs/tasks/debug/>
 - **StreamSpace Architecture:** [ARCHITECTURE.md](./ARCHITECTURE.md)
-- **GitHub Issues:** https://github.com/streamspace/streamspace/issues
+- **GitHub Issues:** <https://github.com/streamspace-dev/streamspace/issues>
 
 For further assistance, please open an issue on GitHub with:
+
 1. Output of `kubectl version`
 2. Output of `helm version`
 3. Relevant logs from affected components

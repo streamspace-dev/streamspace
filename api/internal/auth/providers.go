@@ -186,7 +186,7 @@ import (
 	"crypto/x509"
 	"encoding/pem"
 	"fmt"
-	"io/ioutil"
+	"os"
 )
 
 // SAMLProvider represents a SAML identity provider configuration
@@ -400,7 +400,7 @@ func GetOIDCProviderConfig(provider OIDCProvider) *OIDCProviderConfig {
 
 // LoadCertificate loads an X.509 certificate from PEM file
 func LoadCertificate(certPath string) (*x509.Certificate, error) {
-	certPEM, err := ioutil.ReadFile(certPath)
+	certPEM, err := os.ReadFile(certPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read certificate file: %w", err)
 	}
@@ -420,7 +420,7 @@ func LoadCertificate(certPath string) (*x509.Certificate, error) {
 
 // LoadPrivateKey loads an RSA private key from PEM file
 func LoadPrivateKey(keyPath string) (*rsa.PrivateKey, error) {
-	keyPEM, err := ioutil.ReadFile(keyPath)
+	keyPEM, err := os.ReadFile(keyPath)
 	if err != nil {
 		return nil, fmt.Errorf("failed to read private key file: %w", err)
 	}

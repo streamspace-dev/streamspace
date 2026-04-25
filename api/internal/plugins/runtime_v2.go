@@ -160,8 +160,8 @@ import (
 	"time"
 
 	"github.com/robfig/cron/v3"
-	"github.com/streamspace/streamspace/api/internal/db"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // RuntimeV2 manages the lifecycle and execution of plugins with automatic discovery.

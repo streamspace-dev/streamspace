@@ -257,7 +257,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // Handler handles collaboration-related HTTP requests.
@@ -483,7 +483,7 @@ func (h *CollaborationHandler) CreateCollaborationSession(c *gin.Context) {
 		CanViewOnly: false,
 	}
 
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		INSERT INTO collaboration_participants (
 			collaboration_id, user_id, role, permissions, color, is_active
 		) VALUES ($1, $2, $3, $4, $5, $6)
@@ -505,7 +505,7 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 	var req struct {
 		InviteToken string `json:"invite_token"`
 	}
-	c.ShouldBindJSON(&req)
+	_ = c.ShouldBindJSON(&req)
 
 	// Get collaboration details
 	var sessionID, ownerID string
@@ -528,7 +528,7 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 	// Parse settings
 	var collabSettings CollaborationSettings
 	if settings.Valid && settings.String != "" {
-		json.Unmarshal([]byte(settings.String), &collabSettings)
+		_ = json.Unmarshal([]byte(settings.String), &collabSettings)
 	}
 
 	// Check if user has access to session
@@ -539,14 +539,14 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 
 	// Check if already a participant
 	var existingRole string
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT role FROM collaboration_participants
 		WHERE collaboration_id = $1 AND user_id = $2
 	`, collabID, userID).Scan(&existingRole)
 
 	if existingRole != "" {
 		// Update to active
-		h.DB.DB().Exec(`
+		_, _ = h.DB.DB().Exec(`
 			UPDATE collaboration_participants
 			SET is_active = true, last_seen_at = $1
 			WHERE collaboration_id = $2 AND user_id = $3
@@ -558,7 +558,7 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 
 	// Check participant limit
 	var participantCount int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM collaboration_participants
 		WHERE collaboration_id = $1 AND is_active = true
 	`, collabID).Scan(&participantCount)
@@ -599,14 +599,14 @@ func (h *CollaborationHandler) JoinCollaborationSession(c *gin.Context) {
 	}
 
 	// Update participant count
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		UPDATE collaboration_sessions
 		SET active_users = (SELECT COUNT(*) FROM collaboration_participants WHERE collaboration_id = $1 AND is_active = true)
 		WHERE id = $1
 	`, collabID)
 
 	// Send system message
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		INSERT INTO collaboration_chat (
 			collaboration_id, user_id, message, message_type
 		) VALUES ($1, $2, $3, $4)
@@ -641,14 +641,14 @@ func (h *CollaborationHandler) LeaveCollaborationSession(c *gin.Context) {
 	}
 
 	// Update active user count
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		UPDATE collaboration_sessions
 		SET active_users = (SELECT COUNT(*) FROM collaboration_participants WHERE collaboration_id = $1 AND is_active = true)
 		WHERE id = $1
 	`, collabID)
 
 	// Send system message
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		INSERT INTO collaboration_chat (
 			collaboration_id, user_id, message, message_type
 		) VALUES ($1, $2, $3, $4)
@@ -700,10 +700,10 @@ func (h *CollaborationHandler) GetCollaborationParticipants(c *gin.Context) {
 				p.Username = username.String
 			}
 			if permissions.Valid && permissions.String != "" {
-				json.Unmarshal([]byte(permissions.String), &p.Permissions)
+				_ = json.Unmarshal([]byte(permissions.String), &p.Permissions)
 			}
 			if cursorPos.Valid && cursorPos.String != "" {
-				json.Unmarshal([]byte(cursorPos.String), &p.CursorPosition)
+				_ = json.Unmarshal([]byte(cursorPos.String), &p.CursorPosition)
 			}
 			participants = append(participants, p)
 		}
@@ -860,7 +860,7 @@ func (h *CollaborationHandler) GetChatHistory(c *gin.Context) {
 				msg.Username = username.String
 			}
 			if metadata.Valid && metadata.String != "" {
-				json.Unmarshal([]byte(metadata.String), &msg.Metadata)
+				_ = json.Unmarshal([]byte(metadata.String), &msg.Metadata)
 			}
 			messages = append(messages, msg)
 		}
@@ -895,7 +895,7 @@ func (h *CollaborationHandler) CreateAnnotation(c *gin.Context) {
 
 	// Get session ID
 	var sessionID string
-	h.DB.DB().QueryRow("SELECT session_id FROM collaboration_sessions WHERE id = $1", collabID).Scan(&sessionID)
+	_ = h.DB.DB().QueryRow("SELECT session_id FROM collaboration_sessions WHERE id = $1", collabID).Scan(&sessionID)
 
 	annotationID := fmt.Sprintf("annot-%d", time.Now().UnixNano())
 	req.ID = annotationID
@@ -965,7 +965,7 @@ func (h *CollaborationHandler) GetAnnotations(c *gin.Context) {
 
 		if err == nil {
 			if points.Valid && points.String != "" {
-				json.Unmarshal([]byte(points.String), &a.Points)
+				_ = json.Unmarshal([]byte(points.String), &a.Points)
 			}
 			annotations = append(annotations, a)
 		}
@@ -982,7 +982,7 @@ func (h *CollaborationHandler) DeleteAnnotation(c *gin.Context) {
 
 	// Verify ownership or manage permission
 	var ownerID string
-	h.DB.DB().QueryRow("SELECT user_id FROM collaboration_annotations WHERE id = $1", annotationID).Scan(&ownerID)
+	_ = h.DB.DB().QueryRow("SELECT user_id FROM collaboration_annotations WHERE id = $1", annotationID).Scan(&ownerID)
 
 	if ownerID != userID && !h.canManageCollaboration(collabID, userID) {
 		c.JSON(http.StatusForbidden, gin.H{"error": "permission denied"})
@@ -1028,7 +1028,7 @@ func (h *CollaborationHandler) ClearAllAnnotations(c *gin.Context) {
 
 func (h *CollaborationHandler) isCollaborationParticipant(collabID, userID string) bool {
 	var exists bool
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT EXISTS(SELECT 1 FROM collaboration_participants
 		WHERE collaboration_id = $1 AND user_id = $2)
 	`, collabID, userID).Scan(&exists)
@@ -1037,7 +1037,7 @@ func (h *CollaborationHandler) isCollaborationParticipant(collabID, userID strin
 
 func (h *CollaborationHandler) canManageCollaboration(collabID, userID string) bool {
 	var permissions sql.NullString
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT permissions FROM collaboration_participants
 		WHERE collaboration_id = $1 AND user_id = $2
 	`, collabID, userID).Scan(&permissions)
@@ -1047,13 +1047,13 @@ func (h *CollaborationHandler) canManageCollaboration(collabID, userID string) b
 	}
 
 	var perms CollaborationPermissions
-	json.Unmarshal([]byte(permissions.String), &perms)
+	_ = json.Unmarshal([]byte(permissions.String), &perms)
 	return perms.CanManage
 }
 
 func (h *CollaborationHandler) hasCollaborationPermission(collabID, userID, permission string) bool {
 	var permissions sql.NullString
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT permissions FROM collaboration_participants
 		WHERE collaboration_id = $1 AND user_id = $2 AND is_active = true
 	`, collabID, userID).Scan(&permissions)
@@ -1063,7 +1063,7 @@ func (h *CollaborationHandler) hasCollaborationPermission(collabID, userID, perm
 	}
 
 	var perms CollaborationPermissions
-	json.Unmarshal([]byte(permissions.String), &perms)
+	_ = json.Unmarshal([]byte(permissions.String), &perms)
 
 	switch permission {
 	case "can_chat":
@@ -1093,7 +1093,7 @@ func (h *CollaborationHandler) GetCollaborationStats(c *gin.Context) {
 
 	// Participant count
 	var totalParticipants, activeParticipants int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*), COUNT(*) FILTER (WHERE is_active = true)
 		FROM collaboration_participants WHERE collaboration_id = $1
 	`, collabID).Scan(&totalParticipants, &activeParticipants)
@@ -1102,14 +1102,14 @@ func (h *CollaborationHandler) GetCollaborationStats(c *gin.Context) {
 
 	// Message count
 	var messageCount int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM collaboration_chat WHERE collaboration_id = $1
 	`, collabID).Scan(&messageCount)
 	stats["total_messages"] = messageCount
 
 	// Annotation count
 	var annotationCount int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM collaboration_annotations
 		WHERE collaboration_id = $1 AND (expires_at IS NULL OR expires_at > $2)
 	`, collabID, time.Now()).Scan(&annotationCount)
@@ -1117,7 +1117,7 @@ func (h *CollaborationHandler) GetCollaborationStats(c *gin.Context) {
 
 	// Session duration
 	var startTime time.Time
-	h.DB.DB().QueryRow("SELECT created_at FROM collaboration_sessions WHERE id = $1", collabID).Scan(&startTime)
+	_ = h.DB.DB().QueryRow("SELECT created_at FROM collaboration_sessions WHERE id = $1", collabID).Scan(&startTime)
 	duration := time.Since(startTime)
 	stats["duration_seconds"] = int(duration.Seconds())
 

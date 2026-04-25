@@ -1,0 +1,89 @@
+# Systemd Service - StreamSpace Docker Agent
+#
+# This systemd unit runs docker-agent as a system service.
+# Suitable for:
+#   - Bare-metal deployments
+#   - VM-based deployments
+#   - Traditional Linux server environments
+#
+# Installation:
+#   1. Copy binary to /usr/local/bin/:
+#      sudo cp docker-agent /usr/local/bin/docker-agent
+#      sudo chmod +x /usr/local/bin/docker-agent
+#
+#   2. Copy this file to /etc/systemd/system/:
+#      sudo cp docker-agent.service /etc/systemd/system/
+#
+#   3. Create environment file:
+#      sudo mkdir -p /etc/streamspace
+#      sudo cp docker-agent.env /etc/streamspace/
+#      sudo chmod 600 /etc/streamspace/docker-agent.env
+#
+#   4. Reload systemd and enable service:
+#      sudo systemctl daemon-reload
+#      sudo systemctl enable docker-agent
+#      sudo systemctl start docker-agent
+#
+# Usage:
+#   sudo systemctl status docker-agent
+#   sudo systemctl restart docker-agent
+#   sudo systemctl stop docker-agent
+#   sudo journalctl -u docker-agent -f
+#
+# HA Mode:
+#   For HA deployments, deploy multiple systemd services with:
+#   - Same AGENT_ID
+#   - ENABLE_HA=true
+#   - Appropriate LEADER_ELECTION_BACKEND (file, redis, or swarm)
+
+[Unit]
+Description=StreamSpace Docker Agent
+Documentation=https://streamspace.dev/docs/agents/docker
+After=network-online.target docker.service
+Wants=network-online.target
+Requires=docker.service
+
+[Service]
+Type=simple
+User=root
+Group=docker
+
+# Service Binary
+ExecStart=/usr/local/bin/docker-agent
+
+# Environment Configuration
+EnvironmentFile=/etc/streamspace/docker-agent.env
+
+# Working Directory
+WorkingDirectory=/var/lib/streamspace
+
+# Restart Policy
+Restart=on-failure
+RestartSec=5s
+StartLimitInterval=300s
+StartLimitBurst=5
+
+# Resource Limits
+LimitNOFILE=65536
+LimitNPROC=4096
+
+# Security Hardening
+# Note: docker-agent needs access to Docker socket, so some restrictions are relaxed
+NoNewPrivileges=true
+ProtectSystem=strict
+ProtectHome=true
+PrivateTmp=true
+ReadWritePaths=/var/lib/streamspace /var/run/streamspace
+
+# Logging
+StandardOutput=journal
+StandardError=journal
+SyslogIdentifier=docker-agent
+
+# Graceful Shutdown
+TimeoutStopSec=30s
+KillMode=mixed
+KillSignal=SIGTERM
+
+[Install]
+WantedBy=multi-user.target

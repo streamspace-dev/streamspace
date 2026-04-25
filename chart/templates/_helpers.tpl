@@ -76,6 +76,14 @@ app.kubernetes.io/component: ui
 {{- end }}
 
 {{/*
+K8s Agent labels
+*/}}
+{{- define "streamspace.k8sAgent.labels" -}}
+{{ include "streamspace.labels" . }}
+app.kubernetes.io/component: k8s-agent
+{{- end }}
+
+{{/*
 PostgreSQL labels
 */}}
 {{- define "streamspace.postgresql.labels" -}}
@@ -102,6 +110,17 @@ Create the name of the API service account to use
 {{- default (printf "%s-api" (include "streamspace.fullname" .)) .Values.api.serviceAccount.name }}
 {{- else }}
 {{- default "default" .Values.api.serviceAccount.name }}
+{{- end }}
+{{- end }}
+
+{{/*
+Create the name of the K8s Agent service account to use
+*/}}
+{{- define "streamspace.k8sAgent.serviceAccountName" -}}
+{{- if .Values.k8sAgent.serviceAccount.create }}
+{{- default (printf "%s-k8s-agent" (include "streamspace.fullname" .)) .Values.k8sAgent.serviceAccount.name }}
+{{- else }}
+{{- default "default" .Values.k8sAgent.serviceAccount.name }}
 {{- end }}
 {{- end }}
 
@@ -210,6 +229,20 @@ Image name for UI
 {{- $registry := .Values.global.imageRegistry | default .Values.ui.image.registry }}
 {{- $repository := .Values.ui.image.repository }}
 {{- $tag := .Values.ui.image.tag | default .Chart.AppVersion }}
+{{- if $registry }}
+{{- printf "%s/%s:%s" $registry $repository $tag }}
+{{- else }}
+{{- printf "%s:%s" $repository $tag }}
+{{- end }}
+{{- end }}
+
+{{/*
+Image name for K8s Agent
+*/}}
+{{- define "streamspace.k8sAgent.image" -}}
+{{- $registry := .Values.global.imageRegistry | default .Values.k8sAgent.image.registry }}
+{{- $repository := .Values.k8sAgent.image.repository }}
+{{- $tag := .Values.k8sAgent.image.tag | default .Chart.AppVersion }}
 {{- if $registry }}
 {{- printf "%s/%s:%s" $registry $repository $tag }}
 {{- else }}

@@ -1,0 +1,96 @@
+name: Weekly Status Report
+on:
+  schedule:
+    - cron: '0 9 * * 1'  # Every Monday at 9 AM UTC
+  workflow_dispatch:  # Allow manual trigger
+
+jobs:
+  report:
+    runs-on: ubuntu-latest
+    permissions:
+      issues: write
+    steps:
+      - name: Generate Weekly Report
+        uses: actions/github-script@v7
+        with:
+          script: |
+            const today = new Date();
+            const lastWeek = new Date(today.getTime() - 7 * 24 * 60 * 60 * 1000);
+
+            // Get milestones
+            const milestones = await github.rest.issues.listMilestones({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open'
+            });
+
+            // Get issues closed in last week
+            const closedIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'closed',
+              since: lastWeek.toISOString()
+            });
+
+            // Get open issues by priority
+            const p0Issues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'P0'
+            });
+
+            const blockedIssues = await github.rest.issues.listForRepo({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              state: 'open',
+              labels: 'status:blocked'
+            });
+
+            // Build report
+            let report = `# 📊 Weekly Status Report - ${today.toISOString().split('T')[0]}\n\n`;
+            report += `## 🎯 Milestone Progress\n\n`;
+
+            for (const milestone of milestones.data) {
+              const total = milestone.open_issues + milestone.closed_issues;
+              const progress = total > 0 ? Math.floor((milestone.closed_issues / total) * 100) : 0;
+              report += `### ${milestone.title} (Due: ${milestone.due_on?.split('T')[0] || 'No due date'})\n`;
+              report += `- Progress: ${progress}% (${milestone.closed_issues}/${total} complete)\n`;
+              report += `- Open: ${milestone.open_issues}\n\n`;
+            }
+
+            report += `## ✅ Completed This Week (${closedIssues.data.length} issues)\n\n`;
+            for (const issue of closedIssues.data.slice(0, 10)) {
+              report += `- #${issue.number}: ${issue.title}\n`;
+            }
+            if (closedIssues.data.length > 10) {
+              report += `\n... and ${closedIssues.data.length - 10} more\n`;
+            }
+
+            report += `\n## 🚨 Attention Needed\n\n`;
+            report += `### P0 Critical Issues (${p0Issues.data.length})\n`;
+            for (const issue of p0Issues.data) {
+              report += `- #${issue.number}: ${issue.title}\n`;
+            }
+
+            if (blockedIssues.data.length > 0) {
+              report += `\n### 🚧 Blocked Issues (${blockedIssues.data.length})\n`;
+              for (const issue of blockedIssues.data) {
+                report += `- #${issue.number}: ${issue.title}\n`;
+              }
+            }
+
+            report += `\n---\n\n`;
+            report += `📈 **Project Board**: https://github.com/orgs/streamspace-dev/projects/2\n`;
+            report += `📋 **Milestones**: https://github.com/streamspace-dev/streamspace/milestones\n`;
+
+            console.log(report);
+
+            // Create issue with report
+            await github.rest.issues.create({
+              owner: context.repo.owner,
+              repo: context.repo.repo,
+              title: `Weekly Status Report - ${today.toISOString().split('T')[0]}`,
+              body: report,
+              labels: ['status-report', 'agent:architect']
+            });

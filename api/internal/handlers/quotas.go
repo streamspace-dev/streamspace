@@ -92,11 +92,11 @@ import (
 	"database/sql"
 	"fmt"
 	"net/http"
-	"strconv"
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
 // QuotasHandler handles resource quotas and limits.
@@ -115,6 +115,47 @@ func NewQuotasHandler(database *db.Database) *QuotasHandler {
 	return &QuotasHandler{
 		db: database,
 	}
+}
+
+// SetQuotaRequest represents a request to set resource quotas
+type SetQuotaRequest struct {
+	MaxSessions int `json:"maxSessions" validate:"gte=0,lte=10000"`
+	MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=1000000"`      // millicores, max 1000 cores
+	MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=10000000"`  // MB, max ~10TB
+	MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=100000"`   // GB, max 100TB
+}
+
+// SetDefaultQuotasRequest represents a request to set default quotas
+type SetDefaultQuotasRequest struct {
+	User struct {
+		MaxSessions int `json:"maxSessions" validate:"gte=0,lte=1000"`
+		MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=100000"`
+		MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=1000000"`
+		MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=10000"`
+	} `json:"user" validate:"required"`
+	Team struct {
+		MaxSessions int `json:"maxSessions" validate:"gte=0,lte=10000"`
+		MaxCPU      int `json:"maxCPU" validate:"gte=0,lte=1000000"`
+		MaxMemory   int `json:"maxMemory" validate:"gte=0,lte=10000000"`
+		MaxStorage  int `json:"maxStorage" validate:"gte=0,lte=100000"`
+	} `json:"team" validate:"required"`
+}
+
+// CheckQuotaRequest represents a request to check quota availability
+type CheckQuotaRequest struct {
+	UserID      string `json:"userId" binding:"required" validate:"required,min=1,max=100"`
+	CPU         int    `json:"cpu" validate:"gte=0,lte=100000"`
+	Memory      int    `json:"memory" validate:"gte=0,lte=1000000"`
+	AddSessions int    `json:"addSessions" validate:"gte=0,lte=100"`
+}
+
+// QuotaPolicyRequest represents a quota policy create/update request
+type QuotaPolicyRequest struct {
+	Name        string `json:"name" binding:"required" validate:"required,min=1,max=200"`
+	Description string `json:"description" validate:"omitempty,max=1000"`
+	Rules       string `json:"rules" binding:"required" validate:"required,max=10000"`
+	Priority    int    `json:"priority" validate:"gte=0,lte=100"`
+	Enabled     bool   `json:"enabled"`
 }
 
 // RegisterRoutes registers quota routes
@@ -199,15 +240,8 @@ func (h *QuotasHandler) GetUserQuota(c *gin.Context) {
 func (h *QuotasHandler) SetUserQuota(c *gin.Context) {
 	userID := c.Param("userId")
 
-	var req struct {
-		MaxSessions int `json:"maxSessions"`
-		MaxCPU      int `json:"maxCPU"`      // millicores
-		MaxMemory   int `json:"maxMemory"`   // MB
-		MaxStorage  int `json:"maxStorage"`  // GB
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -275,14 +309,14 @@ func (h *QuotasHandler) GetUserUsage(c *gin.Context) {
 
 	// Count active sessions
 	var activeSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions
 		WHERE user_id = $1 AND state IN ('running', 'starting', 'pending')
 	`, userID).Scan(&activeSessions)
 
 	// Sum allocated resources
 	var totalCPU, totalMemory int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(SUM((resources->>'cpu')::int), 0),
 			COALESCE(SUM((resources->>'memory')::int), 0)
@@ -293,7 +327,7 @@ func (h *QuotasHandler) GetUserUsage(c *gin.Context) {
 
 	// Calculate storage usage (snapshots + persistent homes)
 	var snapshotStorage int64
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(size_bytes), 0)
 		FROM session_snapshots
 		WHERE user_id = $1 AND status = 'completed'
@@ -347,13 +381,13 @@ func (h *QuotasHandler) GetUserQuotaStatus(c *gin.Context) {
 
 	// Get usage
 	var activeSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions
 		WHERE user_id = $1 AND state IN ('running', 'starting', 'pending')
 	`, userID).Scan(&activeSessions)
 
 	var totalCPU, totalMemory int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(SUM((resources->>'cpu')::int), 0),
 			COALESCE(SUM((resources->>'memory')::int), 0)
@@ -363,7 +397,7 @@ func (h *QuotasHandler) GetUserQuotaStatus(c *gin.Context) {
 	`, userID).Scan(&totalCPU, &totalMemory)
 
 	var totalStorage int64
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COALESCE(SUM(size_bytes), 0)
 		FROM session_snapshots
 		WHERE user_id = $1 AND status = 'completed'
@@ -480,15 +514,8 @@ func (h *QuotasHandler) GetTeamQuota(c *gin.Context) {
 func (h *QuotasHandler) SetTeamQuota(c *gin.Context) {
 	teamID := c.Param("teamId")
 
-	var req struct {
-		MaxSessions int `json:"maxSessions"`
-		MaxCPU      int `json:"maxCPU"`
-		MaxMemory   int `json:"maxMemory"`
-		MaxStorage  int `json:"maxStorage"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -570,7 +597,7 @@ func (h *QuotasHandler) GetTeamUsage(c *gin.Context) {
 	userIDs := []string{}
 	for rows.Next() {
 		var userID string
-		rows.Scan(&userID)
+		_ = rows.Scan(&userID)
 		userIDs = append(userIDs, userID)
 	}
 
@@ -607,7 +634,7 @@ func (h *QuotasHandler) GetTeamUsage(c *gin.Context) {
 		SELECT COUNT(*) FROM sessions
 		WHERE user_id IN (%s) AND state IN ('running', 'starting', 'pending')
 	`, placeholders)
-	h.db.DB().QueryRowContext(ctx, query, args...).Scan(&activeSessions)
+	_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&activeSessions)
 
 	// Sum allocated resources
 	var totalCPU, totalMemory int
@@ -619,7 +646,7 @@ func (h *QuotasHandler) GetTeamUsage(c *gin.Context) {
 		WHERE user_id IN (%s) AND state IN ('running', 'starting')
 		AND resources IS NOT NULL
 	`, placeholders)
-	h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalCPU, &totalMemory)
+	_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalCPU, &totalMemory)
 
 	// Calculate storage
 	var totalStorage int64
@@ -628,7 +655,7 @@ func (h *QuotasHandler) GetTeamUsage(c *gin.Context) {
 		FROM session_snapshots
 		WHERE user_id IN (%s) AND status = 'completed'
 	`, placeholders)
-	h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalStorage)
+	_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalStorage)
 
 	c.JSON(http.StatusOK, gin.H{
 		"teamId":         teamID,
@@ -688,7 +715,7 @@ func (h *QuotasHandler) GetTeamQuotaStatus(c *gin.Context) {
 	userIDs := []string{}
 	for rows.Next() {
 		var userID string
-		rows.Scan(&userID)
+		_ = rows.Scan(&userID)
 		userIDs = append(userIDs, userID)
 	}
 
@@ -711,7 +738,7 @@ func (h *QuotasHandler) GetTeamQuotaStatus(c *gin.Context) {
 			SELECT COUNT(*) FROM sessions
 			WHERE user_id IN (%s) AND state IN ('running', 'starting', 'pending')
 		`, placeholders)
-		h.db.DB().QueryRowContext(ctx, query, args...).Scan(&activeSessions)
+		_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&activeSessions)
 
 		query = fmt.Sprintf(`
 			SELECT
@@ -721,14 +748,14 @@ func (h *QuotasHandler) GetTeamQuotaStatus(c *gin.Context) {
 			WHERE user_id IN (%s) AND state IN ('running', 'starting')
 			AND resources IS NOT NULL
 		`, placeholders)
-		h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalCPU, &totalMemory)
+		_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalCPU, &totalMemory)
 
 		query = fmt.Sprintf(`
 			SELECT COALESCE(SUM(size_bytes), 0)
 			FROM session_snapshots
 			WHERE user_id IN (%s) AND status = 'completed'
 		`, placeholders)
-		h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalStorage)
+		_ = h.db.DB().QueryRowContext(ctx, query, args...).Scan(&totalStorage)
 	}
 
 	// Calculate percentages
@@ -792,23 +819,8 @@ func (h *QuotasHandler) GetDefaultQuotas(c *gin.Context) {
 
 // SetDefaultQuotas sets default quotas (stored in config or database)
 func (h *QuotasHandler) SetDefaultQuotas(c *gin.Context) {
-	var req struct {
-		User struct {
-			MaxSessions int `json:"maxSessions"`
-			MaxCPU      int `json:"maxCPU"`
-			MaxMemory   int `json:"maxMemory"`
-			MaxStorage  int `json:"maxStorage"`
-		} `json:"user"`
-		Team struct {
-			MaxSessions int `json:"maxSessions"`
-			MaxCPU      int `json:"maxCPU"`
-			MaxMemory   int `json:"maxMemory"`
-			MaxStorage  int `json:"maxStorage"`
-		} `json:"team"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req SetDefaultQuotasRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -859,7 +871,7 @@ func (h *QuotasHandler) ListAllQuotas(c *gin.Context) {
 		var maxSessions, maxCPU, maxMemory, maxStorage sql.NullInt64
 		var createdAt, updatedAt time.Time
 
-		rows.Scan(&id, &userID, &teamID, &maxSessions, &maxCPU, &maxMemory, &maxStorage,
+		_ = rows.Scan(&id, &userID, &teamID, &maxSessions, &maxCPU, &maxMemory, &maxStorage,
 			&createdAt, &updatedAt)
 
 		quota := map[string]interface{}{
@@ -913,7 +925,7 @@ func (h *QuotasHandler) GetQuotaViolations(c *gin.Context) {
 		for rows.Next() {
 			var userID string
 			var maxSessions, activeSessions int64
-			rows.Scan(&userID, &maxSessions, &activeSessions)
+			_ = rows.Scan(&userID, &maxSessions, &activeSessions)
 
 			violations = append(violations, map[string]interface{}{
 				"type":           "user",
@@ -935,15 +947,8 @@ func (h *QuotasHandler) GetQuotaViolations(c *gin.Context) {
 
 // CheckQuota checks if a quota would be exceeded
 func (h *QuotasHandler) CheckQuota(c *gin.Context) {
-	var req struct {
-		UserID      string `json:"userId" binding:"required"`
-		CPU         int    `json:"cpu"`
-		Memory      int    `json:"memory"`
-		AddSessions int    `json:"addSessions"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req CheckQuotaRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -965,13 +970,13 @@ func (h *QuotasHandler) CheckQuota(c *gin.Context) {
 
 	// Get current usage
 	var activeSessions int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT COUNT(*) FROM sessions
 		WHERE user_id = $1 AND state IN ('running', 'starting', 'pending')
 	`, req.UserID).Scan(&activeSessions)
 
 	var totalCPU, totalMemory int
-	h.db.DB().QueryRowContext(ctx, `
+	_ = h.db.DB().QueryRowContext(ctx, `
 		SELECT
 			COALESCE(SUM((resources->>'cpu')::int), 0),
 			COALESCE(SUM((resources->>'memory')::int), 0)
@@ -1052,7 +1057,7 @@ func (h *QuotasHandler) GetPolicies(c *gin.Context) {
 		var enabled bool
 		var createdAt, updatedAt time.Time
 
-		rows.Scan(&id, &name, &description, &rules, &priority, &enabled, &createdAt, &updatedAt)
+		_ = rows.Scan(&id, &name, &description, &rules, &priority, &enabled, &createdAt, &updatedAt)
 
 		policies = append(policies, map[string]interface{}{
 			"id":          id,
@@ -1074,16 +1079,8 @@ func (h *QuotasHandler) GetPolicies(c *gin.Context) {
 
 // CreatePolicy creates a new quota policy
 func (h *QuotasHandler) CreatePolicy(c *gin.Context) {
-	var req struct {
-		Name        string `json:"name" binding:"required"`
-		Description string `json:"description"`
-		Rules       string `json:"rules" binding:"required"`
-		Priority    int    `json:"priority"`
-		Enabled     bool   `json:"enabled"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req QuotaPolicyRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -1153,16 +1150,8 @@ func (h *QuotasHandler) GetPolicy(c *gin.Context) {
 func (h *QuotasHandler) UpdatePolicy(c *gin.Context) {
 	policyID := c.Param("id")
 
-	var req struct {
-		Name        string `json:"name"`
-		Description string `json:"description"`
-		Rules       string `json:"rules"`
-		Priority    int    `json:"priority"`
-		Enabled     bool   `json:"enabled"`
-	}
-
-	if err := c.ShouldBindJSON(&req); err != nil {
-		c.JSON(http.StatusBadRequest, gin.H{"error": err.Error()})
+	var req QuotaPolicyRequest
+	if !validator.BindAndValidate(c, &req) {
 		return
 	}
 
@@ -1236,11 +1225,4 @@ func nullInt64ToInt(n sql.NullInt64) int {
 		return int(n.Int64)
 	}
 	return 0
-}
-
-func parseInt(s string, def int) int {
-	if i, err := strconv.Atoi(s); err == nil {
-		return i
-	}
-	return def
 }

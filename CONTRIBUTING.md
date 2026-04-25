@@ -1,173 +1,94 @@
-# Contributing to StreamSpace
+<div align="center">
 
-Thank you for your interest in contributing to StreamSpace! This document provides guidelines and instructions for contributing.
+# 🤝 Contributing to StreamSpace
 
-## Code of Conduct
+**Help us build the future of container streaming.**
 
-Be respectful, inclusive, and professional in all interactions.
+</div>
 
-## How to Contribute
+---
 
-### Reporting Bugs
-
-1. Check existing issues to avoid duplicates
-2. Use the bug report template
-3. Include:
-   - StreamSpace version
-   - Kubernetes version
-   - Steps to reproduce
-   - Expected vs actual behavior
-   - Logs and error messages
-
-### Suggesting Features
-
-1. Check existing feature requests
-2. Use the feature request template
-3. Describe:
-   - Use case and problem
-   - Proposed solution
-   - Alternatives considered
-   - Impact on existing functionality
-
-### Pull Requests
-
-1. **Fork** the repository
-2. **Create a branch**: `git checkout -b feature/my-feature`
-3. **Make changes** with clear, focused commits
-4. **Test** your changes thoroughly
-5. **Document** new features or changes
-6. **Submit PR** with clear description
-
-#### PR Guidelines
-
-- Keep PRs focused on a single feature/fix
-- Write clear commit messages
-- Update documentation
-- Add tests for new functionality
-- Ensure CI passes
-- Request review from maintainers
-
-### Development Setup
-
-See [docs/DEVELOPMENT.md](docs/DEVELOPMENT.md) for detailed setup instructions.
-
-Quick start:
-
-```bash
-# Clone your fork
-git clone https://github.com/yourusername/streamspace.git
-cd streamspace
-
-# Install dependencies
-make install-deps
-
-# Run tests
-make test
-
-# Start local development
-make dev
-```
-
-## Project Structure
+## 🏗️ Project Structure
 
 ```
 streamspace/
-├── controller/     # Go workspace controller
-├── api/           # API backend (Go/Python)
-├── ui/            # React frontend
-├── manifests/     # Kubernetes manifests
-├── chart/         # Helm chart
-├── docs/          # Documentation
-└── scripts/       # Utility scripts
+├── api/                # Control Plane API (Go)
+├── agents/             # Execution Agents
+│   └── k8s-agent/      # Kubernetes Agent (Go)
+├── ui/                 # Web UI (React)
+├── manifests/          # Kubernetes manifests
+├── chart/              # Helm chart
+└── docs/               # Documentation
 ```
 
-## Coding Standards
+## 🛠️ Development Setup
 
-### Go (Controller/API)
+### Prerequisites
 
-- Follow [Effective Go](https://golang.org/doc/effective_go.html)
-- Use `gofmt` and `golint`
-- Write tests for new code
-- Document public APIs
-- Handle errors explicitly
+- Go 1.21+
+- Node.js 18+
+- Docker & Kubernetes (k3s recommended)
 
-### JavaScript/TypeScript (UI)
+### Quick Start
 
-- Use ESLint and Prettier
-- Follow React best practices
-- Write component tests
-- Use TypeScript for type safety
+1. **Clone the repo**:
 
-### Kubernetes Manifests
+    ```bash
+    git clone https://github.com/streamspace-dev/streamspace.git
+    cd streamspace
+    ```
 
-- Use descriptive names
-- Add resource limits
-- Include labels and annotations
-- Document via comments
+2. **Install Dependencies**:
 
-## Testing
+    ```bash
+    cd ui && npm install
+    cd ../api && go mod download
+    cd ../agents/k8s-agent && go mod download
+    ```
 
-### Unit Tests
+3. **Run Tests**:
 
-```bash
-# Controller
-cd controller && make test
+    ```bash
+    # API
+    cd api && go test ./...
 
-# API
-cd api && go test ./...
+    # K8s Agent
+    cd agents/k8s-agent && go test ./...
 
-# UI
-cd ui && npm test
-```
+    # UI
+    cd ui && npm test
+    ```
 
-### Integration Tests
+## 📝 Coding Standards
 
-```bash
-# Full integration test suite
-./scripts/run-integration-tests.sh
-```
+### Go (API & Agents)
 
-### Manual Testing
+- Follow [Effective Go](https://golang.org/doc/effective_go.html).
+- Use `gofmt` and `golint`.
+- **Architecture**: Respect the Control Plane / Agent separation. Agents should be stateless executors.
 
-```bash
-# Deploy to test cluster
-kubectl create namespace streamspace-dev
-helm install streamspace-dev ./chart -n streamspace-dev -f test-values.yaml
+### React (UI)
 
-# Test session creation
-kubectl apply -f examples/test-session.yaml
-```
+- Use TypeScript.
+- Follow Functional Component patterns.
+- Use Material-UI for components.
 
-## Documentation
+## 🧪 Testing Guidelines
 
-- Update README.md for user-facing changes
-- Update docs/ for architectural changes
-- Add inline comments for complex logic
-- Include examples for new features
+- **Unit Tests**: Required for all new logic.
+- **Integration Tests**: Run `./tests/scripts/run-integration-tests.sh` before submitting PRs.
+- **Documentation**: Update relevant docs in `docs/` if architecture changes.
 
-## Release Process
+## 📦 Pull Request Process
 
-Maintainers will:
+1. Fork the repository.
+2. Create a feature branch (`feature/my-cool-feature`).
+3. Commit changes.
+4. Push to your fork.
+5. Open a Pull Request.
 
-1. Update version in `chart/Chart.yaml`
-2. Update CHANGELOG.md
-3. Create git tag
-4. Build and push Docker images
-5. Publish Helm chart
-6. Create GitHub release
+---
 
-## Getting Help
-
-- **Documentation**: Check docs/ first
-- **Discord**: https://discord.gg/streamspace
-- **GitHub Discussions**: For questions and ideas
-- **GitHub Issues**: For bugs and feature requests
-
-## Recognition
-
-Contributors are recognized in:
-- CONTRIBUTORS.md
-- Release notes
-- Project README
-
-Thank you for contributing to StreamSpace! 🚀
+<div align="center">
+  <sub>StreamSpace Contribution Guide</sub>
+</div>

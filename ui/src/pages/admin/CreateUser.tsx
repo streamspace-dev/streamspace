@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Admin page uses `any` for API error handling
 import { useState } from 'react';
 import { useNavigate } from 'react-router-dom';
 import {

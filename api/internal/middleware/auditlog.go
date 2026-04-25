@@ -191,7 +191,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // AuditEvent represents a structured audit log event.
@@ -790,7 +790,7 @@ func (a *AuditLogger) Middleware() gin.HandlerFunc {
 
 			// Only log if body is present and under size limit (10KB)
 			if len(bodyBytes) > 0 && len(bodyBytes) < 10240 {
-				json.Unmarshal(bodyBytes, &requestBody)
+				_ = json.Unmarshal(bodyBytes, &requestBody)
 				requestBody = a.redactSensitiveData(requestBody)
 			}
 		}
@@ -830,6 +830,13 @@ func (a *AuditLogger) Middleware() gin.HandlerFunc {
 			RequestBody: requestBody,
 		}
 
+		// Add custom metadata (e.g., agent authentication details)
+		if metadata, exists := c.Get("audit_metadata"); exists {
+			if metadataMap, ok := metadata.(map[string]interface{}); ok {
+				event.Metadata = metadataMap
+			}
+		}
+
 		// Add error information if request failed
 		if len(c.Errors) > 0 {
 			event.Error = c.Errors.String()
@@ -837,7 +844,7 @@ func (a *AuditLogger) Middleware() gin.HandlerFunc {
 
 		// Log event asynchronously (non-blocking)
 		// Database write happens in background goroutine
-		go a.logEvent(event)
+		go func() { _ = a.logEvent(event) }()
 	}
 }
 

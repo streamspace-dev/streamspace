@@ -1,4 +1,4 @@
-import { useState, useEffect } from 'react';
+import { useState } from 'react';
 import {
   Box,
   Typography,
@@ -28,19 +28,13 @@ import {
   Alert,
   Tabs,
   Tab,
-  Snackbar,
 } from '@mui/material';
 import {
-  Schedule as ScheduleIcon,
   Add as AddIcon,
-  Edit as EditIcon,
   Delete as DeleteIcon,
   PlayArrow as RunIcon,
   Pause as PauseIcon,
   CalendarMonth as CalendarIcon,
-  Link as LinkIcon,
-  Wifi as ConnectedIcon,
-  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import AdminPortalLayout from '../components/AdminPortalLayout';
 import api from '../lib/api';
@@ -127,25 +121,17 @@ interface ScheduledSession {
   last_run_status?: string;
 }
 
-interface CalendarIntegration {
-  id: number;
-  provider: string;
-  account_email: string;
-  enabled: boolean;
-  sync_enabled: boolean;
-  last_synced_at?: string;
-}
 
 function SchedulingContent() {
   const [currentTab, setCurrentTab] = useState(0);
   const [scheduleDialog, setScheduleDialog] = useState(false);
   const [connectCalendarDialog, setConnectCalendarDialog] = useState(false);
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
 
   // Fetch data via React Query
-  const { data: schedules = [], refetch: refetchSchedules } = useScheduledSessions();
+  const { data: schedules = [] } = useScheduledSessions();
   const { data: calendarIntegrations = [] } = useCalendarIntegrations();
   const queryClient = useQueryClient();
 
@@ -153,7 +139,7 @@ function SchedulingContent() {
   const { addNotification } = useNotificationQueue();
 
   // Real-time schedule events via WebSocket
-  useScheduleEvents((data: any) => {
+  useScheduleEvents((data: Record<string, unknown>) => {
     setWsConnected(true);
     setWsReconnectAttempts(0);
 
@@ -217,7 +203,7 @@ function SchedulingContent() {
         template_id: scheduleForm.template_id,
         timezone: scheduleForm.timezone,
         schedule: {
-          type: scheduleForm.schedule_type as any,
+          type: scheduleForm.schedule_type as 'daily' | 'weekly' | 'monthly' | 'cron',
           time_of_day: scheduleForm.time_of_day,
           days_of_week: scheduleForm.days_of_week,
           day_of_month: scheduleForm.day_of_month,
@@ -233,7 +219,7 @@ function SchedulingContent() {
       toast.success('Scheduled session created successfully');
       setScheduleDialog(false);
       queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to create scheduled session');
     } finally {
       setLoading(false);
@@ -251,7 +237,7 @@ function SchedulingContent() {
         toast.success('Schedule enabled');
       }
       queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to toggle schedule');
     } finally {
       setLoading(false);
@@ -266,7 +252,7 @@ function SchedulingContent() {
       await api.deleteScheduledSession(id);
       toast.success('Schedule deleted');
       queryClient.invalidateQueries({ queryKey: ['scheduled-sessions'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to delete schedule');
     } finally {
       setLoading(false);
@@ -283,7 +269,7 @@ function SchedulingContent() {
         window.location.href = response.auth_url;
       }
       setConnectCalendarDialog(false);
-    } catch (error) {
+    } catch {
       toast.error('Failed to connect calendar');
     } finally {
       setLoading(false);
@@ -298,7 +284,7 @@ function SchedulingContent() {
       await api.disconnectCalendar(id);
       toast.success('Calendar disconnected');
       queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to disconnect calendar');
     } finally {
       setLoading(false);
@@ -311,7 +297,7 @@ function SchedulingContent() {
       await api.syncCalendar(id);
       toast.success('Calendar synced successfully');
       queryClient.invalidateQueries({ queryKey: ['calendar-integrations'] });
-    } catch (error) {
+    } catch {
       toast.error('Failed to sync calendar');
     } finally {
       setLoading(false);
@@ -331,7 +317,7 @@ function SchedulingContent() {
       document.body.removeChild(a);
       window.URL.revokeObjectURL(url);
       toast.success('iCalendar file downloaded');
-    } catch (error) {
+    } catch {
       toast.error('Failed to export calendar');
     } finally {
       setLoading(false);

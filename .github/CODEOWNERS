@@ -1,0 +1,69 @@
+# CODEOWNERS - Auto-assign reviewers based on files changed
+# https://docs.github.com/en/repositories/managing-your-repositorys-settings-and-features/customizing-your-repository/about-code-owners
+
+# Default owner for everything (fallback)
+* @streamspace-dev/maintainers
+
+# UI / Frontend
+/ui/** @streamspace-dev/frontend-team
+*.tsx @streamspace-dev/frontend-team
+*.ts @streamspace-dev/frontend-team
+*.jsx @streamspace-dev/frontend-team
+*.css @streamspace-dev/frontend-team
+
+# Backend API
+/api/** @streamspace-dev/backend-team
+*.go @streamspace-dev/backend-team
+
+# K8s Agent
+/agents/k8s-agent/** @streamspace-dev/agent-team
+
+# Docker Agent (future)
+/agents/docker-agent/** @streamspace-dev/agent-team
+
+# Database migrations (require extra scrutiny)
+/api/migrations/** @streamspace-dev/backend-team @streamspace-dev/maintainers
+
+# Infrastructure / Deployments
+/manifests/** @streamspace-dev/devops-team
+/chart/** @streamspace-dev/devops-team
+*.yaml @streamspace-dev/devops-team
+*.yml @streamspace-dev/devops-team
+Dockerfile* @streamspace-dev/devops-team
+
+# Documentation (anyone can review, but Scribe should be notified)
+*.md @streamspace-dev/docs-team
+/docs/** @streamspace-dev/docs-team
+
+# Security-sensitive files (require maintainer review)
+.github/workflows/** @streamspace-dev/maintainers
+/api/internal/auth/** @streamspace-dev/maintainers @streamspace-dev/backend-team
+/api/internal/security/** @streamspace-dev/maintainers @streamspace-dev/backend-team
+
+# Configuration files
+/.github/** @streamspace-dev/maintainers
+/config/** @streamspace-dev/maintainers
+*.env.example @streamspace-dev/maintainers
+
+# CI/CD
+/.github/workflows/** @streamspace-dev/devops-team @streamspace-dev/maintainers
+
+# Dependencies
+go.mod @streamspace-dev/backend-team
+go.sum @streamspace-dev/backend-team
+package.json @streamspace-dev/frontend-team
+package-lock.json @streamspace-dev/frontend-team
+
+# WebSocket / VNC (specialized review)
+/api/internal/websocket/** @streamspace-dev/backend-team @streamspace-dev/agent-team
+/agents/k8s-agent/pkg/vnc/** @streamspace-dev/agent-team
+
+# Plugin system
+/api/internal/plugins/** @streamspace-dev/backend-team
+/ui/src/plugins/** @streamspace-dev/frontend-team
+
+# Testing
+*_test.go @streamspace-dev/backend-team
+*.test.ts @streamspace-dev/frontend-team
+*.test.tsx @streamspace-dev/frontend-team
+/tests/** @streamspace-dev/qa-team

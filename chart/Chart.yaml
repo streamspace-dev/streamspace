@@ -13,11 +13,11 @@ keywords:
   - kubernetes
   - browser-based
   - remote-desktop
-home: https://github.com/streamspace/streamspace
+home: https://github.com/streamspace-dev/streamspace
 sources:
-  - https://github.com/streamspace/streamspace
+  - https://github.com/streamspace-dev/streamspace
 maintainers:
   - name: StreamSpace Team
-    email: team@streamspace.io
-icon: https://streamspace.io/logo.png
+    email: team@streamspace.dev
+icon: https://streamspace.dev/logo.png
 kubeVersion: ">=1.19.0-0"

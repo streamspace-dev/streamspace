@@ -11,13 +11,18 @@ import (
 	"time"
 
 	"github.com/google/uuid"
+	"github.com/lib/pq" // PostgreSQL array support
 )
 
 // Session represents a StreamSpace session in the database.
 // This mirrors the k8s.Session structure for API compatibility.
+//
+// MULTI-TENANCY: The OrgID field is CRITICAL for tenant isolation.
+// All queries MUST filter by org_id to prevent cross-tenant access.
 type Session struct {
 	ID                 string     `json:"id"`
 	UserID             string     `json:"user_id"`
+	OrgID              string     `json:"org_id"` // Organization ID for multi-tenancy
 	TeamID             string     `json:"team_id,omitempty"`
 	TemplateName       string     `json:"template_name"`
 	State              string     `json:"state"` // running, hibernated, terminated, pending, failed
@@ -26,17 +31,23 @@ type Session struct {
 	URL                string     `json:"url,omitempty"`
 	Namespace          string     `json:"namespace"`
 	Platform           string     `json:"platform"`
+	AgentID            string     `json:"agent_id,omitempty"`    // v2.0-beta: Agent managing this session
+	ClusterID          string     `json:"cluster_id,omitempty"`  // v2.0-beta: Cluster where session runs
 	PodName            string     `json:"pod_name,omitempty"`
 	Memory             string     `json:"memory,omitempty"`
 	CPU                string     `json:"cpu,omitempty"`
 	PersistentHome     bool       `json:"persistent_home"`
 	IdleTimeout        string     `json:"idle_timeout,omitempty"`
 	MaxSessionDuration string     `json:"max_session_duration,omitempty"`
+	Tags               []string   `json:"tags,omitempty"` // Session tags for filtering and organization
 	CreatedAt          time.Time  `json:"created_at"`
 	UpdatedAt          time.Time  `json:"updated_at"`
 	LastConnection     *time.Time `json:"last_connection,omitempty"`
 	LastDisconnect     *time.Time `json:"last_disconnect,omitempty"`
 	LastActivity       *time.Time `json:"last_activity,omitempty"`
+	StreamingProtocol  string     `json:"streaming_protocol"` // vnc, selkies, guacamole, x2go, rdp
+	StreamingPort      int        `json:"streaming_port"`     // Port for streaming service
+	StreamingPath      string     `json:"streaming_path,omitempty"` // URL path for HTTP-based protocols
 }
 
 // SessionDB handles database operations for sessions.
@@ -50,6 +61,7 @@ func NewSessionDB(db *sql.DB) *SessionDB {
 }
 
 // CreateSession creates a new session in the database.
+// SECURITY: org_id MUST be set to prevent cross-tenant access.
 func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 	if session.ID == "" {
 		session.ID = uuid.New().String()
@@ -59,54 +71,72 @@ func (s *SessionDB) CreateSession(ctx context.Context, session *Session) error {
 	}
 	session.UpdatedAt = time.Now()
 
+	// Default org_id to "default-org" if not set (for backward compatibility)
+	if session.OrgID == "" {
+		session.OrgID = "default-org"
+	}
+
 	query := `
 		INSERT INTO sessions (
-			id, user_id, team_id, template_name, state, app_type,
-			active_connections, url, namespace, platform, pod_name,
+			id, user_id, org_id, team_id, template_name, state, app_type,
+			active_connections, url, namespace, platform, agent_id, cluster_id, pod_name,
 			memory, cpu, persistent_home, idle_timeout, max_session_duration,
-			created_at, updated_at, last_connection, last_disconnect, last_activity
+			tags, created_at, updated_at, last_connection, last_disconnect, last_activity,
+			streaming_protocol, streaming_port, streaming_path
 		)
-		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21)
+		VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11, $12, $13, $14, $15, $16, $17, $18, $19, $20, $21, $22, $23, $24, $25, $26, $27, $28)
 		ON CONFLICT (id) DO UPDATE SET
 			state = EXCLUDED.state,
 			url = EXCLUDED.url,
+			agent_id = EXCLUDED.agent_id,
+			cluster_id = EXCLUDED.cluster_id,
 			pod_name = EXCLUDED.pod_name,
+			tags = EXCLUDED.tags,
+			streaming_protocol = EXCLUDED.streaming_protocol,
+			streaming_port = EXCLUDED.streaming_port,
+			streaming_path = EXCLUDED.streaming_path,
 			updated_at = EXCLUDED.updated_at
 	`
 
 	_, err := s.db.ExecContext(ctx, query,
-		session.ID, session.UserID, nullString(session.TeamID), session.TemplateName, session.State, session.AppType,
-		session.ActiveConnections, session.URL, session.Namespace, session.Platform, session.PodName,
+		session.ID, session.UserID, session.OrgID, nullString(session.TeamID), session.TemplateName, session.State, session.AppType,
+		session.ActiveConnections, session.URL, session.Namespace, session.Platform, nullString(session.AgentID), nullString(session.ClusterID), session.PodName,
 		session.Memory, session.CPU, session.PersistentHome, session.IdleTimeout, session.MaxSessionDuration,
-		session.CreatedAt, session.UpdatedAt, session.LastConnection, session.LastDisconnect, session.LastActivity,
+		pq.Array(session.Tags), session.CreatedAt, session.UpdatedAt, session.LastConnection, session.LastDisconnect, session.LastActivity,
+		session.StreamingProtocol, session.StreamingPort, nullString(session.StreamingPath),
 	)
 	if err != nil {
-		return fmt.Errorf("failed to create session %s for user %s: %w", session.ID, session.UserID, err)
+		return fmt.Errorf("failed to create session %s for user %s in org %s: %w", session.ID, session.UserID, session.OrgID, err)
 	}
 	return nil
 }
 
-// GetSession retrieves a session by ID.
+// GetSession retrieves a session by ID (without org filter - internal use only).
+// WARNING: Use GetSessionByOrg for user-facing APIs to ensure org isolation.
 func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session, error) {
 	session := &Session{}
 
 	query := `
 		SELECT
-			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
-			created_at, updated_at, last_connection, last_disconnect, last_activity
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE id = $1
 	`
 
 	err := s.db.QueryRowContext(ctx, query, sessionID).Scan(
-		&session.ID, &session.UserID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
-		&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.PodName,
+		&session.ID, &session.UserID, &session.OrgID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
+		&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.AgentID, &session.ClusterID, &session.PodName,
 		&session.Memory, &session.CPU, &session.PersistentHome, &session.IdleTimeout, &session.MaxSessionDuration,
+		pq.Array(&session.Tags),
 		&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
+		&session.StreamingProtocol, &session.StreamingPort, &session.StreamingPath,
 	)
 	if err != nil {
 		if err == sql.ErrNoRows {
@@ -118,16 +148,56 @@ func (s *SessionDB) GetSession(ctx context.Context, sessionID string) (*Session,
 	return session, nil
 }
 
-// ListSessions retrieves all sessions.
+// GetSessionByOrg retrieves a session by ID, filtered by organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) GetSessionByOrg(ctx context.Context, sessionID, orgID string) (*Session, error) {
+	session := &Session{}
+
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+		FROM sessions
+		WHERE id = $1 AND org_id = $2
+	`
+
+	err := s.db.QueryRowContext(ctx, query, sessionID, orgID).Scan(
+		&session.ID, &session.UserID, &session.OrgID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
+		&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.AgentID, &session.ClusterID, &session.PodName,
+		&session.Memory, &session.CPU, &session.PersistentHome, &session.IdleTimeout, &session.MaxSessionDuration,
+		pq.Array(&session.Tags),
+		&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
+		&session.StreamingProtocol, &session.StreamingPort, &session.StreamingPath,
+	)
+	if err != nil {
+		if err == sql.ErrNoRows {
+			return nil, fmt.Errorf("session not found: %s", sessionID)
+		}
+		return nil, fmt.Errorf("failed to get session %s: %w", sessionID, err)
+	}
+
+	return session, nil
+}
+
+// ListSessions retrieves all sessions (internal use - no org filter).
+// WARNING: Use ListSessionsByOrg for user-facing APIs to ensure org isolation.
 func (s *SessionDB) ListSessions(ctx context.Context) ([]*Session, error) {
 	query := `
 		SELECT
-			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
-			created_at, updated_at, last_connection, last_disconnect, last_activity
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE state != 'deleted'
 		ORDER BY created_at DESC
@@ -136,16 +206,50 @@ func (s *SessionDB) ListSessions(ctx context.Context) ([]*Session, error) {
 	return s.querySessions(ctx, query)
 }
 
-// ListSessionsByUser retrieves all sessions for a specific user.
+// ListSessionsByOrg retrieves all sessions for a specific organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) ListSessionsByOrg(ctx context.Context, orgID string) ([]*Session, error) {
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+		FROM sessions
+		WHERE org_id = $1 AND state != 'deleted'
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions for org %s: %w", orgID, err)
+	}
+	defer rows.Close()
+
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions for org %s: %w", orgID, err)
+	}
+	return sessions, nil
+}
+
+// ListSessionsByUser retrieves all sessions for a specific user (internal use).
+// WARNING: Use ListSessionsByUserAndOrg for user-facing APIs to ensure org isolation.
 func (s *SessionDB) ListSessionsByUser(ctx context.Context, userID string) ([]*Session, error) {
 	query := `
 		SELECT
-			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
-			created_at, updated_at, last_connection, last_disconnect, last_activity
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE user_id = $1 AND state != 'deleted'
 		ORDER BY created_at DESC
@@ -164,16 +268,49 @@ func (s *SessionDB) ListSessionsByUser(ctx context.Context, userID string) ([]*S
 	return sessions, nil
 }
 
-// ListSessionsByState retrieves all sessions with a specific state.
+// ListSessionsByUserAndOrg retrieves all sessions for a specific user within an org.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) ListSessionsByUserAndOrg(ctx context.Context, userID, orgID string) ([]*Session, error) {
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+		FROM sessions
+		WHERE user_id = $1 AND org_id = $2 AND state != 'deleted'
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, userID, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions for user %s in org %s: %w", userID, orgID, err)
+	}
+	defer rows.Close()
+
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions for user %s in org %s: %w", userID, orgID, err)
+	}
+	return sessions, nil
+}
+
+// ListSessionsByState retrieves all sessions with a specific state (internal use).
 func (s *SessionDB) ListSessionsByState(ctx context.Context, state string) ([]*Session, error) {
 	query := `
 		SELECT
-			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
-			created_at, updated_at, last_connection, last_disconnect, last_activity
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
 		FROM sessions
 		WHERE state = $1
 		ORDER BY created_at DESC
@@ -192,7 +329,39 @@ func (s *SessionDB) ListSessionsByState(ctx context.Context, state string) ([]*S
 	return sessions, nil
 }
 
-// UpdateSessionState updates the state of a session.
+// ListSessionsByStateAndOrg retrieves sessions by state within an organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) ListSessionsByStateAndOrg(ctx context.Context, state, orgID string) ([]*Session, error) {
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity,
+			COALESCE(streaming_protocol, 'vnc'), COALESCE(streaming_port, 5900), COALESCE(streaming_path, '')
+		FROM sessions
+		WHERE state = $1 AND org_id = $2
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, state, orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions with state %s for org %s: %w", state, orgID, err)
+	}
+	defer rows.Close()
+
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions with state %s for org %s: %w", state, orgID, err)
+	}
+	return sessions, nil
+}
+
+// UpdateSessionState updates the state of a session (internal use).
+// WARNING: Use UpdateSessionStateByOrg for user-facing APIs to ensure org isolation.
 func (s *SessionDB) UpdateSessionState(ctx context.Context, sessionID, state string) error {
 	query := `
 		UPDATE sessions
@@ -208,6 +377,28 @@ func (s *SessionDB) UpdateSessionState(ctx context.Context, sessionID, state str
 	rows, _ := result.RowsAffected()
 	if rows == 0 {
 		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	return nil
+}
+
+// UpdateSessionStateByOrg updates session state, filtered by organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) UpdateSessionStateByOrg(ctx context.Context, sessionID, state, orgID string) error {
+	query := `
+		UPDATE sessions
+		SET state = $1, updated_at = $2
+		WHERE id = $3 AND org_id = $4
+	`
+
+	result, err := s.db.ExecContext(ctx, query, state, time.Now(), sessionID, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to update state to %s for session %s in org %s: %w", state, sessionID, orgID, err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("session not found or not in organization: %s", sessionID)
 	}
 
 	return nil
@@ -280,7 +471,8 @@ func (s *SessionDB) UpdateActiveConnections(ctx context.Context, sessionID strin
 	return nil
 }
 
-// DeleteSession marks a session as deleted.
+// DeleteSession marks a session as deleted (internal use).
+// WARNING: Use DeleteSessionByOrg for user-facing APIs to ensure org isolation.
 func (s *SessionDB) DeleteSession(ctx context.Context, sessionID string) error {
 	query := `
 		UPDATE sessions
@@ -292,6 +484,28 @@ func (s *SessionDB) DeleteSession(ctx context.Context, sessionID string) error {
 	if err != nil {
 		return fmt.Errorf("failed to mark session %s as deleted: %w", sessionID, err)
 	}
+	return nil
+}
+
+// DeleteSessionByOrg marks a session as deleted, filtered by organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) DeleteSessionByOrg(ctx context.Context, sessionID, orgID string) error {
+	query := `
+		UPDATE sessions
+		SET state = 'deleted', updated_at = $1
+		WHERE id = $2 AND org_id = $3
+	`
+
+	result, err := s.db.ExecContext(ctx, query, time.Now(), sessionID, orgID)
+	if err != nil {
+		return fmt.Errorf("failed to mark session %s as deleted in org %s: %w", sessionID, orgID, err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("session not found or not in organization: %s", sessionID)
+	}
+
 	return nil
 }
 
@@ -317,15 +531,16 @@ func (s *SessionDB) CountSessionsByUser(ctx context.Context, userID string) (int
 	return count, nil
 }
 
-// GetIdleSessions returns sessions that have been idle beyond their timeout.
+// GetIdleSessions returns sessions that have been idle beyond their timeout (internal use).
 func (s *SessionDB) GetIdleSessions(ctx context.Context) ([]*Session, error) {
 	query := `
 		SELECT
-			id, user_id, COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
 			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
-			COALESCE(platform, 'kubernetes'), COALESCE(pod_name, ''),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
 			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
 			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
 			created_at, updated_at, last_connection, last_disconnect, last_activity
 		FROM sessions
 		WHERE state = 'running'
@@ -354,16 +569,19 @@ func (s *SessionDB) querySessions(ctx context.Context, query string, args ...int
 }
 
 // scanSessions scans rows into Session structs.
+// Note: Queries must include org_id as the 3rd column (after id, user_id).
 func (s *SessionDB) scanSessions(rows *sql.Rows) ([]*Session, error) {
 	var sessions []*Session
 
 	for rows.Next() {
 		session := &Session{}
 		err := rows.Scan(
-			&session.ID, &session.UserID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
-			&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.PodName,
+			&session.ID, &session.UserID, &session.OrgID, &session.TeamID, &session.TemplateName, &session.State, &session.AppType,
+			&session.ActiveConnections, &session.URL, &session.Namespace, &session.Platform, &session.AgentID, &session.ClusterID, &session.PodName,
 			&session.Memory, &session.CPU, &session.PersistentHome, &session.IdleTimeout, &session.MaxSessionDuration,
+			pq.Array(&session.Tags),
 			&session.CreatedAt, &session.UpdatedAt, &session.LastConnection, &session.LastDisconnect, &session.LastActivity,
+			&session.StreamingProtocol, &session.StreamingPort, &session.StreamingPath,
 		)
 		if err != nil {
 			return nil, fmt.Errorf("failed to scan session row: %w", err)
@@ -375,6 +593,86 @@ func (s *SessionDB) scanSessions(rows *sql.Rows) ([]*Session, error) {
 		return nil, fmt.Errorf("error iterating session rows: %w", err)
 	}
 
+	return sessions, nil
+}
+
+// UpdateSessionTags updates the tags for a session.
+func (s *SessionDB) UpdateSessionTags(ctx context.Context, sessionID string, tags []string) error {
+	query := `
+		UPDATE sessions
+		SET tags = $1, updated_at = $2
+		WHERE id = $3
+	`
+
+	result, err := s.db.ExecContext(ctx, query, pq.Array(tags), time.Now(), sessionID)
+	if err != nil {
+		return fmt.Errorf("failed to update tags for session %s: %w", sessionID, err)
+	}
+
+	rows, _ := result.RowsAffected()
+	if rows == 0 {
+		return fmt.Errorf("session not found: %s", sessionID)
+	}
+
+	return nil
+}
+
+// ListSessionsByTags retrieves sessions that have ANY of the specified tags (internal use).
+func (s *SessionDB) ListSessionsByTags(ctx context.Context, tags []string) ([]*Session, error) {
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity
+		FROM sessions
+		WHERE tags && $1 AND state != 'deleted'
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, pq.Array(tags))
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions by tags: %w", err)
+	}
+	defer rows.Close()
+
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions: %w", err)
+	}
+	return sessions, nil
+}
+
+// ListSessionsByTagsAndOrg retrieves sessions by tags within an organization.
+// SECURITY: Use this function for user-facing APIs to ensure org isolation.
+func (s *SessionDB) ListSessionsByTagsAndOrg(ctx context.Context, tags []string, orgID string) ([]*Session, error) {
+	query := `
+		SELECT
+			id, user_id, COALESCE(org_id, 'default-org'), COALESCE(team_id, ''), template_name, state, COALESCE(app_type, 'desktop'),
+			active_connections, COALESCE(url, ''), COALESCE(namespace, 'streamspace'),
+			COALESCE(platform, 'kubernetes'), COALESCE(agent_id, ''), COALESCE(cluster_id, ''), COALESCE(pod_name, ''),
+			COALESCE(memory, ''), COALESCE(cpu, ''), COALESCE(persistent_home, false),
+			COALESCE(idle_timeout, ''), COALESCE(max_session_duration, ''),
+			COALESCE(tags, ARRAY[]::TEXT[]),
+			created_at, updated_at, last_connection, last_disconnect, last_activity
+		FROM sessions
+		WHERE tags && $1 AND org_id = $2 AND state != 'deleted'
+		ORDER BY created_at DESC
+	`
+
+	rows, err := s.db.QueryContext(ctx, query, pq.Array(tags), orgID)
+	if err != nil {
+		return nil, fmt.Errorf("failed to list sessions by tags for org %s: %w", orgID, err)
+	}
+	defer rows.Close()
+
+	sessions, err := s.scanSessions(rows)
+	if err != nil {
+		return nil, fmt.Errorf("failed to scan sessions by tags for org %s: %w", orgID, err)
+	}
 	return sessions, nil
 }
 

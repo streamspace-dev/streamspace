@@ -1,267 +1,173 @@
-# StreamSpace Development Roadmap
+<div align="center">
 
-**Current Version**: v1.0.0-beta
-**Last Updated**: 2025-11-19
+# 🗺️ StreamSpace Roadmap
 
----
+**Current Version**: v2.0-beta • **Last Updated**: 2025-11-23
 
-## Current State
+[![Status](https://img.shields.io/badge/Status-v2.0--beta--testing-yellow.svg)](CHANGELOG.md)
 
-StreamSpace has a functional core platform but several areas require significant work before production readiness.
-
-### Implementation Summary
-
-| Component | Status | Completeness |
-|-----------|--------|--------------|
-| Kubernetes Controller | Complete | 100% |
-| API Backend | Complete | 95% |
-| Web UI | Complete | 95% |
-| Database Schema | Complete | 100% |
-| Helm Chart | Complete | 95% |
-| Plugin System | Partial | 40% (framework only) |
-| Docker Controller | Stub | 5% |
-| Test Coverage | Incomplete | 15-20% |
-| VNC Migration | Not Started | 0% |
+</div>
 
 ---
 
-## Completed Work
+> [!WARNING]
+> **Current Status: v2.0-beta (Testing Phase - NOT Production Ready)**
+>
+> StreamSpace has completed the v2.0 architecture implementation (Control Plane + Multi-Platform Agents) but is experiencing a **test coverage crisis**. See [TEST_STATUS.md](TEST_STATUS.md) for details and remediation plan.
+>
+> **Critical**: API at 4% coverage, both agents at 0% coverage, 136 UI tests failing.
 
-### Core Platform
+> [!NOTE]
+> For detailed production hardening roadmap with 57 tracked improvements, see [.github/RECOMMENDATIONS_ROADMAP.md](.github/RECOMMENDATIONS_ROADMAP.md)
 
-- **Kubernetes Controller** (5,282 lines)
-  - Session reconciler with full lifecycle management
-  - Hibernation controller with idle detection
-  - Template reconciler
-  - ApplicationInstall reconciler
-  - Prometheus metrics (40+ metric types)
+## 📅 Release Timeline
 
-- **API Backend** (61,289 lines)
-  - 70+ API handler files
-  - 87 database tables
-  - 15+ middleware layers
-  - Authentication: Local, SAML 2.0, OIDC OAuth2, MFA
-  - WebSocket support for real-time updates
-  - Webhook system (16 event types)
-  - Integration support (Slack, Teams, Discord, PagerDuty, email)
+```mermaid
+gantt
+    title StreamSpace Development Roadmap
+    dateFormat  YYYY-MM-DD
+    section v1.0
+    Core Platform       :done,    des1, 2025-10-01, 2025-11-01
+    Admin UI            :done,    des2, 2025-11-01, 2025-11-15
+    Security Hardening  :done,    des3, 2025-11-01, 2025-11-15
+    v1.0 Release        :done,    des4, 2025-11-21, 1d
 
-- **Web UI** (25,629 lines)
-  - 27 pages (14 user, 12 admin + login)
-  - 27 React components
-  - Real-time WebSocket integration
-  - Material-UI design system
+    section v2.0 (Current)
+    Architecture Design :done,    v2_1, 2025-11-21, 1d
+    Control Plane       :done,    v2_2, 2025-11-21, 3d
+    K8s Agent           :done,    v2_3, 2025-11-21, 3d
+    VNC Proxy           :done,    v2_4, 2025-11-21, 2d
+    Integration Testing :active,  v2_5, 2025-11-21, 7d
+    v2.0 Stable         :         v2_6, after v2_5, 1d
 
-- **Infrastructure**
-  - CRD definitions (Session, Template, ApplicationInstall)
-  - Helm chart with 19 templates
-  - Kubernetes manifests for deployment
-  - Monitoring configuration (Prometheus, Grafana)
-
----
-
-## Priority Work Items
-
-### Priority 1: Test Coverage (High)
-
-**Current**: ~15-20%
-**Target**: 80%+
-
-The existing test infrastructure needs significant expansion:
-
-#### Controller Tests
-- **Existing**: 4 test files (529 lines)
-- **Needs**: Error handling, edge cases, concurrent operations
-- **Blocker**: Requires envtest setup for local execution
-
-#### API Tests
-- **Existing**: 11 test files (~2,700 lines)
-- **Needs**: 63+ untested handler files, database layer tests
-- **Blocker**: Some tests have build errors (method name mismatches)
-
-#### UI Tests
-- **Existing**: 2 test files (SessionCard, SecuritySettings)
-- **Needs**: 48+ untested components, all pages
-- **Ready**: Vitest configured with 80% threshold
-
-#### Integration Tests
-- **Existing**: 5 test files with 23 test functions
-- **Status**: Complete and passing
-
-**Estimated effort**: 6-8 weeks with dedicated testing focus
-
-### Priority 2: Plugin Implementations (High)
-
-**Current**: Framework complete, 28 plugins are stubs
-**Target**: Working implementations
-
-The plugin system has a complete framework but individual plugins contain only TODOs:
-
-```
-plugins/
-├── streamspace-calendar/        # TODO: Extract from scheduling handler
-├── streamspace-multi-monitor/   # TODO: 3 items
-├── streamspace-compliance/      # TODO: Stub
-├── streamspace-dlp/             # TODO: Stub
-├── streamspace-analytics/       # TODO: Stub
-├── streamspace-slack/           # TODO: Extract from integrations
-├── streamspace-teams/           # TODO: Extract from integrations
-├── streamspace-discord/         # TODO: Extract from integrations
-└── ... (20 more stubs)
+    section Future
+    Docker Agent (v2.1) :         v2_7, after v2_6, 14d
+    VNC Independence    :         v3_0, 2026-01-01, 60d
 ```
 
-**Work required**:
-1. Extract existing handler logic into plugin modules
-2. Implement plugin configuration UI
-3. Add plugin-specific tests
-4. Document each plugin
+## 🎯 Priorities
 
-**Estimated effort**: 4-6 weeks to convert top 10 plugins
+### 1. Fix Broken Test Infrastructure (P0 - CRITICAL)
 
-### Priority 3: Docker Controller (Medium)
+- **Current**: Test suites failing, blocking all validation
+- **Issues**: [#157](https://github.com/streamspace-dev/streamspace/issues/157), [#200-207](https://github.com/streamspace-dev/streamspace/issues)
+- **Timeline**: 1-2 days
+- **Tasks**:
+  - [ ] Fix API handler test panics ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
+  - [ ] Fix K8s agent test compilation ([#203](https://github.com/streamspace-dev/streamspace/issues/203))
+  - [ ] Fix UI component import errors ([#207](https://github.com/streamspace-dev/streamspace/issues/207))
+  - [ ] Fix WebSocket & Services test builds ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
 
-**Current**: 102-line skeleton
-**Target**: Functional parity with Kubernetes controller
+### 2. Critical Test Coverage (P0 - High Priority)
 
-The Docker controller exists as a framework only:
-- NATS event subscription set up
-- No actual Docker operations implemented
-- Packages `pkg/docker` and `pkg/events` are stubs
+- **Current**: API 4%, K8s Agent 0%, Docker Agent 0%, UI 32%
+- **Target v2.0-beta.1**: API 40%, Agents 60%, UI 60%
+- **Timeline**: 10-15 days (Phases 2-4 from TEST_STATUS.md)
+- **Tasks**:
+  - [ ] Docker Agent test suite - 2,100 lines untested ([#201](https://github.com/streamspace-dev/streamspace/issues/201))
+  - [ ] K8s Agent test suite - Leader election, VNC tunneling ([#203](https://github.com/streamspace-dev/streamspace/issues/203))
+  - [ ] AgentHub multi-pod tests - Redis, cross-pod routing ([#202](https://github.com/streamspace-dev/streamspace/issues/202))
+  - [ ] API handler tests - Session, VNC proxy, template endpoints ([#204](https://github.com/streamspace-dev/streamspace/issues/204))
 
-**Work required**:
-1. Implement container lifecycle management
-2. Volume management for user storage
-3. Network configuration
-4. Event publishing back to API
-5. Integration testing
+### 3. Integration & E2E Testing (P1 - High Priority)
 
-**Estimated effort**: 4-6 weeks for MVP
+- **Focus**: Validate complete v2.0 architecture end-to-end
+- **Timeline**: 3-4 days (Phase 5 from TEST_STATUS.md)
+- **Tasks**:
+  - [ ] VNC streaming E2E (Browser → Proxy → Agent → Container) ([#157](https://github.com/streamspace-dev/streamspace/issues/157))
+  - [ ] Multi-pod API failover scenarios
+  - [ ] Agent leader election and failover
+  - [ ] Cross-platform session management (K8s + Docker)
+  - [ ] Performance benchmarking (session creation, VNC latency)
 
-### Priority 4: VNC Independence (Medium)
+### 4. Production Hardening (v2.0-beta.1 - P1)
 
-**Current**: Using LinuxServer.io images with KasmVNC
-**Target**: StreamSpace-native images with TigerVNC + noVNC
+- **Current**: 57 improvements tracked in [RECOMMENDATIONS_ROADMAP.md](.github/RECOMMENDATIONS_ROADMAP.md)
+- **Target v2.0-beta.1**: Security + Observability basics
+- **Timeline**: ~20 hours after tests fixed
+- **Priority Tasks**:
+  - [ ] Health check endpoints ([#158](https://github.com/streamspace-dev/streamspace/issues/158))
+  - [ ] Security headers ([#165](https://github.com/streamspace-dev/streamspace/issues/165))
+  - [ ] Rate limiting ([#163](https://github.com/streamspace-dev/streamspace/issues/163))
+  - [ ] Structured logging ([#159](https://github.com/streamspace-dev/streamspace/issues/159))
+  - [ ] Prometheus metrics ([#160](https://github.com/streamspace-dev/streamspace/issues/160))
 
-**Work required**:
-1. Create base container images (Ubuntu, Alpine, Debian)
-2. Integrate TigerVNC server
-3. Configure noVNC client
-4. Rebuild all 200+ application templates
-5. Set up image build pipeline
-6. Security scanning and signing
+### 5. Plugin Implementation (P2 - Medium Priority)
 
-**Estimated effort**: 4-6 months
+- **Current**: Framework complete, 28 stub plugins, 0% tested
+- **Target**: Working implementations for top 10 plugins
+- **Priority**: Deferred until after test coverage fixed
+- **Top Plugins**:
+  - Calendar, Slack, Teams, Discord, PagerDuty
+  - Compliance, DLP, Analytics
 
----
+## 🛤️ Detailed Roadmap
 
-## Backlog
+### v1.0.0-READY (Completed) ✅
 
-### Nice to Have
+- **Core**: Functional Kubernetes platform
+- **Auth**: Complete authentication stack (SAML, OIDC, MFA)
+- **Admin**: Full admin UI and configuration
+- **Security**: Production-hardened (Audit logs, RBAC, Security headers)
 
-- Multi-cluster federation
-- WebRTC streaming (lower latency)
-- GPU acceleration support
-- Advanced caching with Redis
-- Machine learning-based idle detection
+### v2.0-beta (Current - Testing Phase) ⚠️
 
-### Known Issues
+**Status**: Architecture complete, test coverage crisis
 
-- Some API handlers have TODO comments for minor enhancements
-- Plugin configuration endpoints have incomplete implementations
-- SMS/Email MFA deliberately disabled (security concerns)
+**Completed**:
+- ✅ Multi-platform Control Plane + Agent architecture
+- ✅ Secure VNC Proxy (WebSocket tunneling, firewall-friendly)
+- ✅ Kubernetes Agent (session lifecycle, leader election, VNC tunneling)
+- ✅ Docker Agent (container lifecycle, HA backends)
+- ✅ Multi-pod API (Redis-backed AgentHub)
+- ✅ Real-time agent monitoring UI
 
----
+**Blocked**:
+- ❌ **Test Infrastructure** - Multiple test suites broken ([#200](https://github.com/streamspace-dev/streamspace/issues/200))
+- ❌ **Test Coverage** - 4% API, 0% agents, 32% UI ([TEST_STATUS.md](TEST_STATUS.md))
+- ❌ **Production Readiness** - Cannot deploy without tests
 
-## Release Plan
+**Next**: Fix broken tests (1-2 days) → Comprehensive test coverage (10-15 days) → Production hardening (~20 hours)
 
-### v1.0.0-beta (Current)
+### v2.0-beta.1 (Target: After Test Coverage) 📝
 
-What's included:
-- Functional Kubernetes platform
-- Complete authentication stack
-- 87 database tables
-- 70+ API handlers
-- 50+ UI components
-- Helm chart for deployment
+**Prerequisites**:
+- Test infrastructure fixed
+- API 40%+ coverage
+- Agents 60%+ coverage
+- Integration tests passing
 
-Known limitations:
-- 15-20% test coverage
-- Plugin stubs only
-- Docker controller not functional
-- Using external VNC images
+**Goals**:
+- Production-ready security (rate limiting, input validation, security headers)
+- Observability basics (health checks, structured logging, Prometheus metrics)
+- Validated HA features (multi-pod API, agent leader election)
+- Performance benchmarks documented
 
-### v1.0.0 (Stable Release)
+### v2.1 (Future) 🔮
 
-Requirements before stable:
-- [ ] Test coverage reaches 70%+
-- [ ] Top 10 plugins implemented
-- [ ] All critical API handler TODOs resolved
-- [ ] Documentation audit complete
-- [ ] Security audit complete
+- **Performance**: Redis caching, database optimization, frontend code splitting
+- **UX**: Accessibility improvements, virtual scrolling, bulk operations
+- **Features**: Plugin marketplace, advanced webhooks, multi-cloud support
 
-### v1.1.0 (Docker Support)
+### v3.0 (Future) 🔮
 
-- [ ] Functional Docker controller
-- [ ] Docker Compose deployment option
-- [ ] Local volume management
-- [ ] Integration tests for Docker platform
+- **Streaming**: WebRTC support for lower latency
+- **VNC**: Migration to TigerVNC + noVNC (native images)
+- **Hardware**: GPU acceleration support
+- **Federation**: Multi-cluster support
 
-### v2.0.0 (VNC Independence)
+## 🤝 How to Contribute
 
-- [ ] StreamSpace-native container images
-- [ ] TigerVNC + noVNC stack
-- [ ] Image build pipeline
-- [ ] All templates migrated
-- [ ] Performance optimization
+We welcome contributions! Here are the high-impact areas:
 
----
+1. **Testing**: Help us reach our 80% coverage goal.
+2. **Plugins**: Pick a stub plugin and implement it.
+3. **Documentation**: Improve guides and examples.
 
-## Contributing
-
-See [CONTRIBUTING.md](CONTRIBUTING.md) for guidelines.
-
-### High-Impact Contribution Areas
-
-1. **Write tests** - Any test coverage helps
-2. **Convert plugin stubs** - Pick a plugin and implement it
-3. **Docker controller** - Help build multi-platform support
-4. **Documentation** - Fix inaccuracies, add examples
-
-### Getting Started
-
-```bash
-# Clone and explore
-git clone https://github.com/JoshuaAFerguson/streamspace.git
-cd streamspace
-
-# Run existing tests
-cd k8s-controller && make test
-cd ../api && go test ./... -v
-cd ../ui && npm test
-```
+See [CONTRIBUTING.md](CONTRIBUTING.md) for details.
 
 ---
 
-## Timeline Estimates
-
-| Milestone | Target | Dependencies |
-|-----------|--------|--------------|
-| 70% test coverage | 8 weeks | Testing infrastructure fixes |
-| Top 10 plugins | 10 weeks | Plugin framework validation |
-| Stable v1.0.0 | 12 weeks | Test coverage, plugin work |
-| Docker support | 16 weeks | Docker controller completion |
-| VNC independence | 6 months | Image build infrastructure |
-
-These are rough estimates and depend on contributor availability.
-
----
-
-## References
-
-- [FEATURES.md](FEATURES.md) - Detailed feature status
-- [TEST_COVERAGE_REPORT.md](tests/reports/TEST_COVERAGE_REPORT.md) - Test coverage analysis
-- [CONTRIBUTING.md](CONTRIBUTING.md) - Contribution guidelines
-- [docs/ARCHITECTURE.md](docs/ARCHITECTURE.md) - System architecture
-
----
-
-**Last Updated**: 2025-11-19
+<div align="center">
+  <sub>StreamSpace Roadmap</sub>
+</div>

@@ -65,6 +65,11 @@ spec:
                 key: {{ include "streamspace.postgresql.secretKey" . }}
           - name: DB_SSLMODE
             value: disable
+          - name: JWT_SECRET
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "streamspace.fullname" . }}-secrets
+                key: jwt-secret
           - name: API_PORT
             value: {{ .Values.api.config.port | quote }}
           - name: GIN_MODE
@@ -81,19 +86,11 @@ spec:
                 fieldPath: metadata.namespace
           - name: PLATFORM
             value: kubernetes
-          {{- if .Values.nats.enabled }}
-          - name: NATS_URL
-            value: {{ include "streamspace.nats.url" . }}
-          {{- if and .Values.nats.external.enabled .Values.nats.external.user }}
-          - name: NATS_USER
-            value: {{ .Values.nats.external.user }}
-          - name: NATS_PASSWORD
+          # POD_NAME is required for multi-pod AgentHub support (Redis pub/sub routing)
+          - name: POD_NAME
             valueFrom:
-              secretKeyRef:
-                name: {{ .Values.nats.external.existingSecret }}
-                key: {{ .Values.nats.external.existingSecretPasswordKey }}
-          {{- end }}
-          {{- end }}
+              fieldRef:
+                fieldPath: metadata.name
           {{- if .Values.redis.enabled }}
           - name: CACHE_ENABLED
             value: "true"
@@ -108,8 +105,14 @@ spec:
                 name: {{ .Values.redis.external.existingSecret }}
                 key: {{ .Values.redis.external.existingSecretPasswordKey }}
           {{- end }}
+          # Enable AgentHub Redis for multi-pod support when Redis is available
+          # This allows multiple API replicas to share agent connection state
+          - name: AGENTHUB_REDIS_ENABLED
+            value: {{ .Values.redis.agentHubEnabled | default "true" | quote }}
           {{- else }}
           - name: CACHE_ENABLED
+            value: "false"
+          - name: AGENTHUB_REDIS_ENABLED
             value: "false"
           {{- end }}
           # Admin password for initial setup (Priority 1: Kubernetes Secret)
@@ -118,11 +121,18 @@ spec:
               secretKeyRef:
                 name: {{ if .Values.auth.admin.existingSecret }}{{ .Values.auth.admin.existingSecret }}{{ else }}{{ include "streamspace.fullname" . }}-admin-credentials{{ end }}
                 key: password
-                optional: true  # Don't fail if secret doesn't exist
+                optional: false  # REQUIRED: Fail fast if secret doesn't exist
           # Admin password reset (Priority 3: Manual override)
           # Set this to reset the admin password, then remove after restart
           # - name: ADMIN_PASSWORD_RESET
           #   value: "new-secure-password"
+          # Agent bootstrap key for first-time agent registration (Issue #226)
+          # This allows agents to self-register without manual database provisioning
+          - name: AGENT_BOOTSTRAP_KEY
+            valueFrom:
+              secretKeyRef:
+                name: {{ include "streamspace.fullname" . }}-secrets
+                key: agent-bootstrap-key
         resources:
           {{- toYaml .Values.api.resources | nindent 10 }}
         livenessProbe:

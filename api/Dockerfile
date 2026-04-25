@@ -1,5 +1,5 @@
 # Build stage
-FROM golang:1.24-alpine AS builder
+FROM golang:1.25-bookworm AS builder
 
 # Build arguments for versioning
 ARG VERSION=dev
@@ -9,7 +9,7 @@ ARG BUILD_DATE
 ARG TARGETARCH
 
 # Install build dependencies
-RUN apk add --no-cache git make ca-certificates
+RUN apt-get update && apt-get install -y git make ca-certificates && rm -rf /var/lib/apt/lists/*
 
 WORKDIR /workspace
 
@@ -22,6 +22,7 @@ RUN go mod download
 # Copy source code
 COPY cmd/ cmd/
 COPY internal/ internal/
+COPY static/ static/
 
 # Tidy modules to ensure go.mod and go.sum are up to date
 RUN go mod tidy
@@ -48,6 +49,9 @@ WORKDIR /app
 # Copy binary from builder
 COPY --from=builder /workspace/api-server .
 
+# Copy static files for VNC viewer
+COPY --from=builder /workspace/static ./static
+
 # Create directory for repository clones
 RUN mkdir -p /tmp/streamspace-repos && chmod 777 /tmp/streamspace-repos
 
@@ -63,7 +67,7 @@ EXPOSE 8000
 
 # Health check
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-  CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+    CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
 
 # Environment variables with defaults
 ENV API_PORT=8000 \

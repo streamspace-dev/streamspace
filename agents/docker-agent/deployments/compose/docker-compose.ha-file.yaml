@@ -1,0 +1,91 @@
+# Docker Compose - HA Mode with File Backend
+#
+# This configuration runs multiple docker-agent replicas with file-based leader election.
+# Suitable for:
+#   - Single Docker host with multiple agent processes
+#   - Simple HA without external dependencies
+#   - Development and testing of HA behavior
+#
+# How it works:
+#   - Uses flock (file locking) for leader election
+#   - Shared lock file via named volume
+#   - Only one replica is active (leader) at a time
+#   - Automatic failover in ~15-20 seconds
+#
+# Usage:
+#   docker-compose -f docker-compose.ha-file.yaml up -d --scale docker-agent=3
+#
+# Environment Variables:
+#   AGENT_ID: Unique identifier for this agent (required)
+#   CONTROL_PLANE_URL: Control Plane WebSocket URL (required)
+#   REPLICA_COUNT: Number of replicas (default: 3)
+
+version: '3.8'
+
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    restart: unless-stopped
+
+    # Scale manually with: --scale docker-agent=3
+    # Default: 3 replicas for HA
+
+    # Environment Configuration
+    environment:
+      # Agent Identity
+      AGENT_ID: ${AGENT_ID:-docker-agent-ha}
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-ws://host.docker.internal:8000}
+      PLATFORM: ${PLATFORM:-docker}
+      REGION: ${REGION:-default}
+
+      # Docker Configuration
+      DOCKER_HOST: unix:///var/run/docker.sock
+      NETWORK_NAME: ${NETWORK_NAME:-streamspace}
+      VOLUME_DRIVER: ${VOLUME_DRIVER:-local}
+
+      # Capacity Limits
+      MAX_CPU: ${MAX_CPU:-100}
+      MAX_MEMORY: ${MAX_MEMORY:-128}
+      MAX_SESSIONS: ${MAX_SESSIONS:-100}
+
+      # Health Check Settings
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30s}
+
+      # HA Mode with File Backend
+      ENABLE_HA: "true"
+      LEADER_ELECTION_BACKEND: "file"
+      LOCK_FILE_PATH: "/var/run/streamspace/docker-agent-${AGENT_ID:-docker-agent-ha}.lock"
+
+    # Docker Socket and Lock File Volume
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+      - leader-election-locks:/var/run/streamspace:rw
+
+    # Network Configuration
+    networks:
+      - streamspace
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep docker-agent || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+# Named volume for shared lock files
+volumes:
+  leader-election-locks:
+    driver: local
+
+networks:
+  streamspace:
+    name: ${NETWORK_NAME:-streamspace}
+    driver: bridge

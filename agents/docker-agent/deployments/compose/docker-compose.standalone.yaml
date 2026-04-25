@@ -1,0 +1,76 @@
+# Docker Compose - Standalone Mode (Single Instance, No HA)
+#
+# This configuration runs a single docker-agent instance without leader election.
+# Suitable for:
+#   - Development and testing
+#   - Simple deployments without HA requirements
+#   - Single Docker host environments
+#
+# Usage:
+#   docker-compose -f docker-compose.standalone.yaml up -d
+#
+# Environment Variables:
+#   AGENT_ID: Unique identifier for this agent (required)
+#   CONTROL_PLANE_URL: Control Plane WebSocket URL (required)
+#   PLATFORM: Platform type (default: docker)
+#   REGION: Deployment region (optional)
+
+version: '3.8'
+
+services:
+  docker-agent:
+    image: streamspace/docker-agent:latest
+    container_name: streamspace-docker-agent
+    restart: unless-stopped
+
+    # Environment Configuration
+    environment:
+      # Agent Identity
+      AGENT_ID: ${AGENT_ID:-docker-agent-standalone}
+      CONTROL_PLANE_URL: ${CONTROL_PLANE_URL:-ws://host.docker.internal:8000}
+      PLATFORM: ${PLATFORM:-docker}
+      REGION: ${REGION:-default}
+
+      # Docker Configuration
+      DOCKER_HOST: unix:///var/run/docker.sock
+      NETWORK_NAME: ${NETWORK_NAME:-streamspace}
+      VOLUME_DRIVER: ${VOLUME_DRIVER:-local}
+
+      # Capacity Limits
+      MAX_CPU: ${MAX_CPU:-100}
+      MAX_MEMORY: ${MAX_MEMORY:-128}
+      MAX_SESSIONS: ${MAX_SESSIONS:-100}
+
+      # Health Check Settings
+      HEALTH_CHECK_INTERVAL: ${HEALTH_CHECK_INTERVAL:-30s}
+
+      # HA Mode (disabled for standalone)
+      ENABLE_HA: "false"
+
+    # Docker Socket Access (required)
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock:rw
+
+    # Network Configuration
+    networks:
+      - streamspace
+
+    # Health Check
+    healthcheck:
+      test: ["CMD", "sh", "-c", "pgrep docker-agent || exit 1"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
+
+    # Logging
+    logging:
+      driver: "json-file"
+      options:
+        max-size: "10m"
+        max-file: "3"
+
+networks:
+  streamspace:
+    name: ${NETWORK_NAME:-streamspace}
+    driver: bridge

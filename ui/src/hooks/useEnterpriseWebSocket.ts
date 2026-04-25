@@ -4,8 +4,11 @@ import { useUserStore } from '../store/userStore';
 export interface WebSocketMessage {
   type: string;
   timestamp: string;
-  data: Record<string, any>;
+  data: Record<string, unknown>;
 }
+
+/** Generic event data type for WebSocket events */
+export type WebSocketEventData = Record<string, unknown>;
 
 export type WebSocketMessageHandler = (message: WebSocketMessage) => void;
 
@@ -22,7 +25,7 @@ interface UseEnterpriseWebSocketOptions {
 interface UseEnterpriseWebSocketReturn {
   isConnected: boolean;
   lastMessage: WebSocketMessage | null;
-  sendMessage: (message: any) => void;
+  sendMessage: (message: Record<string, unknown>) => void;
   connect: () => void;
   disconnect: () => void;
   reconnectAttempts: number;
@@ -94,9 +97,10 @@ export function useEnterpriseWebSocket(
     onClose,
     onOpen,
     autoReconnect = true,
-    reconnectInterval = 3000, // Not used with custom backoff
+    reconnectInterval: _reconnectInterval = 3000, // Not used with custom backoff
     maxReconnectAttempts = 10,
   } = options;
+  void _reconnectInterval; // Mark as intentionally unused (kept for API compatibility)
 
   // Custom backoff pattern: 30s, 15s, 15s, then 60s for all subsequent attempts
   const getReconnectDelay = (attemptNumber: number): number => {
@@ -111,7 +115,7 @@ export function useEnterpriseWebSocket(
   const [reconnectAttempts, setReconnectAttempts] = useState(0);
 
   const wsRef = useRef<WebSocket | null>(null);
-  const reconnectTimeoutRef = useRef<NodeJS.Timeout | null>(null);
+  const reconnectTimeoutRef = useRef<ReturnType<typeof setTimeout> | null>(null);
   const shouldReconnectRef = useRef(true);
   const reconnectAttemptsRef = useRef(0);
 
@@ -268,7 +272,7 @@ export function useEnterpriseWebSocket(
     setIsConnected(false);
   }, []);
 
-  const sendMessage = useCallback((message: any) => {
+  const sendMessage = useCallback((message: Record<string, unknown>) => {
     if (wsRef.current && wsRef.current.readyState === WebSocket.OPEN) {
       wsRef.current.send(JSON.stringify(message));
     } else {
@@ -352,7 +356,7 @@ export function useEnterpriseWebSocket(
  */
 export function useWebSocketEvent(
   eventType: string,
-  handler: (data: any) => void,
+  handler: (data: Record<string, unknown>) => void,
   enabled = true
 ) {
   const { lastMessage } = useEnterpriseWebSocket({
@@ -397,66 +401,66 @@ export function useWebSocketEvent(
 // - integration.event: Third-party integration events
 
 /** Hook for webhook delivery status updates */
-export function useWebhookDeliveryEvents(handler: (data: any) => void) {
+export function useWebhookDeliveryEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('webhook.delivery', handler);
 }
 
 /** Hook for security alerts and violations */
-export function useSecurityAlertEvents(handler: (data: any) => void) {
+export function useSecurityAlertEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('security.alert', handler);
 }
 
 /** Hook for session schedule events */
-export function useScheduleEvents(handler: (data: any) => void) {
+export function useScheduleEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('schedule.event', handler);
 }
 
 /** Hook for node health changes */
-export function useNodeHealthEvents(handler: (data: any) => void) {
+export function useNodeHealthEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('node.health', handler);
 }
 
 /** Hook for auto-scaling events */
-export function useScalingEvents(handler: (data: any) => void) {
+export function useScalingEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('scaling.event', handler);
 }
 
 /** Hook for compliance policy violations */
-export function useComplianceViolationEvents(handler: (data: any) => void) {
+export function useComplianceViolationEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('compliance.violation', handler);
 }
 
 /** Hook for user lifecycle events */
-export function useUserEvents(handler: (data: any) => void) {
+export function useUserEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('user.event', handler);
 }
 
 /** Hook for group membership changes */
-export function useGroupEvents(handler: (data: any) => void) {
+export function useGroupEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('group.event', handler);
 }
 
 /** Hook for quota threshold warnings */
-export function useQuotaEvents(handler: (data: any) => void) {
+export function useQuotaEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('quota.event', handler);
 }
 
 /** Hook for plugin lifecycle events */
-export function usePluginEvents(handler: (data: any) => void) {
+export function usePluginEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('plugin.event', handler);
 }
 
 /** Hook for template catalog updates */
-export function useTemplateEvents(handler: (data: any) => void) {
+export function useTemplateEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('template.event', handler);
 }
 
 /** Hook for repository sync status changes */
-export function useRepositoryEvents(handler: (data: any) => void) {
+export function useRepositoryEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('repository.event', handler);
 }
 
 /** Hook for third-party integration events */
-export function useIntegrationEvents(handler: (data: any) => void) {
+export function useIntegrationEvents(handler: (data: WebSocketEventData) => void) {
   useWebSocketEvent('integration.event', handler);
 }

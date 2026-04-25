@@ -79,7 +79,7 @@ import (
 	"time"
 
 	"github.com/gin-gonic/gin"
-	"github.com/streamspace/streamspace/api/internal/db"
+	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
 
 // Handler is the console handler with database access.
@@ -161,7 +161,7 @@ func (h *ConsoleHandler) CreateConsoleSession(c *gin.Context) {
 	if sessionOwner != userID {
 		// Check if user has shared access
 		var hasAccess bool
-		h.DB.DB().QueryRow(`
+		_ = h.DB.DB().QueryRow(`
 			SELECT EXISTS(
 				SELECT 1 FROM session_shares
 				WHERE session_id = $1 AND shared_with_user_id = $2
@@ -250,7 +250,7 @@ func (h *ConsoleHandler) ListConsoleSessions(c *gin.Context) {
 
 		if err == nil {
 			if metadata.Valid && metadata.String != "" {
-				json.Unmarshal([]byte(metadata.String), &cs.Metadata)
+				_ = json.Unmarshal([]byte(metadata.String), &cs.Metadata)
 			}
 			sessions = append(sessions, cs)
 		}
@@ -684,7 +684,7 @@ func (h *ConsoleHandler) getSessionBasePath(sessionID string) string {
 }
 
 func (h *ConsoleHandler) logFileOperation(sessionID, userID, operation, sourcePath, targetPath string, bytesProcessed int64) {
-	h.DB.DB().Exec(`
+	_, _ = h.DB.DB().Exec(`
 		INSERT INTO console_file_operations (
 			session_id, user_id, operation, source_path, target_path, bytes_processed
 		) VALUES ($1, $2, $3, $4, $5, $6)
@@ -706,7 +706,7 @@ func (h *ConsoleHandler) GetFileOperationHistory(c *gin.Context) {
 
 	// Count total
 	var total int
-	h.DB.DB().QueryRow(`
+	_ = h.DB.DB().QueryRow(`
 		SELECT COUNT(*) FROM console_file_operations WHERE session_id = $1
 	`, sessionID).Scan(&total)
 
@@ -730,7 +730,7 @@ func (h *ConsoleHandler) GetFileOperationHistory(c *gin.Context) {
 		var op FileOperation
 		var id int64
 		var createdAt time.Time
-		rows.Scan(&id, &op.Operation, &op.SourcePath, &op.TargetPath, &op.BytesProcessed, &createdAt)
+		_ = rows.Scan(&id, &op.Operation, &op.SourcePath, &op.TargetPath, &op.BytesProcessed, &createdAt)
 		op.Success = true
 		operations = append(operations, op)
 	}

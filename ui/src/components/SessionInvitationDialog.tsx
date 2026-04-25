@@ -111,6 +111,7 @@ export default function SessionInvitationDialog({
     if (open) {
       loadInvitations();
     }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [open, sessionId]);
 
   const loadInvitations = async () => {

@@ -18,6 +18,7 @@ const ThemeContext = createContext<ThemeContextType>({
   toggleTheme: () => {},
 });
 
+// eslint-disable-next-line react-refresh/only-export-components
 export const useThemeMode = () => useContext(ThemeContext);
 
 // Eagerly load Login page and SetupWizard (needed immediately)
@@ -40,6 +41,7 @@ const SecuritySettings = lazy(() => import('./pages/SecuritySettings'));
 const EnhancedRepositories = lazy(() => import('./pages/EnhancedRepositories'));
 const PluginCatalog = lazy(() => import('./pages/PluginCatalog'));
 const InstalledPlugins = lazy(() => import('./pages/InstalledPlugins'));
+const PluginAdministration = lazy(() => import('./pages/admin/PluginAdministration'));
 
 // Admin Pages (loaded only for admin users)
 const AdminDashboard = lazy(() => import('./pages/admin/Dashboard'));
@@ -54,6 +56,14 @@ const CreateGroup = lazy(() => import('./pages/admin/CreateGroup'));
 const Integrations = lazy(() => import('./pages/admin/Integrations'));
 const Scaling = lazy(() => import('./pages/admin/Scaling'));
 const Compliance = lazy(() => import('./pages/admin/Compliance'));
+const AuditLogs = lazy(() => import('./pages/admin/AuditLogs'));
+const Settings = lazy(() => import('./pages/admin/Settings'));
+const License = lazy(() => import('./pages/admin/License'));
+const APIKeys = lazy(() => import('./pages/admin/APIKeys'));
+const Monitoring = lazy(() => import('./pages/admin/Monitoring'));
+// BUG FIX P0-3: Controllers page removed - obsolete in v2.0 (replaced by Agents)
+const Recordings = lazy(() => import('./pages/admin/Recordings'));
+const Agents = lazy(() => import('./pages/admin/Agents'));
 
 // Create React Query client
 const queryClient = new QueryClient({
@@ -105,6 +115,15 @@ const createAppTheme = (mode: ThemeMode) =>
 // Protected Route wrapper
 function ProtectedRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const isTokenExpired = useUserStore((state) => state.isTokenExpired);
+  const clearAuth = useUserStore((state) => state.clearAuth);
+
+  // Check if token has expired
+  if (isAuthenticated && isTokenExpired()) {
+    // Clear the expired auth state and redirect to login
+    clearAuth();
+    return <Navigate to="/login" replace />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -116,7 +135,16 @@ function ProtectedRoute({ children }: { children: React.ReactNode }) {
 // Admin Route wrapper
 function AdminRoute({ children }: { children: React.ReactNode }) {
   const isAuthenticated = useUserStore((state) => state.isAuthenticated);
+  const isTokenExpired = useUserStore((state) => state.isTokenExpired);
+  const clearAuth = useUserStore((state) => state.clearAuth);
   const user = useUserStore((state) => state.user);
+
+  // Check if token has expired
+  if (isAuthenticated && isTokenExpired()) {
+    // Clear the expired auth state and redirect to login
+    clearAuth();
+    return <Navigate to="/login" replace />;
+  }
 
   if (!isAuthenticated) {
     return <Navigate to="/login" replace />;
@@ -334,6 +362,63 @@ function App() {
                 </AdminRoute>
               }
             />
+            <Route
+              path="/admin/audit"
+              element={
+                <AdminRoute>
+                  <AuditLogs />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/settings"
+              element={
+                <AdminRoute>
+                  <Settings />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/license"
+              element={
+                <AdminRoute>
+                  <License />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/api-keys"
+              element={
+                <AdminRoute>
+                  <APIKeys />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/monitoring"
+              element={
+                <AdminRoute>
+                  <Monitoring />
+                </AdminRoute>
+              }
+            />
+            {/* BUG FIX P0-3: Controllers route removed - page obsolete in v2.0 */}
+            <Route
+              path="/admin/recordings"
+              element={
+                <AdminRoute>
+                  <Recordings />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/agents"
+              element={
+                <AdminRoute>
+                  <Agents />
+                </AdminRoute>
+              }
+            />
 
             {/* Admin Content Management Routes */}
             <Route
@@ -365,6 +450,14 @@ function App() {
               element={
                 <AdminRoute>
                   <InstalledPlugins />
+                </AdminRoute>
+              }
+            />
+            <Route
+              path="/admin/plugin-administration"
+              element={
+                <AdminRoute>
+                  <PluginAdministration />
                 </AdminRoute>
               }
             />

@@ -69,6 +69,7 @@ For the new event-driven multi-platform architecture, use these scripts:
 Starts the complete development environment using Docker Compose with NATS and PostgreSQL.
 
 **Usage:**
+
 ```bash
 ./scripts/docker-dev.sh              # Core services only
 ./scripts/docker-dev.sh --with-api   # Include API service
@@ -78,10 +79,12 @@ Starts the complete development environment using Docker Compose with NATS and P
 ```
 
 **Services Started:**
+
 - PostgreSQL (localhost:5432)
 - NATS with JetStream (localhost:4222, monitor: localhost:8222)
 
 **Optional Services:**
+
 - API backend (--with-api)
 - Docker controller (--with-docker)
 - pgAdmin (--with-dev)
@@ -92,6 +95,7 @@ Starts the complete development environment using Docker Compose with NATS and P
 Stops the Docker Compose development environment.
 
 **Usage:**
+
 ```bash
 ./scripts/docker-dev-stop.sh           # Stop services, keep data
 ./scripts/docker-dev-stop.sh --clean   # Stop and remove volumes
@@ -102,6 +106,7 @@ Stops the Docker Compose development environment.
 Builds the Docker platform controller for the event-driven architecture.
 
 **Usage:**
+
 ```bash
 ./scripts/build-docker-controller.sh           # Build Docker image
 ./scripts/build-docker-controller.sh --binary  # Build Go binary only
@@ -112,6 +117,7 @@ Builds the Docker platform controller for the event-driven architecture.
 Tests NATS connectivity and can publish/subscribe to test events.
 
 **Usage:**
+
 ```bash
 ./scripts/test-nats.sh                    # Test connectivity
 ./scripts/test-nats.sh --publish          # Publish test events
@@ -130,16 +136,19 @@ For traditional Kubernetes deployment, use these scripts:
 ### local-build.sh
 
 Builds all StreamSpace Docker images locally:
+
 - `streamspace/streamspace-controller:local`
 - `streamspace/streamspace-api:local`
 - `streamspace/streamspace-ui:local`
 
 **Usage:**
+
 ```bash
 ./scripts/local-build.sh
 ```
 
 **Options:**
+
 - Set `VERSION=custom` to use a different tag
 
 ### local-deploy.sh
@@ -147,16 +156,19 @@ Builds all StreamSpace Docker images locally:
 Deploys StreamSpace using Helm chart (for Helm v3.18.0 or earlier).
 
 **Usage:**
+
 ```bash
 ./scripts/local-deploy.sh
 ```
 
 **Environment Variables:**
+
 - `NAMESPACE`: Kubernetes namespace (default: `streamspace`)
 - `RELEASE_NAME`: Helm release name (default: `streamspace`)
 - `VERSION`: Image tag to use (default: `local`)
 
 **Requirements:**
+
 - Helm v3.18.0 or earlier
 - kubectl with cluster access
 - Local Docker images built
@@ -167,21 +179,25 @@ Deploys StreamSpace using Helm chart (for Helm v3.18.0 or earlier).
 Deploys StreamSpace using raw Kubernetes manifests (Helm-free).
 
 **Usage:**
+
 ```bash
 ./scripts/local-deploy-kubectl.sh
 ```
 
 **Environment Variables:**
+
 - `NAMESPACE`: Kubernetes namespace (default: `streamspace`)
 - `VERSION`: Image tag to use (default: `local`)
 
 **Requirements:**
+
 - kubectl with cluster access
 - Local Docker images built
 - Kubernetes cluster (Docker Desktop, k3s, minikube, etc.)
 - **Does NOT require Helm** - works with any Helm version
 
 **Why This Exists:**
+
 - Helm v3.19.0 (bundled with Docker Desktop) has a critical bug
 - Provides a Helm-free alternative for users who can't downgrade
 - Uses the same manifests, just applies them directly with kubectl
@@ -191,6 +207,7 @@ Deploys StreamSpace using raw Kubernetes manifests (Helm-free).
 Removes StreamSpace deployment and cleans up resources.
 
 **Usage:**
+
 ```bash
 ./scripts/local-teardown.sh
 ```
@@ -198,16 +215,19 @@ Removes StreamSpace deployment and cleans up resources.
 ## Helm v3.19.0 Issue
 
 **Problem:** Helm v3.19.0 has a critical regression in the chart loader that makes it completely unusable for loading charts from directories. All operations fail:
+
 - `helm lint` → fails
 - `helm template` → fails
 - `helm package` → fails
 - `helm install` → fails
 
 **Affected Users:**
+
 - Docker Desktop users on macOS/Windows (Helm is bundled)
 - Anyone who upgraded to Helm v3.19.0
 
 **Solutions:**
+
 1. **Use `local-deploy-kubectl.sh`** (recommended) - bypasses Helm entirely
 2. **Downgrade Helm** to v3.18.0 or earlier (if possible)
 
@@ -222,7 +242,7 @@ See `docs/DEPLOYMENT_TROUBLESHOOTING.md` for comprehensive troubleshooting.
 kubectl port-forward -n streamspace svc/streamspace-ui 3000:80
 ```
 
-Then open: http://localhost:3000
+Then open: <http://localhost:3000>
 
 ### Access the API
 
@@ -230,7 +250,7 @@ Then open: http://localhost:3000
 kubectl port-forward -n streamspace svc/streamspace-api 8000:8000
 ```
 
-Then open: http://localhost:8000
+Then open: <http://localhost:8000>
 
 ### View Logs
 
@@ -260,11 +280,13 @@ kubectl get templates -n streamspace
 ### Clean Up
 
 Using Helm (if you deployed with `local-deploy.sh`):
+
 ```bash
 ./scripts/local-teardown.sh
 ```
 
 Using kubectl (if you deployed with `local-deploy-kubectl.sh`):
+
 ```bash
 kubectl delete namespace streamspace
 ```
@@ -274,11 +296,13 @@ kubectl delete namespace streamspace
 ### Images Not Found
 
 Build images first:
+
 ```bash
 ./scripts/local-build.sh
 ```
 
 Verify they exist:
+
 ```bash
 docker images | grep streamspace
 ```
@@ -286,12 +310,14 @@ docker images | grep streamspace
 ### Helm Chart Errors
 
 If using Helm v3.19.0:
+
 ```bash
 # Switch to kubectl-based deployment
 ./scripts/local-deploy-kubectl.sh
 ```
 
 If using older Helm:
+
 ```bash
 # Check Helm version
 helm version --short
@@ -303,6 +329,7 @@ helm version --short
 ### Pods Not Starting
 
 Check pod status:
+
 ```bash
 kubectl get pods -n streamspace
 kubectl describe pod <pod-name> -n streamspace
@@ -310,6 +337,7 @@ kubectl logs <pod-name> -n streamspace
 ```
 
 Common issues:
+
 - ImagePullBackOff: Images not built or wrong pullPolicy
 - CrashLoopBackOff: Check logs for errors
 - Pending: Check resource availability
@@ -321,5 +349,5 @@ See: `docs/DEPLOYMENT_TROUBLESHOOTING.md`
 ## Support
 
 - Documentation: `docs/`
-- Issues: https://github.com/streamspace/streamspace/issues
-- Discussions: https://github.com/streamspace/streamspace/discussions
+- Issues: <https://github.com/streamspace-dev/streamspace/issues>
+- Discussions: <https://github.com/streamspace-dev/streamspace/discussions>

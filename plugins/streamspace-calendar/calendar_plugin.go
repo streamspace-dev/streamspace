@@ -1,7 +1,7 @@
 package calendarplugin
 
 import (
-	"github.com/streamspace/streamspace/api/internal/plugins"
+	"github.com/streamspace-dev/streamspace/api/internal/plugins"
 )
 
 // CalendarPlugin provides Google/Outlook calendar integration

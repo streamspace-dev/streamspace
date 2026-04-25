@@ -1,0 +1,77 @@
+---
+# Redis Deployment for StreamSpace v2.0
+# Purpose: Shared state for AgentHub across API replicas
+# Bug Fix: P1-MULTI-POD-001 - AgentHub not shared across API pods
+
+apiVersion: apps/v1
+kind: Deployment
+metadata:
+  name: streamspace-redis
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: redis
+spec:
+  replicas: 1
+  selector:
+    matchLabels:
+      app: streamspace
+      component: redis
+  template:
+    metadata:
+      labels:
+        app: streamspace
+        component: redis
+    spec:
+      containers:
+      - name: redis
+        image: redis:7-alpine
+        ports:
+        - containerPort: 6379
+          name: redis
+          protocol: TCP
+        resources:
+          requests:
+            memory: "64Mi"
+            cpu: "100m"
+          limits:
+            memory: "256Mi"
+            cpu: "500m"
+        livenessProbe:
+          tcpSocket:
+            port: 6379
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        readinessProbe:
+          exec:
+            command:
+            - redis-cli
+            - ping
+          initialDelaySeconds: 5
+          periodSeconds: 5
+        volumeMounts:
+        - name: redis-data
+          mountPath: /data
+      volumes:
+      - name: redis-data
+        emptyDir: {}  # For development; use PersistentVolumeClaim in production
+
+---
+apiVersion: v1
+kind: Service
+metadata:
+  name: streamspace-redis
+  namespace: streamspace
+  labels:
+    app: streamspace
+    component: redis
+spec:
+  type: ClusterIP
+  ports:
+  - port: 6379
+    targetPort: 6379
+    protocol: TCP
+    name: redis
+  selector:
+    app: streamspace
+    component: redis

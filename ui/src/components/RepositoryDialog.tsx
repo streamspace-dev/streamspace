@@ -26,10 +26,18 @@ import {
 } from '@mui/icons-material';
 import { Repository } from '../lib/api';
 
+interface RepositoryFormData {
+  name: string;
+  url: string;
+  branch: string;
+  authType: string;
+  authSecret?: string;
+}
+
 interface RepositoryDialogProps {
   open: boolean;
   onClose: () => void;
-  onSave: (data: any) => void;
+  onSave: (data: RepositoryFormData) => void;
   repository?: Repository | null;
   isSaving: boolean;
 }
@@ -173,11 +181,11 @@ export default function RepositoryDialog({
     };
 
     // Only include authSecret if it's set (for edit, empty means don't change)
-    if (formData.authSecret) {
-      (data as any).authSecret = formData.authSecret;
-    }
+    const saveData: RepositoryFormData = formData.authSecret
+      ? { ...data, authSecret: formData.authSecret }
+      : data;
 
-    onSave(data);
+    onSave(saveData);
   };
 
   return (

@@ -1,3 +1,5 @@
+/* eslint-disable @typescript-eslint/no-explicit-any */
+// Admin page uses `any` for API responses and dynamic compliance data
 /**
  * Compliance Admin Page
  *
@@ -68,26 +70,17 @@ import {
   FormControl,
   InputLabel,
   Grid,
-  Alert,
   Paper,
   List,
   ListItem,
   ListItemText,
   Divider,
-  Snackbar,
 } from '@mui/material';
 import {
-  Gavel as ComplianceIcon,
   Add as AddIcon,
   Edit as EditIcon,
   Delete as DeleteIcon,
   Assessment as ReportIcon,
-  Warning as ViolationIcon,
-  CheckCircle as CheckIcon,
-  Error as ErrorIcon,
-  Dashboard as DashboardIcon,
-  Wifi as ConnectedIcon,
-  WifiOff as DisconnectedIcon,
 } from '@mui/icons-material';
 import AdminPortalLayout from '../../components/AdminPortalLayout';
 import api from '../../lib/api';
@@ -232,7 +225,7 @@ function ComplianceContent() {
       low: 0,
     },
   });
-  const [loading, setLoading] = useState(false);
+  const [, setLoading] = useState(false);
   const [wsConnected, setWsConnected] = useState(false);
   const [wsReconnectAttempts, setWsReconnectAttempts] = useState(0);
 
@@ -264,7 +257,7 @@ function ComplianceContent() {
     loadDashboard();
   });
 
-  const [frameworkDialog, setFrameworkDialog] = useState(false);
+  const [, setFrameworkDialog] = useState(false);
   const [policyDialog, setPolicyDialog] = useState(false);
   const [reportDialog, setReportDialog] = useState(false);
 
@@ -380,7 +373,7 @@ function ComplianceContent() {
       setPolicyDialog(false);
       loadPolicies();
       loadDashboard();
-    } catch (error) {
+    } catch {
       toast.error('Failed to create policy');
     } finally {
       setLoading(false);
@@ -390,7 +383,7 @@ function ComplianceContent() {
   const handleGenerateReport = async () => {
     setLoading(true);
     try {
-      const report = await api.generateComplianceReport({
+      await api.generateComplianceReport({
         framework_id: reportForm.framework_id || undefined,
         report_type: reportForm.report_type,
         start_date: reportForm.start_date,
@@ -398,9 +391,7 @@ function ComplianceContent() {
       });
       toast.success('Compliance report generated');
       setReportDialog(false);
-      // Note: Report data is available in the 'report' variable if you want to
-      // download it as JSON or display it in a modal
-    } catch (error) {
+    } catch {
       toast.error('Failed to generate report');
     } finally {
       setLoading(false);
@@ -417,7 +408,7 @@ function ComplianceContent() {
       toast.success('Violation resolved');
       loadViolations();
       loadDashboard();
-    } catch (error) {
+    } catch {
       toast.error('Failed to resolve violation');
     } finally {
       setLoading(false);

@@ -91,7 +91,7 @@ import (
 	"time"
 
 	"github.com/google/uuid"
-	"github.com/streamspace/streamspace/api/internal/models"
+	"github.com/streamspace-dev/streamspace/api/internal/models"
 )
 
 // GroupDB handles database operations for groups
@@ -211,7 +211,6 @@ func (g *GroupDB) ListGroups(ctx context.Context, groupType string, parentID *st
 	if parentID != nil {
 		query += fmt.Sprintf(" AND g.parent_id = $%d", argIdx)
 		args = append(args, *parentID)
-		argIdx++
 	}
 
 	query += " GROUP BY g.id ORDER BY g.name ASC"
