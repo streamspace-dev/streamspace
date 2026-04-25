@@ -60,9 +60,9 @@ The Control Plane sends a platform-agnostic `SessionSpec`:
   "id": "session-123",
   "user": "user-abc",
   "template": {
-    "image": "lscr.io/linuxserver/firefox:latest",
-    "env": {"PUID": "1000"},
-    "ports": [{"name": "vnc", "port": 3000}]
+    "image": "ghcr.io/streamspace-dev/chrome-selkies:latest",
+    "env": {"TZ": "UTC"},
+    "ports": [{"name": "selkies", "port": 8080}]
   },
   "resources": {
     "cpu": "1000m",

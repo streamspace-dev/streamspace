@@ -23,7 +23,7 @@ This guide documents common issues encountered during v2.0-beta development and 
 2. [K8s Agent Issues](#k8s-agent-issues)
 3. [Authentication Issues](#authentication-issues)
 4. [Session Management Issues](#session-management-issues)
-5. [VNC Connection Issues](#vnc-connection-issues)
+5. [Streaming Connection Issues](#streaming-connection-issues)
 6. [Database Issues](#database-issues)
 7. [Helm Chart Issues](#helm-chart-issues)
 8. [Network and Connectivity](#network-and-connectivity)
@@ -572,91 +572,69 @@ EOF
 
 ---
 
-## VNC Connection Issues
+## Streaming Connection Issues
 
-### VNC Viewer Shows "Connecting..." Indefinitely
+### Selkies viewer shows blank / never connects
 
-**Symptoms:**
-- Session state is "running" and pod is ready
-- VNC viewer in UI shows "Connecting..." but never displays desktop
-- Browser console may show WebSocket errors
-- No VNC traffic visible in Network tab
+**Symptoms**
+- Session state is `running` and the pod is `Ready`
+- The iframe at `/api/v1/http/<session-id>/?token=…` loads HTML but never starts streaming
+- Browser console shows WebSocket errors or 401/404
 
-**Possible Causes:**
+**Possible causes**
 
-#### 1. VNC Tunnel Not Initialized
+#### 1. The session pod isn't serving Selkies on 8080
 
-**Check:**
 ```bash
-# Check agent logs for VNC tunnel messages
-kubectl logs -n streamspace -l app.kubernetes.io/component=k8s-agent | grep -i "vnc tunnel"
+# Confirm Selkies is listening
+kubectl exec -n streamspace <session-pod> -- ss -ltnp | grep ':8080'
+# Expected: a listener on 0.0.0.0:8080
 
-# Expected to see:
-# "VNC tunnel initialized for session sess-123"
-# "VNC connection established: UI -> Control Plane -> Agent -> Pod"
+# Check pod logs for entrypoint output
+kubectl logs <session-pod> -n streamspace | head -40
+# Expected: "Display: 1920x1080@60Hz", "Encoder: x264enc|nvh264enc|vah264enc",
+#           "Port: 8080"
 ```
 
-**Solution:**
-If no VNC tunnel messages, check:
-```bash
-# 1. Verify session has agent_id set
-curl -H "Authorization: Bearer $TOKEN" \
-  http://localhost:8000/api/v1/sessions/sess-123 | jq '.agent_id'
-# Expected: "k8s-agent-1" (not null)
+If port 8080 isn't listening, the image's entrypoint failed. Most common causes:
+- GPU device files referenced but not mounted (NVENC/VA-API path); the entrypoint should fall back to `x264enc` automatically — verify the log line above.
+- The base image was built incorrectly (missing the `selkies-gstreamer` binary on `PATH`).
 
-# 2. Restart agent to reinitialize tunnels
-kubectl rollout restart deployment/streamspace-k8s-agent -n streamspace
+#### 2. The control-plane proxy can't reach the session Service
+
+```bash
+# Verify the Service exists for the session
+kubectl get svc -n streamspace -l streamspace.io/session-id=<session-id>
+# Expected: a ClusterIP Service exposing port 8080
+
+# From the API pod, hit the Service directly
+kubectl exec -n streamspace deploy/streamspace-api -- \
+  wget -qO- --timeout=5 "http://<session-id>:8080/" | head -5
+# Expected: HTML from the Selkies UI
 ```
 
-#### 2. Session Pod VNC Server Not Running
+If the Service is missing or the API pod can't reach it, the K8s Agent didn't finish the session lifecycle — check agent logs:
 
-**Check:**
 ```bash
-# Check if VNC server is listening in session pod
-kubectl exec -n streamspace <session-pod> -- netstat -ln | grep 5900
-# Expected: tcp        0      0 0.0.0.0:5900            0.0.0.0:*               LISTEN
-
-# Test VNC connection from agent
-kubectl exec -n streamspace deployment/streamspace-k8s-agent -- \
-  nc -zv <session-pod-ip> 5900
-# Expected: Connection to <pod-ip> 5900 port [tcp/*] succeeded!
+kubectl logs -n streamspace -l app.kubernetes.io/component=k8s-agent \
+  | grep -E "Sending session status update|streamingReady"
+# Expected: a status update with "streamingReady=true" once the pod is ready
 ```
 
-**Solution:**
-If VNC server not running, check session pod logs:
+#### 3. Token rejected by the proxy
+
 ```bash
-kubectl logs <session-pod> -n streamspace
-
-# Common issues:
-# - X server failed to start
-# - Display :1 already in use
-# - VNC password not set
-```
-
-#### 3. WebSocket Proxy Error
-
-**Check:**
-```bash
-# Check Control Plane logs for VNC proxy errors
-kubectl logs -n streamspace -l app.kubernetes.io/component=control-plane | grep vnc_proxy
+# Check API logs for proxy auth failures
+kubectl logs -n streamspace -l app.kubernetes.io/component=control-plane \
+  | grep -E "selkies_proxy|/api/v1/http"
 
 # Common errors:
-# "VNC proxy: failed to connect to agent"
-# "VNC proxy: session not found"
-# "VNC proxy: agent not online"
+# "401 Unauthorized: token expired"
+# "404 Not Found: session not found or not running"
+# "403 Forbidden: session belongs to a different org"
 ```
 
-**Solution:**
-```bash
-# Verify VNC proxy endpoint is reachable
-curl -i -N \
-  -H "Connection: Upgrade" \
-  -H "Upgrade: websocket" \
-  -H "Sec-WebSocket-Version: 13" \
-  -H "Sec-WebSocket-Key: test" \
-  ws://localhost:8000/vnc/sess-123
-# Expected: 101 Switching Protocols
-```
+If the token is expired the UI should redirect to `/login`; if it doesn't, clear the Zustand auth store (`localStorage.removeItem('streamspace-auth')`) and re-login.
 
 ---
 

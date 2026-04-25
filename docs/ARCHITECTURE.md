@@ -44,7 +44,7 @@ graph TD
         K8sFollower1 <-->|WebSocket| API
         K8sFollower2 <-->|WebSocket| API
         K8sLeader -->|Manage| Pods[Session Pods]
-        API -.->|VNC Proxy| K8sLeader
+        API -.->|Selkies Proxy| K8sLeader
         K8sLeader -.->|Tunnel| Pods
     end
 
@@ -54,7 +54,7 @@ graph TD
         DockerLeader <-->|WebSocket| API
         DockerFollower <-->|WebSocket| API
         DockerLeader -->|Manage| Containers[Session Containers]
-        API -.->|VNC Proxy| DockerLeader
+        API -.->|Selkies Proxy| DockerLeader
         DockerLeader -.->|Tunnel| Containers
     end
 ```
@@ -156,7 +156,7 @@ graph TD
 - **Min Replicas**: 2 (for HA)
 - **Max Replicas**: 10 (recommended)
 - **Target CPU**: 70% utilization
-- **Session Affinity**: Sticky sessions for WebSocket connections (required for VNC)
+- **Session Affinity**: Sticky sessions for WebSocket connections (required for the Selkies signaling channel and the agent WebSocket Hub)
 
 **Deployment Command:**
 ```bash
@@ -394,24 +394,23 @@ graph TB
 - **Role**: Central brain of the system.
 - **Tech**: Go (Gin framework).
 - **Responsibilities**:
-  - User Authentication & Authorization (SAML, OIDC).
-  - Session Management (CRUD).
-  - Agent Coordination (WebSocket Hub).
-  - VNC Proxying (Secure tunneling).
-  - Database Management.
+  - User authentication & authorization (SAML, OIDC, MFA).
+  - Session management (CRUD).
+  - Agent coordination (WebSocket Hub).
+  - **Selkies HTTP/WebRTC reverse proxy** at `/api/v1/http/<session-id>/` — token-authenticated, forwards to the session pod's Selkies endpoint on port 8080.
+  - Database management.
 
 ### 2. Execution Agents
 
 - **Role**: Platform-specific executors.
 - **Tech**: Go.
 - **Types**:
-  - **Kubernetes Agent**: Manages Pods, PVCs, Services with leader election (v2.0-beta.1).
-  - **Docker Agent**: Manages Containers, Volumes with HA backends (v2.0-beta.1).
+  - **Kubernetes Agent**: Manages Pods, PVCs, Services with leader election.
+  - **Docker Agent**: Manages Containers, Volumes with HA backends.
 - **Responsibilities**:
   - Connect to Control Plane via secure WebSocket.
   - Execute commands (Start, Stop, Hibernate).
-  - Report status and metrics (Heartbeats).
-  - Tunnel VNC traffic.
+  - Report status and metrics (Heartbeats, `streamingReady`/`streamingPort`).
   - Participate in leader election for High Availability.
 
 ### 3. Web UI
@@ -419,18 +418,19 @@ graph TB
 - **Role**: User interface.
 - **Tech**: React + TypeScript + Material-UI.
 - **Features**:
-  - Dashboard & Catalog.
-  - Session Viewer (noVNC integration).
-  - Admin Panel (User, Agent, Plugin management).
+  - Dashboard & catalog.
+  - Session Viewer — embeds the Selkies endpoint via `<iframe src="/api/v1/http/<id>/?token=…">`.
+  - Admin panel (user, agent, plugin management).
 
 ### 4. Session Workspaces
 
 - **Role**: The actual user environment.
-- **Tech**: Containerized applications (LinuxServer.io images).
+- **Tech**: Containerized applications built from sources in [`streamspace-templates/images/`](https://github.com/streamspace-dev/streamspace-templates/tree/main/images) and published to `ghcr.io/streamspace-dev/<image>`.
+- **Streaming**: Selkies-GStreamer (WebRTC) on port 8080.
 - **Features**:
-  - KasmVNC for streaming.
-  - Persistent home directory.
-  - Isolated environment.
+  - Hardware-accelerated encoding (NVENC, VA-API) when GPUs are available, x264 fallback otherwise.
+  - Persistent home directory via PVC.
+  - Isolated network namespace.
 
 ## 🔄 Data Flow
 
@@ -453,22 +453,25 @@ sequenceDiagram
     API-->>User: Session Ready
 ```
 
-### VNC Streaming (v2.0 Proxy)
+### Streaming (Selkies HTTP/WebRTC proxy)
 
 ```mermaid
 sequenceDiagram
     participant User
+    participant Browser as Browser iframe
     participant API as Control Plane Proxy
-    participant Agent as K8s Agent
-    participant Pod as Session Pod
+    participant Pod as Session Pod (Selkies on :8080)
 
-    User->>API: WebSocket Connect (/api/v1/vnc/:id)
-    API->>Agent: Route VNC Traffic
-    Agent->>Pod: Port Forward (5900)
-    Pod-->>Agent: VNC Data
-    Agent-->>API: VNC Data
-    API-->>User: VNC Data
+    User->>Browser: Open Session Viewer
+    Browser->>API: GET /api/v1/http/<session-id>/?token=<jwt>
+    API->>API: Validate token, look up session, resolve in-cluster Service
+    API->>Pod: HTTP/WebSocket reverse proxy (in-cluster)
+    Pod-->>API: Selkies UI assets, then WebRTC signaling/data
+    API-->>Browser: Stream
+    Browser->>Pod: WebRTC peer connection (via STUN/TURN if configured)
 ```
+
+The control plane never sees raw video frames — once the WebRTC session is established the media path is browser↔pod via the data channel. The proxy's job is the initial signaling round-trip, asset delivery, and authentication.
 
 ## 🛡️ Security Architecture
 
@@ -482,7 +485,7 @@ sequenceDiagram
 
 - **Ingress**: TLS/SSL enforced.
 - **Isolation**: Network Policies deny inter-pod traffic by default.
-- **Proxy**: All VNC traffic flows through Control Plane (no direct pod access).
+- **Proxy**: All session traffic flows through the Control Plane's authenticated reverse proxy (no direct pod access from clients).
 
 ### Data Protection
 
