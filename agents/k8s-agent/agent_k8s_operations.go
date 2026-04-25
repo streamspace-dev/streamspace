@@ -687,25 +687,3 @@ func deletePVC(client *kubernetes.Clientset, namespace, sessionID string) error 
 	return nil
 }
 
-// getTemplateImage returns the container image for a template.
-//
-// TODO: This should fetch the template from the Control Plane API
-// and return the actual image. For now, we use a hardcoded mapping.
-func getTemplateImage(templateName string) string {
-	// Default template images (from LinuxServer.io)
-	templates := map[string]string{
-		"firefox":     "lscr.io/linuxserver/firefox:latest",
-		"chrome":      "lscr.io/linuxserver/chromium:latest",
-		"vscode":      "lscr.io/linuxserver/code-server:latest",
-		"ubuntu":      "lscr.io/linuxserver/webtop:ubuntu-mate",
-		"kali":        "lscr.io/linuxserver/kali-linux:latest",
-		"libreoffice": "lscr.io/linuxserver/libreoffice:latest",
-	}
-
-	if image, ok := templates[templateName]; ok {
-		return image
-	}
-
-	// Default to Firefox if template not found
-	return "lscr.io/linuxserver/firefox:latest"
-}

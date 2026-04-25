@@ -217,44 +217,6 @@ func TestHelperFunctions(t *testing.T) {
 }
 
 // TestGetTemplateImage tests template image mapping
-func TestGetTemplateImage(t *testing.T) {
-	tests := []struct {
-		name     string
-		template string
-		want     string
-	}{
-		{
-			name:     "Firefox template",
-			template: "firefox",
-			want:     "lscr.io/linuxserver/firefox:latest",
-		},
-		{
-			name:     "Chrome template",
-			template: "chrome",
-			want:     "lscr.io/linuxserver/chromium:latest",
-		},
-		{
-			name:     "VS Code template",
-			template: "vscode",
-			want:     "lscr.io/linuxserver/code-server:latest",
-		},
-		{
-			name:     "Unknown template",
-			template: "unknown",
-			want:     "lscr.io/linuxserver/firefox:latest", // default
-		},
-	}
-
-	for _, tt := range tests {
-		t.Run(tt.name, func(t *testing.T) {
-			got := getTemplateImage(tt.template)
-			if got != tt.want {
-				t.Errorf("getTemplateImage() = %v, want %v", got, tt.want)
-			}
-		})
-	}
-}
-
 // TestSessionSpec tests session specification parsing
 func TestSessionSpec(t *testing.T) {
 	payload := map[string]interface{}{

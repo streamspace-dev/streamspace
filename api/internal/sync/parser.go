@@ -122,16 +122,17 @@ type ParsedTemplate struct {
 //	apiVersion: stream.space/v1alpha1
 //	kind: Template
 //	metadata:
-//	  name: firefox-browser
+//	  name: chrome-selkies
 //	spec:
-//	  displayName: Firefox Web Browser
-//	  description: Modern, privacy-focused web browser
+//	  displayName: Google Chrome
+//	  description: Chrome browser streamed via Selkies-GStreamer
 //	  category: Web Browsers
-//	  baseImage: lscr.io/linuxserver/firefox:latest
-//	  vnc:
-//	    enabled: true
-//	    port: 3000
-//	  tags: [browser, web, privacy]
+//	  baseImage: ghcr.io/streamspace-dev/chrome-selkies:latest
+//	  streamingProtocol: selkies
+//	  ports:
+//	    - name: selkies
+//	      containerPort: 8080
+//	  tags: [browser, web, selkies]
 type TemplateManifest struct {
 	APIVersion string `yaml:"apiVersion" json:"apiVersion"`
 	Kind       string `yaml:"kind" json:"kind"`

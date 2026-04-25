@@ -70,28 +70,14 @@ export const MOCK_SESSIONS = {
  */
 export const MOCK_TEMPLATES = [
   {
-    name: 'chromium',
-    displayName: 'Chromium Browser',
-    description: 'Chromium web browser',
+    name: 'chrome-selkies',
+    displayName: 'Google Chrome',
+    description: 'Chrome browser streamed via Selkies-GStreamer (WebRTC)',
     category: 'browsers',
-    baseImage: 'lscr.io/linuxserver/chromium:latest',
+    baseImage: 'ghcr.io/streamspace-dev/chrome-selkies:latest',
+    streamingProtocol: 'selkies',
+    streamingPort: 8080,
     defaultResources: { memory: '2Gi', cpu: '500m' },
-  },
-  {
-    name: 'firefox',
-    displayName: 'Firefox Browser',
-    description: 'Firefox web browser',
-    category: 'browsers',
-    baseImage: 'lscr.io/linuxserver/firefox:latest',
-    defaultResources: { memory: '2Gi', cpu: '500m' },
-  },
-  {
-    name: 'vscode',
-    displayName: 'VS Code',
-    description: 'Visual Studio Code editor',
-    category: 'development',
-    baseImage: 'lscr.io/linuxserver/code-server:latest',
-    defaultResources: { memory: '4Gi', cpu: '1000m' },
   },
 ];
 
