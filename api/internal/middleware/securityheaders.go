@@ -341,14 +341,11 @@ func SecurityHeaders() gin.HandlerFunc {
 		c.Header("X-Content-Type-Options", "nosniff")
 
 		// X-Frame-Options
-		// Prevents clickjacking attacks
-		// Allow SAMEORIGIN for VNC proxy paths (they need to be embedded in iframes)
+		// Prevents clickjacking attacks. Allow SAMEORIGIN for the streaming-proxy
+		// path because the Selkies UI is embedded in an iframe in SessionViewer.
 		path := c.Request.URL.Path
-		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
-			strings.HasPrefix(path, "/api/v1/vnc/") ||
-			strings.HasPrefix(path, "/api/v1/vnc-viewer/") ||
-			strings.HasPrefix(path, "/api/v1/websockify/")
-		if isVNCProxy {
+		isStreamProxy := strings.HasPrefix(path, "/api/v1/http/")
+		if isStreamProxy {
 			c.Header("X-Frame-Options", "SAMEORIGIN")
 		} else {
 			c.Header("X-Frame-Options", "DENY")
@@ -360,14 +357,11 @@ func SecurityHeaders() gin.HandlerFunc {
 
 		// Content-Security-Policy
 		// IMPROVED: Uses nonce-based CSP to eliminate unsafe-inline and unsafe-eval
-		// This significantly improves XSS protection while maintaining functionality
-		// VNC/HTTP proxy paths need relaxed CSP because we're proxying third-party content
-		// (Selkies, Guacamole, etc.) which have their own inline scripts and styles
+		// for first-party content. The streaming-proxy path needs a relaxed CSP
+		// because we proxy content from trusted internal session pods (Selkies)
+		// whose inline scripts/styles we can't tag with nonces.
 		var csp string
-		if isVNCProxy {
-			// Relaxed CSP for VNC/HTTP proxy paths
-			// These paths proxy content from trusted internal session pods (Selkies, etc.)
-			// The proxied content has its own scripts/styles that we can't add nonces to
+		if isStreamProxy {
 			csp = "default-src 'self' 'unsafe-inline' 'unsafe-eval' data: blob:; " +
 				"script-src 'self' 'unsafe-inline' 'unsafe-eval' blob:; " +
 				"style-src 'self' 'unsafe-inline'; " +

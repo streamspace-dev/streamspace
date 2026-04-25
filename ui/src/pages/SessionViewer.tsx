@@ -433,15 +433,12 @@ export default function SessionViewer() {
       </AppBar>
 
       <Box sx={{ flex: 1, position: 'relative', bgcolor: '#000' }}>
-        {/* Multi-protocol streaming support */}
-        {/* VNC: Load noVNC viewer through control plane proxy */}
-        {/* Selkies/HTTP-based: Load through control plane HTTP proxy */}
-        {/* Token is passed as query param for iframe auth (iframes can't send Authorization headers) */}
+        {/* Selkies-only streaming: load the session UI through the control-plane
+            HTTP proxy. Token is passed as a query param because iframes can't
+            send Authorization headers. */}
         <iframe
           ref={iframeRef}
           src={(() => {
-            // Get token from Zustand persisted store ('streamspace-auth' key in localStorage)
-            // The store structure is: {state: {token: "...", ...}}
             let token: string | null = null;
             try {
               const authState = localStorage.getItem('streamspace-auth');
@@ -453,14 +450,7 @@ export default function SessionViewer() {
               console.error('Failed to parse auth state for iframe token:', e);
             }
             const tokenParam = token ? `?token=${encodeURIComponent(token)}` : '';
-            if (
-              session.streamingProtocol === 'selkies' ||
-              session.streamingProtocol === 'guacamole' ||
-              session.streamingProtocol === 'kasm'
-            ) {
-              return `/api/v1/http/${sessionId}/${tokenParam}`;
-            }
-            return `/api/v1/vnc-viewer/${sessionId}${tokenParam}`;
+            return `/api/v1/http/${sessionId}/${tokenParam}`;
           })()}
           style={{
             width: '100%',

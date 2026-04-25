@@ -48,10 +48,10 @@ type ResourceSpec struct {
 }
 
 type TemplateConfig struct {
-	Image       string
-	VNCPort     int
-	DisplayName string
-	Env         map[string]string
+	Image         string
+	StreamingPort int
+	DisplayName   string
+	Env           map[string]string
 }
 
 type SessionCreateEvent struct {

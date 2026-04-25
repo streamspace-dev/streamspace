@@ -163,24 +163,20 @@ func Middleware(jwtManager *JWTManager, userDB *db.UserDB) gin.HandlerFunc {
 
 		var tokenString string
 
-		// Check if this is a VNC/HTTP proxy path (iframes can't send Authorization headers)
+		// Check if this is a streaming-proxy path (iframes can't send Authorization headers)
 		path := c.Request.URL.Path
-		isVNCProxy := strings.HasPrefix(path, "/api/v1/http/") ||
-			strings.HasPrefix(path, "/api/v1/vnc/") ||
-			strings.HasPrefix(path, "/api/v1/vnc-viewer/") ||
-			strings.HasPrefix(path, "/api/v1/websockify/")
+		isStreamProxy := strings.HasPrefix(path, "/api/v1/http/")
 
-		// For WebSocket connections or VNC proxy paths, try query parameter first
+		// For WebSocket connections or streaming-proxy paths, try query parameter first
 		// (browsers can't send custom headers in iframes or WebSocket upgrades)
-		if isWebSocket || isVNCProxy {
+		if isWebSocket || isStreamProxy {
 			tokenString = c.Query("token")
 
 			// If token provided in query, set a session cookie for subsequent requests
-			// This allows asset/sub-resource requests (which don't include ?token) to authenticate
+			// (asset/sub-resource requests don't include ?token but need to authenticate).
+			// SameSite=Lax allows same-origin requests including iframes. Not HttpOnly so
+			// the cookie works in iframe context.
 			if tokenString != "" {
-				// Set cookie for all /api/v1 paths (covers http, vnc, websockify)
-				// Using SameSite=Lax (default) which allows same-origin requests including iframes
-				// Note: Not using HttpOnly so the cookie works properly in iframe context
 				c.SetCookie("streamspace_proxy_token", tokenString, 900, "/api/v1", "", false, false)
 			}
 

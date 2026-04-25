@@ -487,10 +487,10 @@ func TestHandleStatus(t *testing.T) {
 
 	// Create status message
 	status := models.StatusMessage{
-		SessionID: sessionID,
-		State:     "running",
-		VNCReady:  true,
-		VNCPort:   5900,
+		SessionID:      sessionID,
+		State:          "running",
+		StreamingReady: true,
+		StreamingPort:  8080,
 	}
 	statusBytes, _ := json.Marshal(status)
 

@@ -139,14 +139,6 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 		// Don't fail the command - Session CRD is informational
 	}
 
-	// Initialize VNC tunnel for this session
-	if h.agent != nil {
-		if err := h.agent.initVNCTunnelForSession(sessionID); err != nil {
-			log.Printf("[StartSessionHandler] Warning: Failed to init VNC tunnel: %v", err)
-			// Don't fail the command - VNC can be established later
-		}
-	}
-
 	// v2.0 ARCHITECTURE: Update database via API (source of truth)
 	// Send session update message to Control Plane to update database
 	if h.agent != nil {
@@ -160,14 +152,14 @@ func (h *StartSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error
 	return &CommandResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"sessionId":  sessionID,
-			"deployment": deployment.Name,
-			"service":    service.Name,
-			"pvc":        pvcName,
-			"podName":    podName,
-			"podIP":      podIP,
-			"vncPort":    3000, // Default VNC port
-			"state":      "running",
+			"sessionId":     sessionID,
+			"deployment":    deployment.Name,
+			"service":       service.Name,
+			"pvc":           pvcName,
+			"podName":       podName,
+			"podIP":         podIP,
+			"streamingPort": 8080, // Selkies-GStreamer default
+			"state":         "running",
 		},
 	}, nil
 }
@@ -208,13 +200,6 @@ func (h *StopSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 	shouldDeletePVC := getBoolOrDefault(cmd.Payload, "deletePVC", false)
 
 	log.Printf("[StopSessionHandler] Deleting resources for session %s (deletePVC: %v)", sessionID, shouldDeletePVC)
-
-	// Close VNC tunnel for this session
-	if h.agent != nil && h.agent.vncManager != nil {
-		if err := h.agent.vncManager.CloseTunnel(sessionID); err != nil {
-			log.Printf("[StopSessionHandler] Warning: Failed to close VNC tunnel: %v", err)
-		}
-	}
 
 	// Delete Deployment
 	if err := deleteDeployment(h.kubeClient, h.config.Namespace, sessionID); err != nil {
@@ -340,11 +325,11 @@ func (h *WakeSessionHandler) Handle(cmd *CommandMessage) (*CommandResult, error)
 	return &CommandResult{
 		Success: true,
 		Data: map[string]interface{}{
-			"sessionId": sessionID,
-			"podName":   podName,
-			"podIP":     podIP,
-			"vncPort":   3000,
-			"state":     "running",
+			"sessionId":     sessionID,
+			"podName":       podName,
+			"podIP":         podIP,
+			"streamingPort": 8080,
+			"state":         "running",
 		},
 	}, nil
 }

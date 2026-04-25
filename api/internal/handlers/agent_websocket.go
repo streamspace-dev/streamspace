@@ -285,15 +285,6 @@ func (h *AgentWebSocketHandler) readPump(conn *wsocket.AgentConnection) {
 		case models.MessageTypeStatus:
 			h.handleStatus(conn, agentMsg)
 
-		case models.MessageTypeVNCReady, models.MessageTypeVNCData, models.MessageTypeVNCError:
-			// Forward VNC messages to Receive channel for VNC proxy
-			select {
-			case conn.Receive <- messageBytes:
-				// Message forwarded to VNC proxy
-			default:
-				log.Printf("[AgentWebSocket] VNC receive buffer full for agent %s", conn.AgentID)
-			}
-
 		default:
 			log.Printf("[AgentWebSocket] Unknown message type from agent %s: %s", conn.AgentID, agentMsg.Type)
 		}
@@ -476,8 +467,8 @@ func (h *AgentWebSocketHandler) handleStatus(conn *wsocket.AgentConnection, msg 
 	}
 
 	// Log the status update
-	log.Printf("[AgentWebSocket] Agent %s status update for session %s: state=%s, vncReady=%v, vncPort=%d",
-		conn.AgentID, status.SessionID, status.State, status.VNCReady, status.VNCPort)
+	log.Printf("[AgentWebSocket] Agent %s status update for session %s: state=%s, streamingReady=%v, streamingPort=%d",
+		conn.AgentID, status.SessionID, status.State, status.StreamingReady, status.StreamingPort)
 
 	// Update session in database
 	now := time.Now()
@@ -490,12 +481,11 @@ func (h *AgentWebSocketHandler) handleStatus(conn *wsocket.AgentConnection, msg 
 		}
 	}
 
-	// Construct VNC URL if VNC is ready
-	vncURL := ""
-	if status.VNCReady && status.VNCPort > 0 {
-		// VNC URL will be proxied through the API server
-		// Format: /api/v1/sessions/{sessionID}/vnc
-		vncURL = "/api/v1/sessions/" + status.SessionID + "/vnc"
+	// Construct streaming URL when the streaming endpoint is ready.
+	// The URL is proxied through the API server's Selkies HTTP proxy.
+	streamingURL := ""
+	if status.StreamingReady && status.StreamingPort > 0 {
+		streamingURL = "/api/v1/http/" + status.SessionID + "/"
 	}
 
 	query := `
@@ -504,12 +494,12 @@ func (h *AgentWebSocketHandler) handleStatus(conn *wsocket.AgentConnection, msg 
 		WHERE id = $5
 	`
 
-	_, err := h.database.DB().Exec(query, status.State, podName, vncURL, now, status.SessionID)
+	_, err := h.database.DB().Exec(query, status.State, podName, streamingURL, now, status.SessionID)
 	if err != nil {
 		log.Printf("[AgentWebSocket] Failed to update session %s status: %v", status.SessionID, err)
 		return
 	}
 
 	log.Printf("[AgentWebSocket] Updated session %s: state=%s, pod=%s, url=%s",
-		status.SessionID, status.State, podName, vncURL)
+		status.SessionID, status.State, podName, streamingURL)
 }

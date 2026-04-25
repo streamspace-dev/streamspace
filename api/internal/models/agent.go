@@ -378,8 +378,8 @@ type AgentHeartbeatRequest struct {
 //	{
 //	  "sessionId": "sess-456",
 //	  "state": "running",
-//	  "vncReady": true,
-//	  "vncPort": 5900,
+//	  "streamingReady": true,
+//	  "streamingPort": 8080,
 //	  "platformMetadata": {
 //	    "podName": "sess-456-abc123",
 //	    "nodeName": "worker-1"
@@ -388,8 +388,8 @@ type AgentHeartbeatRequest struct {
 type AgentStatusUpdate struct {
 	SessionID        string                 `json:"sessionId" binding:"required"`
 	State            string                 `json:"state" binding:"required"`
-	VNCReady         bool                   `json:"vncReady"`
-	VNCPort          int                    `json:"vncPort,omitempty"`
+	StreamingReady   bool                   `json:"streamingReady"`
+	StreamingPort    int                    `json:"streamingPort,omitempty"`
 	PlatformMetadata map[string]interface{} `json:"platformMetadata,omitempty"`
 }
 
