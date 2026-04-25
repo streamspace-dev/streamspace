@@ -20,6 +20,9 @@
     "noUnusedParameters": true,
     "noFallthroughCasesInSwitch": true,
 
+    /* Test runtime types */
+    "types": ["node", "vitest/globals", "@testing-library/jest-dom"],
+
     /* Path mapping */
     "baseUrl": ".",
     "paths": {
