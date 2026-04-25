@@ -43,8 +43,8 @@ jobs:
         run: |
           go fmt ./...
           go vet ./...
-          # Install golangci-lint
-          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b $(go env GOPATH)/bin v1.55.2
+          # Install golangci-lint (pinned to a version that supports the modules' Go directive)
+          curl -sSfL https://raw.githubusercontent.com/golangci/golangci-lint/master/install.sh | sh -s -- -b "$(go env GOPATH)/bin" "${GOLANGCI_LINT_VERSION}"
           golangci-lint run
 
       - name: Download API dependencies
