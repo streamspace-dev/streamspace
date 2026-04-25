@@ -235,7 +235,7 @@ func (a *K8sAgent) shutdown() {
 
 	if a.wsConn != nil {
 		// Close connection (writePump already stopped, safe to close directly)
-		a.wsConn.Close()
+		_ = a.wsConn.Close()
 		a.wsConn = nil
 	}
 
@@ -533,7 +533,7 @@ func (a *K8sAgent) registerAgent() error {
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
 	// Check response status
 	// ISSUE #234: Accept 202 Accepted for pending approval workflow
@@ -580,11 +580,11 @@ func (a *K8sAgent) registerAgent() error {
 				// Check if still pending
 				var retryRegResp AgentRegistrationResponse
 				if err := json.NewDecoder(retryResp.Body).Decode(&retryRegResp); err != nil {
-					retryResp.Body.Close()
+					_ = retryResp.Body.Close()
 					log.Printf("[K8sAgent] Failed to decode retry response: %v. Continuing to wait...", err)
 					continue
 				}
-				retryResp.Body.Close()
+				_ = retryResp.Body.Close()
 
 				// Check approval status
 				if retryRegResp.ApprovalStatus == "pending" {

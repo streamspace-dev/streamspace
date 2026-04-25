@@ -216,7 +216,20 @@ func TestProcessCommandAgentConnected(t *testing.T) {
 		t.Fatalf("Failed to register agent: %v", err)
 	}
 
-	time.Sleep(100 * time.Millisecond)
+	// Wait for the registration UPDATE to drain through the Run() goroutine
+	// before declaring the next expectation. See agent_hub_test.go for the
+	// underlying go-sqlmock <=1.5.2 race rationale.
+	deadline := time.After(2 * time.Second)
+	for {
+		if mock.ExpectationsWereMet() == nil {
+			break
+		}
+		select {
+		case <-deadline:
+			t.Fatal("timeout waiting for registration UPDATE to be consumed")
+		case <-time.After(5 * time.Millisecond):
+		}
+	}
 
 	// Start dispatcher
 	go dispatcher.Start()

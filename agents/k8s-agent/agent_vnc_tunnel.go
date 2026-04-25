@@ -176,7 +176,7 @@ func (m *VNCTunnelManager) CloseTunnel(sessionID string) error {
 
 	// Close connection
 	if tunnel.conn != nil {
-		tunnel.conn.Close()
+		_ = tunnel.conn.Close()
 	}
 
 	log.Printf("[VNCTunnel] Tunnel closed for session %s", sessionID)

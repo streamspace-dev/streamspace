@@ -25,7 +25,7 @@ var (
 	ErrCommandFailed     = stderrors.New("command execution failed")
 	ErrSessionNotFound   = stderrors.New("session not found")
 	ErrTemplateNotFound  = stderrors.New("template not found")
-	ErrResourceNotFound  = stderrors.New("Kubernetes resource not found")
+	ErrResourceNotFound  = stderrors.New("kubernetes resource not found")
 )
 
 // Kubernetes errors
