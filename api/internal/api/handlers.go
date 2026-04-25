@@ -253,122 +253,47 @@ func NewHandler(database *db.Database, publisher *events.Publisher, dispatcher C
 	}
 }
 
-// detectStreamingProtocol analyzes a template manifest and determines the streaming protocol.
-//
-// This function examines the template's baseImage and port configuration to determine
-// which streaming protocol the session will use:
-//   - VNC: Traditional VNC servers (port 5900)
-//   - Selkies: LinuxServer images with WebRTC streaming (port 3000, path /websockify)
-//   - Guacamole: Apache Guacamole (port 8080)
-//   - X2Go: X2Go desktop sharing (port 22)
-//
-// The detection logic:
-//   1. Parse manifest JSON to extract baseImage field
-//   2. Check image name for known patterns (lscr.io/linuxserver, kasmweb, etc.)
-//   3. Check port configuration for known streaming ports
-//   4. Return protocol, port, and path (for HTTP-based protocols)
+// detectStreamingProtocol resolves the streaming endpoint for a template
+// manifest. StreamSpace is Selkies-only, so this only honors the manifest's
+// explicit `spec.streamingProtocol` / `spec.ports[]` and otherwise returns the
+// Selkies defaults (selkies on port 8080).
 //
 // Returns:
-//   - protocol: "vnc", "selkies", "guacamole", "x2go", etc.
-//   - port: The streaming service port (5900 for VNC, 3000 for Selkies, etc.)
-//   - path: URL path for HTTP-based protocols (e.g., "/websockify" for Selkies)
+//   - protocol: always "selkies" today, kept as a return so the column stays
+//     forward-compatible if a second protocol is ever added.
+//   - port: the streaming service port on the session pod (default 8080).
+//   - path: URL path for sub-resource routing (default empty).
 func detectStreamingProtocol(manifestJSON []byte) (protocol string, port int, path string) {
-	// Default to VNC
-	protocol = "vnc"
-	port = 5900
+	protocol = "selkies"
+	port = 8080
 	path = ""
 
-	// Parse the template manifest
 	var manifest map[string]interface{}
 	if err := json.Unmarshal(manifestJSON, &manifest); err != nil {
 		log.Printf("Failed to parse template manifest for protocol detection: %v", err)
-		return // Return defaults
+		return
 	}
 
-	// Extract spec.baseImage
 	spec, ok := manifest["spec"].(map[string]interface{})
 	if !ok {
-		return // Return defaults
-	}
-
-	baseImage, ok := spec["baseImage"].(string)
-	if !ok {
-		return // Return defaults
-	}
-
-	baseImage = strings.ToLower(baseImage)
-
-	// Detection logic based on image name patterns
-	if strings.Contains(baseImage, "lscr.io/linuxserver/") ||
-	   strings.Contains(baseImage, "linuxserver/") {
-		// LinuxServer images use Selkies (WebRTC streaming via websockify)
-		protocol = "selkies"
-		port = 3000
-		path = "/websockify"
-		log.Printf("Detected Selkies protocol from LinuxServer image: %s", baseImage)
 		return
 	}
 
-	if strings.Contains(baseImage, "kasmweb/") {
-		// Kasm images use Selkies-like protocol
-		protocol = "selkies"
-		port = 6901
-		path = "/websockify"
-		log.Printf("Detected Selkies protocol from Kasm image: %s", baseImage)
-		return
+	// Honor explicit overrides if the template author set them.
+	if p, ok := spec["streamingProtocol"].(string); ok && p != "" {
+		protocol = p
 	}
-
-	if strings.Contains(baseImage, "guacamole/") {
-		// Apache Guacamole
-		protocol = "guacamole"
-		port = 8080
-		path = "/guacamole"
-		log.Printf("Detected Guacamole protocol: %s", baseImage)
-		return
-	}
-
-	if strings.Contains(baseImage, "x2go") {
-		// X2Go desktop sharing
-		protocol = "x2go"
-		port = 22
-		path = ""
-		log.Printf("Detected X2Go protocol: %s", baseImage)
-		return
-	}
-
-	// Check port configuration for protocol hints
 	if ports, ok := spec["ports"].([]interface{}); ok && len(ports) > 0 {
 		if firstPort, ok := ports[0].(map[string]interface{}); ok {
-			if containerPort, ok := firstPort["containerPort"].(float64); ok {
-				switch int(containerPort) {
-				case 3000, 6901:
-					// HTTP-based streaming (likely Selkies/Kasm)
-					protocol = "selkies"
-					port = int(containerPort)
-					path = "/websockify"
-					log.Printf("Detected Selkies protocol from port %d", port)
-					return
-				case 8080:
-					// Likely Guacamole
-					protocol = "guacamole"
-					port = 8080
-					path = "/guacamole"
-					log.Printf("Detected Guacamole protocol from port 8080")
-					return
-				case 5900:
-					// Traditional VNC
-					protocol = "vnc"
-					port = 5900
-					path = ""
-					log.Printf("Detected VNC protocol from port 5900")
-					return
-				}
+			if containerPort, ok := firstPort["containerPort"].(float64); ok && containerPort > 0 {
+				port = int(containerPort)
 			}
 		}
 	}
+	if p, ok := spec["streamingPath"].(string); ok {
+		path = p
+	}
 
-	// Default to VNC if no specific protocol detected
-	log.Printf("No specific protocol detected for image %s, defaulting to VNC", baseImage)
 	return
 }
 
@@ -675,12 +600,14 @@ func (h *Handler) CreateSession(c *gin.Context) {
 				"description": template.Description,
 				"category":    template.Category,
 				"appType":     template.AppType,
-				// Use a sensible default image for testing if we don't have one
-				"baseImage": "lscr.io/linuxserver/firefox:latest",
+				// Default to the bootstrap chrome-selkies image when the
+				// catalog hasn't supplied a baseImage of its own.
+				"baseImage":         "ghcr.io/streamspace-dev/chrome-selkies:latest",
+				"streamingProtocol": "selkies",
 				"ports": []map[string]interface{}{
 					{
-						"name":          "vnc",
-						"containerPort": 3000,
+						"name":          "selkies",
+						"containerPort": 8080,
 						"protocol":      "TCP",
 					},
 				},
