@@ -135,11 +135,14 @@ For the deeper technical reference, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTU
 
 ## Available applications
 
-Templates live in [`streamspace-templates`](https://github.com/streamspace-dev/streamspace-templates). The image-build pipeline in that repo publishes signed multi-arch images to `ghcr.io/streamspace-dev/<image>`. The current bootstrap image is:
+Templates live in [`streamspace-templates`](https://github.com/streamspace-dev/streamspace-templates). The image-build pipeline in that repo is set up to publish signed multi-arch images to `ghcr.io/streamspace-dev/<image>` with cosign signatures and SPDX SBOM attestations.
 
-- `ghcr.io/streamspace-dev/chrome-selkies` — Google Chrome streamed via Selkies-GStreamer
+> [!WARNING]
+> **No image is published yet.** The pipeline's first image source — `chrome-selkies` — references a base image (`ghcr.io/selkies-project/selkies-gstreamer:24.04`) that does not exist in the upstream registry. Both the post-merge CI run and a local build attempt failed at the docker pull step. Tracked in [streamspace-templates#3](https://github.com/streamspace-dev/streamspace-templates/issues/3). The `chrome-selkies` Dockerfile needs to be rewritten `FROM ubuntu:24.04` and install Selkies from the [release tarballs](https://github.com/selkies-project/selkies/releases) before any image becomes available.
+>
+> The Helm chart's seeded `default-apps-configmap.yaml` and the example session above point at `ghcr.io/streamspace-dev/chrome-selkies:latest` ahead of when it actually exists; deploys will pull-fail until the build is fixed.
 
-A Selkies-native catalog (Firefox, VS Code, full desktops, etc.) is being added on top of the build pipeline.
+A Selkies-native catalog (Firefox, VS Code, full desktops, etc.) is being added on top of the same pipeline.
 
 ## Development
 
