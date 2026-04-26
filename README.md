@@ -135,12 +135,14 @@ For the deeper technical reference, see [`docs/ARCHITECTURE.md`](docs/ARCHITECTU
 
 ## Available applications
 
-Templates live in [`streamspace-templates`](https://github.com/streamspace-dev/streamspace-templates). The image-build pipeline in that repo is set up to publish signed multi-arch images to `ghcr.io/streamspace-dev/<image>` with cosign signatures and SPDX SBOM attestations.
+Templates live in [`streamspace-templates`](https://github.com/streamspace-dev/streamspace-templates). The image-build pipeline in that repo publishes signed images to `ghcr.io/streamspace-dev/<image>` with cosign keyless signatures and SPDX SBOM attestations.
 
-> [!WARNING]
-> **No image is published yet.** The pipeline's first image source — `chrome-selkies` — references a base image (`ghcr.io/selkies-project/selkies-gstreamer:24.04`) that does not exist in the upstream registry. Both the post-merge CI run and a local build attempt failed at the docker pull step. Tracked in [streamspace-templates#3](https://github.com/streamspace-dev/streamspace-templates/issues/3). The `chrome-selkies` Dockerfile needs to be rewritten `FROM ubuntu:24.04` and install Selkies from the [release tarballs](https://github.com/selkies-project/selkies/releases) before any image becomes available.
->
-> The Helm chart's seeded `default-apps-configmap.yaml` and the example session above point at `ghcr.io/streamspace-dev/chrome-selkies:latest` ahead of when it actually exists; deploys will pull-fail until the build is fixed.
+Currently published:
+
+- `ghcr.io/streamspace-dev/chrome-selkies:latest` — Google Chrome streamed via Selkies-GStreamer (linux/amd64; arm64 pending upstream Selkies binaries)
+
+> [!NOTE]
+> The package on GHCR may be private by default. Org admin can flip it to public via [the package settings page](https://github.com/orgs/streamspace-dev/packages/container/package/chrome-selkies). Once public, anonymous pulls and the cosign verification command in [`streamspace-templates/images/README.md`](https://github.com/streamspace-dev/streamspace-templates/blob/main/images/README.md) work without auth.
 
 A Selkies-native catalog (Firefox, VS Code, full desktops, etc.) is being added on top of the same pipeline.
 
