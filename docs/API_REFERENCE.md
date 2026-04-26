@@ -1501,6 +1501,6 @@ done
 **StreamSpace Version**: v2.0.0-beta.1
 
 For more information, see:
-- [Deployment Guide](V2_DEPLOYMENT_GUIDE.md)
-- [Migration Guide](MIGRATION_V1_TO_V2.md)
+- [Deployment Guide](DEPLOYMENT.md)
+- [Migration Guide](historical/MIGRATION_V1_TO_V2.md) (frozen — v1 is gone)
 - [Architecture Documentation](ARCHITECTURE.md)
