@@ -61,9 +61,11 @@ USER streamspace
 # Expose API port
 EXPOSE 8000
 
-# Health check
+# Health check. NOTE: BusyBox wget's --spider sends HEAD, which gin's
+# router answers with 404 because the /health route is registered for
+# GET only. Use -O /dev/null to force GET and discard the body.
 HEALTHCHECK --interval=30s --timeout=3s --start-period=5s --retries=3 \
-    CMD wget --no-verbose --tries=1 --spider http://localhost:8000/health || exit 1
+    CMD wget -q -O /dev/null http://localhost:8000/health || exit 1
 
 # Environment variables with defaults
 ENV API_PORT=8000 \

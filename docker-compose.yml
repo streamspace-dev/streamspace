@@ -1,5 +1,3 @@
-version: '3.9'
-
 services:
   # PostgreSQL database
   postgres:
@@ -10,7 +8,9 @@ services:
       POSTGRES_USER: streamspace
       POSTGRES_PASSWORD: streamspace
     ports:
-      - "5432:5432"
+      # Host 5433 → container 5432 to avoid clashing with a host Postgres on 5432.
+      # Internally, services on the streamspace network still reach it on 5432.
+      - "5433:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -71,14 +71,29 @@ services:
       API_PORT: 8000
       GIN_MODE: debug
 
-      # JWT configuration
-      JWT_SECRET: dev-secret-change-in-production
+      # JWT configuration. Must be >=32 chars per api/internal/auth check.
+      JWT_SECRET: dev-jwt-secret-change-in-production-please-use-a-real-one
+
+      # Dev admin credentials — bypasses the first-run setup wizard so the
+      # login form (admin/admin123) works immediately. Override or remove
+      # for any non-local deployment.
+      ADMIN_PASSWORD: admin123
+
+      # Agent bootstrap key — must match the AGENT_API_KEY passed to the
+      # docker-agent service below. The agent self-registers on first
+      # connect when its API key matches this bootstrap key. Format must
+      # be 64 hex characters (validated by api/internal/auth.ValidateAPIKeyFormat).
+      AGENT_BOOTSTRAP_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
 
       # NATS configuration
       NATS_URL: nats://nats:4222
       NATS_USER: ""
       NATS_PASSWORD: ""
-      PLATFORM: kubernetes
+      # Docker-platform mode for the local compose stack — k8sClient stays
+      # nil (the API tolerates this; see api/cmd/main.go around the k8s
+      # NewClient call). For kubernetes, mount a kubeconfig and set this
+      # to "kubernetes".
+      PLATFORM: docker
 
       # Sync configuration
       SYNC_INTERVAL: 1h
@@ -92,7 +107,9 @@ services:
       # - ~/.kube:/root/.kube:ro
       - /tmp/streamspace-repos:/tmp/streamspace-repos
     healthcheck:
-      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost:8000/health"]
+      # `wget --spider` sends HEAD; gin's /health route only answers GET.
+      # Use -O /dev/null to force a GET that succeeds with the registered route.
+      test: ["CMD", "wget", "-q", "-O", "/dev/null", "http://localhost:8000/health"]
       interval: 30s
       timeout: 3s
       retries: 3
@@ -100,27 +117,67 @@ services:
       - streamspace
     restart: unless-stopped
 
-  # StreamSpace Docker Controller (for Docker platform support)
-  docker-controller:
+  # StreamSpace Docker Agent (v2 architecture).
+  #
+  # NOTE: The Docker agent fell behind during k8s-agent development — its
+  # session lifecycle handlers may be incomplete relative to k8s-agent.
+  # This service is wired here so the v2 control-plane → agent topology
+  # can boot end-to-end, but launching real Docker-backed sessions through
+  # the agent is not guaranteed to fully work yet. Use the k8s deployment
+  # path (manifests/) for verified end-to-end streaming until the docker
+  # agent catches up.
+  #
+  # Self-registers on first connect using AGENT_BOOTSTRAP_KEY (set on the
+  # API service above) — no manual provisioning needed for dev.
+  docker-agent:
     build:
-      context: ./docker-controller
+      context: ./agents/docker-agent
       dockerfile: Dockerfile
-    container_name: streamspace-docker-controller
+    container_name: streamspace-docker-agent
     depends_on:
-      nats:
+      api:
         condition: service_healthy
     environment:
-      NATS_URL: nats://nats:4222
-      NATS_USER: ""
-      NATS_PASSWORD: ""
-      CONTROLLER_ID: streamspace-docker-controller-1
+      AGENT_ID: docker-agent-local
+      CONTROL_PLANE_URL: ws://api:8000/api/v1/agents/connect
+      AGENT_API_KEY: deadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeefdeadbeef
+      REGION: local
       DOCKER_NETWORK: streamspace
+      LEADER_ELECTION_BACKEND: file
+    # Agent needs to manage Docker containers on the host. The :ro flag
+    # from the previous docker-controller config wouldn't allow create/start.
     volumes:
-      - /var/run/docker.sock:/var/run/docker.sock:ro
+      - /var/run/docker.sock:/var/run/docker.sock
     networks:
       - streamspace
     profiles:
       - docker
+    restart: unless-stopped
+
+  # StreamSpace Web UI. Nginx serves the built React bundle and proxies
+  # /api/ + /ws/ to the api service (config in ui/nginx.conf). Visit
+  # http://localhost:3000 in the browser.
+  ui:
+    build:
+      context: ./ui
+      dockerfile: Dockerfile
+      args:
+        VERSION: ${VERSION:-dev}
+        COMMIT: ${COMMIT:-local}
+        BUILD_DATE: ${BUILD_DATE}
+    container_name: streamspace-ui
+    depends_on:
+      api:
+        condition: service_healthy
+    ports:
+      - "3000:80"
+    networks:
+      - streamspace
+    healthcheck:
+      test: ["CMD", "wget", "--no-verbose", "--tries=1", "--spider", "http://localhost/health"]
+      interval: 30s
+      timeout: 5s
+      retries: 3
     restart: unless-stopped
 
   # pgAdmin for database management (optional, for development)
