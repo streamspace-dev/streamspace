@@ -10,6 +10,16 @@ interface ToastOptions {
 class ToastManager {
   private container: HTMLElement | null = null;
   private toasts: Map<string, { element: HTMLElement; timeout: ReturnType<typeof setTimeout> }> = new Map();
+  // Dedupe identical toast messages fired within this window. Without this,
+  // a single page navigation that triggers N parallel API requests all
+  // returning 5xx (e.g. Sessions page hitting /sessions/:id/connect plus
+  // /users/me/quota during a brief backend hiccup) stacks the same red
+  // "Server error. Please try again later." 3-4× simultaneously, which
+  // looks like the app is dying. 2 seconds is long enough to absorb a
+  // request burst but short enough that a real second occurrence still
+  // shows up.
+  private recentMessages: Map<string, number> = new Map();
+  private static readonly DEDUPE_WINDOW_MS = 2000;
 
   private ensureContainer() {
     if (!this.container) {
@@ -57,6 +67,23 @@ class ToastManager {
   }
 
   show(message: string, type: ToastType = 'info', options: ToastOptions = {}) {
+    // Dedupe: skip if this exact message was shown within the recent window.
+    // Keyed by `${type}:${message}` so an info and an error with the same
+    // text are still both shown.
+    const dedupeKey = `${type}:${message}`;
+    const now = Date.now();
+    const last = this.recentMessages.get(dedupeKey);
+    if (last && now - last < ToastManager.DEDUPE_WINDOW_MS) {
+      return null;
+    }
+    this.recentMessages.set(dedupeKey, now);
+    // Garbage-collect old entries so the map doesn't grow unbounded.
+    for (const [key, ts] of this.recentMessages) {
+      if (now - ts > ToastManager.DEDUPE_WINDOW_MS * 2) {
+        this.recentMessages.delete(key);
+      }
+    }
+
     const container = this.ensureContainer();
     const id = `toast-${Date.now()}-${Math.random()}`;
     const duration = options.duration || 4000;

@@ -117,9 +117,15 @@ export const handlers = [
   http.post('/api/v1/auth/login', async ({ request }) => {
     const body = await request.json() as { username: string; password: string };
 
+    // 24h expiry — matches what real backend returns; without this the
+    // auth store's isTokenExpired() returns true (null/undefined treated
+    // as already expired) and route guards bounce back to /login.
+    const expiresAt = new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString();
+
     if (body.username === 'admin' && body.password === 'admin123') {
       return HttpResponse.json({
         token: generateMockToken(MOCK_USERS.admin),
+        expiresAt,
         user: MOCK_USERS.admin,
       });
     }
@@ -127,6 +133,7 @@ export const handlers = [
     if (body.username === 'testuser' && body.password === 'testuser123') {
       return HttpResponse.json({
         token: generateMockToken(MOCK_USERS.testuser),
+        expiresAt,
         user: MOCK_USERS.testuser,
       });
     }
@@ -149,13 +156,15 @@ export const handlers = [
     return HttpResponse.json({ message: 'Logged out successfully' });
   }),
 
-  // Sessions endpoints
+  // Sessions endpoints. The real backend wraps the list in
+  // {"sessions": [...], "total": N} (see api/internal/api/handlers.go's
+  // ListSessions); this mock has to match that envelope or api.listSessions()
+  // returns undefined and the page silently renders empty.
+  // (Earlier bug: MOCK_SESSIONS.vnc was referenced here but never defined,
+  // producing a trailing `null` in the array; removed.)
   http.get('/api/v1/sessions', () => {
-    return HttpResponse.json([
-      MOCK_SESSIONS.running,
-      MOCK_SESSIONS.hibernated,
-      MOCK_SESSIONS.vnc,
-    ]);
+    const sessions = [MOCK_SESSIONS.running, MOCK_SESSIONS.hibernated];
+    return HttpResponse.json({ sessions, total: sessions.length });
   }),
 
   http.get('/api/v1/sessions/:sessionId', ({ params }) => {
@@ -298,4 +307,49 @@ export const handlers = [
       uptime: '7 days',
     });
   }),
+
+  // ---------------------------------------------------------------------------
+  // Stub handlers — return empty arrays/objects so the UI doesn't crash with
+  // 500s on endpoints that aren't yet fully mocked. Pages that depend on these
+  // will render their empty states; that's the right behavior for a UI audit
+  // pass focused on layout/interaction bugs.
+  // ---------------------------------------------------------------------------
+  http.get('/api/v1/applications/user', () => HttpResponse.json([])),
+  http.get('/api/v1/preferences/favorites', () => HttpResponse.json([])),
+  http.put('/api/v1/preferences/favorites', () => HttpResponse.json({ success: true })),
+  http.get('/api/v1/plugins', () => HttpResponse.json([])),
+  http.get('/api/v1/plugins/catalog', () => HttpResponse.json([])),
+  http.get('/api/v1/catalog/repositories', () => HttpResponse.json([])),
+  http.get('/api/v1/catalog/templates', () => HttpResponse.json([])),
+  http.get('/api/v1/sessions/by-tags', () => HttpResponse.json([])),
+  http.get('/api/v1/groups', () => HttpResponse.json([])),
+  http.get('/api/v1/users/me', () => HttpResponse.json(MOCK_USERS.admin)),
+  http.get('/api/v1/users/me/quota', () => HttpResponse.json({
+    maxSessions: 10, usedSessions: 1, maxCpu: '8000m', usedCpu: '1000m',
+    maxMemory: '16Gi', usedMemory: '2Gi', maxStorage: '100Gi', usedStorage: '5Gi',
+  })),
+  http.get('/api/v1/scheduling/sessions', () => HttpResponse.json([])),
+  http.get('/api/v1/scheduling/calendar/integrations', () => HttpResponse.json([])),
+  http.get('/api/v1/security/mfa/methods', () => HttpResponse.json([])),
+  http.get('/api/v1/security/ip-whitelist', () => HttpResponse.json([])),
+  http.get('/api/v1/security/alerts', () => HttpResponse.json([])),
+  http.get('/api/v1/security/device-posture', () => HttpResponse.json({})),
+  http.get('/api/v1/compliance/dashboard', () => HttpResponse.json({})),
+  http.get('/api/v1/compliance/policies', () => HttpResponse.json([])),
+  http.get('/api/v1/compliance/violations', () => HttpResponse.json([])),
+  http.get('/api/v1/compliance/frameworks', () => HttpResponse.json([])),
+  http.get('/api/v1/admin/nodes', () => HttpResponse.json([])),
+  http.get('/api/v1/admin/nodes/stats', () => HttpResponse.json({})),
+  http.get('/api/v1/admin/quotas', () => HttpResponse.json([])),
+  http.get('/api/v1/integrations/external', () => HttpResponse.json([])),
+  http.get('/api/v1/integrations/webhooks', () => HttpResponse.json([])),
+  http.get('/api/v1/integrations/events', () => HttpResponse.json([])),
+  http.get('/api/v1/scaling/autoscaling/policies', () => HttpResponse.json([])),
+  http.get('/api/v1/scaling/autoscaling/history', () => HttpResponse.json([])),
+  http.get('/api/v1/scaling/load-balancing/nodes', () => HttpResponse.json([])),
+  http.get('/api/v1/scaling/load-balancing/policies', () => HttpResponse.json([])),
+  http.get('/api/v1/auth/setup/status', () => HttpResponse.json({ setupComplete: true })),
+  http.get('/api/v1/version', () => HttpResponse.json({ version: 'dev' })),
+  http.get('/api/v1/health', () => HttpResponse.json({ status: 'ok' })),
+  http.get('/api/v1/metrics', () => HttpResponse.json({})),
 ];

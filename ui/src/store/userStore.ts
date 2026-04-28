@@ -25,12 +25,23 @@ export const useUserStore = create<AuthState>()(
       expiresAt: null,
       isAuthenticated: false,
 
-      // Set authentication from login response
+      // Set authentication from login response.
+      //
+      // Defensive default for expiresAt: TypeScript marks LoginResponse.expiresAt
+      // as required, but TS type contracts aren't enforced at the network
+      // boundary. A backend (or MSW mock) returning {token, user} without
+      // expiresAt would otherwise leave the field undefined, isTokenExpired()
+      // would return true on the next render, and the route guard would bounce
+      // the user back to /login with no error shown — silent broken auth.
+      // Default to 24h ahead so the session is at least usable until the next
+      // /auth/me call refreshes state.
       setAuth: (loginResponse: LoginResponse) =>
         set({
           user: loginResponse.user,
           token: loginResponse.token,
-          expiresAt: loginResponse.expiresAt,
+          expiresAt:
+            loginResponse.expiresAt ??
+            new Date(Date.now() + 24 * 60 * 60 * 1000).toISOString(),
           isAuthenticated: true,
         }),
 

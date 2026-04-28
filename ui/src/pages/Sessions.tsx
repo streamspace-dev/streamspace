@@ -35,7 +35,7 @@ import SessionInvitationDialog from '../components/SessionInvitationDialog';
 import QuotaAlert from '../components/QuotaAlert';
 import ActivityIndicator from '../components/ActivityIndicator';
 import IdleTimer from '../components/IdleTimer';
-import { useUpdateSessionState, useDeleteSession } from '../hooks/useApi';
+import { useSessions, useUpdateSessionState, useDeleteSession } from '../hooks/useApi';
 import { useSessionsWebSocket } from '../hooks/useWebSocket';
 import { useUserStore } from '../store/userStore';
 import { Session } from '../lib/api';
@@ -95,6 +95,10 @@ export default function Sessions() {
   const navigate = useNavigate();
   const username = useUserStore((state) => state.user?.username);
   const [sessions, setSessions] = useState<Session[]>([]);
+  // Initial REST fetch — seeds `sessions` so the page isn't blank during the
+  // window between mount and the first WebSocket push (or forever if the WS
+  // can't connect, which used to leave Sessions silently empty).
+  const { data: initialSessions } = useSessions(username);
   const updateSessionState = useUpdateSessionState();
   const deleteSession = useDeleteSession();
   const [deleteDialogOpen, setDeleteDialogOpen] = useState(false);
@@ -140,6 +144,20 @@ export default function Sessions() {
 
   // Enhanced WebSocket with connection quality and manual reconnect
   const sessionsWs = useEnhancedWebSocket(baseSessionsWs);
+
+  // Seed sessions from the initial REST fetch on mount. We only set if local
+  // state is still empty so a faster WebSocket push wins the race; if WS never
+  // connects (mock mode, network glitch), the page still renders the data we
+  // got from REST instead of being permanently empty.
+  useEffect(() => {
+    if (initialSessions && sessions.length === 0) {
+      const filtered = username
+        ? initialSessions.filter((s) => s.user === username)
+        : initialSessions;
+      setSessions(filtered);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialSessions]);
 
   const handleStateChange = (id: string, state: 'running' | 'hibernated') => {
     updateSessionState.mutate({ id, state });
@@ -297,8 +315,15 @@ export default function Sessions() {
             No sessions found with the selected tag. Clear the filter to see all sessions.
           </Alert>
         ) : sessions.length === 0 ? (
-          <Alert severity="info">
-            You don't have any sessions yet. Visit the Template Catalog to create one!
+          <Alert
+            severity="info"
+            action={
+              <Button color="inherit" size="small" onClick={() => navigate('/')}>
+                Browse Applications
+              </Button>
+            }
+          >
+            You don't have any sessions yet. Pick an application to launch one.
           </Alert>
         ) : (
           <Grid container spacing={3}>
