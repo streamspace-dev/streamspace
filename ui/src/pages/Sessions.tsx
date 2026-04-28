@@ -331,25 +331,45 @@ export default function Sessions() {
               <Grid item xs={12} md={6} lg={4} key={session.name}>
                 <Card>
                   <CardContent>
-                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'start', mb: 2 }}>
-                      <Box>
-                        <Typography variant="h6" sx={{ fontWeight: 600 }}>
+                    <Box sx={{ display: 'flex', justifyContent: 'space-between', alignItems: 'flex-start', mb: 2, gap: 1 }}>
+                      <Box sx={{ minWidth: 0, flex: 1 }}>
+                        <Typography
+                          variant="h6"
+                          sx={{
+                            fontWeight: 600,
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={session.template}
+                        >
                           {session.template}
                         </Typography>
-                        <Typography variant="caption" color="text.secondary">
+                        <Typography
+                          variant="caption"
+                          color="text.secondary"
+                          sx={{
+                            display: 'block',
+                            overflow: 'hidden',
+                            textOverflow: 'ellipsis',
+                            whiteSpace: 'nowrap',
+                          }}
+                          title={session.name}
+                        >
                           {session.name}
                         </Typography>
                       </Box>
-                      <Box sx={{ display: 'flex', gap: 0.5, flexDirection: 'column', alignItems: 'flex-end' }}>
-                        <Chip label={session.state} size="small" color={getStateColor(session.state)} />
-                        <Chip label={session.status.phase} size="small" color={getPhaseColor(session.status.phase)} />
-                        <ActivityIndicator
-                          isActive={session.isActive}
-                          isIdle={session.isIdle}
-                          state={session.state}
-                          size="small"
-                        />
-                      </Box>
+                      {/* Single status pill — phase is the most informative
+                          (Running/Pending/Hibernated/Failed); the lowercase
+                          `state` Chip and a separate ActivityIndicator pill
+                          were stacked here previously, three pills for the
+                          same conceptual thing. ActivityIndicator now only
+                          appears inline below when the session is idle. */}
+                      <Chip
+                        label={session.status.phase || session.state}
+                        size="small"
+                        color={getPhaseColor(session.status.phase) || getStateColor(session.state)}
+                      />
                     </Box>
 
                     <Box sx={{ display: 'flex', flexDirection: 'column', gap: 1 }}>
@@ -381,13 +401,37 @@ export default function Sessions() {
                         </Box>
                       )}
                       {session.status.url && (
-                        <Box sx={{ display: 'flex', justifyContent: 'space-between' }}>
-                          <Typography variant="body2" color="text.secondary">
+                        <Box sx={{ display: 'flex', justifyContent: 'space-between', gap: 1, minWidth: 0 }}>
+                          <Typography variant="body2" color="text.secondary" sx={{ flexShrink: 0 }}>
                             URL
                           </Typography>
-                          <Typography variant="body2" sx={{ fontSize: '0.75rem', maxWidth: '60%' }} noWrap>
+                          <Typography
+                            variant="body2"
+                            sx={{
+                              fontSize: '0.75rem',
+                              minWidth: 0,
+                              flex: 1,
+                              overflow: 'hidden',
+                              textOverflow: 'ellipsis',
+                              whiteSpace: 'nowrap',
+                              textAlign: 'right',
+                            }}
+                            title={session.status.url}
+                          >
                             {session.status.url}
                           </Typography>
+                        </Box>
+                      )}
+                      {/* Idle indicator only when actively idle — not as a
+                          third stacked status pill. */}
+                      {session.isIdle && session.state === 'running' && (
+                        <Box sx={{ display: 'flex', justifyContent: 'flex-start' }}>
+                          <ActivityIndicator
+                            isActive={session.isActive}
+                            isIdle={session.isIdle}
+                            state={session.state}
+                            size="small"
+                          />
                         </Box>
                       )}
                       {session.tags && session.tags.length > 0 && (
@@ -404,8 +448,13 @@ export default function Sessions() {
                       )}
                     </Box>
                   </CardContent>
-                  <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2 }}>
-                    <Box>
+                  {/* Action row: previously wrapped inconsistently (Connect on
+                      its own line on narrow cards). flexWrap + gap keeps the
+                      primary action (Connect/Resume) and the icon row on the
+                      same line at sensible card widths and wraps cleanly when
+                      they don't fit. */}
+                  <CardActions sx={{ justifyContent: 'space-between', px: 2, pb: 2, flexWrap: 'wrap', gap: 1 }}>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       {session.state === 'running' ? (
                         <>
                           <Button
@@ -421,6 +470,7 @@ export default function Sessions() {
                             color="warning"
                             onClick={() => handleStateChange(session.name, 'hibernated')}
                             disabled={updateSessionState.isPending}
+                            title="Hibernate"
                           >
                             <PauseIcon />
                           </IconButton>
@@ -431,12 +481,13 @@ export default function Sessions() {
                           color="success"
                           onClick={() => handleStateChange(session.name, 'running')}
                           disabled={updateSessionState.isPending}
+                          title="Resume"
                         >
                           <PlayIcon />
                         </IconButton>
                       )}
                     </Box>
-                    <Box>
+                    <Box sx={{ display: 'flex', alignItems: 'center', gap: 0.5 }}>
                       <IconButton
                         size="small"
                         color="primary"
