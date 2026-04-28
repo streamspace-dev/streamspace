@@ -16,8 +16,6 @@ import {
   Workspaces as SessionsIcon,
   Warning as WarningIcon,
 } from '@mui/icons-material';
-import type { UserQuota as _UserQuota } from '../lib/api';
-void (_UserQuota); // Type-only import marked as used
 import { useCurrentUserQuota } from '../hooks/useApi';
 
 interface QuotaMetric {
