@@ -11,88 +11,11 @@ global:
   # Storage class for all PVCs
   storageClass: ""
 
-## StreamSpace Kubernetes Controller
-## DEPRECATED: Controller is not needed in v2.0-beta architecture.
-## In v2.0-beta, the API creates Session CRDs directly and dispatches commands to agents via WebSocket.
-## The controller-based architecture was replaced by the agent-based architecture.
-controller:
-  enabled: false  # Disabled for v2.0-beta (agent-based architecture)
-
-  image:
-    registry: ghcr.io
-    repository: streamspace-dev/streamspace-kubernetes-controller
-    tag: "v0.2.0"
-    pullPolicy: IfNotPresent
-
-  # Number of controller replicas (use 3+ with leader election for HA)
-  replicaCount: 1
-
-  # Leader election for high availability
-  leaderElection:
-    enabled: false # Enable when replicaCount > 1
-
-  resources:
-    requests:
-      memory: 256Mi
-      cpu: 200m
-    limits:
-      memory: 512Mi
-      cpu: 1000m
-
-  # Controller configuration
-  config:
-    # Ingress settings for created sessions
-    ingressDomain: streamspace.local
-    ingressClass: traefik
-
-    # Metrics and health
-    metricsBindAddress: ":8080"
-    healthProbeBindAddress: ":8081"
-
-  # Service for metrics
-  service:
-    type: ClusterIP
-    metricsPort: 8080
-
-  # Service account
-  serviceAccount:
-    create: true
-    annotations: {}
-    name: ""
-
-  # Pod annotations
-  podAnnotations:
-    prometheus.io/scrape: "true"
-    prometheus.io/port: "8080"
-    prometheus.io/path: "/metrics"
-
-  # Security context
-  podSecurityContext:
-    fsGroup: 65532
-    runAsNonRoot: true
-    runAsUser: 65532
-
-  securityContext:
-    allowPrivilegeEscalation: false
-    capabilities:
-      drop:
-        - ALL
-    readOnlyRootFilesystem: true
-
-  # Node selector
-  nodeSelector: {}
-
-  # Tolerations
-  tolerations: []
-
-  # Affinity
-  affinity: {}
-
-  # Pod Disruption Budget
-  podDisruptionBudget:
-    enabled: false
-    minAvailable: 1
-    # maxUnavailable: 1
+## (Removed in v2: the v1 Kubernetes controller was replaced by the K8s Agent
+## below. Templates referencing .Values.controller and the old image
+## streamspace-dev/streamspace-kubernetes-controller were deleted in the same
+## change. If you're upgrading from v1, set k8sAgent.enabled=true and remove
+## any --set controller.* flags.)
 
 ## K8s Agent (v2.0-beta)
 # The K8s Agent connects to the Control Plane and manages sessions on Kubernetes
@@ -689,9 +612,6 @@ networkPolicy:
   # Monitoring namespace
   monitoring:
     namespace: observability
-  # Controller network restrictions
-  controller:
-    restrictEgress: false
 
 ## Common labels
 commonLabels: {}

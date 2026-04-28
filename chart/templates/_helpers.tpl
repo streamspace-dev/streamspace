@@ -52,14 +52,6 @@ app.kubernetes.io/instance: {{ .Release.Name }}
 {{- end }}
 
 {{/*
-Controller labels
-*/}}
-{{- define "streamspace.controller.labels" -}}
-{{ include "streamspace.labels" . }}
-app.kubernetes.io/component: controller
-{{- end }}
-
-{{/*
 API labels
 */}}
 {{- define "streamspace.api.labels" -}}
@@ -89,17 +81,6 @@ PostgreSQL labels
 {{- define "streamspace.postgresql.labels" -}}
 {{ include "streamspace.labels" . }}
 app.kubernetes.io/component: database
-{{- end }}
-
-{{/*
-Create the name of the controller service account to use
-*/}}
-{{- define "streamspace.controller.serviceAccountName" -}}
-{{- if .Values.controller.serviceAccount.create }}
-{{- default (printf "%s-controller" (include "streamspace.fullname" .)) .Values.controller.serviceAccount.name }}
-{{- else }}
-{{- default "default" .Values.controller.serviceAccount.name }}
-{{- end }}
 {{- end }}
 
 {{/*
@@ -191,20 +172,6 @@ Get the PostgreSQL secret key for password
 {{- .Values.postgresql.auth.secretKeys.adminPasswordKey }}
 {{- else }}
 {{- "postgres-password" }}
-{{- end }}
-{{- end }}
-
-{{/*
-Image name for controller
-*/}}
-{{- define "streamspace.controller.image" -}}
-{{- $registry := .Values.global.imageRegistry | default .Values.controller.image.registry }}
-{{- $repository := .Values.controller.image.repository }}
-{{- $tag := .Values.controller.image.tag | default .Chart.AppVersion }}
-{{- if $registry }}
-{{- printf "%s/%s:%s" $registry $repository $tag }}
-{{- else }}
-{{- printf "%s:%s" $repository $tag }}
 {{- end }}
 {{- end }}
 

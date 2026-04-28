@@ -1,63 +1,9 @@
 {{- if .Values.rbac.create }}
 ---
-# Controller RBAC
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRole
-metadata:
-  name: {{ include "streamspace.fullname" . }}-controller
-  labels:
-    {{- include "streamspace.controller.labels" . | nindent 4 }}
-rules:
-  # Sessions and Templates CRDs
-  - apiGroups: ["stream.space"]
-    resources: ["sessions", "templates"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["stream.space"]
-    resources: ["sessions/status", "templates/status"]
-    verbs: ["get", "update", "patch"]
-  - apiGroups: ["stream.space"]
-    resources: ["sessions/finalizers", "templates/finalizers"]
-    verbs: ["update"]
-  
-  # Core resources
-  - apiGroups: [""]
-    resources: ["services", "persistentvolumeclaims"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["apps"]
-    resources: ["deployments"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["networking.k8s.io"]
-    resources: ["ingresses"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  
-  # Events
-  - apiGroups: [""]
-    resources: ["events"]
-    verbs: ["create", "patch"]
-  
-  # Leader election
-  - apiGroups: [""]
-    resources: ["configmaps"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
-  - apiGroups: ["coordination.k8s.io"]
-    resources: ["leases"]
-    verbs: ["get", "list", "watch", "create", "update", "patch", "delete"]
----
-apiVersion: rbac.authorization.k8s.io/v1
-kind: ClusterRoleBinding
-metadata:
-  name: {{ include "streamspace.fullname" . }}-controller
-  labels:
-    {{- include "streamspace.controller.labels" . | nindent 4 }}
-roleRef:
-  apiGroup: rbac.authorization.k8s.io
-  kind: ClusterRole
-  name: {{ include "streamspace.fullname" . }}-controller
-subjects:
-  - kind: ServiceAccount
-    name: {{ include "streamspace.controller.serviceAccountName" . }}
-    namespace: {{ .Release.Namespace }}
----
+# (v1 Controller RBAC removed in v2: ClusterRole, ClusterRoleBinding, and
+# the controller ServiceAccount are no longer rendered. The K8s Agent has
+# its own RBAC bundle (k8s-agent-rbac.yaml); the API only needs the
+# namespaced Role/RoleBinding below for log streaming.)
 # API RBAC
 apiVersion: rbac.authorization.k8s.io/v1
 kind: Role

@@ -1,24 +1,3 @@
-{{- if and .Values.controller.enabled .Values.controller.podDisruptionBudget.enabled }}
-apiVersion: policy/v1
-kind: PodDisruptionBudget
-metadata:
-  name: {{ include "streamspace.fullname" . }}-controller
-  namespace: {{ .Release.Namespace }}
-  labels:
-    {{- include "streamspace.controller.labels" . | nindent 4 }}
-spec:
-  {{- if .Values.controller.podDisruptionBudget.minAvailable }}
-  minAvailable: {{ .Values.controller.podDisruptionBudget.minAvailable }}
-  {{- end }}
-  {{- if .Values.controller.podDisruptionBudget.maxUnavailable }}
-  maxUnavailable: {{ .Values.controller.podDisruptionBudget.maxUnavailable }}
-  {{- end }}
-  selector:
-    matchLabels:
-      {{- include "streamspace.selectorLabels" . | nindent 6 }}
-      app.kubernetes.io/component: controller
----
-{{- end }}
 {{- if and .Values.api.enabled .Values.api.podDisruptionBudget.enabled }}
 apiVersion: policy/v1
 kind: PodDisruptionBudget

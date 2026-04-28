@@ -114,21 +114,8 @@ Connection Status:
   kubectl logs -n {{ .Release.Namespace }} -l app.kubernetes.io/component=api \
     | grep "Agent registered"
 
-The K8s Agent connects to the Control Plane via WebSocket for session management.
-This replaces the v1.x controller-based architecture.
-
-{{- else if .Values.controller.enabled }}
-
-⚙️  V1.X CONTROLLER ARCHITECTURE
-────────────────────────────────────────────────────────────────────────────
-
-StreamSpace is deployed with the v1.x Controller architecture.
-
-To upgrade to v2.0-beta agent architecture:
-  helm upgrade {{ .Release.Name }} {{ .Chart.Name }} \
-    --reuse-values \
-    --set k8sAgent.enabled=true \
-    --set controller.enabled=false
+The K8s Agent connects to the Control Plane via WebSocket for session
+management. (The v1.x controller-based architecture was removed in v2.0.)
 
 {{- end }}
 
@@ -147,7 +134,7 @@ To upgrade to v2.0-beta agent architecture:
 
 View metrics:
   kubectl port-forward -n {{ .Release.Namespace }} \
-    svc/{{ include "streamspace.fullname" . }}-controller 8080:8080
+    svc/{{ include "streamspace.fullname" . }}-api 8080:8080
 
   curl http://localhost:8080/metrics
 

@@ -21,7 +21,7 @@ jobs:
     runs-on: ubuntu-latest
     strategy:
       matrix:
-        component: [api, ui, kubernetes-controller]
+        component: [api, ui, k8s-agent, docker-agent]
     steps:
       - name: Checkout code
         uses: actions/checkout@v4
@@ -35,8 +35,10 @@ jobs:
             docker build -t streamspace-api:scan ./api
           elif [ "${{ matrix.component }}" = "ui" ]; then
             docker build -t streamspace-ui:scan ./ui
-          elif [ "${{ matrix.component }}" = "kubernetes-controller" ]; then
-            docker build -t streamspace-kubernetes-controller:scan ./k8s-controller
+          elif [ "${{ matrix.component }}" = "k8s-agent" ]; then
+            docker build -t streamspace-k8s-agent:scan ./agents/k8s-agent
+          elif [ "${{ matrix.component }}" = "docker-agent" ]; then
+            docker build -t streamspace-docker-agent:scan ./agents/docker-agent
           fi
 
       - name: Run Trivy vulnerability scanner

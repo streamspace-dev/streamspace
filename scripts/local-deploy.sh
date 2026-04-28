@@ -76,7 +76,7 @@ check_images() {
 
     local missing_images=0
 
-    # v2.0: K8s Agent REPLACES kubernetes-controller
+    # K8s Agent (the v1 kubernetes-controller was removed in v2)
     for image in "streamspace/streamspace-api" "streamspace/streamspace-ui" "streamspace/streamspace-k8s-agent"; do
         if docker images "${image}:${VERSION}" --format "{{.Repository}}:{{.Tag}}" | grep -q "${image}:${VERSION}"; then
             log_success "Found ${image}:${VERSION}"

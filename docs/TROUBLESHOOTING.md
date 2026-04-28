@@ -52,7 +52,8 @@ The Helm chart has been updated with the following changes:
 
 1. **Removed v1.x Components:**
    - `chart/templates/nats.yaml` (122 lines) - v1.x event system
-   - `controller` now disabled by default
+   - `chart/templates/controller-deployment.yaml` and the `controller`
+     values block — fully removed (was disabled-by-default, now gone)
 
 2. **Added v2.0 Components:**
    - `chart/templates/k8s-agent-deployment.yaml` (118 lines)
