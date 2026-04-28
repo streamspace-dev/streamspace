@@ -2,7 +2,7 @@
 #
 # local-build.sh - Build all StreamSpace Docker images locally
 #
-# This script builds the controller, API, and UI Docker images for local testing.
+# This script builds the API, UI, and agent Docker images for local testing.
 # Images are tagged with 'local' and 'latest' tags for easy identification.
 #
 
@@ -27,7 +27,7 @@ KUBERNETES_CONTROLLER_IMAGE="streamspace/streamspace-kubernetes-controller"
 API_IMAGE="streamspace/streamspace-api"
 UI_IMAGE="streamspace/streamspace-ui"
 K8S_AGENT_IMAGE="streamspace/streamspace-k8s-agent"
-DOCKER_CONTROLLER_IMAGE="streamspace/streamspace-docker-controller"
+DOCKER_AGENT_IMAGE="streamspace/streamspace-docker-agent"
 
 # GHCR image names (for local K8s deployment compatibility)
 GHCR_API_IMAGE="ghcr.io/streamspace-dev/streamspace-api"
@@ -135,25 +135,19 @@ build_k8s_agent() {
     log_success "K8s Agent image built successfully"
 }
 
-# Build Docker controller image
-build_docker_controller() {
-    log "Building Docker controller image..."
-    log_info "Image: ${DOCKER_CONTROLLER_IMAGE}:${VERSION}"
-    log_info "Context: ${PROJECT_ROOT}/docker-controller"
-
-    # Check if docker-controller directory exists
-    if [ ! -d "${PROJECT_ROOT}/docker-controller" ]; then
-        log_warning "Docker controller directory not found, skipping (deferred to v2.1)"
-        return 0
-    fi
+# Build Docker agent image (v2 architecture; replaces v1 docker-controller).
+build_docker_agent() {
+    log "Building Docker agent image..."
+    log_info "Image: ${DOCKER_AGENT_IMAGE}:${VERSION}"
+    log_info "Context: ${PROJECT_ROOT}/agents/docker-agent"
 
     docker build ${BUILD_ARGS} \
-        -t "${DOCKER_CONTROLLER_IMAGE}:${VERSION}" \
-        -t "${DOCKER_CONTROLLER_IMAGE}:latest" \
-        -f "${PROJECT_ROOT}/docker-controller/Dockerfile" \
-        "${PROJECT_ROOT}/docker-controller/"
+        -t "${DOCKER_AGENT_IMAGE}:${VERSION}" \
+        -t "${DOCKER_AGENT_IMAGE}:latest" \
+        -f "${PROJECT_ROOT}/agents/docker-agent/Dockerfile" \
+        "${PROJECT_ROOT}/agents/docker-agent/"
 
-    log_success "Docker controller image built successfully"
+    log_success "Docker agent image built successfully"
 }
 
 # List built images
@@ -161,7 +155,7 @@ list_images() {
     log "Built images:"
     echo ""
     docker images --format "table {{.Repository}}\t{{.Tag}}\t{{.ID}}\t{{.Size}}" | \
-        grep -E "REPOSITORY|streamspace/streamspace-(kubernetes-controller|api|ui|k8s-agent|docker-controller)" || true
+        grep -E "REPOSITORY|streamspace/streamspace-(api|ui|k8s-agent|docker-agent)" || true
     echo ""
 }
 
@@ -202,12 +196,12 @@ main() {
                 k8s-agent|agent)
                     build_k8s_agent
                     ;;
-                docker-controller)
-                    build_docker_controller
+                docker-agent)
+                    build_docker_agent
                     ;;
                 *)
                     log_error "Unknown component: $component"
-                    log_info "Valid components: controller, api, ui, k8s-agent, docker-controller"
+                    log_info "Valid components: api, ui, k8s-agent, docker-agent"
                     exit 1
                     ;;
             esac

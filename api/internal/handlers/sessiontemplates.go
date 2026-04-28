@@ -620,7 +620,7 @@ func (h *SessionTemplatesHandler) UseSessionTemplate(c *gin.Context) {
 		PersistentHome: true,
 	}
 
-	// Add template configuration for Docker controller
+	// Add template configuration for the Docker agent (v2; was "Docker controller" pre-v2 rename).
 	if k8sTemplate != nil {
 		// Selkies-GStreamer defaults to port 8080. Templates still carry a
 		// legacy VNC.Port field for backwards-compat with old fixtures; honor

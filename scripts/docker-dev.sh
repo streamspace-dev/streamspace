@@ -3,12 +3,12 @@
 # docker-dev.sh - Start StreamSpace development environment with Docker Compose
 #
 # This script starts the complete development environment using docker-compose,
-# including PostgreSQL, NATS with JetStream, and optionally the API and Docker controller.
+# including PostgreSQL, NATS with JetStream, and optionally the API and Docker agent.
 #
 # Usage:
 #   ./scripts/docker-dev.sh              # Start core services (postgres, nats)
 #   ./scripts/docker-dev.sh --with-api   # Include API service
-#   ./scripts/docker-dev.sh --with-docker # Include Docker controller
+#   ./scripts/docker-dev.sh --with-docker # Include Docker agent
 #   ./scripts/docker-dev.sh --all        # Start all services
 #   ./scripts/docker-dev.sh --logs       # Start and follow logs
 #
@@ -61,7 +61,7 @@ Start StreamSpace development environment with Docker Compose.
 
 Options:
     --with-api      Include the API service
-    --with-docker   Include the Docker controller (profile: docker)
+    --with-docker   Include the Docker agent (profile: docker)
     --with-dev      Include development tools like pgAdmin (profile: dev)
     --with-monitor  Include monitoring stack (profile: monitoring)
     --all           Start all services including all profiles
@@ -71,7 +71,7 @@ Options:
 Examples:
     $(basename "$0")                    # Start core services (postgres, nats)
     $(basename "$0") --with-api         # Start with API
-    $(basename "$0") --with-docker      # Start with Docker controller
+    $(basename "$0") --with-docker      # Start with Docker agent
     $(basename "$0") --all --logs       # Start all and follow logs
 
 Services:
@@ -83,7 +83,7 @@ Services:
       - api             StreamSpace API backend
 
     Docker Profile (--with-docker):
-      - docker-controller  Docker platform controller
+      - docker-agent  Docker platform controller
 
     Dev Profile (--with-dev):
       - pgadmin         PostgreSQL admin interface

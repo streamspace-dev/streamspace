@@ -45,7 +45,7 @@ These scripts reference v1.0 architecture (CRDs, controller) and need updates:
 | `local-teardown.sh` | Teardown local env | ⚠️ Minor updates needed |
 | `local-port-forward.sh` | Port-forward services | ✅ Mostly works, add agent logs |
 | `local-stop-port-forward.sh` | Stop port-forwards | ✅ Works as-is |
-| `build-docker-controller.sh` | Build controller image | ⚠️ Rename to build K8s Agent |
+| `local-build.sh docker-agent` | Build Docker agent image | ✅ Replaced legacy `build-docker-controller.sh` |
 | `docker-dev.sh` | Docker dev environment | ⚠️ Update for Control Plane + Agent |
 | `docker-dev-stop.sh` | Stop Docker dev | ✅ Works as-is |
 | `test-nats.sh` | Test NATS connectivity | ⚠️ Update for agent WebSocket |

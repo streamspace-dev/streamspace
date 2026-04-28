@@ -51,7 +51,7 @@ For the new event-driven multi-platform architecture, use these scripts:
 # Start development environment (PostgreSQL, NATS)
 ./scripts/docker-dev.sh
 
-# Start with Docker controller
+# Start with Docker agent
 ./scripts/docker-dev.sh --with-docker
 
 # Start with all services (including monitoring)
@@ -73,7 +73,7 @@ Starts the complete development environment using Docker Compose with NATS and P
 ```bash
 ./scripts/docker-dev.sh              # Core services only
 ./scripts/docker-dev.sh --with-api   # Include API service
-./scripts/docker-dev.sh --with-docker # Include Docker controller
+./scripts/docker-dev.sh --with-docker # Include Docker agent
 ./scripts/docker-dev.sh --all        # All services and profiles
 ./scripts/docker-dev.sh --logs       # Start and follow logs
 ```
@@ -86,7 +86,7 @@ Starts the complete development environment using Docker Compose with NATS and P
 **Optional Services:**
 
 - API backend (--with-api)
-- Docker controller (--with-docker)
+- Docker agent (--with-docker)
 - pgAdmin (--with-dev)
 - Prometheus/Grafana (--with-monitor)
 
@@ -99,17 +99,6 @@ Stops the Docker Compose development environment.
 ```bash
 ./scripts/docker-dev-stop.sh           # Stop services, keep data
 ./scripts/docker-dev-stop.sh --clean   # Stop and remove volumes
-```
-
-### build-docker-controller.sh
-
-Builds the Docker platform controller for the event-driven architecture.
-
-**Usage:**
-
-```bash
-./scripts/build-docker-controller.sh           # Build Docker image
-./scripts/build-docker-controller.sh --binary  # Build Go binary only
 ```
 
 ### test-nats.sh
