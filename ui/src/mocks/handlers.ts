@@ -198,7 +198,9 @@ export const handlers = [
     return HttpResponse.json({ status: 'terminated' });
   }),
 
-  http.post('/api/v1/sessions/:sessionId/connect', () => {
+  // Backend route is GET /sessions/:id/connect (see api/cmd/main.go:637); the
+  // earlier POST mock 500'd in the SessionViewer flow.
+  http.get('/api/v1/sessions/:sessionId/connect', () => {
     return HttpResponse.json({
       connectionId: `conn-${Date.now()}`,
       sessionUrl: 'http://test.local:3000',
