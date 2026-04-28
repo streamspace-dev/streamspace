@@ -44,8 +44,8 @@ export const MOCK_SESSIONS = {
     },
     activeConnections: 0,
     resources: { cpu: '500m', memory: '2Gi' },
-    created_at: new Date().toISOString(),
-    last_activity: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
   },
   hibernated: {
     name: 'test-session-hibernated',
@@ -61,8 +61,8 @@ export const MOCK_SESSIONS = {
     },
     activeConnections: 0,
     resources: { cpu: '500m', memory: '2Gi' },
-    created_at: new Date().toISOString(),
-    last_activity: new Date().toISOString(),
+    createdAt: new Date().toISOString(),
+    lastActivity: new Date().toISOString(),
   },
 };
 
@@ -189,7 +189,7 @@ export const handlers = [
       ...MOCK_SESSIONS.running,
       name: body.name || `session-${Date.now()}`,
       template: body.template,
-      created_at: new Date().toISOString(),
+      createdAt: new Date().toISOString(),
     };
     return HttpResponse.json(newSession, { status: 201 });
   }),
@@ -293,9 +293,29 @@ export const handlers = [
     });
   }),
 
+  // Cluster metrics — backs admin Dashboard's `useMetrics()` (api.getMetrics → GET /metrics).
+  // Shape mirrors the ClusterMetrics interface declared in admin/Dashboard.tsx.
+  http.get('/api/v1/metrics', () => {
+    return HttpResponse.json({
+      cluster: {
+        nodes: { total: 3, ready: 3, notReady: 0 },
+        sessions: { total: 2, running: 1, hibernated: 1, terminated: 0 },
+        resources: {
+          cpu: { total: '12 cores', used: '3.2 cores', percent: 27 },
+          memory: { total: '48 GiB', used: '14.5 GiB', percent: 30 },
+          pods: { total: 110, used: 28, percent: 25 },
+        },
+        users: { total: 2, active: 1 },
+      },
+    });
+  }),
+
   // Users (admin)
+  // Real backend returns the {users, total} envelope (see api.listUsers); a bare
+  // array would deserialize as `[]` and the page would show "No users found".
   http.get('/api/v1/users', () => {
-    return HttpResponse.json([MOCK_USERS.admin, MOCK_USERS.testuser]);
+    const users = [MOCK_USERS.admin, MOCK_USERS.testuser];
+    return HttpResponse.json({ users, total: users.length });
   }),
 
   // System metrics (admin)
@@ -341,6 +361,11 @@ export const handlers = [
   http.get('/api/v1/admin/nodes', () => HttpResponse.json([])),
   http.get('/api/v1/admin/nodes/stats', () => HttpResponse.json({})),
   http.get('/api/v1/admin/quotas', () => HttpResponse.json([])),
+  // Admin Agents page hits /admin/agents (not /agents) and expects the
+  // {agents, total, page, limit} envelope; bare array → 500 in axios layer.
+  http.get('/api/v1/admin/agents', () =>
+    HttpResponse.json({ agents: MOCK_AGENTS, total: MOCK_AGENTS.length, page: 1, limit: 50 })
+  ),
   http.get('/api/v1/integrations/external', () => HttpResponse.json([])),
   http.get('/api/v1/integrations/webhooks', () => HttpResponse.json([])),
   http.get('/api/v1/integrations/events', () => HttpResponse.json([])),
