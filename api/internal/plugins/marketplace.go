@@ -153,6 +153,7 @@ import (
 
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	"gopkg.in/yaml.v3"
 )
 
 // PluginMarketplace manages plugin discovery, download, and installation.
@@ -202,18 +203,36 @@ type PluginMarketplace struct {
 // This combination allows the UI to show "Install", "Installed", or "Update Available"
 // buttons dynamically without extra database queries.
 type MarketplacePlugin struct {
-	Name        string                 `json:"name"`
-	Version     string                 `json:"version"`
-	DisplayName string                 `json:"displayName"`
-	Description string                 `json:"description"`
-	Author      string                 `json:"author"`
-	Category    string                 `json:"category"`
-	Tags        []string               `json:"tags"`
-	IconURL     string                 `json:"iconUrl"`
-	Manifest    models.PluginManifest  `json:"manifest"`
-	DownloadURL string                 `json:"downloadUrl"`
-	Installed   bool                   `json:"installed"`
-	Enabled     bool                   `json:"enabled"`
+	Name        string                `json:"name"`
+	Version     string                `json:"version"`
+	DisplayName string                `json:"displayName"`
+	Description string                `json:"description"`
+	Author      string                `json:"author"`
+	Category    string                `json:"category"`
+	Tags        []string              `json:"tags"`
+	IconURL     string                `json:"iconUrl"`
+	Manifest    models.PluginManifest `json:"manifest"`
+	DownloadURL string                `json:"downloadUrl"`
+	Path        string                `json:"path"`
+	Installed   bool                  `json:"installed"`
+	Enabled     bool                  `json:"enabled"`
+}
+
+type pluginCatalogYAML struct {
+	Spec struct {
+		Plugins []struct {
+			Name        string   `yaml:"name"`
+			Version     string   `yaml:"version"`
+			DisplayName string   `yaml:"displayName"`
+			Description string   `yaml:"description"`
+			Author      string   `yaml:"author"`
+			Category    string   `yaml:"category"`
+			Type        string   `yaml:"type"`
+			Tags        []string `yaml:"tags"`
+			Path        string   `yaml:"path"`
+			Icon        string   `yaml:"icon"`
+		} `yaml:"plugins"`
+	} `yaml:"spec"`
 }
 
 // NewPluginMarketplace creates a new plugin marketplace instance.
@@ -339,22 +358,9 @@ func (m *PluginMarketplace) SyncCatalog(ctx context.Context) error {
 
 	log.Println("[Plugin Marketplace] Syncing plugin catalog from repository...")
 
-	// Fetch catalog from repository
-	catalogURL := fmt.Sprintf("%s/catalog.json", m.repositoryURL)
-	resp, err := http.Get(catalogURL)
+	plugins, err := m.fetchCatalog(ctx)
 	if err != nil {
-		return fmt.Errorf("failed to fetch plugin catalog: %w", err)
-	}
-	defer resp.Body.Close()
-
-	if resp.StatusCode != http.StatusOK {
-		return fmt.Errorf("failed to fetch catalog: HTTP %d", resp.StatusCode)
-	}
-
-	// Parse catalog
-	var plugins []*MarketplacePlugin
-	if err := json.NewDecoder(resp.Body).Decode(&plugins); err != nil {
-		return fmt.Errorf("failed to parse plugin catalog: %w", err)
+		return err
 	}
 
 	// Update local cache
@@ -645,7 +651,8 @@ func (m *PluginMarketplace) UninstallPlugin(ctx context.Context, name string) er
 //   - Smaller bandwidth (gzip compression)
 //
 // **Example Archive URL**:
-//   https://github.com/JoshuaAFerguson/streamspace-plugins/releases/download/v1.2.3/streamspace-analytics.tar.gz
+//
+//	https://github.com/JoshuaAFerguson/streamspace-plugins/releases/download/v1.2.3/streamspace-analytics.tar.gz
 //
 // **Archive Contents**:
 //
@@ -694,11 +701,9 @@ func (m *PluginMarketplace) downloadPlugin(ctx context.Context, plugin *Marketpl
 		return fmt.Errorf("failed to create plugin directory: %w", err)
 	}
 
-	// Download plugin archive
 	downloadURL := plugin.DownloadURL
 	if downloadURL == "" {
-		// Default: GitHub raw content
-		downloadURL = fmt.Sprintf("%s/%s/plugin.tar.gz", m.repositoryURL, plugin.Name)
+		return m.downloadPluginFiles(plugin, pluginPath)
 	}
 
 	resp, err := http.Get(downloadURL)
@@ -708,6 +713,9 @@ func (m *PluginMarketplace) downloadPlugin(ctx context.Context, plugin *Marketpl
 	defer resp.Body.Close()
 
 	if resp.StatusCode != http.StatusOK {
+		if strings.HasSuffix(downloadURL, ".tar.gz") || strings.HasSuffix(downloadURL, ".tgz") {
+			return m.downloadPluginFiles(plugin, pluginPath)
+		}
 		return fmt.Errorf("download failed: HTTP %d", resp.StatusCode)
 	}
 
@@ -718,7 +726,7 @@ func (m *PluginMarketplace) downloadPlugin(ctx context.Context, plugin *Marketpl
 		}
 	} else {
 		// Fallback: Download individual files
-		if err := m.downloadPluginFiles(plugin.Name, pluginPath); err != nil {
+		if err := m.downloadPluginFiles(plugin, pluginPath); err != nil {
 			return fmt.Errorf("failed to download plugin files: %w", err)
 		}
 	}
@@ -774,27 +782,196 @@ func (m *PluginMarketplace) downloadPlugin(ctx context.Context, plugin *Marketpl
 //   - pluginPath: Local directory to save files
 //
 // Returns error if manifest.json download fails, nil otherwise.
-func (m *PluginMarketplace) downloadPluginFiles(pluginName, pluginPath string) error {
+func (m *PluginMarketplace) downloadPluginFiles(plugin *MarketplacePlugin, pluginPath string) error {
+	pluginSourcePath := plugin.Path
+	if pluginSourcePath == "" {
+		pluginSourcePath = plugin.Name
+	}
+
 	// Download manifest.json
-	manifestURL := fmt.Sprintf("%s/%s/manifest.json", m.repositoryURL, pluginName)
-	if err := m.downloadFile(manifestURL, filepath.Join(pluginPath, "manifest.json")); err != nil {
+	manifestURL := fmt.Sprintf("%s/%s/manifest.json", m.repositoryURL, pluginSourcePath)
+	manifestPath := filepath.Join(pluginPath, "manifest.json")
+	if err := m.downloadFile(manifestURL, manifestPath); err != nil {
 		return err
 	}
 
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return err
+	}
+
+	var manifest models.PluginManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return fmt.Errorf("failed to parse manifest.json for %s: %w", plugin.Name, err)
+	}
+
 	// Download README.md
-	readmeURL := fmt.Sprintf("%s/%s/README.md", m.repositoryURL, pluginName)
+	readmeURL := fmt.Sprintf("%s/%s/README.md", m.repositoryURL, pluginSourcePath)
 	_ = m.downloadFile(readmeURL, filepath.Join(pluginPath, "README.md")) // Optional, ignore errors
 
-	// Download plugin code (could be .go, .js, etc.)
-	// Try multiple extensions
-	for _, ext := range []string{".go", ".js", ".py", "_plugin.go"} {
-		codeURL := fmt.Sprintf("%s/%s/%s%s", m.repositoryURL, pluginName, pluginName, ext)
-		if err := m.downloadFile(codeURL, filepath.Join(pluginPath, pluginName+ext)); err == nil {
-			break // Success
+	if manifest.Icon != "" {
+		iconURL := fmt.Sprintf("%s/%s/%s", m.repositoryURL, pluginSourcePath, manifest.Icon)
+		_ = m.downloadFile(iconURL, filepath.Join(pluginPath, filepath.Base(manifest.Icon)))
+	}
+
+	entrypoints := uniqueEntrypoints(manifest)
+	if !hasSharedObjectEntrypoint(entrypoints) {
+		return fmt.Errorf(
+			"plugin %s does not expose a runtime-loadable .so entrypoint; publish plugin.tar.gz or a bundle with .so assets",
+			plugin.Name,
+		)
+	}
+
+	for _, entry := range entrypoints {
+		entryURL := fmt.Sprintf("%s/%s/%s", m.repositoryURL, pluginSourcePath, entry)
+		if err := m.downloadFile(entryURL, filepath.Join(pluginPath, filepath.Base(entry))); err != nil {
+			return fmt.Errorf("failed to download plugin entrypoint %s: %w", entry, err)
 		}
 	}
 
 	return nil
+}
+
+func (m *PluginMarketplace) fetchCatalog(ctx context.Context) ([]*MarketplacePlugin, error) {
+	yamlURL := fmt.Sprintf("%s/catalog.yaml", m.repositoryURL)
+	resp, err := http.Get(yamlURL)
+	if err == nil && resp != nil {
+		defer resp.Body.Close()
+		if resp.StatusCode == http.StatusOK {
+			var catalog pluginCatalogYAML
+			if err := yaml.NewDecoder(resp.Body).Decode(&catalog); err != nil {
+				return nil, fmt.Errorf("failed to parse plugin catalog yaml: %w", err)
+			}
+
+			plugins := make([]*MarketplacePlugin, 0, len(catalog.Spec.Plugins))
+			for _, item := range catalog.Spec.Plugins {
+				plugin := &MarketplacePlugin{
+					Name:        item.Name,
+					Version:     item.Version,
+					DisplayName: item.DisplayName,
+					Description: item.Description,
+					Author:      item.Author,
+					Category:    item.Category,
+					Tags:        item.Tags,
+					Path:        item.Path,
+				}
+
+				if plugin.Path == "" {
+					plugin.Path = plugin.Name
+				}
+
+				manifest, manifestErr := m.fetchManifest(ctx, plugin.Path)
+				if manifestErr != nil {
+					log.Printf("[Plugin Marketplace] Warning: Failed to fetch manifest for %s: %v", plugin.Name, manifestErr)
+				} else {
+					plugin.Manifest = manifest
+					if plugin.Version == "" {
+						plugin.Version = manifest.Version
+					}
+					if plugin.DisplayName == "" {
+						plugin.DisplayName = manifest.DisplayName
+					}
+					if plugin.Description == "" {
+						plugin.Description = manifest.Description
+					}
+					if plugin.Author == "" {
+						plugin.Author = manifest.Author
+					}
+					if plugin.Category == "" {
+						plugin.Category = manifest.Category
+					}
+					if len(plugin.Tags) == 0 {
+						plugin.Tags = manifest.Tags
+					}
+					if plugin.IconURL == "" && manifest.Icon != "" {
+						plugin.IconURL = fmt.Sprintf("%s/%s/%s", m.repositoryURL, plugin.Path, manifest.Icon)
+					}
+				}
+
+				plugins = append(plugins, plugin)
+			}
+
+			return plugins, nil
+		}
+	}
+
+	catalogURL := fmt.Sprintf("%s/catalog.json", m.repositoryURL)
+	resp, err = http.Get(catalogURL)
+	if err != nil {
+		return nil, fmt.Errorf("failed to fetch plugin catalog: %w", err)
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return nil, fmt.Errorf("failed to fetch catalog: HTTP %d", resp.StatusCode)
+	}
+
+	var plugins []*MarketplacePlugin
+	if err := json.NewDecoder(resp.Body).Decode(&plugins); err != nil {
+		return nil, fmt.Errorf("failed to parse plugin catalog json: %w", err)
+	}
+
+	return plugins, nil
+}
+
+func (m *PluginMarketplace) fetchManifest(ctx context.Context, pluginPath string) (models.PluginManifest, error) {
+	req, err := http.NewRequestWithContext(ctx, http.MethodGet, fmt.Sprintf("%s/%s/manifest.json", m.repositoryURL, pluginPath), nil)
+	if err != nil {
+		return models.PluginManifest{}, err
+	}
+
+	resp, err := http.DefaultClient.Do(req)
+	if err != nil {
+		return models.PluginManifest{}, err
+	}
+	defer resp.Body.Close()
+
+	if resp.StatusCode != http.StatusOK {
+		return models.PluginManifest{}, fmt.Errorf("manifest request returned HTTP %d", resp.StatusCode)
+	}
+
+	var manifest models.PluginManifest
+	if err := json.NewDecoder(resp.Body).Decode(&manifest); err != nil {
+		return models.PluginManifest{}, err
+	}
+
+	return manifest, nil
+}
+
+func uniqueEntrypoints(manifest models.PluginManifest) []string {
+	entrypoints := []string{
+		manifest.Entrypoints.Main,
+		manifest.Entrypoints.API,
+		manifest.Entrypoints.UI,
+		manifest.Entrypoints.Webhook,
+		manifest.Entrypoints.CLI,
+	}
+
+	seen := make(map[string]struct{}, len(entrypoints))
+	unique := make([]string, 0, len(entrypoints))
+	for _, entry := range entrypoints {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		unique = append(unique, entry)
+	}
+
+	return unique
+}
+
+func hasSharedObjectEntrypoint(entrypoints []string) bool {
+	for _, entry := range entrypoints {
+		if strings.HasSuffix(entry, ".so") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // downloadFile downloads a single file from URL to local path.
@@ -1122,23 +1299,24 @@ func (m *PluginMarketplace) updateDatabaseCatalog(ctx context.Context, plugins [
 		// Upsert to catalog
 		_, err = m.db.DB().ExecContext(ctx, `
 			INSERT INTO catalog_plugins (
-				repository_id, name, version, display_name, description,
+				repository_id, name, version, display_name, description, source_path,
 				category, plugin_type, icon_url, manifest, tags, created_at, updated_at
 			)
-			VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, NOW(), NOW())
-			ON CONFLICT (name)
+			VALUES (1, $1, $2, $3, $4, $5, $6, $7, $8, $9, $10, NOW(), NOW())
+			ON CONFLICT (repository_id, name)
 			DO UPDATE SET
 				version = $2,
 				display_name = $3,
 				description = $4,
-				category = $5,
-				plugin_type = $6,
-				icon_url = $7,
-				manifest = $8,
-				tags = $9,
+				source_path = $5,
+				category = $6,
+				plugin_type = $7,
+				icon_url = $8,
+				manifest = $9,
+				tags = $10,
 				updated_at = NOW()
 		`, plugin.Name, plugin.Version, plugin.DisplayName, plugin.Description,
-			plugin.Category, plugin.Manifest.Type, plugin.IconURL, manifestJSON, plugin.Tags)
+			plugin.Path, plugin.Category, plugin.Manifest.Type, plugin.IconURL, manifestJSON, plugin.Tags)
 
 		if err != nil {
 			log.Printf("[Plugin Marketplace] Error updating catalog for %s: %v", plugin.Name, err)

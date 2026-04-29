@@ -138,57 +138,70 @@ func (pl *PluginLogger) log(level string, message string, data map[string]interf
 //
 // Use for detailed diagnostic information during development.
 // Typically disabled in production.
-func (pl *PluginLogger) Debug(message string, data ...map[string]interface{}) {
-	var d map[string]interface{}
-	if len(data) > 0 {
-		d = data[0]
-	}
-	pl.log("DEBUG", message, d)
+func (pl *PluginLogger) Debug(message string, data ...interface{}) {
+	pl.log("DEBUG", message, normalizeLogData(data...))
 }
 
 // Info logs an informational message.
 //
 // Use for general operational messages (startup, shutdown, state changes).
-func (pl *PluginLogger) Info(message string, data ...map[string]interface{}) {
-	var d map[string]interface{}
-	if len(data) > 0 {
-		d = data[0]
-	}
-	pl.log("INFO", message, d)
+func (pl *PluginLogger) Info(message string, data ...interface{}) {
+	pl.log("INFO", message, normalizeLogData(data...))
 }
 
 // Warn logs a warning message.
 //
 // Use for potentially problematic situations that don't prevent operation.
-func (pl *PluginLogger) Warn(message string, data ...map[string]interface{}) {
-	var d map[string]interface{}
-	if len(data) > 0 {
-		d = data[0]
-	}
-	pl.log("WARN", message, d)
+func (pl *PluginLogger) Warn(message string, data ...interface{}) {
+	pl.log("WARN", message, normalizeLogData(data...))
 }
 
 // Error logs an error message.
 //
 // Use for error conditions that are handled gracefully.
-func (pl *PluginLogger) Error(message string, data ...map[string]interface{}) {
-	var d map[string]interface{}
-	if len(data) > 0 {
-		d = data[0]
-	}
-	pl.log("ERROR", message, d)
+func (pl *PluginLogger) Error(message string, data ...interface{}) {
+	pl.log("ERROR", message, normalizeLogData(data...))
 }
 
 // Fatal logs a fatal error message.
 //
 // NOTE: Unlike log.Fatal(), this does NOT exit the process.
 // It only logs at FATAL level to indicate critical plugin errors.
-func (pl *PluginLogger) Fatal(message string, data ...map[string]interface{}) {
-	var d map[string]interface{}
-	if len(data) > 0 {
-		d = data[0]
+func (pl *PluginLogger) Fatal(message string, data ...interface{}) {
+	pl.log("FATAL", message, normalizeLogData(data...))
+}
+
+// normalizeLogData accepts either a single structured map or alternating
+// key/value pairs to keep plugin logging ergonomic across older plugin code.
+func normalizeLogData(args ...interface{}) map[string]interface{} {
+	if len(args) == 0 {
+		return nil
 	}
-	pl.log("FATAL", message, d)
+
+	if len(args) == 1 {
+		if fields, ok := args[0].(map[string]interface{}); ok {
+			return fields
+		}
+		return map[string]interface{}{"value": args[0]}
+	}
+
+	fields := make(map[string]interface{}, (len(args)+1)/2)
+	for i := 0; i < len(args); i += 2 {
+		key := "arg"
+		if s, ok := args[i].(string); ok && s != "" {
+			key = s
+		} else if i > 0 {
+			key = "arg"
+		}
+
+		if i+1 < len(args) {
+			fields[key] = args[i+1]
+		} else {
+			fields[key] = nil
+		}
+	}
+
+	return fields
 }
 
 // WithField returns a logger with a pre-configured field.

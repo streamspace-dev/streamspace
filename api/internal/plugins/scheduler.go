@@ -273,7 +273,28 @@ func NewPluginScheduler(cronInstance *cron.Cron, pluginName string) *PluginSched
 //   - job: Function to execute on schedule
 //
 // Returns nil on success, error if cron expression is invalid.
-func (ps *PluginScheduler) Schedule(jobName string, cronExpr string, job func()) error {
+func (ps *PluginScheduler) Schedule(args ...interface{}) error {
+	var jobName string
+	var cronExpr string
+	var job func()
+
+	switch len(args) {
+	case 2:
+		cronExpr, _ = args[0].(string)
+		job, _ = args[1].(func())
+		jobName = cronExpr
+	case 3:
+		jobName, _ = args[0].(string)
+		cronExpr, _ = args[1].(string)
+		job, _ = args[2].(func())
+	default:
+		return fmt.Errorf("schedule expects either (cronExpr, job) or (jobName, cronExpr, job)")
+	}
+
+	if cronExpr == "" || job == nil {
+		return fmt.Errorf("invalid schedule arguments")
+	}
+
 	// Remove existing job if any
 	if existingID, exists := ps.jobIDs[jobName]; exists {
 		ps.cron.Remove(existingID)

@@ -26,6 +26,7 @@ import (
 	"github.com/streamspace-dev/streamspace/api/internal/handlers"
 	"github.com/streamspace-dev/streamspace/api/internal/k8s"
 	"github.com/streamspace-dev/streamspace/api/internal/middleware"
+	internalplugins "github.com/streamspace-dev/streamspace/api/internal/plugins"
 	"github.com/streamspace-dev/streamspace/api/internal/quota"
 	"github.com/streamspace-dev/streamspace/api/internal/services"
 	"github.com/streamspace-dev/streamspace/api/internal/sync"
@@ -36,15 +37,15 @@ import (
 func main() {
 	// Configuration from environment
 	port := getEnv("API_PORT", "8000")
-	tlsCertFile := os.Getenv("TLS_CERT_FILE")       // Path to TLS certificate file (PEM format)
-	tlsKeyFile := os.Getenv("TLS_KEY_FILE")         // Path to TLS private key file (PEM format)
-	agentCACertFile := os.Getenv("AGENT_CA_CERT_FILE") // Path to CA cert for validating agent client certs (enables mTLS)
+	tlsCertFile := os.Getenv("TLS_CERT_FILE")                             // Path to TLS certificate file (PEM format)
+	tlsKeyFile := os.Getenv("TLS_KEY_FILE")                               // Path to TLS private key file (PEM format)
+	agentCACertFile := os.Getenv("AGENT_CA_CERT_FILE")                    // Path to CA cert for validating agent client certs (enables mTLS)
 	requireClientCert := getEnv("REQUIRE_CLIENT_CERT", "false") == "true" // Require client cert (only with mTLS)
-	rateLimitEnabled := getEnv("RATE_LIMIT_ENABLED", "true") == "true" // Enable rate limiting (default: true)
-	rateLimitRPM := getEnvInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 60) // Requests per minute (default: 60)
+	rateLimitEnabled := getEnv("RATE_LIMIT_ENABLED", "true") == "true"    // Enable rate limiting (default: true)
+	rateLimitRPM := getEnvInt("RATE_LIMIT_REQUESTS_PER_MINUTE", 60)       // Requests per minute (default: 60)
 	// rateLimitBurst := getEnvInt("RATE_LIMIT_BURST", 10) // Burst capacity (default: 10) - reserved for future use
 	auditLogEnabled := getEnv("AUDIT_LOG_ENABLED", "true") == "true" // Enable audit logging (default: true)
-	auditLogBodies := getEnv("AUDIT_LOG_BODIES", "false") == "true" // Log request bodies (default: false for privacy)
+	auditLogBodies := getEnv("AUDIT_LOG_BODIES", "false") == "true"  // Log request bodies (default: false for privacy)
 	dbHost := getEnv("DB_HOST", "localhost")
 	dbPort := getEnv("DB_PORT", "5432")
 	dbUser := getEnv("DB_USER", "streamspace")
@@ -52,6 +53,7 @@ func main() {
 	dbName := getEnv("DB_NAME", "streamspace")
 	dbSSLMode := getEnv("DB_SSL_MODE", "disable") // SECURITY: Should be "require" in production
 	pluginDir := getEnv("PLUGIN_DIR", "./plugins")
+	pluginRepositoryURL := getEnv("PLUGIN_REPOSITORY_URL", "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main")
 
 	log.Println("Starting StreamSpace API Server...")
 
@@ -112,11 +114,20 @@ func main() {
 	}
 	defer redisCache.Close()
 
-	// Initialize Kubernetes client
+	// Initialize Kubernetes client. Optional in v2.0+ — the downstream
+	// handler signature explicitly accepts nil for standalone-API and
+	// docker-platform deployments (see line ~360 below). Only hard-fail
+	// when the operator declared kubernetes as the platform; otherwise
+	// log + continue with k8sClient=nil.
 	log.Println("Initializing Kubernetes client...")
 	k8sClient, err := k8s.NewClient()
 	if err != nil {
-		log.Fatalf("Failed to initialize Kubernetes client: %v", err)
+		platformEnv := os.Getenv("PLATFORM")
+		if platformEnv == "" || platformEnv == events.PlatformKubernetes {
+			log.Fatalf("Failed to initialize Kubernetes client: %v", err)
+		}
+		log.Printf("Kubernetes client init failed (PLATFORM=%s, continuing without it): %v", platformEnv, err)
+		k8sClient = nil
 	}
 
 	// Initialize stub event publisher (NATS removed - WebSocket used instead)
@@ -361,7 +372,10 @@ func main() {
 	activityHandler := handlers.NewActivityHandler(k8sClient, activityTracker, database)
 	catalogHandler := handlers.NewCatalogHandler(database)
 	sharingHandler := handlers.NewSharingHandler(database)
-	pluginHandler := handlers.NewPluginHandler(database, pluginDir)
+	pluginRuntime := internalplugins.NewRuntimeV2(database, pluginDir)
+	pluginMarketplace := internalplugins.NewPluginMarketplace(database, pluginRepositoryURL, pluginDir)
+	pluginMarketplaceHandler := handlers.NewPluginMarketplaceHandler(database, pluginMarketplace, pluginRuntime)
+	pluginHandler := handlers.NewPluginHandler(database, pluginDir, pluginRuntime)
 	dashboardHandler := handlers.NewDashboardHandler(database, k8sClient)
 	sessionActivityHandler := handlers.NewSessionActivityHandler(database)
 	apiKeyHandler := handlers.NewAPIKeyHandler(database)
@@ -395,6 +409,18 @@ func main() {
 	agentWebSocketHandler := handlers.NewAgentWebSocketHandler(agentHub, database)
 	selkiesProxyHandler := handlers.NewSelkiesProxyHandler(database, agentHub, "streamspace")
 
+	if err := pluginMarketplace.SyncCatalog(context.Background()); err != nil {
+		log.Printf("Warning: Initial plugin catalog sync failed: %v", err)
+	}
+	if err := pluginRuntime.Start(context.Background()); err != nil {
+		log.Printf("Warning: Plugin runtime failed to start: %v", err)
+	}
+	defer func() {
+		if err := pluginRuntime.Stop(context.Background()); err != nil {
+			log.Printf("Warning: Plugin runtime failed to stop cleanly: %v", err)
+		}
+	}()
+
 	// SECURITY: Initialize webhook authentication
 	webhookSecret := os.Getenv("WEBHOOK_SECRET")
 	if webhookSecret == "" {
@@ -403,7 +429,7 @@ func main() {
 	}
 
 	// Setup routes
-	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, nodeHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, applicationHandler, auditHandler, configurationHandler, licenseHandler, recordingHandler, agentHandler, agentWebSocketHandler, selkiesProxyHandler, jwtManager, userDB, database, redisCache, webhookSecret, rateLimitEnabled, rateLimitRPM)
+	setupRoutes(router, apiHandler, userHandler, groupHandler, authHandler, activityHandler, catalogHandler, sharingHandler, pluginHandler, pluginMarketplaceHandler, dashboardHandler, sessionActivityHandler, apiKeyHandler, teamHandler, preferencesHandler, notificationsHandler, searchHandler, sessionTemplatesHandler, batchHandler, monitoringHandler, quotasHandler, nodeHandler, wsManager, consoleHandler, collaborationHandler, integrationsHandler, loadBalancingHandler, schedulingHandler, securityHandler, templateVersioningHandler, setupHandler, applicationHandler, auditHandler, configurationHandler, licenseHandler, recordingHandler, agentHandler, agentWebSocketHandler, selkiesProxyHandler, jwtManager, userDB, database, redisCache, webhookSecret, rateLimitEnabled, rateLimitRPM)
 
 	// SECURITY: Configure mTLS for agent authentication (optional)
 	var tlsConfig *tls.Config
@@ -424,9 +450,9 @@ func main() {
 
 		// Configure TLS with client certificate validation
 		tlsConfig = &tls.Config{
-			ClientCAs: caCertPool,
+			ClientCAs:  caCertPool,
 			ClientAuth: tls.VerifyClientCertIfGiven, // Default: optional client cert
-			MinVersion: tls.VersionTLS12, // Enforce TLS 1.2+
+			MinVersion: tls.VersionTLS12,            // Enforce TLS 1.2+
 		}
 
 		// If REQUIRE_CLIENT_CERT is true, make client certs mandatory
@@ -548,7 +574,7 @@ func main() {
 	log.Println("Graceful shutdown completed")
 }
 
-func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, nodeHandler *handlers.NodeHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, applicationHandler *handlers.ApplicationHandler, auditHandler *handlers.AuditHandler, configurationHandler *handlers.ConfigurationHandler, licenseHandler *handlers.LicenseHandler, recordingHandler *handlers.RecordingHandler, agentHandler *handlers.AgentHandler, agentWebSocketHandler *handlers.AgentWebSocketHandler, selkiesProxyHandler *handlers.SelkiesProxyHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, database *db.Database, redisCache *cache.Cache, webhookSecret string, rateLimitEnabled bool, rateLimitRPM int) {
+func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserHandler, groupHandler *handlers.GroupHandler, authHandler *auth.AuthHandler, activityHandler *handlers.ActivityHandler, catalogHandler *handlers.CatalogHandler, sharingHandler *handlers.SharingHandler, pluginHandler *handlers.PluginHandler, pluginMarketplaceHandler *handlers.PluginMarketplaceHandler, dashboardHandler *handlers.DashboardHandler, sessionActivityHandler *handlers.SessionActivityHandler, apiKeyHandler *handlers.APIKeyHandler, teamHandler *handlers.TeamHandler, preferencesHandler *handlers.PreferencesHandler, notificationsHandler *handlers.NotificationsHandler, searchHandler *handlers.SearchHandler, sessionTemplatesHandler *handlers.SessionTemplatesHandler, batchHandler *handlers.BatchHandler, monitoringHandler *handlers.MonitoringHandler, quotasHandler *handlers.QuotasHandler, nodeHandler *handlers.NodeHandler, wsManager *internalWebsocket.Manager, consoleHandler *handlers.ConsoleHandler, collaborationHandler *handlers.CollaborationHandler, integrationsHandler *handlers.IntegrationsHandler, loadBalancingHandler *handlers.LoadBalancingHandler, schedulingHandler *handlers.SchedulingHandler, securityHandler *handlers.SecurityHandler, templateVersioningHandler *handlers.TemplateVersioningHandler, setupHandler *handlers.SetupHandler, applicationHandler *handlers.ApplicationHandler, auditHandler *handlers.AuditHandler, configurationHandler *handlers.ConfigurationHandler, licenseHandler *handlers.LicenseHandler, recordingHandler *handlers.RecordingHandler, agentHandler *handlers.AgentHandler, agentWebSocketHandler *handlers.AgentWebSocketHandler, selkiesProxyHandler *handlers.SelkiesProxyHandler, jwtManager *auth.JWTManager, userDB *db.UserDB, database *db.Database, redisCache *cache.Cache, webhookSecret string, rateLimitEnabled bool, rateLimitRPM int) {
 	// SECURITY: Create authentication middleware
 	authMiddleware := auth.Middleware(jwtManager, userDB)
 	adminMiddleware := auth.RequireRole("admin")
@@ -906,6 +932,7 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 
 			// Plugin system - using dedicated handler
 			pluginHandler.RegisterRoutes(protected)
+			pluginMarketplaceHandler.RegisterRoutes(protected)
 
 			// Installed applications management - using dedicated handler (admin only for management)
 			applicationHandler.RegisterRoutes(protected)
@@ -1050,27 +1077,27 @@ func setupRoutes(router *gin.Engine, h *api.Handler, userHandler *handlers.UserH
 			protected.GET("/metrics", operatorMiddleware, h.GetMetrics)
 		}
 
-	// v2.0 Agent self-service routes (require mTLS OR API key authentication, not JWT)
-	// These routes are for agents to register themselves and send heartbeats
-	// Authentication: mTLS (if configured) or API key fallback
-	// Rate limited to prevent brute-force attacks
-	agentRoutes := v1.Group("/agents")
-	agentRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM))       // Apply rate limiting first
-	agentRoutes.Use(agentAuth.RequireAuth())   // Then authentication
-	{
-		agentHandler.RegisterRoutes(agentRoutes)
-	}
+		// v2.0 Agent self-service routes (require mTLS OR API key authentication, not JWT)
+		// These routes are for agents to register themselves and send heartbeats
+		// Authentication: mTLS (if configured) or API key fallback
+		// Rate limited to prevent brute-force attacks
+		agentRoutes := v1.Group("/agents")
+		agentRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM)) // Apply rate limiting first
+		agentRoutes.Use(agentAuth.RequireAuth())                                           // Then authentication
+		{
+			agentHandler.RegisterRoutes(agentRoutes)
+		}
 
-	// v2.0 Agent WebSocket connections (require mTLS OR API key authentication, not JWT)
-	// Agents connect here to receive commands and send status updates
-	// Authentication: mTLS (if configured) or API key fallback
-	// Rate limited to prevent connection flooding
-	agentWSRoutes := v1.Group("")
-	agentWSRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM))     // Apply rate limiting first
-	agentWSRoutes.Use(agentAuth.RequireAuth()) // Then authentication
-	{
-		agentWebSocketHandler.RegisterRoutes(agentWSRoutes)
-	}
+		// v2.0 Agent WebSocket connections (require mTLS OR API key authentication, not JWT)
+		// Agents connect here to receive commands and send status updates
+		// Authentication: mTLS (if configured) or API key fallback
+		// Rate limited to prevent connection flooding
+		agentWSRoutes := v1.Group("")
+		agentWSRoutes.Use(agentRateLimit(globalRateLimiter, rateLimitEnabled, rateLimitRPM)) // Apply rate limiting first
+		agentWSRoutes.Use(agentAuth.RequireAuth())                                           // Then authentication
+		{
+			agentWebSocketHandler.RegisterRoutes(agentWSRoutes)
+		}
 	}
 
 	// WebSocket endpoints (require authentication)

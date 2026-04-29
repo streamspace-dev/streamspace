@@ -48,21 +48,21 @@
 //
 // Example Usage Flow:
 //
-//	1. User browses catalog:
-//	   GET /api/plugins/catalog?category=analytics&sort=popular
+//  1. User browses catalog:
+//     GET /api/plugins/catalog?category=analytics&sort=popular
 //
-//	2. User views plugin details:
-//	   GET /api/plugins/catalog/42
-//	   (View count incremented async)
+//  2. User views plugin details:
+//     GET /api/plugins/catalog/42
+//     (View count incremented async)
 //
-//	3. User installs plugin:
-//	   POST /api/plugins/catalog/42/install
-//	   Body: {"config": {"api_key": "..."}}
-//	   (Plugin added to installed_plugins, install count incremented)
+//  3. User installs plugin:
+//     POST /api/plugins/catalog/42/install
+//     Body: {"config": {"api_key": "..."}}
+//     (Plugin added to installed_plugins, install count incremented)
 //
-//	4. User enables/disables plugin:
-//	   POST /api/plugins/123/enable
-//	   (Plugin enabled in database, runtime loads it on next restart/reload)
+//  4. User enables/disables plugin:
+//     POST /api/plugins/123/enable
+//     (Plugin enabled in database, runtime loads it on next restart/reload)
 package handlers
 
 import (
@@ -83,6 +83,7 @@ import (
 	"github.com/gin-gonic/gin"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
+	internalplugins "github.com/streamspace-dev/streamspace/api/internal/plugins"
 	"github.com/streamspace-dev/streamspace/api/internal/validator"
 )
 
@@ -100,6 +101,8 @@ type PluginHandler struct {
 	db *db.Database
 	// pluginDir is the directory where plugins are installed.
 	pluginDir string
+	// runtime manages immediate load/unload behavior when available.
+	runtime *internalplugins.RuntimeV2
 }
 
 // NewPluginHandler creates a new plugin handler.
@@ -115,25 +118,35 @@ type PluginHandler struct {
 //
 //	handler := NewPluginHandler(db, "/plugins")
 //	handler.RegisterRoutes(router.Group("/api"))
-func NewPluginHandler(database *db.Database, pluginDir string) *PluginHandler {
+func NewPluginHandler(database *db.Database, pluginDir string, runtime ...*internalplugins.RuntimeV2) *PluginHandler {
 	// Create plugins directory if it doesn't exist
 	if pluginDir != "" {
 		if err := os.MkdirAll(pluginDir, 0755); err != nil {
 			log.Printf("[PluginHandler] Warning: Failed to create plugins directory: %v", err)
 		}
 	}
+
+	var pluginRuntime *internalplugins.RuntimeV2
+	if len(runtime) > 0 {
+		pluginRuntime = runtime[0]
+	}
 	return &PluginHandler{
 		db:        database,
 		pluginDir: pluginDir,
+		runtime:   pluginRuntime,
 	}
 }
 
 // downloadPluginFromRepository downloads a plugin from its repository to the local plugins directory.
-// It attempts to download as a .tar.gz archive first, falling back to individual files.
-func (h *PluginHandler) downloadPluginFromRepository(pluginName string, repoURL string) error {
+// It prefers a packaged archive and only falls back to manifest-driven asset fetches.
+func (h *PluginHandler) downloadPluginFromRepository(pluginName, repoURL, sourcePath string) error {
 	if h.pluginDir == "" {
 		log.Printf("[PluginHandler] No plugins directory configured, skipping download")
 		return nil
+	}
+
+	if sourcePath == "" {
+		sourcePath = pluginName
 	}
 
 	pluginPath := filepath.Join(h.pluginDir, pluginName)
@@ -144,15 +157,15 @@ func (h *PluginHandler) downloadPluginFromRepository(pluginName string, repoURL 
 	}
 
 	// Try to download as archive first
-	archiveURL := fmt.Sprintf("%s/%s/plugin.tar.gz", strings.TrimSuffix(repoURL, "/"), pluginName)
+	archiveURL := fmt.Sprintf("%s/%s/plugin.tar.gz", strings.TrimSuffix(repoURL, "/"), sourcePath)
 	if err := h.downloadAndExtractArchive(archiveURL, pluginPath); err == nil {
 		log.Printf("[PluginHandler] Downloaded plugin %s as archive", pluginName)
 		return nil
 	}
 
-	// Fallback: download individual files
-	log.Printf("[PluginHandler] Archive not available, downloading individual files for %s", pluginName)
-	return h.downloadPluginFiles(pluginName, repoURL, pluginPath)
+	// Fallback: download files referenced by manifest.json.
+	log.Printf("[PluginHandler] Archive not available, downloading runtime assets for %s", pluginName)
+	return h.downloadPluginFiles(pluginName, sourcePath, repoURL, pluginPath)
 }
 
 // downloadAndExtractArchive downloads a .tar.gz archive and extracts it to the target directory.
@@ -214,31 +227,87 @@ func (h *PluginHandler) downloadAndExtractArchive(url string, targetDir string) 
 	return nil
 }
 
-// downloadPluginFiles downloads individual plugin files from the repository.
-func (h *PluginHandler) downloadPluginFiles(pluginName string, repoURL string, targetDir string) error {
-	// Files to download
-	files := []string{"plugin.json", "manifest.json", "README.md", "LICENSE"}
-
-	var downloadedAny bool
-	for _, file := range files {
-		fileURL := fmt.Sprintf("%s/%s/%s", strings.TrimSuffix(repoURL, "/"), pluginName, file)
-		targetPath := filepath.Join(targetDir, file)
-
-		if err := h.downloadFile(fileURL, targetPath); err != nil {
-			// Only log error for required files
-			if file == "plugin.json" || file == "manifest.json" {
-				log.Printf("[PluginHandler] Warning: Failed to download %s: %v", file, err)
-			}
-			continue
-		}
-		downloadedAny = true
+// downloadPluginFiles downloads manifest-driven plugin assets from the repository.
+func (h *PluginHandler) downloadPluginFiles(pluginName, sourcePath, repoURL, targetDir string) error {
+	baseURL := strings.TrimSuffix(repoURL, "/")
+	manifestURL := fmt.Sprintf("%s/%s/manifest.json", baseURL, sourcePath)
+	manifestPath := filepath.Join(targetDir, "manifest.json")
+	if err := h.downloadFile(manifestURL, manifestPath); err != nil {
+		return fmt.Errorf("failed to download manifest.json: %w", err)
 	}
 
-	if !downloadedAny {
-		return fmt.Errorf("failed to download any plugin files")
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return fmt.Errorf("failed to read manifest.json: %w", err)
+	}
+
+	var manifest models.PluginManifest
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return fmt.Errorf("failed to parse manifest.json: %w", err)
+	}
+
+	_ = h.downloadFile(fmt.Sprintf("%s/%s/README.md", baseURL, sourcePath), filepath.Join(targetDir, "README.md"))
+	_ = h.downloadFile(fmt.Sprintf("%s/%s/LICENSE", baseURL, sourcePath), filepath.Join(targetDir, "LICENSE"))
+	if manifest.Icon != "" {
+		_ = h.downloadFile(
+			fmt.Sprintf("%s/%s/%s", baseURL, sourcePath, manifest.Icon),
+			filepath.Join(targetDir, filepath.Base(manifest.Icon)),
+		)
+	}
+
+	entrypoints := handlerEntrypoints(manifest)
+	if !handlerHasSharedObjectEntrypoint(entrypoints) {
+		return fmt.Errorf(
+			"plugin %s does not expose a runtime-loadable .so entrypoint; publish plugin.tar.gz or a bundle with .so assets",
+			pluginName,
+		)
+	}
+
+	for _, entry := range entrypoints {
+		entryURL := fmt.Sprintf("%s/%s/%s", baseURL, sourcePath, entry)
+		targetPath := filepath.Join(targetDir, filepath.Base(entry))
+		if err := h.downloadFile(entryURL, targetPath); err != nil {
+			return fmt.Errorf("failed to download plugin entrypoint %s: %w", entry, err)
+		}
 	}
 
 	return nil
+}
+
+func handlerEntrypoints(manifest models.PluginManifest) []string {
+	entrypoints := []string{
+		manifest.Entrypoints.Main,
+		manifest.Entrypoints.API,
+		manifest.Entrypoints.UI,
+		manifest.Entrypoints.Webhook,
+		manifest.Entrypoints.CLI,
+	}
+
+	seen := make(map[string]struct{}, len(entrypoints))
+	unique := make([]string, 0, len(entrypoints))
+	for _, entry := range entrypoints {
+		entry = strings.TrimSpace(entry)
+		if entry == "" {
+			continue
+		}
+		if _, ok := seen[entry]; ok {
+			continue
+		}
+		seen[entry] = struct{}{}
+		unique = append(unique, entry)
+	}
+
+	return unique
+}
+
+func handlerHasSharedObjectEntrypoint(entrypoints []string) bool {
+	for _, entry := range entrypoints {
+		if strings.HasSuffix(entry, ".so") {
+			return true
+		}
+	}
+
+	return false
 }
 
 // downloadFile downloads a single file from URL to the target path.
@@ -635,11 +704,11 @@ func (h *PluginHandler) RatePlugin(c *gin.Context) {
 //	}
 //
 // Behavior:
-//   1. Fetches plugin details from catalog_plugins
-//   2. Checks if already installed (returns 409 if yes)
-//   3. Inserts into installed_plugins with enabled=true
-//   4. Increments install count asynchronously
-//   5. Updates plugin_stats table
+//  1. Fetches plugin details from catalog_plugins
+//  2. Checks if already installed (returns 409 if yes)
+//  3. Inserts into installed_plugins with enabled=true
+//  4. Increments install count asynchronously
+//  5. Updates plugin_stats table
 //
 // Side Effects:
 //   - Plugin install count incremented (async, non-blocking)
@@ -686,15 +755,16 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	var catalogPlugin models.CatalogPlugin
 	var manifestJSON []byte
 	var repoURL sql.NullString
+	var sourcePath sql.NullString
 	err := h.db.DB().QueryRow(`
-		SELECT cp.id, cp.name, cp.version, cp.display_name, cp.description, cp.plugin_type, cp.icon_url, cp.manifest, r.url
+		SELECT cp.id, cp.name, cp.version, cp.display_name, cp.description, cp.plugin_type, cp.icon_url, cp.manifest, r.url, cp.source_path
 		FROM catalog_plugins cp
 		LEFT JOIN repositories r ON cp.repository_id = r.id
 		WHERE cp.id = $1
 	`, catalogPluginID).Scan(
 		&catalogPlugin.ID, &catalogPlugin.Name, &catalogPlugin.Version,
 		&catalogPlugin.DisplayName, &catalogPlugin.Description,
-		&catalogPlugin.PluginType, &catalogPlugin.IconURL, &manifestJSON, &repoURL,
+		&catalogPlugin.PluginType, &catalogPlugin.IconURL, &manifestJSON, &repoURL, &sourcePath,
 	)
 
 	if err == sql.ErrNoRows {
@@ -738,7 +808,7 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 	// Download plugin files to local plugins directory
 	if repoURL.Valid && h.pluginDir != "" {
 		go func() {
-			if err := h.downloadPluginFromRepository(catalogPlugin.Name, repoURL.String); err != nil {
+			if err := h.downloadPluginFromRepository(catalogPlugin.Name, repoURL.String, sourcePath.String); err != nil {
 				log.Printf("[PluginHandler] Warning: Failed to download plugin files for %s: %v", catalogPlugin.Name, err)
 			} else {
 				log.Printf("[PluginHandler] Plugin files downloaded to %s/%s", h.pluginDir, catalogPlugin.Name)
@@ -764,10 +834,31 @@ func (h *PluginHandler) InstallPlugin(c *gin.Context) {
 		`, catalogPlugin.ID, time.Now())
 	}()
 
-	c.JSON(http.StatusCreated, gin.H{
+	var warning string
+	if h.runtime != nil {
+		var config map[string]interface{}
+		if len(req.Config) > 0 {
+			if err := json.Unmarshal(req.Config, &config); err != nil {
+				warning = "Plugin installed, but config could not be parsed for runtime load."
+			}
+		}
+		if config == nil {
+			config = make(map[string]interface{})
+		}
+		if err := h.runtime.LoadPluginWithConfig(c.Request.Context(), catalogPlugin.Name, catalogPlugin.Version, config, catalogPlugin.Manifest); err != nil {
+			warning = err.Error()
+		}
+	}
+
+	response := gin.H{
 		"message":  "Plugin installed successfully",
 		"pluginId": installedID,
-	})
+	}
+	if warning != "" {
+		response["warning"] = warning
+	}
+
+	c.JSON(http.StatusCreated, response)
 }
 
 // ListInstalledPlugins lists all installed plugins.
@@ -1031,7 +1122,26 @@ func (h *PluginHandler) UpdateInstalledPlugin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Plugin updated successfully"})
+	var warning string
+	if h.runtime != nil {
+		var pluginName string
+		if err := h.db.DB().QueryRow(`SELECT name FROM installed_plugins WHERE id = $1`, id).Scan(&pluginName); err == nil {
+			if req.Enabled != nil && !*req.Enabled {
+				if err := h.runtime.UnloadPlugin(c.Request.Context(), pluginName); err != nil {
+					warning = err.Error()
+				}
+			} else if err := h.runtime.ReloadPlugin(c.Request.Context(), pluginName); err != nil {
+				warning = err.Error()
+			}
+		}
+	}
+
+	response := gin.H{"message": "Plugin updated successfully"}
+	if warning != "" {
+		response["warning"] = warning
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // UninstallPlugin removes a plugin from the system.
@@ -1084,6 +1194,13 @@ func (h *PluginHandler) UninstallPlugin(c *gin.Context) {
 		return
 	}
 
+	warning := ""
+	if h.runtime != nil {
+		if err := h.runtime.UnloadPlugin(c.Request.Context(), pluginName); err != nil {
+			warning = err.Error()
+		}
+	}
+
 	// Remove plugin files from plugins directory
 	if h.pluginDir != "" && pluginName != "" {
 		pluginPath := filepath.Join(h.pluginDir, pluginName)
@@ -1094,7 +1211,12 @@ func (h *PluginHandler) UninstallPlugin(c *gin.Context) {
 		}
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Plugin uninstalled successfully"})
+	response := gin.H{"message": "Plugin uninstalled successfully"}
+	if warning != "" {
+		response["warning"] = warning
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // EnablePlugin enables an installed plugin.
@@ -1119,6 +1241,16 @@ func (h *PluginHandler) UninstallPlugin(c *gin.Context) {
 func (h *PluginHandler) EnablePlugin(c *gin.Context) {
 	id := c.Param("id")
 
+	var pluginName string
+	if err := h.db.DB().QueryRow(`SELECT name FROM installed_plugins WHERE id = $1`, id).Scan(&pluginName); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Plugin not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch plugin", "details": err.Error()})
+		return
+	}
+
 	result, err := h.db.DB().Exec(`
 		UPDATE installed_plugins
 		SET enabled = true, updated_at = NOW()
@@ -1136,7 +1268,14 @@ func (h *PluginHandler) EnablePlugin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Plugin enabled successfully"})
+	response := gin.H{"message": "Plugin enabled successfully"}
+	if h.runtime != nil {
+		if err := h.runtime.LoadPluginByName(c.Request.Context(), pluginName); err != nil {
+			response["warning"] = err.Error()
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }
 
 // DisablePlugin disables an installed plugin.
@@ -1161,6 +1300,16 @@ func (h *PluginHandler) EnablePlugin(c *gin.Context) {
 func (h *PluginHandler) DisablePlugin(c *gin.Context) {
 	id := c.Param("id")
 
+	var pluginName string
+	if err := h.db.DB().QueryRow(`SELECT name FROM installed_plugins WHERE id = $1`, id).Scan(&pluginName); err != nil {
+		if err == sql.ErrNoRows {
+			c.JSON(http.StatusNotFound, gin.H{"error": "Plugin not found"})
+			return
+		}
+		c.JSON(http.StatusInternalServerError, gin.H{"error": "Failed to fetch plugin", "details": err.Error()})
+		return
+	}
+
 	result, err := h.db.DB().Exec(`
 		UPDATE installed_plugins
 		SET enabled = false, updated_at = NOW()
@@ -1178,5 +1327,12 @@ func (h *PluginHandler) DisablePlugin(c *gin.Context) {
 		return
 	}
 
-	c.JSON(http.StatusOK, gin.H{"message": "Plugin disabled successfully"})
+	response := gin.H{"message": "Plugin disabled successfully"}
+	if h.runtime != nil {
+		if err := h.runtime.UnloadPlugin(c.Request.Context(), pluginName); err != nil {
+			response["warning"] = err.Error()
+		}
+	}
+
+	c.JSON(http.StatusOK, response)
 }

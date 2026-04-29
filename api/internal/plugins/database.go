@@ -186,8 +186,11 @@
 package plugins
 
 import (
+	"bytes"
 	"database/sql"
 	"fmt"
+	"sort"
+	"strings"
 
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 )
@@ -445,6 +448,45 @@ func (pd *PluginDatabase) Query(query string, args ...interface{}) (*sql.Rows, e
 // Returns sql.Row (must call Scan to get values and error).
 func (pd *PluginDatabase) QueryRow(query string, args ...interface{}) *sql.Row {
 	return pd.db.DB().QueryRow(query, args...)
+}
+
+// QueryInt is a convenience helper for scalar integer queries such as COUNT(*).
+func (pd *PluginDatabase) QueryInt(query string, args ...interface{}) (int, error) {
+	var value int
+	err := pd.QueryRow(query, args...).Scan(&value)
+	return value, err
+}
+
+// Insert inserts a simple key/value payload into the specified table.
+func (pd *PluginDatabase) Insert(tableName string, values map[string]interface{}) error {
+	if len(values) == 0 {
+		return fmt.Errorf("no values provided for insert into %s", tableName)
+	}
+
+	cols := make([]string, 0, len(values))
+	for col := range values {
+		cols = append(cols, col)
+	}
+	sort.Strings(cols)
+
+	args := make([]interface{}, 0, len(cols))
+	placeholders := make([]string, 0, len(cols))
+	for i, col := range cols {
+		args = append(args, values[col])
+		placeholders = append(placeholders, fmt.Sprintf("$%d", i+1))
+	}
+
+	var query bytes.Buffer
+	query.WriteString("INSERT INTO ")
+	query.WriteString(tableName)
+	query.WriteString(" (")
+	query.WriteString(strings.Join(cols, ", "))
+	query.WriteString(") VALUES (")
+	query.WriteString(strings.Join(placeholders, ", "))
+	query.WriteString(")")
+
+	_, err := pd.Exec(query.String(), args...)
+	return err
 }
 
 // Transaction executes a function within a database transaction.

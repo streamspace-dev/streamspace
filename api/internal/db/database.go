@@ -77,8 +77,8 @@ import (
 	"strings"
 	"time"
 
-	"golang.org/x/crypto/bcrypt"
 	_ "github.com/lib/pq"
+	"golang.org/x/crypto/bcrypt"
 )
 
 // Config holds database configuration
@@ -184,10 +184,10 @@ func NewDatabase(config Config) (*Database, error) {
 
 	// Configure connection pool for optimal performance
 	// These settings balance performance with resource usage
-	db.SetMaxOpenConns(25)                     // Maximum number of open connections to the database
-	db.SetMaxIdleConns(5)                      // Maximum number of connections in the idle connection pool
-	db.SetConnMaxLifetime(5 * time.Minute)     // Maximum amount of time a connection may be reused (5 minutes)
-	db.SetConnMaxIdleTime(1 * time.Minute)     // Maximum amount of time a connection may be idle (1 minute)
+	db.SetMaxOpenConns(25)                 // Maximum number of open connections to the database
+	db.SetMaxIdleConns(5)                  // Maximum number of connections in the idle connection pool
+	db.SetConnMaxLifetime(5 * time.Minute) // Maximum amount of time a connection may be reused (5 minutes)
+	db.SetConnMaxIdleTime(1 * time.Minute) // Maximum amount of time a connection may be idle (1 minute)
 
 	// Test connection
 	if err := db.Ping(); err != nil {
@@ -772,6 +772,7 @@ func (d *Database) Migrate() error {
 			version VARCHAR(50) NOT NULL,
 			display_name VARCHAR(255),
 			description TEXT,
+			source_path TEXT,
 			category VARCHAR(100),
 			plugin_type VARCHAR(50) DEFAULT 'extension',
 			icon_url TEXT,
@@ -789,6 +790,8 @@ func (d *Database) Migrate() error {
 		`CREATE INDEX IF NOT EXISTS idx_catalog_plugins_category ON catalog_plugins(category)`,
 		`CREATE INDEX IF NOT EXISTS idx_catalog_plugins_type ON catalog_plugins(plugin_type)`,
 		`CREATE INDEX IF NOT EXISTS idx_catalog_plugins_category_rating ON catalog_plugins(category, avg_rating DESC)`,
+		`CREATE UNIQUE INDEX IF NOT EXISTS idx_catalog_plugins_repository_name ON catalog_plugins(repository_id, name)`,
+		`ALTER TABLE catalog_plugins ADD COLUMN IF NOT EXISTS source_path TEXT`,
 
 		// Installed plugins (user-installed plugins)
 		`CREATE TABLE IF NOT EXISTS installed_plugins (

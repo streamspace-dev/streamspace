@@ -756,18 +756,24 @@ type WidgetOptions struct {
 // Registers a widget for display on the user home dashboard.
 //
 // Returns: error if widget ID conflicts, nil on success
-func (pu *PluginUI) RegisterWidget(opts WidgetOptions) error {
-	widget := &UIWidget{
-		ID:          opts.ID,
-		Title:       opts.Title,
-		Component:   opts.Component,
-		Position:    opts.Position,
-		Width:       opts.Width,
-		Icon:        opts.Icon,
-		Permissions: opts.Permissions,
+func (pu *PluginUI) RegisterWidget(input interface{}) error {
+	switch opts := input.(type) {
+	case WidgetOptions:
+		widget := &UIWidget{
+			ID:          opts.ID,
+			Title:       opts.Title,
+			Component:   opts.Component,
+			Position:    opts.Position,
+			Width:       opts.Width,
+			Icon:        opts.Icon,
+			Permissions: opts.Permissions,
+		}
+		return pu.registry.RegisterWidget(pu.pluginName, widget)
+	case *UIWidget:
+		return pu.registry.RegisterWidget(pu.pluginName, opts)
+	default:
+		return fmt.Errorf("RegisterWidget requires WidgetOptions or *UIWidget")
 	}
-
-	return pu.registry.RegisterWidget(pu.pluginName, widget)
 }
 
 // RegisterAdminWidget registers an admin dashboard widget.
@@ -834,19 +840,25 @@ type AdminPageOptions struct {
 }
 
 // RegisterAdminPage registers an admin page at /admin/plugins/{name}/{path}.
-func (pu *PluginUI) RegisterAdminPage(opts AdminPageOptions) error {
-	page := &UIAdminPage{
-		ID:          opts.ID,
-		Title:       opts.Title,
-		Path:        opts.Path,
-		Component:   opts.Component,
-		Icon:        opts.Icon,
-		MenuLabel:   opts.MenuLabel,
-		Permissions: opts.Permissions,
-		Order:       opts.Order,
+func (pu *PluginUI) RegisterAdminPage(input interface{}) error {
+	switch opts := input.(type) {
+	case AdminPageOptions:
+		page := &UIAdminPage{
+			ID:          opts.ID,
+			Title:       opts.Title,
+			Path:        opts.Path,
+			Component:   opts.Component,
+			Icon:        opts.Icon,
+			MenuLabel:   opts.MenuLabel,
+			Permissions: opts.Permissions,
+			Order:       opts.Order,
+		}
+		return pu.registry.RegisterAdminPage(pu.pluginName, page)
+	case *UIAdminPage:
+		return pu.registry.RegisterAdminPage(pu.pluginName, opts)
+	default:
+		return fmt.Errorf("RegisterAdminPage requires AdminPageOptions or *UIAdminPage")
 	}
-
-	return pu.registry.RegisterAdminPage(pu.pluginName, page)
 }
 
 // MenuItemOptions contains options for registering a menu item.
@@ -866,16 +878,22 @@ type MenuItemOptions struct {
 }
 
 // RegisterMenuItem registers a navigation menu item.
-func (pu *PluginUI) RegisterMenuItem(opts MenuItemOptions) error {
-	item := &UIMenuItem{
-		ID:          opts.ID,
-		Label:       opts.Label,
-		Path:        opts.Path,
-		Icon:        opts.Icon,
-		Component:   opts.Component,
-		Order:       opts.Order,
-		Permissions: opts.Permissions,
+func (pu *PluginUI) RegisterMenuItem(input interface{}) error {
+	switch opts := input.(type) {
+	case MenuItemOptions:
+		item := &UIMenuItem{
+			ID:          opts.ID,
+			Label:       opts.Label,
+			Path:        opts.Path,
+			Icon:        opts.Icon,
+			Component:   opts.Component,
+			Order:       opts.Order,
+			Permissions: opts.Permissions,
+		}
+		return pu.registry.RegisterMenuItem(pu.pluginName, item)
+	case *UIMenuItem:
+		return pu.registry.RegisterMenuItem(pu.pluginName, opts)
+	default:
+		return fmt.Errorf("RegisterMenuItem requires MenuItemOptions or *UIMenuItem")
 	}
-
-	return pu.registry.RegisterMenuItem(pu.pluginName, item)
 }

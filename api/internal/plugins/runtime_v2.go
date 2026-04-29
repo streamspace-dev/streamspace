@@ -6,11 +6,11 @@
 // Design Rationale - Why RuntimeV2:
 //
 // RuntimeV2 is an evolution of the original Runtime that adds:
-//   1. Automatic discovery of available plugins (filesystem + built-in)
-//   2. Database-driven plugin loading (loads only enabled plugins)
-//   3. Auto-start capability (plugins load on API startup)
-//   4. Integrated event bus for inter-plugin communication
-//   5. Centralized registries (API, UI, Events, Scheduler)
+//  1. Automatic discovery of available plugins (filesystem + built-in)
+//  2. Database-driven plugin loading (loads only enabled plugins)
+//  3. Auto-start capability (plugins load on API startup)
+//  4. Integrated event bus for inter-plugin communication
+//  5. Centralized registries (API, UI, Events, Scheduler)
 //
 // Plugin Lifecycle Flow:
 //
@@ -77,15 +77,15 @@
 //
 // RuntimeV2 supports two plugin loading modes:
 //
-//	1. Auto-start (default): Automatically loads all enabled plugins from database
-//	   - Best for: Production deployments
-//	   - Use case: Plugins are managed via UI/API, enabled state in database
-//	   - Example: Admin enables "slack-notifications" via UI → loads on restart
+//  1. Auto-start (default): Automatically loads all enabled plugins from database
+//     - Best for: Production deployments
+//     - Use case: Plugins are managed via UI/API, enabled state in database
+//     - Example: Admin enables "slack-notifications" via UI → loads on restart
 //
-//	2. Manual loading: Plugins must be loaded via API calls
-//	   - Best for: Development, testing, debugging
-//	   - Use case: Fine-grained control over plugin loading
-//	   - Example: Load specific plugin version for testing
+//  2. Manual loading: Plugins must be loaded via API calls
+//     - Best for: Development, testing, debugging
+//     - Use case: Fine-grained control over plugin loading
+//     - Example: Load specific plugin version for testing
 //
 // Database Schema Integration:
 //
@@ -236,7 +236,7 @@ type RuntimeV2 struct {
 //
 // Thread Safety: Constructor is not thread-safe. Do not call concurrently.
 func NewRuntimeV2(database *db.Database, pluginDirs ...string) *RuntimeV2 {
-	return &RuntimeV2{
+	runtime := &RuntimeV2{
 		db:          database,
 		discovery:   NewPluginDiscovery(pluginDirs...),
 		plugins:     make(map[string]*LoadedPlugin),
@@ -246,6 +246,10 @@ func NewRuntimeV2(database *db.Database, pluginDirs ...string) *RuntimeV2 {
 		uiRegistry:  NewUIRegistry(),
 		autoStart:   true,
 	}
+
+	GetGlobalRegistry().ApplyToDiscovery(runtime.discovery)
+
+	return runtime
 }
 
 // SetAutoStart enables/disables automatic plugin loading on Start().
@@ -293,8 +297,8 @@ func (r *RuntimeV2) SetAutoStart(enabled bool) {
 //
 // The plugin becomes available for loading but is not automatically loaded.
 // To load the plugin, either:
-//   1. Enable it in database (for auto-start mode)
-//   2. Call LoadPluginWithConfig manually
+//  1. Enable it in database (for auto-start mode)
+//  2. Call LoadPluginWithConfig manually
 //
 // Example:
 //
@@ -633,7 +637,9 @@ func (r *RuntimeV2) LoadPluginWithConfig(ctx context.Context, name, version stri
 	pluginCtx.Database = NewPluginDatabase(r.db, name)
 	pluginCtx.Events = NewPluginEvents(r.eventBus, name)
 	pluginCtx.API = NewPluginAPI(r.apiRegistry, name)
+	pluginCtx.APIRegistry = pluginCtx.API
 	pluginCtx.UI = NewPluginUI(r.uiRegistry, name)
+	pluginCtx.UIRegistry = pluginCtx.UI
 	pluginCtx.Storage = NewPluginStorage(r.db, name)
 	pluginCtx.Logger = NewPluginLogger(name)
 	pluginCtx.Scheduler = NewPluginScheduler(r.scheduler, name)

@@ -493,7 +493,7 @@ type PluginAPI struct {
 //
 // Creates a scoped API interface for a specific plugin, with automatic
 // namespace isolation. This is called by the plugin runtime during
-//initialization, not by plugins directly.
+// initialization, not by plugins directly.
 //
 // Parameters:
 //   - registry: The global API registry
@@ -562,7 +562,37 @@ type EndpointOptions struct {
 //	    Permissions: []string{"plugin.slack.send"},
 //	    Description: "Send a Slack message",
 //	})
-func (pa *PluginAPI) RegisterEndpoint(opts EndpointOptions) error {
+func (pa *PluginAPI) RegisterEndpoint(args ...interface{}) error {
+	var opts EndpointOptions
+	switch len(args) {
+	case 1:
+		var ok bool
+		opts, ok = args[0].(EndpointOptions)
+		if !ok {
+			return fmt.Errorf("RegisterEndpoint requires EndpointOptions or method/path/handler")
+		}
+	case 3:
+		method, ok := args[0].(string)
+		if !ok {
+			return fmt.Errorf("RegisterEndpoint method must be a string")
+		}
+		path, ok := args[1].(string)
+		if !ok {
+			return fmt.Errorf("RegisterEndpoint path must be a string")
+		}
+		handler, ok := args[2].(gin.HandlerFunc)
+		if !ok {
+			return fmt.Errorf("RegisterEndpoint handler must be a gin.HandlerFunc")
+		}
+		opts = EndpointOptions{
+			Method:  method,
+			Path:    path,
+			Handler: handler,
+		}
+	default:
+		return fmt.Errorf("RegisterEndpoint requires EndpointOptions or method/path/handler")
+	}
+
 	// Ensure path starts with / (normalize input)
 	if len(opts.Path) == 0 || opts.Path[0] != '/' {
 		opts.Path = "/" + opts.Path

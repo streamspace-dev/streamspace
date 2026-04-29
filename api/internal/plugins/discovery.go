@@ -203,6 +203,7 @@
 package plugins
 
 import (
+	"encoding/json"
 	"fmt"
 	"log"
 	"os"
@@ -242,9 +243,9 @@ import (
 //	// Load specific plugin
 //	handler, _ := discovery.LoadPlugin("analytics")
 type PluginDiscovery struct {
-	pluginDirs      []string
-	builtinPlugins  map[string]PluginFactory
-	dynamicPlugins  map[string]*plugin.Plugin
+	pluginDirs     []string
+	builtinPlugins map[string]PluginFactory
+	dynamicPlugins map[string]*plugin.Plugin
 }
 
 // PluginFactory is a function that creates a new plugin instance
@@ -255,8 +256,8 @@ func NewPluginDiscovery(pluginDirs ...string) *PluginDiscovery {
 	if len(pluginDirs) == 0 {
 		// Default plugin directories
 		pluginDirs = []string{
-			"/plugins",                    // Container path
-			"./plugins",                   // Local development
+			"/plugins",                             // Container path
+			"./plugins",                            // Local development
 			"/usr/local/share/streamspace/plugins", // System install
 		}
 	}
@@ -414,6 +415,45 @@ func (pd *PluginDiscovery) findPluginFile(name string) string {
 				return subPath
 			}
 		}
+
+		if manifestPath := filepath.Join(dir, name, "manifest.json"); pd.hasFile(manifestPath) {
+			if entrypointPath := pd.findPluginFromManifest(manifestPath); entrypointPath != "" {
+				return entrypointPath
+			}
+		}
+	}
+
+	return ""
+}
+
+func (pd *PluginDiscovery) hasFile(path string) bool {
+	info, err := os.Stat(path)
+	return err == nil && !info.IsDir()
+}
+
+func (pd *PluginDiscovery) findPluginFromManifest(manifestPath string) string {
+	manifestBytes, err := os.ReadFile(manifestPath)
+	if err != nil {
+		return ""
+	}
+
+	var manifest struct {
+		Entrypoints struct {
+			Main string `json:"main"`
+		} `json:"entrypoints"`
+	}
+	if err := json.Unmarshal(manifestBytes, &manifest); err != nil {
+		return ""
+	}
+
+	entrypoint := strings.TrimSpace(manifest.Entrypoints.Main)
+	if entrypoint == "" || !strings.HasSuffix(entrypoint, ".so") {
+		return ""
+	}
+
+	path := filepath.Join(filepath.Dir(manifestPath), filepath.Clean(entrypoint))
+	if pd.hasFile(path) {
+		return path
 	}
 
 	return ""

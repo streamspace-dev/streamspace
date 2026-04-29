@@ -34,6 +34,7 @@
 //  7. **Runtime**: Plugin handles events, serves API requests, runs jobs
 //  8. **Disabling**: Plugin stops receiving new events (OnDisable hook)
 //  9. **OnUnload Hook**: Plugin cleans up resources
+//
 // 10. **Unloading**: Plugin removed from memory, all resources released
 //
 // # Concurrency Model
@@ -561,13 +562,15 @@ type PluginContext struct {
 	Manifest   models.PluginManifest
 
 	// Platform APIs
-	Database  *PluginDatabase
-	Events    *PluginEvents
-	API       *PluginAPI
-	UI        *PluginUI
-	Storage   *PluginStorage
-	Logger    *PluginLogger
-	Scheduler *PluginScheduler
+	Database    *PluginDatabase
+	Events      *PluginEvents
+	API         *PluginAPI
+	APIRegistry *PluginAPI
+	UI          *PluginUI
+	UIRegistry  *PluginUI
+	Storage     *PluginStorage
+	Logger      *PluginLogger
+	Scheduler   *PluginScheduler
 
 	// Platform state
 	runtime *Runtime
@@ -808,7 +811,9 @@ func (r *Runtime) LoadPlugin(ctx context.Context, name, version string, config m
 	pluginCtx.Database = NewPluginDatabase(r.db, name)
 	pluginCtx.Events = NewPluginEvents(r.eventBus, name)
 	pluginCtx.API = NewPluginAPI(r.apiRegistry, name)
+	pluginCtx.APIRegistry = pluginCtx.API
 	pluginCtx.UI = NewPluginUI(r.uiRegistry, name)
+	pluginCtx.UIRegistry = pluginCtx.UI
 	pluginCtx.Storage = NewPluginStorage(r.db, name)
 	pluginCtx.Logger = NewPluginLogger(name)
 	pluginCtx.Scheduler = NewPluginScheduler(r.scheduler, name)
