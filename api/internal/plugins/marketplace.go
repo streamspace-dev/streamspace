@@ -151,6 +151,7 @@ import (
 	"strings"
 	"time"
 
+	"github.com/lib/pq"
 	"github.com/streamspace-dev/streamspace/api/internal/db"
 	"github.com/streamspace-dev/streamspace/api/internal/models"
 	"gopkg.in/yaml.v3"
@@ -241,7 +242,7 @@ type pluginCatalogYAML struct {
 // parameters, allowing callers to omit repository URL or plugin directory.
 //
 // **Default Values**:
-//   - repositoryURL: "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main"
+//   - repositoryURL: "https://raw.githubusercontent.com/streamspace-dev/streamspace-plugins/main"
 //   - pluginDir: "/plugins"
 //   - cacheTTL: 15 minutes (hardcoded, could be configurable)
 //
@@ -272,7 +273,7 @@ type pluginCatalogYAML struct {
 // Returns initialized marketplace ready to sync catalog.
 func NewPluginMarketplace(database *db.Database, repositoryURL, pluginDir string) *PluginMarketplace {
 	if repositoryURL == "" {
-		repositoryURL = "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main"
+		repositoryURL = "https://raw.githubusercontent.com/streamspace-dev/streamspace-plugins/main"
 	}
 
 	if pluginDir == "" {
@@ -652,7 +653,7 @@ func (m *PluginMarketplace) UninstallPlugin(ctx context.Context, name string) er
 //
 // **Example Archive URL**:
 //
-//	https://github.com/JoshuaAFerguson/streamspace-plugins/releases/download/v1.2.3/streamspace-analytics.tar.gz
+//	https://github.com/streamspace-dev/streamspace-plugins/releases/download/v1.2.3/streamspace-analytics.tar.gz
 //
 // **Archive Contents**:
 //
@@ -1316,7 +1317,7 @@ func (m *PluginMarketplace) updateDatabaseCatalog(ctx context.Context, plugins [
 				tags = $10,
 				updated_at = NOW()
 		`, plugin.Name, plugin.Version, plugin.DisplayName, plugin.Description,
-			plugin.Path, plugin.Category, plugin.Manifest.Type, plugin.IconURL, manifestJSON, plugin.Tags)
+			plugin.Path, plugin.Category, plugin.Manifest.Type, plugin.IconURL, manifestJSON, pq.Array(plugin.Tags))
 
 		if err != nil {
 			log.Printf("[Plugin Marketplace] Error updating catalog for %s: %v", plugin.Name, err)

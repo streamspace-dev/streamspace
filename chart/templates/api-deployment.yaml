@@ -80,6 +80,14 @@ spec:
             value: {{ .Values.api.config.syncInterval }}
           - name: SYNC_WORK_DIR
             value: {{ .Values.api.config.syncWorkDir }}
+          - name: DEFAULT_TEMPLATE_REPOSITORY_URL
+            value: {{ .Values.repositories.templates.url | quote }}
+          - name: DEFAULT_TEMPLATE_REPOSITORY_BRANCH
+            value: {{ .Values.repositories.templates.branch | quote }}
+          - name: DEFAULT_PLUGIN_REPOSITORY_URL
+            value: {{ .Values.repositories.plugins.url | quote }}
+          - name: DEFAULT_PLUGIN_REPOSITORY_BRANCH
+            value: {{ .Values.repositories.plugins.branch | quote }}
           - name: NAMESPACE
             valueFrom:
               fieldRef:

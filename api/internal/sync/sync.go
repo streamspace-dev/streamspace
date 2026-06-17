@@ -21,8 +21,8 @@
 //  6. Periodic sync keeps catalog up-to-date
 //
 // Example repositories:
-//   - https://github.com/JoshuaAFerguson/streamspace-templates (official templates)
-//   - https://github.com/JoshuaAFerguson/streamspace-plugins (official plugins)
+//   - https://github.com/streamspace-dev/streamspace-templates (official templates)
+//   - https://github.com/streamspace-dev/streamspace-plugins (official plugins)
 //
 // Configuration:
 //   - SYNC_WORK_DIR: Directory for cloned repositories (default: /tmp/streamspace-repos)
@@ -36,6 +36,7 @@ import (
 	"log"
 	"os"
 	"path/filepath"
+	"strings"
 	"time"
 
 	"github.com/lib/pq"
@@ -197,23 +198,32 @@ func (s *SyncService) SyncRepository(ctx context.Context, repoID int) error {
 	}
 
 	// Clone or update repository
-	repoPath := filepath.Join(s.workDir, fmt.Sprintf("repo-%d", repoID))
-
-	var cloneErr error
-	if _, err := os.Stat(repoPath); os.IsNotExist(err) {
-		// Clone repository
-		log.Printf("Cloning repository %s to %s", repo.URL, repoPath)
-		cloneErr = s.gitClient.Clone(ctx, repo.URL, repoPath, repo.Branch, repo.AuthConfig)
+	repoPath, useLocalRepository := resolveLocalRepositoryPath(repo.URL)
+	if useLocalRepository {
+		log.Printf("Using local repository path %s for repository %d", repoPath, repoID)
 	} else {
-		// Pull latest changes
-		log.Printf("Pulling latest changes for repository %s", repo.URL)
-		cloneErr = s.gitClient.Pull(ctx, repoPath, repo.Branch, repo.AuthConfig)
-	}
+		repoPath = filepath.Join(s.workDir, fmt.Sprintf("repo-%d", repoID))
 
-	if cloneErr != nil {
-		errMsg := fmt.Sprintf("Git operation failed: %v", cloneErr)
-		_ = s.updateRepositoryStatus(ctx, repoID, "failed", errMsg) // Best effort status update
-		return fmt.Errorf("git operation failed: %w", cloneErr)
+		var cloneErr error
+		if _, err := os.Stat(repoPath); os.IsNotExist(err) {
+			// Clone repository
+			log.Printf("Cloning repository %s to %s", repo.URL, repoPath)
+			cloneErr = s.gitClient.Clone(ctx, repo.URL, repoPath, repo.Branch, repo.AuthConfig)
+		} else {
+			// Pull latest changes
+			log.Printf("Pulling latest changes for repository %s", repo.URL)
+			cloneErr = s.gitClient.Pull(ctx, repoPath, repo.Branch, repo.AuthConfig)
+			if cloneErr != nil && shouldRecloneRepository(cloneErr) {
+				log.Printf("Repository checkout at %s is invalid, recloning %s", repoPath, repo.URL)
+				cloneErr = s.gitClient.Clone(ctx, repo.URL, repoPath, repo.Branch, repo.AuthConfig)
+			}
+		}
+
+		if cloneErr != nil {
+			errMsg := fmt.Sprintf("Git operation failed: %v", cloneErr)
+			_ = s.updateRepositoryStatus(ctx, repoID, "failed", errMsg) // Best effort status update
+			return fmt.Errorf("git operation failed: %w", cloneErr)
+		}
 	}
 
 	// Parse templates from repository
@@ -519,6 +529,36 @@ func (s *SyncService) StartScheduledSync(ctx context.Context, interval time.Dura
 			return
 		}
 	}
+}
+
+func resolveLocalRepositoryPath(repoURL string) (string, bool) {
+	repoURL = strings.TrimSpace(repoURL)
+	if repoURL == "" {
+		return "", false
+	}
+
+	localPath := strings.TrimPrefix(repoURL, "file://")
+	info, err := os.Stat(localPath)
+	if err != nil || !info.IsDir() {
+		return "", false
+	}
+
+	absPath, err := filepath.Abs(localPath)
+	if err != nil {
+		return localPath, true
+	}
+
+	return absPath, true
+}
+
+func shouldRecloneRepository(err error) bool {
+	if err == nil {
+		return false
+	}
+
+	message := err.Error()
+	return strings.Contains(message, "not a git repository") ||
+		strings.Contains(message, "does not appear to be a git repository")
 }
 
 // Repository represents a template repository

@@ -186,7 +186,7 @@ export interface CatalogPlugin {
   displayName: string;
   description: string;
   category: string;
-  pluginType: 'extension' | 'webhook' | 'api' | 'ui' | 'theme';
+  pluginType: 'extension' | 'integration' | 'webhook' | 'api' | 'ui' | 'theme';
   iconUrl?: string;
   manifest: PluginManifest;
   tags: string[];
@@ -221,7 +221,7 @@ export interface InstalledPlugin {
 export interface PluginFilters {
   search?: string;
   category?: string;
-  pluginType?: 'extension' | 'webhook' | 'api' | 'ui' | 'theme';
+  pluginType?: 'extension' | 'integration' | 'webhook' | 'api' | 'ui' | 'theme';
   tag?: string;
   sort?: 'popular' | 'rating' | 'recent' | 'installs';
   page?: number;

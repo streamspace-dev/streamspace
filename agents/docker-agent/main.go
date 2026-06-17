@@ -247,20 +247,47 @@ const (
 
 // AgentRegistrationRequest is the request payload for agent registration.
 type AgentRegistrationRequest struct {
-	AgentID  string                `json:"agentId"`
-	Platform string                `json:"platform"`
-	Region   string                `json:"region,omitempty"`
-	Capacity *config.AgentCapacity `json:"capacity,omitempty"`
+	AgentID  string                 `json:"agentId"`
+	Platform string                 `json:"platform"`
+	Region   string                 `json:"region,omitempty"`
+	Capacity *AgentCapacity         `json:"capacity,omitempty"`
 	Metadata map[string]interface{} `json:"metadata,omitempty"`
 }
 
 // AgentRegistrationResponse is the response from agent registration.
 type AgentRegistrationResponse struct {
+	Agent *struct {
+		ID        string    `json:"id"`
+		AgentID   string    `json:"agentId"`
+		Platform  string    `json:"platform"`
+		Status    string    `json:"status"`
+		CreatedAt time.Time `json:"createdAt"`
+	} `json:"agent,omitempty"`
+
 	ID        string    `json:"id"`
 	AgentID   string    `json:"agentId"`
 	Platform  string    `json:"platform"`
 	Status    string    `json:"status"`
 	CreatedAt time.Time `json:"createdAt"`
+
+	APIKey         string `json:"apiKey,omitempty"`
+	Message        string `json:"message,omitempty"`
+	ApprovalStatus string `json:"approvalStatus,omitempty"`
+}
+
+type AgentCapacity struct {
+	MaxSessions int    `json:"maxSessions"`
+	CPU         string `json:"cpu"`
+	Memory      string `json:"memory"`
+	Storage     string `json:"storage,omitempty"`
+}
+
+func apiAgentCapacity(capacity config.AgentCapacity) *AgentCapacity {
+	return &AgentCapacity{
+		MaxSessions: capacity.MaxSessions,
+		CPU:         fmt.Sprintf("%d cores", capacity.MaxCPU),
+		Memory:      fmt.Sprintf("%dGi", capacity.MaxMemory),
+	}
 }
 
 // Connect establishes connection to the Control Plane.
@@ -293,11 +320,11 @@ func (a *DockerAgent) registerAgent() error {
 		AgentID:  a.config.AgentID,
 		Platform: a.config.Platform,
 		Region:   a.config.Region,
-		Capacity: &a.config.Capacity,
+		Capacity: apiAgentCapacity(a.config.Capacity),
 		Metadata: map[string]interface{}{
-			"dockerHost":    a.config.DockerHost,
-			"networkName":   a.config.NetworkName,
-			"volumeDriver":  a.config.VolumeDriver,
+			"dockerHost":   a.config.DockerHost,
+			"networkName":  a.config.NetworkName,
+			"volumeDriver": a.config.VolumeDriver,
 		},
 	}
 
@@ -335,9 +362,9 @@ func (a *DockerAgent) registerAgent() error {
 	if err != nil {
 		return fmt.Errorf("HTTP request failed: %w", err)
 	}
-	defer resp.Body.Close()
+	defer func() { _ = resp.Body.Close() }()
 
-	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated {
+	if resp.StatusCode != http.StatusOK && resp.StatusCode != http.StatusCreated && resp.StatusCode != http.StatusAccepted {
 		body, _ := io.ReadAll(resp.Body)
 		return fmt.Errorf("registration failed with status %d: %s", resp.StatusCode, string(body))
 	}
@@ -348,7 +375,27 @@ func (a *DockerAgent) registerAgent() error {
 		return fmt.Errorf("failed to parse registration response: %w", err)
 	}
 
-	log.Printf("[DockerAgent] Registered successfully (ID: %s, Status: %s)", regResp.ID, regResp.Status)
+	if regResp.ApprovalStatus == "pending" {
+		return fmt.Errorf("agent registration is pending administrator approval: %s", regResp.Message)
+	}
+
+	if regResp.ApprovalStatus == "rejected" {
+		return fmt.Errorf("agent registration was rejected by administrator")
+	}
+
+	if regResp.APIKey != "" {
+		log.Printf("[DockerAgent] Received API key from Control Plane for agent %s", a.config.AgentID)
+		a.config.APIKey = regResp.APIKey
+	}
+
+	agentID := regResp.AgentID
+	status := regResp.Status
+	if regResp.Agent != nil {
+		agentID = regResp.Agent.AgentID
+		status = regResp.Agent.Status
+	}
+
+	log.Printf("[DockerAgent] Registered successfully: %s (status: %s)", agentID, status)
 	return nil
 }
 
@@ -509,11 +556,7 @@ func (a *DockerAgent) SendHeartbeats() {
 				"payload": map[string]interface{}{
 					"status":         "online",
 					"activeSessions": 0, // TODO: Add actual session count
-					"capacity": map[string]interface{}{
-						"maxCpu":      a.config.Capacity.MaxCPU,
-						"maxMemory":   a.config.Capacity.MaxMemory,
-						"maxSessions": a.config.Capacity.MaxSessions,
-					},
+					"capacity":       apiAgentCapacity(a.config.Capacity),
 				},
 			}
 
@@ -532,16 +575,10 @@ func (a *DockerAgent) SendHeartbeats() {
 // runStandalone runs the agent without leader election (single instance mode).
 func runStandalone(agent *DockerAgent) {
 	log.Println("[DockerAgent] Running in standalone mode (no HA)")
-
-	// Run agent in background
-	go func() {
-		if err := agent.Run(); err != nil {
-			log.Printf("[DockerAgent] Agent error: %v", err)
-		}
-	}()
-
-	// Wait for shutdown signal
-	agent.WaitForShutdown()
+	go agent.WaitForShutdown()
+	if err := agent.Run(); err != nil {
+		log.Fatalf("[DockerAgent] Agent error: %v", err)
+	}
 }
 
 // runWithLeaderElection runs the agent with leader election (HA mode).

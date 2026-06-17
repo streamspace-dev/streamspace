@@ -10,7 +10,7 @@ services:
       POSTGRES_USER: streamspace
       POSTGRES_PASSWORD: streamspace
     ports:
-      - "5432:5432"
+      - "${STREAMSPACE_POSTGRES_PORT:-5433}:5432"
     volumes:
       - postgres-data:/var/lib/postgresql/data
     healthcheck:
@@ -72,13 +72,17 @@ services:
       GIN_MODE: debug
 
       # JWT configuration
-      JWT_SECRET: dev-secret-change-in-production
+      JWT_SECRET: streamspace-local-dev-secret-change-me-32chars
+
+      # Agent bootstrap for local development
+      AGENT_BOOTSTRAP_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      AGENT_BOOTSTRAP_AUTO_APPROVE: "true"
 
       # NATS configuration
       NATS_URL: nats://nats:4222
       NATS_USER: ""
       NATS_PASSWORD: ""
-      PLATFORM: kubernetes
+      PLATFORM: docker
 
       # Sync configuration
       SYNC_INTERVAL: 1h
@@ -96,6 +100,41 @@ services:
       interval: 30s
       timeout: 3s
       retries: 3
+    networks:
+      - streamspace
+    restart: unless-stopped
+
+  docker-agent:
+    build:
+      context: ./agents/docker-agent
+      dockerfile: Dockerfile
+    container_name: streamspace-docker-agent
+    user: "0:0"
+    depends_on:
+      api:
+        condition: service_started
+    environment:
+      AGENT_ID: docker-dev-local
+      CONTROL_PLANE_URL: ws://api:8000
+      AGENT_API_KEY: 0123456789abcdef0123456789abcdef0123456789abcdef0123456789abcdef
+      PLATFORM: docker
+      REGION: local
+      DOCKER_HOST: unix:///var/run/docker.sock
+      NETWORK_NAME: streamspace
+      VOLUME_DRIVER: local
+      MAX_CPU: 8
+      MAX_MEMORY: 32
+      MAX_SESSIONS: 25
+      HEALTH_CHECK_INTERVAL: 30
+      ENABLE_HA: "false"
+    volumes:
+      - /var/run/docker.sock:/var/run/docker.sock
+    healthcheck:
+      test: ["CMD", "pgrep", "docker-agent"]
+      interval: 30s
+      timeout: 10s
+      retries: 3
+      start_period: 10s
     networks:
       - streamspace
     restart: unless-stopped

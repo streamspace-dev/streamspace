@@ -4,6 +4,7 @@ import (
 	"encoding/json"
 	"fmt"
 	"io/fs"
+	"log"
 	"os"
 	"path/filepath"
 	"strings"
@@ -112,7 +113,8 @@ type ParsedTemplate struct {
 // TemplateManifest represents the complete YAML structure of a Template resource.
 //
 // This structure mirrors the Kubernetes Template CRD defined in:
-//   controller/api/v1alpha1/template_types.go
+//
+//	controller/api/v1alpha1/template_types.go
 //
 // The manifest is parsed from YAML files in repositories and validated
 // before being stored in the catalog database as JSON.
@@ -142,13 +144,13 @@ type TemplateManifest struct {
 		Labels    map[string]string `yaml:"labels,omitempty" json:"labels,omitempty"`
 	} `yaml:"metadata" json:"metadata"`
 	Spec struct {
-		DisplayName      string            `yaml:"displayName" json:"displayName"`
-		Description      string            `yaml:"description" json:"description"`
-		Category         string            `yaml:"category" json:"category"`
-		AppType          string            `yaml:"appType,omitempty" json:"appType,omitempty"`
-		Icon             string            `yaml:"icon,omitempty" json:"icon,omitempty"`
-		BaseImage        string            `yaml:"baseImage" json:"baseImage"`
-		DefaultResources map[string]string `yaml:"defaultResources,omitempty" json:"defaultResources,omitempty"`
+		DisplayName      string                 `yaml:"displayName" json:"displayName"`
+		Description      string                 `yaml:"description" json:"description"`
+		Category         string                 `yaml:"category" json:"category"`
+		AppType          string                 `yaml:"appType,omitempty" json:"appType,omitempty"`
+		Icon             string                 `yaml:"icon,omitempty" json:"icon,omitempty"`
+		BaseImage        string                 `yaml:"baseImage" json:"baseImage"`
+		DefaultResources map[string]interface{} `yaml:"defaultResources,omitempty" json:"defaultResources,omitempty"`
 		Ports            []struct {
 			Name          string `yaml:"name" json:"name"`
 			ContainerPort int    `yaml:"containerPort" json:"containerPort"`
@@ -230,8 +232,11 @@ func (p *TemplateParser) ParseRepository(repoPath string) ([]*ParsedTemplate, er
 		// Parse template file
 		template, err := p.ParseTemplateFile(path)
 		if err != nil {
-			// Log error but continue processing other files
-			// (not all YAML files may be templates)
+			// Log parse errors for real templates; silent failure leaves the catalog empty
+			// with no operator signal.
+			if strings.HasSuffix(path, ".yaml") || strings.HasSuffix(path, ".yml") {
+				log.Printf("Skipping template manifest %s: %v", path, err)
+			}
 			return nil
 		}
 
@@ -283,6 +288,15 @@ func (p *TemplateParser) ParseTemplateFile(filePath string) (*ParsedTemplate, er
 		return nil, fmt.Errorf("failed to read file: %w", err)
 	}
 
+	return p.parseTemplateData(data)
+}
+
+func (p *TemplateParser) parseTemplateData(data []byte) (*ParsedTemplate, error) {
+	var rawManifest map[string]interface{}
+	if err := yaml.Unmarshal(data, &rawManifest); err != nil {
+		return nil, fmt.Errorf("failed to parse YAML: %w", err)
+	}
+
 	// Parse YAML
 	var manifest TemplateManifest
 	if err := yaml.Unmarshal(data, &manifest); err != nil {
@@ -324,7 +338,7 @@ func (p *TemplateParser) ParseTemplateFile(filePath string) (*ParsedTemplate, er
 	}
 
 	// Convert full manifest to JSON for storage
-	manifestJSON, err := json.Marshal(manifest)
+	manifestJSON, err := json.Marshal(rawManifest)
 	if err != nil {
 		return nil, fmt.Errorf("failed to marshal manifest to JSON: %w", err)
 	}
@@ -351,49 +365,7 @@ func (p *TemplateParser) ParseTemplateFile(filePath string) (*ParsedTemplate, er
 
 // ParseTemplateFromString parses a template from a YAML string
 func (p *TemplateParser) ParseTemplateFromString(yamlContent string) (*ParsedTemplate, error) {
-	// Parse YAML
-	var manifest TemplateManifest
-	if err := yaml.Unmarshal([]byte(yamlContent), &manifest); err != nil {
-		return nil, fmt.Errorf("failed to parse YAML: %w", err)
-	}
-
-	// Validate this is a Template resource
-	if manifest.Kind != "Template" {
-		return nil, fmt.Errorf("not a Template resource (kind: %s)", manifest.Kind)
-	}
-
-	// Determine app type
-	appType := manifest.Spec.AppType
-	if appType == "" {
-		if manifest.Spec.WebApp != nil && manifest.Spec.WebApp.Enabled {
-			appType = "webapp"
-		} else {
-			appType = "desktop"
-		}
-	}
-
-	// Convert full manifest to JSON for storage
-	manifestJSON, err := json.Marshal(manifest)
-	if err != nil {
-		return nil, fmt.Errorf("failed to marshal manifest to JSON: %w", err)
-	}
-
-	template := &ParsedTemplate{
-		Name:        manifest.Metadata.Name,
-		DisplayName: manifest.Spec.DisplayName,
-		Description: manifest.Spec.Description,
-		Category:    manifest.Spec.Category,
-		AppType:     appType,
-		Icon:        manifest.Spec.Icon,
-		Manifest:    string(manifestJSON),
-		Tags:        manifest.Spec.Tags,
-	}
-
-	if template.Tags == nil {
-		template.Tags = []string{}
-	}
-
-	return template, nil
+	return p.parseTemplateData([]byte(yamlContent))
 }
 
 // ValidateTemplateManifest validates a template manifest structure
@@ -589,7 +561,7 @@ type PluginManifest struct {
 	License string `json:"license,omitempty"`
 
 	// Type is the plugin architecture type (required).
-	// Valid values: "extension", "webhook", "api", "ui", "theme"
+	// Valid values: "extension", "integration", "webhook", "api", "ui", "theme"
 	Type string `json:"type"`
 
 	// Category organizes plugins in the catalog.
@@ -673,7 +645,7 @@ func (p *PluginParser) ParseRepository(repoPath string) ([]*ParsedPlugin, error)
 		if !d.IsDir() && d.Name() == "manifest.json" {
 			plugin, err := p.ParsePluginFile(path)
 			if err != nil {
-				// Log error but continue processing other files
+				log.Printf("Skipping plugin manifest %s: %v", path, err)
 				return nil
 			}
 
@@ -696,7 +668,7 @@ func (p *PluginParser) ParseRepository(repoPath string) ([]*ParsedPlugin, error)
 //  1. Read file from disk
 //  2. Unmarshal JSON into PluginManifest struct
 //  3. Validate required fields (name, version, displayName, type)
-//  4. Validate plugin type is one of: extension, webhook, api, ui, theme
+//  4. Validate plugin type is one of: extension, integration, webhook, api, ui, theme
 //  5. Convert manifest to JSON for database storage
 //
 // Required fields:
@@ -707,6 +679,7 @@ func (p *PluginParser) ParseRepository(repoPath string) ([]*ParsedPlugin, error)
 //
 // Plugin type validation:
 //   - "extension": General-purpose extension (most common)
+//   - "integration": External service integration plugin
 //   - "webhook": Responds to webhook events
 //   - "api": Adds new API endpoints
 //   - "ui": Adds UI components or pages
@@ -759,14 +732,15 @@ func (p *PluginParser) ParsePluginFile(filePath string) (*ParsedPlugin, error) {
 
 	// Validate plugin type
 	validTypes := map[string]bool{
-		"extension": true,
-		"webhook":   true,
-		"api":       true,
-		"ui":        true,
-		"theme":     true,
+		"extension":   true,
+		"integration": true,
+		"webhook":     true,
+		"api":         true,
+		"ui":          true,
+		"theme":       true,
 	}
 	if !validTypes[manifest.Type] {
-		return nil, fmt.Errorf("invalid plugin type: %s (must be extension, webhook, api, ui, or theme)", manifest.Type)
+		return nil, fmt.Errorf("invalid plugin type: %s (must be extension, integration, webhook, api, ui, or theme)", manifest.Type)
 	}
 
 	// Convert full manifest to JSON for storage
@@ -827,7 +801,7 @@ func (p *PluginParser) ValidatePluginManifest(jsonContent string) error {
 		"theme":     true,
 	}
 	if !validTypes[manifest.Type] {
-		return fmt.Errorf("invalid type: %s (must be extension, webhook, api, ui, or theme)", manifest.Type)
+		return fmt.Errorf("invalid type: %s (must be extension, integration, webhook, api, ui, or theme)", manifest.Type)
 	}
 
 	return nil

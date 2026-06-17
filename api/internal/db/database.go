@@ -72,6 +72,7 @@ import (
 	"log"
 	"net"
 	"os"
+	"path/filepath"
 	"regexp"
 	"strconv"
 	"strings"
@@ -94,6 +95,30 @@ type Config struct {
 // Database represents the database connection
 type Database struct {
 	db *sql.DB
+}
+
+const (
+	officialTemplatesRepoName = "Official Templates"
+	officialPluginsRepoName   = "Official Plugins"
+
+	officialTemplatesRepoURL = "https://github.com/streamspace-dev/streamspace-templates"
+	officialPluginsRepoURL   = "https://github.com/streamspace-dev/streamspace-plugins"
+
+	legacyTemplatesRepoURL = "https://github.com/JoshuaAFerguson/streamspace-templates"
+	legacyPluginsRepoURL   = "https://github.com/JoshuaAFerguson/streamspace-plugins"
+
+	defaultRepositoryBranch = "main"
+)
+
+type defaultRepositoryConfig struct {
+	name           string
+	url            string
+	branch         string
+	repoType       string
+	siblingDirName string
+	explicitURL    bool
+	explicitBranch bool
+	managedURLs    []string
 }
 
 // validateConfig validates database configuration to prevent SQL injection
@@ -398,8 +423,8 @@ func (d *Database) Migrate() error {
 
 		// Insert default repositories (plugins and templates)
 		`INSERT INTO repositories (name, url, branch, type, auth_type, status) VALUES
-			('Official Plugins', 'https://github.com/JoshuaAFerguson/streamspace-plugins', 'main', 'plugin', 'none', 'pending'),
-			('Official Templates', 'https://github.com/JoshuaAFerguson/streamspace-templates', 'main', 'template', 'none', 'pending')
+			('Official Plugins', 'https://github.com/streamspace-dev/streamspace-plugins', 'main', 'plugin', 'none', 'pending'),
+			('Official Templates', 'https://github.com/streamspace-dev/streamspace-templates', 'main', 'template', 'none', 'pending')
 		ON CONFLICT (name) DO NOTHING`,
 
 		// Catalog templates (cache of templates from repos)
@@ -2552,66 +2577,225 @@ func (d *Database) checkPasswordReset() error {
 	return nil
 }
 
+func defaultRepositoryConfigs() []defaultRepositoryConfig {
+	templateURL, templateURLExplicit := resolveDefaultRepositoryURL(
+		"DEFAULT_TEMPLATE_REPOSITORY_URL",
+		"streamspace-templates",
+		officialTemplatesRepoURL,
+	)
+	templateBranch, templateBranchExplicit := resolveDefaultRepositoryBranch("DEFAULT_TEMPLATE_REPOSITORY_BRANCH")
+
+	pluginURL, pluginURLExplicit := resolveDefaultRepositoryURL(
+		"DEFAULT_PLUGIN_REPOSITORY_URL",
+		"streamspace-plugins",
+		officialPluginsRepoURL,
+	)
+	pluginBranch, pluginBranchExplicit := resolveDefaultRepositoryBranch("DEFAULT_PLUGIN_REPOSITORY_BRANCH")
+
+	return []defaultRepositoryConfig{
+		{
+			name:           officialTemplatesRepoName,
+			url:            templateURL,
+			branch:         templateBranch,
+			repoType:       "template",
+			siblingDirName: "streamspace-templates",
+			explicitURL:    templateURLExplicit,
+			explicitBranch: templateBranchExplicit,
+			managedURLs:    []string{officialTemplatesRepoURL, legacyTemplatesRepoURL},
+		},
+		{
+			name:           officialPluginsRepoName,
+			url:            pluginURL,
+			branch:         pluginBranch,
+			repoType:       "plugin",
+			siblingDirName: "streamspace-plugins",
+			explicitURL:    pluginURLExplicit,
+			explicitBranch: pluginBranchExplicit,
+			managedURLs:    []string{officialPluginsRepoURL, legacyPluginsRepoURL},
+		},
+	}
+}
+
+func resolveDefaultRepositoryBranch(envKey string) (string, bool) {
+	if value := strings.TrimSpace(os.Getenv(envKey)); value != "" {
+		return value, true
+	}
+
+	return defaultRepositoryBranch, false
+}
+
+func resolveDefaultRepositoryURL(envKey, siblingDirName, fallbackURL string) (string, bool) {
+	if value := strings.TrimSpace(os.Getenv(envKey)); value != "" {
+		return value, true
+	}
+
+	if siblingDir, ok := discoverSiblingRepositoryDir(siblingDirName); ok {
+		return siblingDir, false
+	}
+
+	return fallbackURL, false
+}
+
+func discoverSiblingRepositoryDir(repoDirName string) (string, bool) {
+	searchRoots := []string{}
+
+	if wd, err := os.Getwd(); err == nil {
+		searchRoots = append(searchRoots, wd)
+	}
+
+	if executable, err := os.Executable(); err == nil {
+		searchRoots = append(searchRoots, filepath.Dir(executable))
+	}
+
+	seen := map[string]struct{}{}
+	for _, root := range searchRoots {
+		root = strings.TrimSpace(root)
+		if root == "" {
+			continue
+		}
+
+		dir := root
+		for {
+			candidate := filepath.Join(dir, repoDirName)
+			if _, exists := seen[candidate]; exists {
+				parent := filepath.Dir(dir)
+				if parent == dir {
+					break
+				}
+				dir = parent
+				continue
+			}
+			seen[candidate] = struct{}{}
+
+			if hasRepositoryCatalog(candidate) {
+				absPath, err := filepath.Abs(candidate)
+				if err != nil {
+					return candidate, true
+				}
+				return absPath, true
+			}
+
+			parent := filepath.Dir(dir)
+			if parent == dir {
+				break
+			}
+			dir = parent
+		}
+	}
+
+	return "", false
+}
+
+func hasRepositoryCatalog(path string) bool {
+	info, err := os.Stat(path)
+	if err != nil || !info.IsDir() {
+		return false
+	}
+
+	_, err = os.Stat(filepath.Join(path, "catalog.yaml"))
+	return err == nil
+}
+
+func isManagedDefaultRepositoryURL(currentURL string, repo defaultRepositoryConfig) bool {
+	currentURL = strings.TrimSpace(currentURL)
+	if currentURL == "" || currentURL == repo.url {
+		return false
+	}
+
+	for _, managedURL := range repo.managedURLs {
+		if currentURL == managedURL {
+			return true
+		}
+	}
+
+	return looksLikeLocalRepositoryPath(currentURL, repo.siblingDirName)
+}
+
+func looksLikeLocalRepositoryPath(rawPath, repoDirName string) bool {
+	rawPath = strings.TrimSpace(rawPath)
+	rawPath = strings.TrimPrefix(rawPath, "file://")
+	if rawPath == "" {
+		return false
+	}
+
+	return filepath.Base(filepath.Clean(rawPath)) == repoDirName
+}
+
 // ensureDefaultRepository ensures the official StreamSpace repositories are configured.
 // This ensures both the templates and plugins repositories exist.
 //
 // The repositories will be automatically synced by the sync service on startup.
 //
 // Behavior:
-//   - Uses INSERT ... ON CONFLICT DO NOTHING for idempotency
-//   - Inserts both Official Templates and Official Plugins repositories
-//   - Does not fail if repositories already configured
-//
-// Default repository configurations:
-//   - Official Templates: https://github.com/JoshuaAFerguson/streamspace-templates
-//   - Official Plugins: https://github.com/JoshuaAFerguson/streamspace-plugins
-//   - Branch: main
-//   - Auth: none (public repositories)
-//   - Status: pending (will be synced automatically)
+//   - Inserts missing default repositories
+//   - Self-heals legacy official URLs to current defaults
+//   - Prefers sibling local checkouts in development when present
+//   - Respects explicit environment overrides for URL and branch
 func (d *Database) ensureDefaultRepository() error {
-	// Define default repositories
-	type defaultRepo struct {
-		name     string
-		url      string
-		branch   string
-		repoType string
-	}
-
-	defaultRepos := []defaultRepo{
-		{
-			name:     "Official Templates",
-			url:      "https://github.com/JoshuaAFerguson/streamspace-templates",
-			branch:   "main",
-			repoType: "template",
-		},
-		{
-			name:     "Official Plugins",
-			url:      "https://github.com/JoshuaAFerguson/streamspace-plugins",
-			branch:   "main",
-			repoType: "plugin",
-		},
-	}
+	defaultRepos := defaultRepositoryConfigs()
 
 	log.Println("📦 Ensuring default repositories are configured...")
 
 	for _, repo := range defaultRepos {
-		// Use INSERT ... ON CONFLICT DO NOTHING for idempotency
-		result, err := d.db.Exec(`
-			INSERT INTO repositories (name, url, branch, type, auth_type, status, created_at, updated_at)
-			VALUES ($1, $2, $3, $4, 'none', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
-			ON CONFLICT (name) DO NOTHING
-		`, repo.name, repo.url, repo.branch, repo.repoType)
+		var currentURL, currentBranch sql.NullString
+		err := d.db.QueryRow(`
+			SELECT url, branch
+			FROM repositories
+			WHERE name = $1
+		`, repo.name).Scan(&currentURL, &currentBranch)
 
-		if err != nil {
-			return fmt.Errorf("failed to ensure repository '%s': %w", repo.name, err)
+		if err != nil && err != sql.ErrNoRows {
+			return fmt.Errorf("failed to load repository '%s': %w", repo.name, err)
 		}
 
-		rowsAffected, _ := result.RowsAffected()
-		if rowsAffected > 0 {
+		if err == sql.ErrNoRows {
+			_, err = d.db.Exec(`
+				INSERT INTO repositories (name, url, branch, type, auth_type, status, created_at, updated_at)
+				VALUES ($1, $2, $3, $4, 'none', 'pending', CURRENT_TIMESTAMP, CURRENT_TIMESTAMP)
+			`, repo.name, repo.url, repo.branch, repo.repoType)
+			if err != nil {
+				return fmt.Errorf("failed to add repository '%s': %w", repo.name, err)
+			}
+
 			log.Printf("   ✓ Added '%s' (%s)", repo.name, repo.url)
-		} else {
-			log.Printf("   ✓ '%s' already configured", repo.name)
+			continue
 		}
+
+		shouldUpdateURL := repo.explicitURL || isManagedDefaultRepositoryURL(currentURL.String, repo)
+		shouldUpdateBranch := repo.explicitBranch || shouldUpdateURL || strings.TrimSpace(currentBranch.String) == ""
+
+		if shouldUpdateURL || shouldUpdateBranch {
+			nextURL := currentURL.String
+			if shouldUpdateURL {
+				nextURL = repo.url
+			}
+
+			nextBranch := currentBranch.String
+			if shouldUpdateBranch {
+				nextBranch = repo.branch
+			}
+
+			_, err = d.db.Exec(`
+				UPDATE repositories
+				SET url = $1,
+					branch = $2,
+					type = $3,
+					auth_type = 'none',
+					auth_secret = NULL,
+					status = 'pending',
+					error_message = NULL,
+					updated_at = CURRENT_TIMESTAMP
+				WHERE name = $4
+			`, nextURL, nextBranch, repo.repoType, repo.name)
+			if err != nil {
+				return fmt.Errorf("failed to update repository '%s': %w", repo.name, err)
+			}
+
+			log.Printf("   ✓ Updated '%s' to %s", repo.name, nextURL)
+			continue
+		}
+
+		log.Printf("   ✓ '%s' already configured", repo.name)
 	}
 
 	log.Println("✓ Default repositories configured successfully")

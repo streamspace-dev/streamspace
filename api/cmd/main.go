@@ -53,7 +53,7 @@ func main() {
 	dbName := getEnv("DB_NAME", "streamspace")
 	dbSSLMode := getEnv("DB_SSL_MODE", "disable") // SECURITY: Should be "require" in production
 	pluginDir := getEnv("PLUGIN_DIR", "./plugins")
-	pluginRepositoryURL := getEnv("PLUGIN_REPOSITORY_URL", "https://raw.githubusercontent.com/JoshuaAFerguson/streamspace-plugins/main")
+	pluginRepositoryURL := getEnv("PLUGIN_REPOSITORY_URL", "https://raw.githubusercontent.com/streamspace-dev/streamspace-plugins/main")
 
 	log.Println("Starting StreamSpace API Server...")
 

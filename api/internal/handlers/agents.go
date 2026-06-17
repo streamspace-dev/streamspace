@@ -47,6 +47,8 @@ import (
 	"fmt"
 	"log"
 	"net/http"
+	"os"
+	"strings"
 	"time"
 
 	"github.com/gin-gonic/gin"
@@ -64,6 +66,15 @@ type AgentHandler struct {
 	database   *db.Database
 	hub        *websocket.AgentHub
 	dispatcher *services.CommandDispatcher
+}
+
+func bootstrapAutoApproveEnabled() bool {
+	switch strings.ToLower(strings.TrimSpace(os.Getenv("AGENT_BOOTSTRAP_AUTO_APPROVE"))) {
+	case "1", "true", "yes", "on":
+		return true
+	default:
+		return false
+	}
 }
 
 // NewAgentHandler creates a new agent handler
@@ -133,12 +144,28 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 	// ISSUE #226 FIX: Check if this is a first-time registration via bootstrap key
 	// ISSUE #234: Support pending approval workflow
 	isBootstrapAuth, _ := c.Get("isBootstrapAuth")
+	autoApproveBootstrap := isBootstrapAuth == true && bootstrapAutoApproveEnabled()
 	approvalStatus := "pending" // Default to pending for new agents
+	bootstrapAPIKey, _ := c.Get("agentAPIKey")
+	bootstrapAPIKeyString, _ := bootstrapAPIKey.(string)
+	bootstrapAPIKeyHash := ""
 
 	if isBootstrapAuth == true {
-		// Bootstrap registration - agent waits for approval
-		// Don't generate API key yet - only after approval
-		log.Printf("[AgentHandler] New agent %s requesting registration (status: pending approval)", req.AgentID)
+		if autoApproveBootstrap {
+			approvalStatus = "approved"
+			var err error
+			bootstrapAPIKeyHash, err = auth.HashAPIKey(bootstrapAPIKeyString)
+			if err != nil {
+				c.JSON(http.StatusInternalServerError, gin.H{
+					"error":   "Failed to prepare bootstrap agent credentials",
+					"details": err.Error(),
+				})
+				return
+			}
+			log.Printf("[AgentHandler] Auto-approving bootstrap agent %s for local/dev registration", req.AgentID)
+		} else {
+			log.Printf("[AgentHandler] New agent %s requesting registration (status: pending approval)", req.AgentID)
+		}
 	}
 
 	// Check if agent already exists
@@ -215,11 +242,36 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 		}
 	}
 
+	if autoApproveBootstrap {
+		_, err = h.database.DB().Exec(`
+			UPDATE agents
+			SET approval_status = 'approved',
+			    api_key_hash = CASE
+			        WHEN (api_key_hash IS NULL OR api_key_hash = '') AND $2 <> '' THEN $2
+			        ELSE api_key_hash
+			    END,
+			    api_key_created_at = CASE
+			        WHEN (api_key_hash IS NULL OR api_key_hash = '') AND $2 <> '' THEN $1
+			        ELSE api_key_created_at
+			    END,
+			    approved_at = COALESCE(approved_at, $1),
+			    updated_at = $1
+			WHERE agent_id = $3
+		`, now, bootstrapAPIKeyHash, req.AgentID)
+		if err != nil {
+			c.JSON(http.StatusInternalServerError, gin.H{
+				"error":   "Failed to auto-approve bootstrap agent",
+				"details": err.Error(),
+			})
+			return
+		}
+	}
+
 	// ISSUE #234: Return approval status to agent
 	if isBootstrapAuth == true {
 		// Check actual approval status from database
 		var approvalStatus string
-		var apiKeyHash *string
+		var apiKeyHash sql.NullString
 		err := h.database.DB().QueryRow(
 			"SELECT approval_status, api_key_hash FROM agents WHERE agent_id = $1",
 			agent.AgentID,
@@ -232,13 +284,17 @@ func (h *AgentHandler) RegisterAgent(c *gin.Context) {
 			return
 		}
 
-		if approvalStatus == "approved" && apiKeyHash != nil {
+		if approvalStatus == "approved" {
 			// Agent approved - return success (agent should switch to using its API key)
-			c.JSON(http.StatusOK, gin.H{
+			response := gin.H{
 				"agent":          agent,
 				"approvalStatus": "approved",
 				"message":        "Agent approved. Use your configured API key for subsequent requests.",
-			})
+			}
+			if bootstrapAPIKeyString != "" {
+				response["apiKey"] = bootstrapAPIKeyString
+			}
+			c.JSON(http.StatusOK, response)
 			return
 		} else if approvalStatus == "pending" {
 			// Agent pending approval
